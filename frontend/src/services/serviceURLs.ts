@@ -75,6 +75,26 @@ export const API_ENDPOINTS = {
     DELETE_FILE: (fileId: number) => `${API_BASE}/import/file/${fileId}`,
   },
   
+  // NAV Tracking endpoints
+  NAV: {
+    SEARCH_SCHEMES: `${API_BASE}/nav/schemes/search`,
+    BOOKMARKS: `${API_BASE}/nav/bookmarks`,
+    UPDATE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
+    DELETE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
+    NAV_DATA: `${API_BASE}/nav/data`,
+    LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
+    DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
+    DOWNLOAD_HISTORICAL: `${API_BASE}/nav/download/historical`,
+    DOWNLOAD_PROGRESS: (jobId: number) => `${API_BASE}/nav/download/progress/${jobId}`,
+    DOWNLOAD_JOBS: `${API_BASE}/nav/download/jobs`,
+    CANCEL_DOWNLOAD: (jobId: number) => `${API_BASE}/nav/download/jobs/${jobId}`,
+    ACTIVE_DOWNLOADS: `${API_BASE}/nav/download/active`,
+    STATISTICS: `${API_BASE}/nav/statistics`,
+    CHECK_TODAY: `${API_BASE}/nav/check-today`,
+    HEALTH: `${API_BASE}/nav/health`,
+    DOCS: `${API_BASE}/nav/docs`,
+  },
+  
   // File management endpoints (for future sprints)
   FILES: {
     UPLOAD: `${API_BASE}/files/upload`,
@@ -91,23 +111,6 @@ export const API_ENDPOINTS = {
       STATUS: (importId: number) => `${API_BASE}/files/import/${importId}/status`,
     }
   },
-
-  // Add this to your existing API_ENDPOINTS object
-NAV: {
-  SEARCH_SCHEMES: `${API_BASE}/nav/schemes/search`,
-  BOOKMARKS: `${API_BASE}/nav/bookmarks`,
-  UPDATE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
-  DELETE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
-  NAV_DATA: `${API_BASE}/nav/data`,
-  LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
-  DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
-  DOWNLOAD_HISTORICAL: `${API_BASE}/nav/download/historical`,
-  DOWNLOAD_PROGRESS: (jobId: number) => `${API_BASE}/nav/download/progress/${jobId}`,
-  DOWNLOAD_JOBS: `${API_BASE}/nav/download/jobs`,
-  CANCEL_DOWNLOAD: (jobId: number) => `${API_BASE}/nav/download/jobs/${jobId}`,
-  STATISTICS: `${API_BASE}/nav/statistics`,
-  CHECK_TODAY: `${API_BASE}/nav/check-today`,
-},
   
   // Dashboard endpoints (for future sprints)
   DASHBOARD: {
@@ -137,6 +140,7 @@ export type AuthEndpoints = typeof API_ENDPOINTS.AUTH;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CustomerEndpoints = typeof API_ENDPOINTS.CUSTOMERS;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
+export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -321,6 +325,70 @@ export const IMPORT_URLS = {
     `${API_ENDPOINTS.IMPORT.DELETE_FILE(fileId)}${buildQueryParams({}, environment)}`,
 } as const;
 
+// NAV-specific URL helpers
+export const NAV_URLS = {
+  // Search schemes with query parameters
+  searchSchemes: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.NAV.SEARCH_SCHEMES}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get bookmarks with query parameters
+  getBookmarks: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.NAV.BOOKMARKS}${buildQueryParams(params || {}, environment)}`,
+  
+  // Create bookmark
+  createBookmark: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARKS}${buildQueryParams({}, environment)}`,
+  
+  // Update bookmark
+  updateBookmark: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.UPDATE_BOOKMARK(id)}${buildQueryParams({}, environment)}`,
+  
+  // Delete bookmark
+  deleteBookmark: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DELETE_BOOKMARK(id)}${buildQueryParams({}, environment)}`,
+  
+  // Get NAV data with query parameters
+  getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get latest NAV for scheme
+  getLatestNav: (schemeId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.LATEST_NAV(schemeId)}${buildQueryParams({}, environment)}`,
+  
+  // Download operations
+  triggerDailyDownload: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DOWNLOAD_DAILY}${buildQueryParams({}, environment)}`,
+  
+  triggerHistoricalDownload: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DOWNLOAD_HISTORICAL}${buildQueryParams({}, environment)}`,
+  
+  getDownloadProgress: (jobId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DOWNLOAD_PROGRESS(jobId)}${buildQueryParams({}, environment)}`,
+  
+  getDownloadJobs: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.NAV.DOWNLOAD_JOBS}${buildQueryParams(params || {}, environment)}`,
+  
+  cancelDownload: (jobId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.CANCEL_DOWNLOAD(jobId)}${buildQueryParams({}, environment)}`,
+  
+  getActiveDownloads: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.ACTIVE_DOWNLOADS}${buildQueryParams({}, environment)}`,
+  
+  // Statistics and monitoring
+  getStatistics: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.STATISTICS}${buildQueryParams({}, environment)}`,
+  
+  checkTodayData: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.CHECK_TODAY}${buildQueryParams({}, environment)}`,
+  
+  // System endpoints
+  getHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.HEALTH}${buildQueryParams({}, environment)}`,
+  
+  getDocs: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DOCS}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Development logging
 if (process.env.NODE_ENV === 'development') {
   console.log('🔗 API Base URL:', API_BASE);
@@ -329,6 +397,7 @@ if (process.env.NODE_ENV === 'development') {
     Contacts: Object.keys(API_ENDPOINTS.CONTACTS).length,
     Customers: Object.keys(API_ENDPOINTS.CUSTOMERS).length,
     Import: Object.keys(API_ENDPOINTS.IMPORT).length,
+    Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,

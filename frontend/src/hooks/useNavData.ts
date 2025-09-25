@@ -1,5 +1,5 @@
 // frontend/src/hooks/useNavData.ts
-// File 12/14: React hooks for NAV operations following existing patterns
+// File 12/14: React hooks for NAV operations - Fixed infinite loop issues
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -17,6 +17,8 @@ import type {
   NavDataParams,
   HistoricalDownloadRequest,
   DownloadJobParams,
+  PaginatedResponse,
+  ApiResponse
 } from '../services/nav.service';
 
 // ==================== SCHEME SEARCH HOOK ====================
@@ -53,10 +55,10 @@ export const useSchemeSearch = (): UseSchemeSearchReturn => {
     setError(null);
 
     try {
-      const response = await navService.searchSchemes(params);
+      const response: PaginatedResponse<SchemeSearchResult> = await navService.searchSchemes(params);
       
       if (response.success && response.data) {
-        setSchemes(response.data.schemes);
+        setSchemes(response.data.schemes || []);
         setPagination({
           total: response.data.total,
           page: response.data.page,
@@ -103,7 +105,7 @@ export interface UseBookmarksReturn {
   createBookmark: (request: CreateBookmarkRequest) => Promise<void>;
   updateBookmark: (id: number, updates: UpdateBookmarkRequest) => Promise<void>;
   deleteBookmark: (id: number) => Promise<void>;
-  refetch: () => Promise<void>;
+  refetch: () => void;
   pagination: {
     total: number;
     page: number;
@@ -119,18 +121,18 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseBookmarksReturn['pagination']>(null);
-  const [lastParams, setLastParams] = useState<BookmarkSearchParams | undefined>(initialParams);
+  const lastParamsRef = useRef<BookmarkSearchParams>(initialParams || {});
 
-  const fetchBookmarks = useCallback(async (params: BookmarkSearchParams = {}) => {
+  const fetchBookmarksStable = useCallback(async (params: BookmarkSearchParams = {}) => {
     setIsLoading(true);
     setError(null);
-    setLastParams(params);
+    lastParamsRef.current = params;
 
     try {
-      const response = await navService.getBookmarks(params);
+      const response: PaginatedResponse<SchemeBookmark> = await navService.getBookmarks(params);
       
       if (response.success && response.data) {
-        setBookmarks(response.data.bookmarks);
+        setBookmarks(response.data.bookmarks || []);
         setPagination({
           total: response.data.total,
           page: response.data.page,
@@ -149,13 +151,16 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     }
   }, []);
 
+  // Stable reference that doesn't change on re-renders
+  const fetchBookmarks = fetchBookmarksStable;
+
   const createBookmark = useCallback(async (request: CreateBookmarkRequest) => {
     try {
-      const response = await navService.createBookmark(request);
+      const response: ApiResponse<SchemeBookmark> = await navService.createBookmark(request);
       
       if (response.success) {
-        // Refetch bookmarks to get updated list
-        await fetchBookmarks(lastParams);
+        // Refetch with last used params
+        await fetchBookmarksStable(lastParamsRef.current);
       } else {
         throw new Error(response.error || 'Failed to create bookmark');
       }
@@ -163,14 +168,14 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
       setError(err.message || 'Failed to create bookmark');
       throw err;
     }
-  }, [fetchBookmarks, lastParams]);
+  }, [fetchBookmarksStable]);
 
   const updateBookmark = useCallback(async (id: number, updates: UpdateBookmarkRequest) => {
     try {
-      const response = await navService.updateBookmark(id, updates);
+      const response: ApiResponse<SchemeBookmark> = await navService.updateBookmark(id, updates);
       
       if (response.success) {
-        // Update the bookmark in the local state
+        // Update local state optimistically
         setBookmarks(prev => 
           prev.map(bookmark => 
             bookmark.id === id ? { ...bookmark, ...updates } : bookmark
@@ -187,15 +192,13 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
 
   const deleteBookmark = useCallback(async (id: number) => {
     try {
-      const response = await navService.deleteBookmark(id);
+      const response: ApiResponse<void> = await navService.deleteBookmark(id);
       
       if (response.success) {
-        // Remove the bookmark from local state
+        // Remove from local state
         setBookmarks(prev => prev.filter(bookmark => bookmark.id !== id));
-        // Update pagination if needed
-        if (pagination) {
-          setPagination(prev => prev ? { ...prev, total: prev.total - 1 } : null);
-        }
+        // Update pagination count
+        setPagination(prev => prev ? { ...prev, total: prev.total - 1 } : null);
       } else {
         throw new Error(response.error || 'Failed to delete bookmark');
       }
@@ -203,14 +206,16 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
       setError(err.message || 'Failed to delete bookmark');
       throw err;
     }
-  }, [pagination]);
+  }, []);
 
-  const refetch = useCallback(() => fetchBookmarks(lastParams), [fetchBookmarks, lastParams]);
+  const refetch = useCallback(() => {
+    fetchBookmarksStable(lastParamsRef.current);
+  }, [fetchBookmarksStable]);
 
-  // Initial fetch
+  // Initial fetch - only on mount
   useEffect(() => {
-    fetchBookmarks(initialParams);
-  }, [fetchBookmarks, initialParams]);
+    fetchBookmarksStable(initialParams || {});
+  }, []); // Empty dependency array - only run once
 
   return {
     bookmarks,
@@ -254,10 +259,10 @@ export const useNavData = (): UseNavDataReturn => {
     setError(null);
 
     try {
-      const response = await navService.getNavData(params);
+      const response: PaginatedResponse<NavData> = await navService.getNavData(params);
       
       if (response.success && response.data) {
-        setNavData(response.data.nav_data);
+        setNavData(response.data.nav_data || []);
         setPagination({
           total: response.data.total,
           page: response.data.page,
@@ -278,7 +283,7 @@ export const useNavData = (): UseNavDataReturn => {
 
   const getLatestNav = useCallback(async (schemeId: number): Promise<NavData | null> => {
     try {
-      const response = await navService.getLatestNav(schemeId);
+      const response: ApiResponse<NavData> = await navService.getLatestNav(schemeId);
       
       if (response.success && response.data) {
         return response.data;
@@ -312,7 +317,7 @@ export interface UseDownloadsReturn {
   cancelDownload: (jobId: number) => Promise<void>;
   fetchDownloadJobs: (params?: DownloadJobParams) => Promise<void>;
   fetchActiveDownloads: () => Promise<void>;
-  refetch: () => Promise<void>;
+  refetch: () => void;
   pagination: {
     total: number;
     page: number;
@@ -329,18 +334,18 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseDownloadsReturn['pagination']>(null);
-  const [lastParams, setLastParams] = useState<DownloadJobParams | undefined>(initialParams);
+  const lastParamsRef = useRef<DownloadJobParams>(initialParams || {});
 
-  const fetchDownloadJobs = useCallback(async (params: DownloadJobParams = {}) => {
+  const fetchDownloadJobsStable = useCallback(async (params: DownloadJobParams = {}) => {
     setIsLoading(true);
     setError(null);
-    setLastParams(params);
+    lastParamsRef.current = params;
 
     try {
-      const response = await navService.getDownloadJobs(params);
+      const response: PaginatedResponse<DownloadJob> = await navService.getDownloadJobs(params);
       
       if (response.success && response.data) {
-        setDownloadJobs(response.data.jobs);
+        setDownloadJobs(response.data.jobs || []);
         setPagination({
           total: response.data.total,
           page: response.data.page,
@@ -359,7 +364,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     }
   }, []);
 
-  const fetchActiveDownloads = useCallback(async () => {
+  const fetchActiveDownloadsStable = useCallback(async () => {
     try {
       const response = await navService.getActiveDownloads();
       
@@ -367,19 +372,25 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
         setActiveDownloads(response.data.active_downloads);
       }
     } catch (err: any) {
-      // Don't set error for active downloads fetch failure
+      // Don't set error for active downloads fetch failure - it's not critical
       console.error('Failed to fetch active downloads:', err);
     }
   }, []);
+
+  // Stable references
+  const fetchDownloadJobs = fetchDownloadJobsStable;
+  const fetchActiveDownloads = fetchActiveDownloadsStable;
 
   const triggerDailyDownload = useCallback(async () => {
     try {
       const response = await navService.triggerDailyDownload();
       
       if (response.success && response.data) {
-        // Refresh download jobs after triggering
-        await fetchDownloadJobs(lastParams);
-        await fetchActiveDownloads();
+        // Refresh data after triggering
+        await Promise.all([
+          fetchDownloadJobsStable(lastParamsRef.current),
+          fetchActiveDownloadsStable()
+        ]);
         return response.data;
       } else {
         throw new Error(response.error || 'Failed to trigger daily download');
@@ -388,7 +399,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       setError(err.message || 'Failed to trigger daily download');
       throw err;
     }
-  }, [fetchDownloadJobs, fetchActiveDownloads, lastParams]);
+  }, [fetchDownloadJobsStable, fetchActiveDownloadsStable]);
 
   const triggerHistoricalDownload = useCallback(async (request: HistoricalDownloadRequest) => {
     // Validate date range
@@ -406,9 +417,11 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       const response = await navService.triggerHistoricalDownload(request);
       
       if (response.success && response.data) {
-        // Refresh download jobs after triggering
-        await fetchDownloadJobs(lastParams);
-        await fetchActiveDownloads();
+        // Refresh data after triggering
+        await Promise.all([
+          fetchDownloadJobsStable(lastParamsRef.current),
+          fetchActiveDownloadsStable()
+        ]);
         return response.data;
       } else {
         throw new Error(response.error || 'Failed to trigger historical download');
@@ -417,20 +430,19 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       setError(err.message || 'Failed to trigger historical download');
       throw err;
     }
-  }, [fetchDownloadJobs, fetchActiveDownloads, lastParams]);
+  }, [fetchDownloadJobsStable, fetchActiveDownloadsStable]);
 
   const cancelDownload = useCallback(async (jobId: number) => {
     try {
       const response = await navService.cancelDownloadJob(jobId);
       
       if (response.success) {
-        // Update the job status in local state
+        // Update local state
         setDownloadJobs(prev => 
           prev.map(job => 
             job.id === jobId ? { ...job, status: 'cancelled' as const } : job
           )
         );
-        // Remove from active downloads
         setActiveDownloads(prev => prev.filter(download => download.jobId !== jobId));
       } else {
         throw new Error(response.error || 'Failed to cancel download');
@@ -441,16 +453,16 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     }
   }, []);
 
-  const refetch = useCallback(async () => {
-    await fetchDownloadJobs(lastParams);
-    await fetchActiveDownloads();
-  }, [fetchDownloadJobs, fetchActiveDownloads, lastParams]);
+  const refetch = useCallback(() => {
+    fetchDownloadJobsStable(lastParamsRef.current);
+    fetchActiveDownloadsStable();
+  }, [fetchDownloadJobsStable, fetchActiveDownloadsStable]);
 
-  // Initial fetch
+  // Initial fetch - only on mount
   useEffect(() => {
-    fetchDownloadJobs(initialParams);
-    fetchActiveDownloads();
-  }, [fetchDownloadJobs, fetchActiveDownloads, initialParams]);
+    fetchDownloadJobsStable(initialParams || {});
+    fetchActiveDownloadsStable();
+  }, []); // Empty dependency array - only run once
 
   return {
     downloadJobs,
@@ -509,7 +521,7 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
           const response = await navService.getDownloadProgress(jobId);
           
           if (!response.success || !response.data) {
-            throw new Error('Failed to get download progress');
+            throw new Error(response.error || 'Failed to get download progress');
           }
 
           const currentProgress = response.data;
@@ -574,7 +586,7 @@ export interface UseNavStatisticsReturn {
   error: string | null;
   fetchStatistics: () => Promise<void>;
   checkTodayData: () => Promise<void>;
-  refetch: () => Promise<void>;
+  refetch: () => void;
 }
 
 export const useNavStatistics = (): UseNavStatisticsReturn => {
@@ -583,7 +595,7 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStatistics = useCallback(async () => {
+  const fetchStatisticsStable = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -602,7 +614,7 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
     }
   }, []);
 
-  const checkTodayData = useCallback(async () => {
+  const checkTodayDataStable = useCallback(async () => {
     try {
       const response = await navService.checkTodayData();
       
@@ -610,19 +622,25 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
         setTodayDataStatus(response.data);
       }
     } catch (err: any) {
-      // Don't set error for today data check failure
+      // Don't set error for today data check failure - it's not critical
       console.error('Failed to check today data:', err);
     }
   }, []);
 
-  const refetch = useCallback(async () => {
-    await Promise.all([fetchStatistics(), checkTodayData()]);
-  }, [fetchStatistics, checkTodayData]);
+  // Stable references
+  const fetchStatistics = fetchStatisticsStable;
+  const checkTodayData = checkTodayDataStable;
 
-  // Initial fetch
+  const refetch = useCallback(() => {
+    fetchStatisticsStable();
+    checkTodayDataStable();
+  }, [fetchStatisticsStable, checkTodayDataStable]);
+
+  // Initial fetch - only on mount
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    fetchStatisticsStable();
+    checkTodayDataStable();
+  }, []); // Empty dependency array - only run once
 
   return {
     statistics,
@@ -644,23 +662,41 @@ export interface UseNavDashboardReturn {
   todayDataStatus: UseNavStatisticsReturn['todayDataStatus'];
   isLoading: boolean;
   error: string | null;
-  refetchAll: () => Promise<void>;
+  refetchAll: () => void;
 }
 
 export const useNavDashboard = (): UseNavDashboardReturn => {
-  const { bookmarks, isLoading: bookmarksLoading, error: bookmarksError, refetch: refetchBookmarks } = useBookmarks({ page_size: 10 });
-  const { statistics, todayDataStatus, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useNavStatistics();
-  const { activeDownloads, isLoading: downloadsLoading, error: downloadsError, fetchActiveDownloads } = useDownloads();
+  // Use hooks with limited data for dashboard
+  const { 
+    bookmarks, 
+    isLoading: bookmarksLoading, 
+    error: bookmarksError, 
+    refetch: refetchBookmarks 
+  } = useBookmarks({ page_size: 10 });
+  
+  const { 
+    statistics, 
+    todayDataStatus, 
+    isLoading: statsLoading, 
+    error: statsError, 
+    refetch: refetchStats 
+  } = useNavStatistics();
+  
+  const { 
+    activeDownloads, 
+    isLoading: downloadsLoading, 
+    error: downloadsError, 
+    fetchActiveDownloads 
+  } = useDownloads();
 
   const isLoading = bookmarksLoading || statsLoading || downloadsLoading;
   const error = bookmarksError || statsError || downloadsError;
 
-  const refetchAll = useCallback(async () => {
-    await Promise.all([
-      refetchBookmarks(),
-      refetchStats(),
-      fetchActiveDownloads()
-    ]);
+  // Stable refetchAll function that doesn't change on every render
+  const refetchAll = useCallback(() => {
+    refetchBookmarks();
+    refetchStats();
+    fetchActiveDownloads();
   }, [refetchBookmarks, refetchStats, fetchActiveDownloads]);
 
   return {

@@ -12,7 +12,8 @@ import {
   Briefcase,
   Upload,
   FileSpreadsheet,
-  Bug  // Add this import
+  Bug,
+  Target  // Add this for NAV tracking
 } from 'lucide-react';
 
 export interface NavigationItem {
@@ -62,39 +63,33 @@ export const NAVIGATION_MENU: NavigationSection[] = [
     ]
   },
   {
-  id: 'data_operations',
-  name: 'Data Operations',
-  items: [
-    {
-      id: 'etl_dashboard',
-      name: 'ETL Dashboard',
-      path: '/import-dashboard',
-      icon: FileSpreadsheet
-    },
-    {
-      id: 'data_import',
-      name: 'Import Data',
-      path: '/data-import',
-      icon: Upload
-    },
-    
-  ]
-},
+    id: 'data_operations',
+    name: 'Data Operations',
+    items: [
+      {
+        id: 'etl_dashboard',
+        name: 'ETL Dashboard',
+        path: '/import-dashboard',
+        icon: FileSpreadsheet
+      },
+      {
+        id: 'data_import',
+        name: 'Import Data',
+        path: '/data-import',
+        icon: Upload
+      },
+    ]
+  },
   {
     id: 'portfolio_management',
     name: 'Portfolio Management',
     items: [
+      // Removed portfolio_contacts and portfolio_customers as requested
       {
-        id: 'portfolio_contacts',
-        name: 'Contacts',
-        path: '/portfolio/contacts',
-        icon: Users
-      },
-      {
-        id: 'portfolio_customers',
-        name: 'Customers',
-        path: '/portfolio/customers',
-        icon: Crown
+        id: 'nav_tracking',
+        name: 'NAV Tracking',
+        path: '/nav/dashboard',
+        icon: Target
       },
       {
         id: 'portfolios',
@@ -144,7 +139,7 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         path: '/settings',
         icon: Settings
       },
-      {  // ADD THIS ITEM
+      {
         id: 'system_logs',
         name: 'System Logs',
         path: '/admin/logs',
@@ -173,6 +168,12 @@ export const QUICK_ACCESS_ITEMS: NavigationItem[] = [
     name: 'Customers',
     path: '/customers',
     icon: Crown
+  },
+  {
+    id: 'nav_tracking',
+    name: 'NAV Tracking',
+    path: '/nav/dashboard',
+    icon: Target
   },
   {
     id: 'etl_upload',
@@ -207,6 +208,11 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
     return currentPath === '/dashboard';
   }
   
+  // Handle NAV routes
+  if (itemPath === '/nav/dashboard') {
+    return currentPath.startsWith('/nav');
+  }
+  
   // Handle ETL routes
   if (itemPath === '/etl') {
     return currentPath === '/etl' || (currentPath.startsWith('/etl') && !currentPath.startsWith('/etl/upload'));
@@ -214,15 +220,6 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
   
   if (itemPath === '/etl/upload') {
     return currentPath === '/etl/upload';
-  }
-  
-  // Handle portfolio sub-routes
-  if (itemPath === '/portfolio/contacts') {
-    return currentPath === '/portfolio/contacts';
-  }
-  
-  if (itemPath === '/portfolio/customers') {
-    return currentPath === '/portfolio/customers';
   }
   
   // For customers route, make sure it's exact match or starts with /customers/
@@ -235,7 +232,7 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
     return currentPath === '/contacts' || currentPath.startsWith('/contacts/');
   }
 
-  // Handle admin/logs route  // ADD THIS
+  // Handle admin/logs route
   if (itemPath === '/admin/logs') {
     return currentPath === '/admin/logs';
   }
@@ -254,8 +251,26 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
     icon: Home
   });
   
+  // Handle NAV routes
+  if (currentPath.startsWith('/nav')) {
+    breadcrumbs.push({
+      id: 'portfolio_management',
+      name: 'Portfolio Management',
+      path: '/portfolio',
+      icon: Briefcase
+    });
+    
+    if (currentPath.startsWith('/nav/dashboard')) {
+      breadcrumbs.push({
+        id: 'nav_tracking',
+        name: 'NAV Tracking',
+        path: '/nav/dashboard',
+        icon: Target
+      });
+    }
+  }
   // Handle ETL routes
-  if (currentPath.startsWith('/etl')) {
+  else if (currentPath.startsWith('/etl')) {
     breadcrumbs.push({
       id: 'etl_dashboard',
       name: 'ETL Dashboard',
@@ -272,7 +287,7 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
       });
     }
   } 
-  // Handle admin routes  // ADD THIS BLOCK
+  // Handle admin routes
   else if (currentPath.startsWith('/admin/')) {
     if (currentPath === '/admin/logs') {
       breadcrumbs.push({
@@ -283,31 +298,6 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
       });
     }
   }
-  // Handle portfolio routes
-  else if (currentPath.startsWith('/portfolio/')) {
-    breadcrumbs.push({
-      id: 'portfolio_management',
-      name: 'Portfolio Management',
-      path: '/portfolio',
-      icon: Briefcase
-    });
-    
-    if (currentPath === '/portfolio/contacts') {
-      breadcrumbs.push({
-        id: 'portfolio_contacts',
-        name: 'Contacts',
-        path: '/portfolio/contacts',
-        icon: Users
-      });
-    } else if (currentPath === '/portfolio/customers') {
-      breadcrumbs.push({
-        id: 'portfolio_customers',
-        name: 'Customers',
-        path: '/portfolio/customers',
-        icon: Crown
-      });
-    }
-  } 
   // Handle contact routes
   else if (currentPath.startsWith('/contacts/')) {
     breadcrumbs.push({
@@ -364,9 +354,8 @@ export const FEATURE_FLAGS = {
   market_data: false,      // Real-time market data (coming soon)
   ai_insights: false,      // AI-powered insights (future feature)
   notifications: true,     // Notification system
-  portfolio_contacts: true, // Portfolio contacts view
-  portfolio_customers: true, // Portfolio customers view
-  system_logs: true        // ADD THIS - System logs feature
+  nav_tracking: true,      // NAV tracking system
+  system_logs: true        // System logs feature
 };
 
 // Filter menu based on feature flags
@@ -378,11 +367,10 @@ export const getFilteredNavigationMenu = (): NavigationSection[] => {
       if (item.id === 'portfolios' && !FEATURE_FLAGS.portfolios) return false;
       if (item.id === 'portfolio_analysis' && !FEATURE_FLAGS.analytics) return false;
       if (item.id === 'market_data' && !FEATURE_FLAGS.market_data) return false;
-      if (item.id === 'portfolio_contacts' && !FEATURE_FLAGS.portfolio_contacts) return false;
-      if (item.id === 'portfolio_customers' && !FEATURE_FLAGS.portfolio_customers) return false;
+      if (item.id === 'nav_tracking' && !FEATURE_FLAGS.nav_tracking) return false;
       if ((item.id === 'etl_dashboard' || item.id === 'etl_upload') && !FEATURE_FLAGS.etl_system) return false;
       if (item.id === 'data_management' && !FEATURE_FLAGS.import_export) return false;
-      if (item.id === 'system_logs' && !FEATURE_FLAGS.system_logs) return false;  // ADD THIS LINE
+      if (item.id === 'system_logs' && !FEATURE_FLAGS.system_logs) return false;
       return true;
     })
   })).filter(section => section.items.length > 0);

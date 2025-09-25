@@ -1,11 +1,11 @@
 // backend/src/controllers/nav.controller.ts
-// File 7/14: NAV API controller following existing patterns
+// File 7/14: NAV API controller with proper TypeScript types
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
 import { NavDownloadService } from '../services/navDownload.service';
 import { AmfiDataSourceService } from '../services/amfiDataSource.service';
-import { SchemeService } from '../services/scheme.service';
+import { SchemeService, SchemeDetail } from '../services/scheme.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
 import {
   SchemeBookmarkSearchParams,
@@ -23,6 +23,13 @@ interface AuthenticatedRequest extends Request {
     tenant_id: number;
   };
   environment?: 'live' | 'test';
+}
+
+// Enhanced scheme type with NAV info
+interface SchemeWithNavInfo extends SchemeDetail {
+  is_bookmarked: boolean;
+  latest_nav_value: number | null;
+  latest_nav_date: Date | null;
 }
 
 export class NavController {
@@ -89,12 +96,12 @@ export class NavController {
 
       const bookmarkedSchemeIds = new Set(bookmarks.bookmarks.map(b => b.scheme_id));
 
-      const schemesWithBookmarkStatus = searchResults.schemes.map(scheme => ({
+      const schemesWithBookmarkStatus: SchemeWithNavInfo[] = searchResults.schemes.map(scheme => ({
         ...scheme,
         is_bookmarked: bookmarkedSchemeIds.has(scheme.id),
-        // Add latest NAV info if available
-        latest_nav_value: null,
-        latest_nav_date: null
+        // Add latest NAV info if available - properly typed as null initially
+        latest_nav_value: null as number | null,
+        latest_nav_date: null as Date | null
       }));
 
       res.json({

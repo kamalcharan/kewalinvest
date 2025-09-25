@@ -1,5 +1,5 @@
 // backend/src/services/navDownload.service.ts
-// File 6/14: Download orchestration with progress tracking and UI engagement
+// File 6/14: Download orchestration with progress tracking and proper scheme ID mapping
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -25,7 +25,7 @@ export interface DownloadProgressUpdate {
   totalSchemes: number;
   processedRecords: number;
   estimatedTimeRemaining?: number; // in milliseconds
-  errors?: Array<{ scheme_code: string; error: string }>;
+  errors?: Array<{ scheme_id: number; scheme_code: string; error: string }>;
   startTime: Date;
   lastUpdate: Date;
 }
@@ -118,11 +118,11 @@ export class NavDownloadService {
         };
       }
 
-      // Create download job
+      // Create download job with correct property names
       const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
-        jobType: 'daily',
-        schemeIds: schemesWithoutData,
-        scheduledDate: new Date()
+        job_type: 'daily',
+        scheme_ids: schemesWithoutData,
+        scheduled_date: new Date()
       });
 
       // Create download lock
@@ -208,13 +208,13 @@ export class NavDownloadService {
       // Estimate download time (rough calculation)
       const estimatedTimeMs = this.estimateDownloadTime(request.schemeIds.length, daysDiff);
 
-      // Create download job
+      // Create download job with correct property names
       const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
-        jobType: 'historical',
-        schemeIds: request.schemeIds,
-        scheduledDate: new Date(),
-        startDate: request.startDate,
-        endDate: request.endDate
+        job_type: 'historical',
+        scheme_ids: request.schemeIds,
+        scheduled_date: new Date(),
+        start_date: request.startDate,
+        end_date: request.endDate
       });
 
       // Create download lock
@@ -282,11 +282,11 @@ export class NavDownloadService {
         };
       }
 
-      // Create download job
+      // Create download job with correct property names
       const job = await this.navService.createDownloadJob(tenantId, isLive, systemUserId, {
-        jobType: 'weekly',
-        schemeIds: untrackedSchemes,
-        scheduledDate: new Date()
+        job_type: 'weekly',
+        scheme_ids: untrackedSchemes,
+        scheduled_date: new Date()
       });
 
       // Create download lock
@@ -319,7 +319,7 @@ export class NavDownloadService {
   // ==================== DOWNLOAD EXECUTION ====================
 
   /**
-   * Execute download job with progress updates
+   * Execute download job with progress updates and proper error handling
    */
   private async executeDownload(
     jobId: number,
@@ -409,18 +409,47 @@ export class NavDownloadService {
 
       this.updateProgress(jobId, {
         status: 'running',
-        currentStep: 'Finalizing download...',
+        currentStep: 'Finalizing download and mapping errors...',
         progressPercentage: 90
       });
 
-      // Create result summary
+      // Map errors with proper scheme IDs
+      let schemesWithErrors: Array<{ scheme_id: number; scheme_code: string; error: string }> = [];
+      
+      if (upsertResult.errors.length > 0) {
+        SimpleLogger.error('NavDownload', 'Processing errors from upsert', 'executeDownload', {
+          jobId, errorCount: upsertResult.errors.length, 
+          errorCodes: upsertResult.errors.map(e => e.scheme_code)
+        }, userId, tenantId);
+
+        // Get scheme IDs for error schemes
+        const errorSchemeCodes = upsertResult.errors.map(e => e.scheme_code);
+        const schemeIdMap = await this.getSchemeIdsByCodesMap(tenantId, isLive, errorSchemeCodes);
+        
+        schemesWithErrors = upsertResult.errors.map(error => {
+          const schemeId = schemeIdMap[error.scheme_code];
+          if (!schemeId) {
+            SimpleLogger.error('NavDownload', 'Scheme ID not found for error mapping', 'executeDownload', {
+              jobId, schemeCode: error.scheme_code, error: error.error
+            }, userId, tenantId);
+          }
+          
+          return {
+            scheme_id: schemeId || 0, // Only fallback to 0 if scheme truly not found
+            scheme_code: error.scheme_code,
+            error: error.error
+          };
+        });
+      }
+
+      // Create comprehensive result summary
       const resultSummary: NavDownloadJobResult = {
         total_schemes: job.scheme_ids.length,
         successful_downloads: job.scheme_ids.length - upsertResult.errors.length,
         failed_downloads: upsertResult.errors.length,
         total_records_inserted: upsertResult.inserted,
         total_records_updated: upsertResult.updated,
-        schemes_with_errors: upsertResult.errors,
+        schemes_with_errors: schemesWithErrors,
         execution_time_ms: Date.now() - startTime,
         api_calls_made: 1
       };
@@ -431,12 +460,14 @@ export class NavDownloadService {
         result_summary: resultSummary
       });
 
+      // Update progress with final status including errors
       this.updateProgress(jobId, {
         status: 'completed',
         currentStep: 'Download completed successfully',
         progressPercentage: 100,
         processedSchemes: resultSummary.successful_downloads,
-        processedRecords: resultSummary.total_records_inserted + resultSummary.total_records_updated
+        processedRecords: resultSummary.total_records_inserted + resultSummary.total_records_updated,
+        errors: schemesWithErrors
       });
 
       // Mark historical download as completed for bookmarks
@@ -448,7 +479,11 @@ export class NavDownloadService {
       this.cleanupAfterDownload(jobId, job.job_type, tenantId, isLive);
 
       SimpleLogger.error('NavDownload', 'Download job completed successfully', 'executeDownload', {
-        jobId, tenantId, userId, jobType: job.job_type, resultSummary
+        jobId, tenantId, userId, jobType: job.job_type, 
+        successfulDownloads: resultSummary.successful_downloads,
+        failedDownloads: resultSummary.failed_downloads,
+        recordsProcessed: resultSummary.total_records_inserted + resultSummary.total_records_updated,
+        executionTimeMs: resultSummary.execution_time_ms
       }, userId, tenantId);
 
     } catch (error: any) {
@@ -474,6 +509,79 @@ export class NavDownloadService {
       }, userId, tenantId, error.stack);
 
       throw error;
+    }
+  }
+
+  // ==================== SCHEME ID MAPPING UTILITIES ====================
+
+  /**
+   * Get scheme IDs by scheme codes for proper error mapping
+   * This ensures we always have valid scheme IDs in our error reports
+   */
+  private async getSchemeIdsByCodesMap(
+    tenantId: number,
+    isLive: boolean,
+    schemeCodes: string[]
+  ): Promise<{ [code: string]: number }> {
+    try {
+      if (schemeCodes.length === 0) return {};
+
+      const query = `
+        SELECT id, scheme_code 
+        FROM t_scheme_details
+        WHERE tenant_id = $1 
+          AND is_live = $2 
+          AND scheme_code = ANY($3) 
+          AND is_active = true
+      `;
+      
+      const result = await this.db.query(query, [tenantId, isLive, schemeCodes]);
+      
+      const schemeMap: { [code: string]: number } = {};
+      result.rows.forEach(row => {
+        schemeMap[row.scheme_code] = row.id;
+      });
+      
+      // Log any scheme codes that weren't found
+      const foundCodes = new Set(Object.keys(schemeMap));
+      const missingCodes = schemeCodes.filter(code => !foundCodes.has(code));
+      
+      if (missingCodes.length > 0) {
+        SimpleLogger.error('NavDownload', 'Some scheme codes not found in database', 'getSchemeIdsByCodesMap', {
+          tenantId, isLive, missingCodes, foundCount: result.rows.length, totalRequested: schemeCodes.length
+        });
+      }
+      
+      return schemeMap;
+    } catch (error: any) {
+      SimpleLogger.error('NavDownload', 'Failed to get scheme IDs by codes', 'getSchemeIdsByCodesMap', {
+        tenantId, schemeCodes, error: error.message
+      }, undefined, tenantId, error.stack);
+      return {}; // Return empty map on error
+    }
+  }
+
+  /**
+   * Get scheme codes by IDs (for filtering downloaded data)
+   */
+  private async getSchemeCodesByIds(
+    tenantId: number,
+    isLive: boolean,
+    schemeIds: number[]
+  ): Promise<string[]> {
+    try {
+      const query = `
+        SELECT scheme_code FROM t_scheme_details
+        WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
+      `;
+      
+      const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
+      return result.rows.map(row => row.scheme_code);
+    } catch (error: any) {
+      SimpleLogger.error('NavDownload', 'Failed to get scheme codes', 'getSchemeCodesByIds', {
+        tenantId, schemeIds, error: error.message
+      });
+      return [];
     }
   }
 
@@ -528,7 +636,8 @@ export class NavDownloadService {
 
     // In production, you might emit this to websocket or SSE for real-time UI updates
     SimpleLogger.error('NavDownload', 'Progress update', 'updateProgress', {
-      jobId, ...updates
+      jobId, status: updates.status, percentage: updates.progressPercentage, 
+      step: updates.currentStep, errorCount: updates.errors?.length || 0
     });
   }
 
@@ -670,30 +779,6 @@ export class NavDownloadService {
   }
 
   /**
-   * Get scheme codes by IDs
-   */
-  private async getSchemeCodesByIds(
-    tenantId: number,
-    isLive: boolean,
-    schemeIds: number[]
-  ): Promise<string[]> {
-    try {
-      const query = `
-        SELECT scheme_code FROM t_scheme_details
-        WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
-      `;
-      
-      const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
-      return result.rows.map(row => row.scheme_code);
-    } catch (error) {
-      SimpleLogger.error('NavDownload', 'Failed to get scheme codes', 'getSchemeCodesByIds', {
-        tenantId, schemeIds
-      });
-      return [];
-    }
-  }
-
-  /**
    * Get untracked schemes for weekly download
    */
   private async getUntrackedSchemesForWeeklyDownload(
@@ -719,9 +804,9 @@ export class NavDownloadService {
       
       const result = await this.db.query(query, [tenantId, isLive, limit]);
       return result.rows.map(row => row.id);
-    } catch (error) {
+    } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to get untracked schemes', 'getUntrackedSchemesForWeeklyDownload', {
-        tenantId, limit
+        tenantId, limit, error: error.message
       });
       return [];
     }
@@ -744,9 +829,13 @@ export class NavDownloadService {
       `;
       
       await this.db.query(query, [tenantId, isLive, userId, schemeIds]);
-    } catch (error) {
-      SimpleLogger.error('NavDownload', 'Failed to mark historical download completed', 'markHistoricalDownloadCompleted', {
+      
+      SimpleLogger.error('NavDownload', 'Historical download marked as completed', 'markHistoricalDownloadCompleted', {
         tenantId, userId, schemeIds
+      }, userId, tenantId);
+    } catch (error: any) {
+      SimpleLogger.error('NavDownload', 'Failed to mark historical download completed', 'markHistoricalDownloadCompleted', {
+        tenantId, userId, schemeIds, error: error.message
       });
     }
   }
@@ -763,9 +852,12 @@ export class NavDownloadService {
     // Remove from progress tracking after 5 minutes (allow UI to fetch final status)
     setTimeout(() => {
       this.progressUpdates.delete(jobId);
+      SimpleLogger.error('NavDownload', 'Progress tracking cleaned up', 'cleanupAfterDownload', {
+        jobId, jobType
+      });
     }, 5 * 60 * 1000);
 
-    // Remove download locks
+    // Remove download locks immediately
     const locksToRemove: string[] = [];
     for (const [key, lock] of this.downloadLocks.entries()) {
       if (lock.jobId === jobId) {
@@ -773,6 +865,12 @@ export class NavDownloadService {
       }
     }
     locksToRemove.forEach(key => this.downloadLocks.delete(key));
+    
+    if (locksToRemove.length > 0) {
+      SimpleLogger.error('NavDownload', 'Download locks cleaned up', 'cleanupAfterDownload', {
+        jobId, jobType, locksRemoved: locksToRemove.length
+      });
+    }
   }
 
   /**

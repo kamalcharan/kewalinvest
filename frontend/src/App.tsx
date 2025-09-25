@@ -14,9 +14,10 @@ import Register from './pages/auth/Register';
 // Layout
 import MainLayout from './components/layout/MainLayout';
 
-
 // Dashboard page
 import Dashboard from './pages/Dashboard';
+
+// NAV Pages
 import NavDashboardPage from './pages/nav/NavDashboardPage';
 
 // Contact pages
@@ -33,7 +34,7 @@ import CustomerViewPage from './pages/customers/CustomerViewPage';
 import ImportDataPage from './pages/data-import/ImportDataPage';
 import ImportDashboard from './pages/data-import/ImportDashboard';
 
-// System Admin pages  // ADD THIS LINE
+// System Admin pages
 import SystemLogsPage from './pages/admin/SystemLogsPage';
 
 const queryClient = new QueryClient();
@@ -72,11 +73,18 @@ function App() {
                 <Route path="data-import/:step" element={<ImportDataPage />} />
                 <Route path="data-import/results/:sessionId" element={<ImportDataPage />} />
                 
-                {/* Admin Routes */}  {/* ADD THIS LINE */}
+                {/* NAV Tracking Routes */}
+                <Route path="nav/dashboard" element={<NavDashboardPage />} />
+                {/* Add these future NAV routes when you create the components */}
+                {/* 
+                <Route path="nav/search" element={<NavSchemeSearchPage />} />
+                <Route path="nav/bookmarks" element={<NavBookmarksPage />} />
+                <Route path="nav/downloads" element={<NavDownloadsPage />} />
+                <Route path="nav/statistics" element={<NavStatisticsPage />} />
+                */}
+                
+                {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
-
-                {/* NAV Dashboard */}
-                <Route path="/nav/dashboard" element={<NavDashboardPage />} />
                 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>

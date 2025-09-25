@@ -71,10 +71,12 @@ export interface DownloadJob {
     total_records_inserted: number;
     total_records_updated: number;
     schemes_with_errors: Array<{
+      scheme_id: number;    // ✅ Fixed: Added missing scheme_id
       scheme_code: string;
       error: string;
     }>;
     execution_time_ms: number;
+    api_calls_made: number;  // ✅ Fixed: Added missing field
   };
   error_details?: string;
   is_live: boolean;
@@ -96,7 +98,11 @@ export interface DownloadProgress {
   totalSchemes: number;
   processedRecords: number;
   estimatedTimeRemaining?: number;
-  errors?: Array<{ scheme_code: string; error: string }>;
+  errors?: Array<{ 
+    scheme_id: number;    // ✅ Fixed: Added missing scheme_id
+    scheme_code: string; 
+    error: string; 
+  }>;
   startTime: string;
   lastUpdate: string;
 }
@@ -174,10 +180,17 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+// ✅ Fixed: Corrected PaginatedResponse type structure
 export interface PaginatedResponse<T> {
   success: boolean;
-  data: {
-    [key: string]: T[];
+  data?: {
+    // Specific response arrays based on endpoint
+    schemes?: T[];      // For scheme search results  
+    bookmarks?: T[];    // For bookmark results
+    nav_data?: T[];     // For NAV data results  
+    jobs?: T[];         // For download job results
+    
+    // Pagination metadata
     total: number;
     page: number;
     page_size: number;
@@ -185,6 +198,8 @@ export interface PaginatedResponse<T> {
     has_next: boolean;
     has_prev: boolean;
   };
+  error?: string;
+  message?: string;
 }
 
 // Service class
@@ -251,7 +266,7 @@ export class NavService {
    */
   async searchSchemes(params: SchemeSearchParams): Promise<PaginatedResponse<SchemeSearchResult>> {
     const url = NAV_URLS.searchSchemes(params);
-    return this.makeRequest<any>(url, { method: 'GET' });
+    return this.makeRequest<PaginatedResponse<SchemeSearchResult>['data']>(url, { method: 'GET' }) as Promise<PaginatedResponse<SchemeSearchResult>>;
   }
 
   // ==================== BOOKMARK MANAGEMENT ====================
@@ -261,7 +276,7 @@ export class NavService {
    */
   async getBookmarks(params: BookmarkSearchParams = {}): Promise<PaginatedResponse<SchemeBookmark>> {
     const url = NAV_URLS.getBookmarks(params);
-    return this.makeRequest<any>(url, { method: 'GET' });
+    return this.makeRequest<PaginatedResponse<SchemeBookmark>['data']>(url, { method: 'GET' }) as Promise<PaginatedResponse<SchemeBookmark>>;
   }
 
   /**
@@ -301,7 +316,7 @@ export class NavService {
    */
   async getNavData(params: NavDataParams = {}): Promise<PaginatedResponse<NavData>> {
     const url = NAV_URLS.getNavData(params);
-    return this.makeRequest<any>(url, { method: 'GET' });
+    return this.makeRequest<PaginatedResponse<NavData>['data']>(url, { method: 'GET' }) as Promise<PaginatedResponse<NavData>>;
   }
 
   /**
@@ -346,14 +361,15 @@ export class NavService {
    */
   async getDownloadJobs(params: DownloadJobParams = {}): Promise<PaginatedResponse<DownloadJob>> {
     const url = NAV_URLS.getDownloadJobs(params);
-    return this.makeRequest<any>(url, { method: 'GET' });
+    return this.makeRequest<PaginatedResponse<DownloadJob>['data']>(url, { method: 'GET' }) as Promise<PaginatedResponse<DownloadJob>>;
   }
 
   /**
    * Cancel running download
+   * ✅ Fixed: Use correct NAV_URLS method name
    */
   async cancelDownloadJob(jobId: number): Promise<ApiResponse<void>> {
-    const url = NAV_URLS.cancelDownloadJob(jobId);
+    const url = NAV_URLS.cancelDownload(jobId);  // ✅ Fixed: was cancelDownloadJob
     return this.makeRequest<void>(url, { method: 'DELETE' });
   }
 
@@ -393,6 +409,7 @@ export class NavService {
 
   /**
    * Health check for NAV service
+   * ✅ Fixed: Use correct NAV_URLS method name
    */
   async healthCheck(): Promise<ApiResponse<{
     service: string;
@@ -401,15 +418,16 @@ export class NavService {
     version: string;
     environment: string;
   }>> {
-    const url = NAV_URLS.healthCheck();
+    const url = NAV_URLS.getHealth();  // ✅ Fixed: was healthCheck
     return this.makeRequest<any>(url, { method: 'GET' });
   }
 
   /**
    * Get API documentation
+   * ✅ Fixed: Use correct NAV_URLS method name
    */
   async getApiDocs(): Promise<ApiResponse<any>> {
-    const url = NAV_URLS.getApiDocs();
+    const url = NAV_URLS.getDocs();  // ✅ Fixed: was getApiDocs
     return this.makeRequest<any>(url, { method: 'GET' });
   }
 
@@ -488,7 +506,7 @@ export class NavService {
     try {
       const response = await this.getBookmarks({ page_size: 1000 });
       
-      if (!response.success || !response.data.bookmarks) {
+      if (!response.success || !response.data?.bookmarks) {
         return {};
       }
 
