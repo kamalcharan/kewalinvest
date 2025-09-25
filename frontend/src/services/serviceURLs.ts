@@ -93,6 +93,13 @@ export const API_ENDPOINTS = {
     CHECK_TODAY: `${API_BASE}/nav/check-today`,
     HEALTH: `${API_BASE}/nav/health`,
     DOCS: `${API_BASE}/nav/docs`,
+    
+    // NEW: Scheduler endpoints
+    SCHEDULER_CONFIG: `${API_BASE}/nav/scheduler/config`,
+    SCHEDULER_CONFIG_UPDATE: (id: number) => `${API_BASE}/nav/scheduler/config/${id}`,
+    SCHEDULER_STATUS: `${API_BASE}/nav/scheduler/status`,
+    SCHEDULER_TRIGGER: `${API_BASE}/nav/scheduler/trigger`,
+    SCHEDULER_ALL_ACTIVE: `${API_BASE}/nav/scheduler/all-active`,
   },
   
   // File management endpoints (for future sprints)
@@ -387,6 +394,28 @@ export const NAV_URLS = {
   
   getDocs: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOCS}${buildQueryParams({}, environment)}`,
+  
+  // NEW: Scheduler endpoints
+  getSchedulerConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
+  
+  saveSchedulerConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
+  
+  updateSchedulerConfig: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG_UPDATE(id)}${buildQueryParams({}, environment)}`,
+  
+  deleteSchedulerConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
+  
+  getSchedulerStatus: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_STATUS}${buildQueryParams({}, environment)}`,
+  
+  triggerScheduledDownload: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_TRIGGER}${buildQueryParams({}, environment)}`,
+  
+  getAllActiveSchedulers: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Development logging
@@ -401,6 +430,14 @@ if (process.env.NODE_ENV === 'development') {
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
+  });
+  
+  // Log new scheduler endpoints
+  console.log('📅 New NAV Scheduler Endpoints:', {
+    SCHEDULER_CONFIG: API_ENDPOINTS.NAV.SCHEDULER_CONFIG,
+    SCHEDULER_STATUS: API_ENDPOINTS.NAV.SCHEDULER_STATUS,
+    SCHEDULER_TRIGGER: API_ENDPOINTS.NAV.SCHEDULER_TRIGGER,
+    SCHEDULER_ALL_ACTIVE: API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE,
   });
 }
 

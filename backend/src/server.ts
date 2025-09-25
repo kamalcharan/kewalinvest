@@ -22,12 +22,18 @@ import { testConnection } from './config/database';
 import { LogsController } from './controllers/logs.controller';
 import { SimpleLogger } from './services/simpleLogger.service';
 
+// NEW: Import NAV Scheduler Service for initialization
+import { NavSchedulerService } from './services/navScheduler.service';
+
 // Load environment variables
 dotenv.config();
 
 // Create Express app
 const app: Application = express();
 const PORT = process.env.PORT || 8080;
+
+// NEW: Initialize NAV Scheduler Service (will be initialized after DB connection)
+let navScheduler: NavSchedulerService;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -83,6 +89,7 @@ app.get('/health', (_req: Request, res: Response) => {
       staging: true,
       logs: true,
       nav: true,
+      nav_scheduler: !!navScheduler, // NEW: Indicate if scheduler is initialized
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -226,6 +233,15 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/health',
       'POST /api/nav/n8n-callback',
       
+      // NEW: NAV Scheduler endpoints
+      'GET /api/nav/scheduler/config',
+      'POST /api/nav/scheduler/config',
+      'PUT /api/nav/scheduler/config/:id',
+      'DELETE /api/nav/scheduler/config',
+      'GET /api/nav/scheduler/status',
+      'POST /api/nav/scheduler/trigger',
+      'GET /api/nav/scheduler/all-active',
+      
       // System logs endpoints
       'GET /api/logs',
       'GET /api/logs/stats',
@@ -291,6 +307,35 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction): void => {
   });
 });
 
+// NEW: Graceful shutdown handlers for NAV Scheduler
+process.on('SIGTERM', async () => {
+  console.log('📅 SIGTERM received, shutting down NAV scheduler gracefully...');
+  try {
+    if (navScheduler) {
+      await navScheduler.shutdownSchedulers();
+      console.log('✅ NAV Scheduler shut down successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error shutting down NAV scheduler:', error);
+  } finally {
+    process.exit(0);
+  }
+});
+
+process.on('SIGINT', async () => {
+  console.log('📅 SIGINT received, shutting down NAV scheduler gracefully...');
+  try {
+    if (navScheduler) {
+      await navScheduler.shutdownSchedulers();
+      console.log('✅ NAV Scheduler shut down successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error shutting down NAV scheduler:', error);
+  } finally {
+    process.exit(0);
+  }
+});
+
 // Start server
 app.listen(PORT, async () => {
   console.log(`
@@ -353,6 +398,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/download/progress/:id ║
 ║  • GET  /api/nav/statistics            ║
 ║                                        ║
+║  📅 NAV Scheduler (NEW):               ║
+║  • GET  /api/nav/scheduler/config      ║
+║  • POST /api/nav/scheduler/config      ║
+║  • GET  /api/nav/scheduler/status      ║
+║  • POST /api/nav/scheduler/trigger     ║
+║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
 ║  • GET  /api/import/headers/:fileId    ║
@@ -392,11 +443,26 @@ app.listen(PORT, async () => {
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
     
+    // NEW: Initialize NAV Scheduler Service after successful DB connection
+    try {
+      console.log('📅 Initializing NAV Scheduler Service...');
+      navScheduler = new NavSchedulerService();
+      await navScheduler.initializeSchedulers();
+      console.log('✅ NAV Scheduler Service initialized successfully');
+    } catch (schedulerError: any) {
+      console.error('⚠️  NAV Scheduler initialization failed:', schedulerError.message);
+      console.log('📅 NAV Scheduler will be available but no active schedules will run');
+      // Don't fail server startup if scheduler fails - just log the error
+    }
+    
     // Check N8N configuration
     if (process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_URL) {
       console.log('✅ N8N integration configured');
+      console.log(`📡 N8N Base URL: ${process.env.N8N_BASE_URL || 'Not set'}`);
+      console.log(`🔗 N8N Webhook: ${process.env.N8N_NAV_WEBHOOK_NAME || 'nav-download-trigger'}`);
     } else {
       console.log('⚠️  N8N integration not configured (N8N_BASE_URL/N8N_WEBHOOK_URL missing)');
+      console.log('📅 Scheduler will be available but cannot trigger N8N workflows');
     }
     
     // Check and create file storage directories
@@ -428,7 +494,22 @@ app.listen(PORT, async () => {
     
     console.log('✅ All file upload directories verified/created');
     
+    // Final status summary
+    console.log(`
+╔════════════════════════════════════════╗
+║          🎉 STARTUP COMPLETE 🎉        ║
+╠════════════════════════════════════════╣
+║  Database: ✅ Connected                ║
+║  NAV Routes: ✅ Ready                  ║
+║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
+║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
+║  File Storage: ✅ Ready                ║
+╚════════════════════════════════════════╝
+    `);
+    
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);
+    console.log('⚠️  Server started but database connection failed');
+    console.log('📅 NAV Scheduler will not be initialized without database');
   }
 });

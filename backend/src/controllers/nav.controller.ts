@@ -1,9 +1,10 @@
 // backend/src/controllers/nav.controller.ts
-// File 7/14: NAV API controller with proper TypeScript types
+// File 7/14: NAV API controller with proper TypeScript types + NEW SCHEDULER ENDPOINTS
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
 import { NavDownloadService } from '../services/navDownload.service';
+import { NavSchedulerService } from '../services/navScheduler.service';
 import { AmfiDataSourceService } from '../services/amfiDataSource.service';
 import { SchemeService, SchemeDetail } from '../services/scheme.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
@@ -35,12 +36,14 @@ interface SchemeWithNavInfo extends SchemeDetail {
 export class NavController {
   private navService: NavService;
   private downloadService: NavDownloadService;
+  private schedulerService: NavSchedulerService;
   private amfiService: AmfiDataSourceService;
   private schemeService: SchemeService;
 
   constructor() {
     this.navService = new NavService();
     this.downloadService = new NavDownloadService();
+    this.schedulerService = new NavSchedulerService();
     this.amfiService = new AmfiDataSourceService();
     this.schemeService = new SchemeService();
   }
@@ -886,4 +889,354 @@ export class NavController {
       });
     }
   };
+
+  // ==================== SCHEDULER MANAGEMENT ENDPOINTS ====================
+
+  /**
+   * Get scheduler configuration
+   * GET /api/nav/scheduler/config
+   */
+  getSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const config = await this.schedulerService.getSchedulerConfig(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        data: config
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get scheduler config', 'getSchedulerConfig', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get scheduler configuration'
+      });
+    }
+  };
+
+  /**
+   * Save scheduler configuration
+   * POST /api/nav/scheduler/config
+   * Body: {
+   *   schedule_type: 'daily' | 'weekly' | 'custom',
+   *   download_time: 'HH:MM',
+   *   cron_expression?: string,
+   *   is_enabled: boolean
+   * }
+   */
+  saveSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const { schedule_type, download_time, cron_expression, is_enabled } = req.body;
+
+      // Validation
+      if (!schedule_type || !download_time || is_enabled === undefined) {
+        res.status(400).json({
+          success: false,
+          error: 'schedule_type, download_time, and is_enabled are required'
+        });
+        return;
+      }
+
+      // Validate time format (HH:MM)
+      if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(download_time)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid time format. Use HH:MM format (24-hour)'
+        });
+        return;
+      }
+
+      // Generate cron expression if not provided
+      let finalCronExpression = cron_expression;
+      if (!finalCronExpression) {
+        finalCronExpression = this.generateCronExpression(schedule_type, download_time);
+      }
+
+      const config = {
+        tenant_id: user!.tenant_id,
+        user_id: user!.user_id,
+        is_live: isLive,
+        schedule_type,
+        cron_expression: finalCronExpression,
+        download_time,
+        is_enabled
+      };
+
+      const savedConfig = await this.schedulerService.saveSchedulerConfig(config);
+
+      res.json({
+        success: true,
+        data: savedConfig,
+        message: 'Scheduler configuration saved successfully'
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to save scheduler config', 'saveSchedulerConfig', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        body: req.body,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to save scheduler configuration'
+      });
+    }
+  };
+
+  /**
+   * Update existing scheduler configuration
+   * PUT /api/nav/scheduler/config/:id
+   */
+  updateSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const configId = parseInt(req.params.id);
+
+      if (isNaN(configId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid configuration ID'
+        });
+        return;
+      }
+
+      const { schedule_type, download_time, cron_expression, is_enabled } = req.body;
+
+      // Get existing config first
+      const existingConfig = await this.schedulerService.getSchedulerConfig(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      if (!existingConfig || existingConfig.id !== configId) {
+        res.status(404).json({
+          success: false,
+          error: 'Scheduler configuration not found'
+        });
+        return;
+      }
+
+      // Generate cron expression if schedule changed
+      let finalCronExpression = cron_expression;
+      if (schedule_type && download_time && !cron_expression) {
+        finalCronExpression = this.generateCronExpression(schedule_type, download_time);
+      }
+
+      const updatedConfig = {
+        ...existingConfig,
+        ...(schedule_type && { schedule_type }),
+        ...(download_time && { download_time }),
+        ...(finalCronExpression && { cron_expression: finalCronExpression }),
+        ...(is_enabled !== undefined && { is_enabled })
+      };
+
+      const savedConfig = await this.schedulerService.saveSchedulerConfig(updatedConfig);
+
+      res.json({
+        success: true,
+        data: savedConfig,
+        message: 'Scheduler configuration updated successfully'
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to update scheduler config', 'updateSchedulerConfig', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        configId: req.params.id,
+        body: req.body,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update scheduler configuration'
+      });
+    }
+  };
+
+  /**
+   * Delete scheduler configuration
+   * DELETE /api/nav/scheduler/config
+   */
+  deleteSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      await this.schedulerService.deleteSchedulerConfig(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        message: 'Scheduler configuration deleted successfully'
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to delete scheduler config', 'deleteSchedulerConfig', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to delete scheduler configuration'
+      });
+    }
+  };
+
+  /**
+   * Get scheduler status
+   * GET /api/nav/scheduler/status
+   */
+  getSchedulerStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const status = await this.schedulerService.getSchedulerStatus(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        data: status
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get scheduler status', 'getSchedulerStatus', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get scheduler status'
+      });
+    }
+  };
+
+  /**
+   * Manually trigger download (bypassing schedule)
+   * POST /api/nav/scheduler/trigger
+   */
+  triggerScheduledDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const result = await this.schedulerService.manualTriggerDownload(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            execution_id: result.executionId,
+            message: 'Download triggered successfully via N8N'
+          }
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: result.error || 'Failed to trigger download'
+        });
+      }
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to trigger scheduled download', 'triggerScheduledDownload', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to trigger download'
+      });
+    }
+  };
+
+  /**
+   * Get all active schedulers (admin endpoint)
+   * GET /api/nav/scheduler/all-active
+   */
+  getAllActiveSchedulers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      // This could be restricted to admin users only
+      const activeSchedulers = await this.schedulerService.getAllActiveSchedulers();
+
+      res.json({
+        success: true,
+        data: {
+          active_schedulers: activeSchedulers,
+          total_active: activeSchedulers.length
+        }
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get all active schedulers', 'getAllActiveSchedulers', {
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get active schedulers'
+      });
+    }
+  };
+
+  // ==================== HELPER METHODS ====================
+
+  /**
+   * Generate cron expression based on schedule type and time
+   */
+  private generateCronExpression(scheduleType: string, downloadTime: string): string {
+    const [hours, minutes] = downloadTime.split(':').map(Number);
+
+    switch (scheduleType) {
+      case 'daily':
+        // Every day at specified time
+        return `${minutes} ${hours} * * *`;
+      
+      case 'weekly':
+        // Every Friday at specified time
+        return `${minutes} ${hours} * * 5`;
+      
+      case 'custom':
+        // Default to daily if custom not specified
+        return `${minutes} ${hours} * * *`;
+      
+      default:
+        throw new Error('Invalid schedule type');
+    }
+  }
 }

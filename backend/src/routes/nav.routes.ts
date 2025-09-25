@@ -1,5 +1,5 @@
 // backend/src/routes/nav.routes.ts
-// File 8/14: NAV routing with proper middleware following existing patterns
+// File 8/14: NAV routing with proper middleware following existing patterns + NEW SCHEDULER ROUTES
 
 import { Router } from 'express';
 import { NavController } from '../controllers/nav.controller';
@@ -62,6 +62,38 @@ const historicalDownloadRateLimit = rateLimit({
   keyGenerator: (req) => {
     const user = (req as any).user;
     return `historical_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
+  }
+});
+
+// NEW: Scheduler configuration rate limiting (prevent spam configuration changes)
+const schedulerConfigRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 scheduler config changes per hour
+  message: {
+    success: false,
+    error: 'Scheduler configuration rate limit exceeded. Please wait before making more changes.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const user = (req as any).user;
+    return `scheduler_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
+  }
+});
+
+// NEW: Manual trigger rate limiting (prevent abuse of manual triggers)
+const manualTriggerRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour  
+  max: 5, // 5 manual triggers per hour
+  message: {
+    success: false,
+    error: 'Manual trigger rate limit exceeded. Please wait before triggering another download.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const user = (req as any).user;
+    return `manual_trigger_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
   }
 });
 
@@ -211,6 +243,118 @@ router.get('/statistics', navController.getNavStatistics);
  */
 router.get('/check-today', navController.checkTodayNavData);
 
+// ==================== NEW: SCHEDULER MANAGEMENT ROUTES ====================
+
+/**
+ * Get user's scheduler configuration
+ * GET /api/nav/scheduler/config
+ * 
+ * Returns current scheduler settings including:
+ * - schedule_type (daily/weekly/custom)
+ * - download_time (HH:MM format)
+ * - cron_expression
+ * - is_enabled status
+ * - next_execution_at timestamp
+ */
+router.get('/scheduler/config', navController.getSchedulerConfig);
+
+/**
+ * Create/Save scheduler configuration  
+ * POST /api/nav/scheduler/config
+ * Body: {
+ *   schedule_type: 'daily' | 'weekly' | 'custom',
+ *   download_time: 'HH:MM', // e.g., "23:00"
+ *   cron_expression?: string, // optional, auto-generated if not provided
+ *   is_enabled: boolean
+ * }
+ * 
+ * Creates new scheduler config or updates existing one
+ * Auto-generates cron expression from schedule_type + download_time
+ * Starts/stops cron job based on is_enabled flag
+ */
+router.post('/scheduler/config', schedulerConfigRateLimit, navController.saveSchedulerConfig);
+
+/**
+ * Update existing scheduler configuration
+ * PUT /api/nav/scheduler/config/:id
+ * Body: {
+ *   schedule_type?: 'daily' | 'weekly' | 'custom',
+ *   download_time?: 'HH:MM',
+ *   cron_expression?: string,
+ *   is_enabled?: boolean
+ * }
+ * 
+ * Updates specific fields of existing scheduler configuration
+ * Automatically restarts cron job with new settings
+ */
+router.put('/scheduler/config/:id', schedulerConfigRateLimit, navController.updateSchedulerConfig);
+
+/**
+ * Delete scheduler configuration
+ * DELETE /api/nav/scheduler/config
+ * 
+ * Removes user's scheduler configuration and stops any running cron job
+ * This will disable all automated downloads for the user
+ */
+router.delete('/scheduler/config', schedulerConfigRateLimit, navController.deleteSchedulerConfig);
+
+/**
+ * Get scheduler status and recent executions
+ * GET /api/nav/scheduler/status
+ * 
+ * Returns: {
+ *   config: { ... scheduler configuration ... },
+ *   is_running: boolean,
+ *   cron_job_active: boolean,
+ *   next_run: "2024-09-26T23:00:00Z",
+ *   last_run: "2024-09-25T23:00:00Z", 
+ *   recent_executions: [
+ *     {
+ *       execution_time: "2024-09-25T23:00:00Z",
+ *       status: "success",
+ *       n8n_execution_id: "abc123",
+ *       execution_duration_ms: 45000
+ *     }
+ *   ]
+ * }
+ */
+router.get('/scheduler/status', navController.getSchedulerStatus);
+
+/**
+ * Manually trigger scheduled download (bypass cron schedule)
+ * POST /api/nav/scheduler/trigger
+ * 
+ * Immediately triggers a download via N8N workflow
+ * Does not affect the regular schedule - this is a one-time manual trigger
+ * Useful for testing or immediate downloads
+ * 
+ * Returns: {
+ *   execution_id: "n8n_abc123",
+ *   message: "Download triggered successfully via N8N"
+ * }
+ */
+router.post('/scheduler/trigger', manualTriggerRateLimit, navController.triggerScheduledDownload);
+
+/**
+ * Get all active schedulers across system (admin endpoint)
+ * GET /api/nav/scheduler/all-active
+ * 
+ * Returns system-wide view of all active schedulers
+ * Useful for admin monitoring and system health checks
+ * 
+ * Returns: {
+ *   active_schedulers: [
+ *     {
+ *       jobKey: "nav_scheduler_1_live_123",
+ *       config: { ... },
+ *       isActive: true
+ *     }
+ *   ],
+ *   total_active: 15
+ * }
+ */
+router.get('/scheduler/all-active', navController.getAllActiveSchedulers);
+
 // ==================== N8N INTEGRATION ROUTES ====================
 
 /**
@@ -249,7 +393,16 @@ router.get('/health', (req, res) => {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       version: process.env.npm_package_version || '1.0.0',
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      features: {
+        schemes_search: true,
+        bookmarks: true,
+        nav_data: true,
+        downloads: true,
+        scheduler: true, // NEW: Indicate scheduler feature is available
+        n8n_integration: !!process.env.N8N_BASE_URL,
+        amfi_integration: true
+      }
     });
   } catch (error: any) {
     res.status(503).json({
@@ -313,6 +466,27 @@ router.use((error: any, req: any, res: any, next: any) => {
     'DOWNLOAD_JOB_NOT_FOUND': {
       status: 404,
       message: 'Download job not found'
+    },
+    // NEW: Scheduler-specific error codes
+    'SCHEDULER_CONFIG_NOT_FOUND': {
+      status: 404,
+      message: 'Scheduler configuration not found'
+    },
+    'INVALID_CRON_EXPRESSION': {
+      status: 400,
+      message: 'Invalid cron expression provided'
+    },
+    'SCHEDULER_ALREADY_EXISTS': {
+      status: 409,
+      message: 'User already has a scheduler configuration'
+    },
+    'N8N_WEBHOOK_FAILED': {
+      status: 502,
+      message: 'Failed to trigger N8N workflow'
+    },
+    'SCHEDULER_NOT_ENABLED': {
+      status: 400,
+      message: 'Scheduler is not enabled for this user'
     }
   };
 
@@ -380,6 +554,16 @@ router.get('/docs', (req, res) => {
         cancel: { method: 'DELETE', path: '/download/jobs/:jobId' },
         active: { method: 'GET', path: '/download/active' }
       },
+      // NEW: Scheduler endpoints documentation
+      scheduler: {
+        get_config: { method: 'GET', path: '/scheduler/config' },
+        save_config: { method: 'POST', path: '/scheduler/config', rate_limit: '20/hour' },
+        update_config: { method: 'PUT', path: '/scheduler/config/:id', rate_limit: '20/hour' },
+        delete_config: { method: 'DELETE', path: '/scheduler/config', rate_limit: '20/hour' },
+        get_status: { method: 'GET', path: '/scheduler/status' },
+        manual_trigger: { method: 'POST', path: '/scheduler/trigger', rate_limit: '5/hour' },
+        all_active: { method: 'GET', path: '/scheduler/all-active' }
+      },
       statistics: {
         dashboard: { method: 'GET', path: '/statistics' },
         check_today: { method: 'GET', path: '/check-today' }
@@ -392,7 +576,9 @@ router.get('/docs', (req, res) => {
     rate_limits: {
       general: '100 requests per 15 minutes',
       downloads: '10 requests per hour',
-      historical_downloads: '3 requests per day'
+      historical_downloads: '3 requests per day',
+      scheduler_config: '20 requests per hour', // NEW
+      manual_trigger: '5 requests per hour' // NEW
     },
     error_codes: Object.keys({
       'SCHEME_NOT_FOUND': 404,
@@ -401,7 +587,13 @@ router.get('/docs', (req, res) => {
       'HISTORICAL_DOWNLOAD_COMPLETED': 409,
       'INVALID_DATE_RANGE': 400,
       'AMFI_API_ERROR': 503,
-      'RATE_LIMIT_EXCEEDED': 429
+      'RATE_LIMIT_EXCEEDED': 429,
+      // NEW: Scheduler error codes
+      'SCHEDULER_CONFIG_NOT_FOUND': 404,
+      'INVALID_CRON_EXPRESSION': 400,
+      'SCHEDULER_ALREADY_EXISTS': 409,
+      'N8N_WEBHOOK_FAILED': 502,
+      'SCHEDULER_NOT_ENABLED': 400
     })
   };
 
