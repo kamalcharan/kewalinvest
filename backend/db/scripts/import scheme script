@@ -1,0 +1,304 @@
+-- Database function to process scheme records from staging to production
+DROP FUNCTION IF EXISTS process_single_scheme_record CASCADE;
+
+CREATE OR REPLACE FUNCTION process_single_scheme_record(p_staging_id INTEGER)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_staging RECORD;
+    v_mapped_data JSONB;
+    v_scheme_id INTEGER;
+    v_is_duplicate BOOLEAN;
+    v_error_messages TEXT[];
+    v_scheme_type_id INTEGER;
+    v_scheme_category_id INTEGER;
+    v_launch_date DATE;
+    v_closure_date DATE;
+    v_minimum_amount DECIMAL(15,2);
+BEGIN
+    -- Get staging record
+    SELECT * INTO v_staging
+    FROM t_import_staging_data
+    WHERE id = p_staging_id;
+    
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+    
+    -- Mark as processing
+    UPDATE t_import_staging_data
+    SET processing_status = 'processing'
+    WHERE id = p_staging_id;
+    
+    v_mapped_data := v_staging.mapped_data;
+    v_error_messages := ARRAY[]::TEXT[];
+    
+    BEGIN
+        -- Check for duplicate by scheme_code
+        SELECT COUNT(*) > 0 INTO v_is_duplicate
+        FROM t_scheme_details
+        WHERE scheme_code = v_mapped_data->>'scheme_code'
+          AND tenant_id = v_staging.tenant_id
+          AND is_live = v_staging.is_live;
+        
+        IF v_is_duplicate THEN
+            -- Update existing scheme
+            UPDATE t_scheme_details
+            SET 
+                amc_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'amc_name'), ''), amc_name),
+                scheme_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_name'), ''), scheme_name),
+                scheme_nav_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''), scheme_nav_name),
+                scheme_minimum_amount = CASE 
+                    WHEN v_mapped_data->>'scheme_minimum_amount' IS NOT NULL 
+                    THEN (v_mapped_data->>'scheme_minimum_amount')::DECIMAL(15,2)
+                    ELSE scheme_minimum_amount 
+                END,
+                isin_div_payout = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_payout'), ''), isin_div_payout),
+                isin_growth = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_growth'), ''), isin_growth),
+                isin_div_reinvestment = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_reinvestment'), ''), isin_div_reinvestment),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE scheme_code = v_mapped_data->>'scheme_code'
+              AND tenant_id = v_staging.tenant_id
+              AND is_live = v_staging.is_live
+            RETURNING id INTO v_scheme_id;
+            
+            -- Mark as duplicate
+            UPDATE t_import_staging_data
+            SET processing_status = 'duplicate',
+                warnings = array_append(warnings, 'Scheme already exists - updated'),
+                created_record_id = v_scheme_id,
+                created_record_type = 'scheme',
+                processed_at = CURRENT_TIMESTAMP
+            WHERE id = p_staging_id;
+            
+            RETURN;
+        END IF;
+        
+        -- Get scheme_type_id if scheme_type is provided
+        v_scheme_type_id := NULL;
+        IF v_mapped_data->>'scheme_type' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_type') != '' THEN
+            SELECT id INTO v_scheme_type_id
+            FROM t_scheme_masters
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_type'))
+              AND master_type = 'scheme_type'
+              AND tenant_id = v_staging.tenant_id
+              AND is_live = v_staging.is_live
+              AND is_active = true
+            LIMIT 1;
+        END IF;
+        
+        -- Get scheme_category_id if scheme_category is provided
+        v_scheme_category_id := NULL;
+        IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
+            SELECT id INTO v_scheme_category_id
+            FROM t_scheme_masters
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
+              AND master_type = 'scheme_category'
+              AND tenant_id = v_staging.tenant_id
+              AND is_live = v_staging.is_live
+              AND is_active = true
+            LIMIT 1;
+        END IF;
+        
+        -- Parse launch_date
+        v_launch_date := NULL;
+        IF v_mapped_data->>'launch_date' IS NOT NULL AND TRIM(v_mapped_data->>'launch_date') != '' THEN
+            BEGIN
+                v_launch_date := TO_DATE(v_mapped_data->>'launch_date', 'YYYY-MM-DD');
+            EXCEPTION WHEN OTHERS THEN
+                BEGIN
+                    v_launch_date := TO_DATE(v_mapped_data->>'launch_date', 'DD-MM-YYYY');
+                EXCEPTION WHEN OTHERS THEN
+                    BEGIN
+                        v_launch_date := TO_DATE(v_mapped_data->>'launch_date', 'MM-DD-YYYY');
+                    EXCEPTION WHEN OTHERS THEN
+                        v_launch_date := NULL;
+                    END;
+                END;
+            END;
+        END IF;
+        
+        -- Parse closure_date
+        v_closure_date := NULL;
+        IF v_mapped_data->>'closure_date' IS NOT NULL AND TRIM(v_mapped_data->>'closure_date') != '' THEN
+            BEGIN
+                v_closure_date := TO_DATE(v_mapped_data->>'closure_date', 'YYYY-MM-DD');
+            EXCEPTION WHEN OTHERS THEN
+                BEGIN
+                    v_closure_date := TO_DATE(v_mapped_data->>'closure_date', 'DD-MM-YYYY');
+                EXCEPTION WHEN OTHERS THEN
+                    BEGIN
+                        v_closure_date := TO_DATE(v_mapped_data->>'closure_date', 'MM-DD-YYYY');
+                    EXCEPTION WHEN OTHERS THEN
+                        v_closure_date := NULL;
+                    END;
+                END;
+            END;
+        END IF;
+        
+        -- Parse minimum amount
+        v_minimum_amount := NULL;
+        IF v_mapped_data->>'scheme_minimum_amount' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_minimum_amount') != '' THEN
+            BEGIN
+                v_minimum_amount := (v_mapped_data->>'scheme_minimum_amount')::DECIMAL(15,2);
+            EXCEPTION WHEN OTHERS THEN
+                v_minimum_amount := NULL;
+            END;
+        END IF;
+        
+        -- Create new scheme record
+        INSERT INTO t_scheme_details (
+            tenant_id,
+            is_live,
+            amc_name,
+            scheme_code,
+            scheme_name,
+            scheme_type_id,
+            scheme_category_id,
+            scheme_nav_name,
+            scheme_minimum_amount,
+            launch_date,
+            closure_date,
+            isin_div_payout,
+            isin_growth,
+            isin_div_reinvestment,
+            created_at
+        ) VALUES (
+            v_staging.tenant_id,
+            v_staging.is_live,
+            NULLIF(TRIM(v_mapped_data->>'amc_name'), ''),
+            v_mapped_data->>'scheme_code',
+            v_mapped_data->>'scheme_name',
+            v_scheme_type_id,
+            v_scheme_category_id,
+            NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''),
+            v_minimum_amount,
+            v_launch_date,
+            v_closure_date,
+            NULLIF(TRIM(v_mapped_data->>'isin_div_payout'), ''),
+            NULLIF(TRIM(v_mapped_data->>'isin_growth'), ''),
+            NULLIF(TRIM(v_mapped_data->>'isin_div_reinvestment'), ''),
+            CURRENT_TIMESTAMP
+        ) RETURNING id INTO v_scheme_id;
+        
+        -- Mark as success
+        UPDATE t_import_staging_data
+        SET processing_status = 'success',
+            created_record_id = v_scheme_id,
+            created_record_type = 'scheme',
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = p_staging_id;
+        
+    EXCEPTION WHEN OTHERS THEN
+        -- Handle errors
+        v_error_messages := array_append(v_error_messages, SQLERRM);
+        
+        UPDATE t_import_staging_data
+        SET processing_status = 'failed',
+            error_messages = v_error_messages,
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = p_staging_id;
+    END;
+END;
+$$;
+
+-- Also create a batch processing function for schemes
+DROP FUNCTION IF EXISTS process_scheme_import_with_timing CASCADE;
+
+CREATE OR REPLACE FUNCTION process_scheme_import_with_timing(
+    p_session_id INTEGER,
+    p_target_duration_ms INTEGER DEFAULT 30000
+) RETURNS TABLE(
+    processed_count INTEGER,
+    success_count INTEGER,
+    failed_count INTEGER,
+    duplicate_count INTEGER,
+    actual_duration_ms INTEGER
+) 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_start_time TIMESTAMP;
+    v_end_time TIMESTAMP;
+    v_staging_record RECORD;
+    v_processed_count INTEGER := 0;
+    v_success_count INTEGER := 0;
+    v_failed_count INTEGER := 0;
+    v_duplicate_count INTEGER := 0;
+    v_batch_size INTEGER := 100;
+    v_sleep_ms INTEGER;
+BEGIN
+    v_start_time := clock_timestamp();
+    
+    -- Update session status to processing
+    UPDATE t_import_sessions 
+    SET status = 'processing',
+        processing_started_at = v_start_time
+    WHERE id = p_session_id;
+    
+    -- Process records in batches
+    FOR v_staging_record IN 
+        SELECT id, processing_status
+        FROM t_import_staging_data
+        WHERE session_id = p_session_id
+        AND processing_status = 'pending'
+        ORDER BY row_number
+        
+    LOOP
+        -- Process single record
+        PERFORM process_single_scheme_record(v_staging_record.id);
+        
+        -- Get the updated status
+        SELECT processing_status INTO v_staging_record
+        FROM t_import_staging_data
+        WHERE id = v_staging_record.id;
+        
+        -- Update counters
+        v_processed_count := v_processed_count + 1;
+        
+        CASE v_staging_record.processing_status
+            WHEN 'success' THEN v_success_count := v_success_count + 1;
+            WHEN 'failed' THEN v_failed_count := v_failed_count + 1;
+            WHEN 'duplicate' THEN v_duplicate_count := v_duplicate_count + 1;
+        END CASE;
+        
+        -- Check if we should continue or sleep
+        IF v_processed_count % 10 = 0 THEN
+            -- Calculate sleep time to match target duration
+            v_end_time := clock_timestamp();
+            v_sleep_ms := (p_target_duration_ms / v_batch_size) - 
+                         EXTRACT(MILLISECOND FROM (v_end_time - v_start_time));
+            
+            IF v_sleep_ms > 0 THEN
+                PERFORM pg_sleep(v_sleep_ms / 1000.0);
+            END IF;
+        END IF;
+    END LOOP;
+    
+    v_end_time := clock_timestamp();
+    
+    -- Update session with final statistics
+    UPDATE t_import_sessions 
+    SET status = CASE 
+            WHEN v_failed_count > 0 THEN 'completed_with_errors'
+            ELSE 'completed'
+        END,
+        processed_records = v_processed_count,
+        successful_records = v_success_count,
+        failed_records = v_failed_count,
+        duplicate_records = v_duplicate_count,
+        processing_completed_at = v_end_time
+    WHERE id = p_session_id;
+    
+    RETURN QUERY SELECT 
+        v_processed_count,
+        v_success_count,
+        v_failed_count,
+        v_duplicate_count,
+        EXTRACT(MILLISECOND FROM (v_end_time - v_start_time))::INTEGER;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION process_single_scheme_record TO kewal_admin;
+GRANT EXECUTE ON FUNCTION process_scheme_import_with_timing TO kewal_admin;

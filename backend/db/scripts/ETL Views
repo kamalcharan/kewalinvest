@@ -1,0 +1,65 @@
+-- Migration: Create views for staging statistics and monitoring
+-- Purpose: Provide efficient queries for staging status monitoring
+-- Author: System
+-- Date: 2024
+
+-- View for session-level staging statistics
+CREATE OR REPLACE VIEW v_import_staging_statistics AS
+SELECT 
+  session_id,
+  tenant_id,
+  is_live,
+  import_type,
+  COUNT(*) as total_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'pending') as pending_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'processing') as processing_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'success') as success_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'failed') as failed_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'duplicate') as duplicate_rows,
+  COUNT(*) FILTER (WHERE processing_status = 'skipped') as skipped_rows,
+  MIN(created_at) as staging_started_at,
+  MAX(processed_at) as last_processed_at,
+  ROUND(
+    CAST(COUNT(*) FILTER (WHERE processing_status = 'success') AS DECIMAL) / 
+    NULLIF(COUNT(*), 0) * 100, 2
+  ) as success_rate
+FROM t_import_staging_data
+GROUP BY session_id, tenant_id, is_live, import_type;
+
+-- View for detailed staging progress
+CREATE OR REPLACE VIEW v_import_staging_progress AS
+SELECT 
+  s.id as session_id,
+  s.session_name,
+  s.import_type,
+  s.status as session_status,
+  s.staging_total_rows,
+  s.current_batch,
+  s.total_batches,
+  s.last_processed_row,
+  COALESCE(st.pending_rows, 0) as pending_rows,
+  COALESCE(st.processing_rows, 0) as processing_rows,
+  COALESCE(st.success_rows, 0) as success_rows,
+  COALESCE(st.failed_rows, 0) as failed_rows,
+  CASE 
+    WHEN s.staging_total_rows > 0 THEN 
+      ROUND(CAST(COALESCE(st.success_rows + st.failed_rows + st.skipped_rows, 0) AS DECIMAL) / 
+            s.staging_total_rows * 100, 2)
+    ELSE 0 
+  END as completion_percentage,
+  s.processing_started_at,
+  s.staging_completed_at,
+  CASE 
+    WHEN s.processing_started_at IS NOT NULL AND st.processing_rows > 0 THEN
+      EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - s.processing_started_at)) / 
+      NULLIF(st.success_rows + st.failed_rows, 0)
+    ELSE NULL
+  END as avg_seconds_per_record
+FROM t_import_sessions s
+LEFT JOIN v_import_staging_statistics st ON s.id = st.session_id;
+
+-- Index to support the views
+CREATE INDEX IF NOT EXISTS idx_staging_view_support ON t_import_staging_data(session_id, processing_status);
+
+COMMENT ON VIEW v_import_staging_statistics IS 'Aggregated statistics for staging table by session';
+COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring view';

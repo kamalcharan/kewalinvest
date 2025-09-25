@@ -1,0 +1,158 @@
+-- Setup Tenants and Row Level Security (RLS)
+
+-- First, clear existing tenants except default
+DELETE FROM t_tenants WHERE tenant_code != 'default';
+
+-- Insert the 4 tenants
+INSERT INTO t_tenants (tenant_code, tenant_name, is_active, subscription_plan) VALUES
+    ('kewal', 'Kewal Investments', true, 'premium'),     -- Actual customer
+    ('localsing', 'LocalSing Test', true, 'basic'),      -- Test tenant 1
+    ('vikuna', 'Vikuna Test', true, 'basic'),            -- Test tenant 2
+    ('pulse', 'Pulse Test', true, 'basic')               -- Test tenant 3
+ON CONFLICT (tenant_code) DO NOTHING;
+
+-- Show all tenants
+SELECT id, tenant_code, tenant_name, subscription_plan FROM t_tenants ORDER BY id;
+
+-- Enable Row Level Security on all tables
+ALTER TABLE t_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE t_chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE t_chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Create a function to get current tenant_id from session/context
+-- This will be set by the application when user logs in
+CREATE OR REPLACE FUNCTION current_tenant_id() 
+RETURNS INTEGER AS $$
+BEGIN
+    -- Try to get tenant_id from current setting
+    -- If not set, return NULL (no access)
+    RETURN NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create a function to get current environment (live/test)
+CREATE OR REPLACE FUNCTION current_environment() 
+RETURNS VARCHAR AS $$
+BEGIN
+    -- Default to 'live' if not set
+    RETURN COALESCE(current_setting('app.current_environment', true), 'live');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 'live';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop existing policies if any
+DROP POLICY IF EXISTS tenant_isolation_users ON t_users;
+DROP POLICY IF EXISTS tenant_isolation_chat_sessions ON t_chat_sessions;
+DROP POLICY IF EXISTS tenant_isolation_chat_messages ON t_chat_messages;
+
+-- Create RLS Policies for t_users
+CREATE POLICY tenant_isolation_users ON t_users
+    FOR ALL
+    USING (tenant_id = current_tenant_id());
+
+-- Create RLS Policies for t_chat_sessions
+CREATE POLICY tenant_isolation_chat_sessions ON t_chat_sessions
+    FOR ALL
+    USING (tenant_id = current_tenant_id());
+
+-- Create RLS Policies for t_chat_messages
+CREATE POLICY tenant_isolation_chat_messages ON t_chat_messages
+    FOR ALL
+    USING (tenant_id = current_tenant_id());
+
+-- Create environment-based policies (for live/test data separation)
+DROP POLICY IF EXISTS environment_filter_users ON t_users;
+DROP POLICY IF EXISTS environment_filter_chat_sessions ON t_chat_sessions;
+DROP POLICY IF EXISTS environment_filter_chat_messages ON t_chat_messages;
+
+CREATE POLICY environment_filter_users ON t_users
+    FOR SELECT
+    USING (
+        CASE 
+            WHEN current_environment() = 'live' THEN is_live = true
+            WHEN current_environment() = 'test' THEN is_live = false
+            ELSE true
+        END
+    );
+
+CREATE POLICY environment_filter_chat_sessions ON t_chat_sessions
+    FOR SELECT
+    USING (
+        CASE 
+            WHEN current_environment() = 'live' THEN is_live = true
+            WHEN current_environment() = 'test' THEN is_live = false
+            ELSE true
+        END
+    );
+
+CREATE POLICY environment_filter_chat_messages ON t_chat_messages
+    FOR SELECT
+    USING (
+        CASE 
+            WHEN current_environment() = 'live' THEN is_live = true
+            WHEN current_environment() = 'test' THEN is_live = false
+            ELSE true
+        END
+    );
+
+-- Grant necessary permissions
+GRANT ALL ON ALL TABLES IN SCHEMA public TO kewal_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO kewal_admin;
+GRANT EXECUTE ON FUNCTION current_tenant_id() TO kewal_admin;
+GRANT EXECUTE ON FUNCTION current_environment() TO kewal_admin;
+
+-- Create some test users for each tenant
+-- Password for all test users will be 'Test@123' (you'll hash this in application)
+INSERT INTO t_users (tenant_id, email, password_hash, is_active, theme_preference, environment_preference, is_live) 
+SELECT 
+    t.id,
+    CASE 
+        WHEN t.tenant_code = 'kewal' THEN 'admin@kewalinvestments.com'
+        WHEN t.tenant_code = 'localsing' THEN 'test@localsing.com'
+        WHEN t.tenant_code = 'vikuna' THEN 'test@vikuna.com'
+        WHEN t.tenant_code = 'pulse' THEN 'test@pulse.com'
+    END as email,
+    '$2a$10$YourHashHere', -- This will be replaced with actual hash from backend
+    true,
+    'techy-simple',
+    'live',
+    true
+FROM t_tenants t
+WHERE t.tenant_code IN ('kewal', 'localsing', 'vikuna', 'pulse')
+ON CONFLICT (tenant_id, email) DO NOTHING;
+
+-- Test RLS by setting tenant context
+-- Example: Set tenant to 'kewal' (id=2 based on our inserts)
+SET app.current_tenant_id = '2';
+SET app.current_environment = 'live';
+
+-- This should only show users from tenant_id = 2
+SELECT id, email, tenant_id FROM t_users;
+
+-- Reset context
+RESET app.current_tenant_id;
+RESET app.current_environment;
+
+-- Show summary
+SELECT 
+    'Tenants Created' as status,
+    COUNT(*) as count 
+FROM t_tenants
+UNION ALL
+SELECT 
+    'Users Created' as status,
+    COUNT(*) as count 
+FROM t_users
+UNION ALL
+SELECT 
+    'RLS Enabled Tables' as status,
+    COUNT(*) as count
+FROM pg_tables 
+WHERE schemaname = 'public' 
+AND tablename IN ('t_users', 't_chat_sessions', 't_chat_messages')
+AND rowsecurity = true;

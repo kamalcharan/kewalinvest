@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KewalInvest Backend Server Verification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        
+        .test-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+        }
+        
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status.pending {
+            background: #ffeaa7;
+            color: #fdcb6e;
+        }
+        
+        .status.success {
+            background: #00b894;
+            color: white;
+        }
+        
+        .status.error {
+            background: #e17055;
+            color: white;
+        }
+        
+        .status.loading {
+            background: #74b9ff;
+            color: white;
+        }
+        
+        button {
+            background: #0984e3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0770c7;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .response-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #0984e3;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .auth-section {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .auth-input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        .progress {
+            margin: 20px 0;
+            padding: 20px;
+            background: #e8f5e8;
+            border-radius: 5px;
+        }
+        
+        .file-test {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 KewalInvest Backend Server Verification</h1>
+            <p>Complete server health check and ETL route verification</p>
+        </div>
+        
+        <div class="auth-section">
+            <h3>🔐 Authentication Setup</h3>
+            <p>Enter your authentication details to test protected endpoints:</p>
+            <input type="text" id="serverUrl" class="auth-input" placeholder="Server URL (default: http://localhost:8080)" value="http://localhost:8080">
+            <input type="text" id="accessToken" class="auth-input" placeholder="Access Token (from localStorage: access_token)">
+            <input type="text" id="tenantId" class="auth-input" placeholder="Tenant ID (from localStorage: tenant_id)">
+            <input type="text" id="environment" class="auth-input" placeholder="Environment (from localStorage: environment)" value="live">
+            <button onclick="loadFromLocalStorage()">Load from LocalStorage</button>
+            <button onclick="runAllTests()">🚀 Start Verification</button>
+        </div>
+
+        <div class="progress" id="progress" style="display: none;">
+            <h3>🔄 Testing Progress</h3>
+            <div id="progressText">Starting tests...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>1. 🏥 Basic Server Health</h3>
+            <div class="test-item">
+                <span><strong>Server Reachability:</strong> Can we connect to the server?</span>
+                <span class="status pending" id="status-reachability">PENDING</span>
+            </div>
+            <div id="response-reachability" class="response-details" style="display: none;"></div>
+            
+            <div class="test-item">
+                <span><strong>Health Endpoint:</strong> GET /health</span>
+                <span class="status pending" id="status-health">PENDING</span>
+            </div>
+            <div id="response-health" class="response-details" style="display: none;"></div>
+            
+            <div class="test-item">
+                <span><strong>API Overview:</strong> GET /api</span>
+                <span class="status pending" id="status-api">PENDING</span>
+            </div>
+            <div id="response-api" class="response-details" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 🔐 Authentication System</h3>
+            <div class="test-item">
+                <span><strong>Protected Route Test:</strong> GET /api/import/sessions</span>
+                <span class="status pending" id="status-auth">PENDING</span>
+            </div>
+            <div id="response-auth" class="response-details" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 📁 Import Routes Verification</h3>
+            <div class="test-item">
+                <span><strong>Templates Endpoint:</strong> GET /api/import/templates</span>
+                <span class="status pending" id="status-templates">PENDING</span>
+            </div>
+            <div id="response-templates" class="response-details" style="display: none;"></div>
+            
+            <div class="test-item">
+                <span><strong>Import Sessions:</strong> GET /api/import/sessions</span>
+                <span class="status pending" id="status-sessions">PENDING</span>
+            </div>
+            <div id="response-sessions" class="response-details" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 📤 File Upload System</h3>
+            <div class="file-test">
+                <p><strong>File Upload Test:</strong></p>
+                <input type="file" id="testFile" accept=".csv,.xlsx,.xls">
+                <select id="importType">
+                    <option value="CustomerData">Customer Data</option>
+                    <option value="TransactionData">Transaction Data</option>
+                </select>
+                <button onclick="testFileUpload()" id="uploadBtn">Test File Upload</button>
+                <div class="test-item">
+                    <span><strong>File Upload:</strong> POST /api/import/upload</span>
+                    <span class="status pending" id="status-upload">PENDING</span>
+                </div>
+                <div id="response-upload" class="response-details" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. 🔧 System Configuration</h3>
+            <div class="test-item">
+                <span><strong>CORS Headers:</strong> Check cross-origin access</span>
+                <span class="status pending" id="status-cors">PENDING</span>
+            </div>
+            <div id="response-cors" class="response-details" style="display: none;"></div>
+            
+            <div class="test-item">
+                <span><strong>Rate Limiting:</strong> Check if rate limits are active</span>
+                <span class="status pending" id="status-rate">PENDING</span>
+            </div>
+            <div id="response-rate" class="response-details" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let serverUrl = 'http://localhost:8080';
+        let authHeaders = {};
+
+        function loadFromLocalStorage() {
+            document.getElementById('accessToken').value = localStorage.getItem('access_token') || '';
+            document.getElementById('tenantId').value = localStorage.getItem('tenant_id') || '';
+            document.getElementById('environment').value = localStorage.getItem('environment') || 'live';
+        }
+
+        function setupAuth() {
+            serverUrl = document.getElementById('serverUrl').value || 'http://localhost:8080';
+            const token = document.getElementById('accessToken').value;
+            const tenantId = document.getElementById('tenantId').value;
+            const environment = document.getElementById('environment').value;
+
+            authHeaders = {
+                'Content-Type': 'application/json'
+            };
+
+            if (token) {
+                authHeaders['Authorization'] = `Bearer ${token}`;
+            }
+            if (tenantId) {
+                authHeaders['X-Tenant-ID'] = tenantId;
+            }
+            if (environment) {
+                authHeaders['X-Environment'] = environment;
+            }
+        }
+
+        function updateStatus(testId, status, message = '') {
+            const statusEl = document.getElementById(`status-${testId}`);
+            const responseEl = document.getElementById(`response-${testId}`);
+            
+            if (statusEl) {
+                statusEl.textContent = status.toUpperCase();
+                statusEl.className = `status ${status}`;
+            }
+            
+            if (message && responseEl) {
+                responseEl.textContent = message;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        function updateProgress(text) {
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        async function testEndpoint(testId, method, endpoint, options = {}) {
+            try {
+                updateStatus(testId, 'loading');
+                
+                const response = await fetch(`${serverUrl}${endpoint}`, {
+                    method: method,
+                    headers: { ...authHeaders, ...options.headers },
+                    body: options.body
+                });
+
+                const responseText = await response.text();
+                let responseData;
+                
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch {
+                    responseData = responseText;
+                }
+
+                const details = `Status: ${response.status} ${response.statusText}\n` +
+                               `Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}\n` +
+                               `Response: ${JSON.stringify(responseData, null, 2)}`;
+
+                if (response.ok) {
+                    updateStatus(testId, 'success', details);
+                    return { success: true, data: responseData, status: response.status };
+                } else {
+                    updateStatus(testId, 'error', details);
+                    return { success: false, error: responseData, status: response.status };
+                }
+            } catch (error) {
+                updateStatus(testId, 'error', `Network Error: ${error.message}`);
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function runAllTests() {
+            setupAuth();
+            updateProgress('Setting up authentication...');
+
+            // 1. Basic Server Health
+            updateProgress('Testing server reachability...');
+            await testEndpoint('reachability', 'GET', '');
+            
+            updateProgress('Testing health endpoint...');
+            await testEndpoint('health', 'GET', '/health');
+            
+            updateProgress('Testing API overview...');
+            await testEndpoint('api', 'GET', '/api');
+
+            // 2. Authentication System
+            updateProgress('Testing authentication system...');
+            await testEndpoint('auth', 'GET', '/api/import/sessions');
+
+            // 3. Import Routes
+            updateProgress('Testing import templates...');
+            await testEndpoint('templates', 'GET', '/api/import/templates');
+            
+            updateProgress('Testing import sessions...');
+            await testEndpoint('sessions', 'GET', '/api/import/sessions');
+
+            // 4. System Configuration
+            updateProgress('Testing CORS configuration...');
+            const corsTest = await testEndpoint('cors', 'OPTIONS', '/api/import/upload');
+            
+            updateProgress('Testing rate limiting...');
+            await testEndpoint('rate', 'GET', '/health');
+
+            updateProgress('✅ All tests completed!');
+        }
+
+        async function testFileUpload() {
+            const fileInput = document.getElementById('testFile');
+            const importType = document.getElementById('importType').value;
+            
+            if (!fileInput.files[0]) {
+                alert('Please select a file first');
+                return;
+            }
+
+            setupAuth();
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('importType', importType);
+
+            try {
+                updateStatus('upload', 'loading');
+                document.getElementById('uploadBtn').disabled = true;
+
+                const response = await fetch(`${serverUrl}/api/import/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authHeaders['Authorization'],
+                        'X-Tenant-ID': authHeaders['X-Tenant-ID'],
+                        'X-Environment': authHeaders['X-Environment']
+                    },
+                    body: formData
+                });
+
+                const responseText = await response.text();
+                let responseData;
+                
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch {
+                    responseData = responseText;
+                }
+
+                const details = `Status: ${response.status} ${response.statusText}\n` +
+                               `File: ${file.name} (${file.size} bytes)\n` +
+                               `Type: ${importType}\n` +
+                               `Response: ${JSON.stringify(responseData, null, 2)}`;
+
+                if (response.ok) {
+                    updateStatus('upload', 'success', details);
+                } else {
+                    updateStatus('upload', 'error', details);
+                }
+            } catch (error) {
+                updateStatus('upload', 'error', `Upload Error: ${error.message}`);
+            } finally {
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        }
+
+        // Load auth details on page load
+        window.addEventListener('load', () => {
+            loadFromLocalStorage();
+        });
+    </script>
+</body>
+</html>

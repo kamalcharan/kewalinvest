@@ -1,0 +1,523 @@
+-- Migration: Create import processing functions for timed customer data import
+-- Purpose: Process staged data with controlled timing for better UX
+-- Date: 2025
+
+-- Main processing function with timing control
+CREATE OR REPLACE FUNCTION process_customer_import_with_timing(
+    p_session_id INTEGER,
+    p_target_duration_ms INTEGER DEFAULT 30000
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_session RECORD;
+    v_staging_record RECORD;
+    v_total_records INTEGER;
+    v_records_per_batch INTEGER;
+    v_delay_per_batch INTERVAL;
+    v_processed_count INTEGER := 0;
+    v_success_count INTEGER := 0;
+    v_failed_count INTEGER := 0;
+    v_duplicate_count INTEGER := 0;
+    v_batch_count INTEGER := 0;
+    v_start_time TIMESTAMP;
+    v_result JSONB;
+BEGIN
+    v_start_time := CURRENT_TIMESTAMP;
+    
+    -- Get session details
+    SELECT * INTO v_session
+    FROM t_import_sessions
+    WHERE id = p_session_id;
+    
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Session % not found', p_session_id;
+    END IF;
+    
+    -- Get total record count
+    SELECT COUNT(*) INTO v_total_records
+    FROM t_import_staging_data
+    WHERE session_id = p_session_id
+    AND processing_status = 'pending';
+    
+    -- Calculate batch size and delays for target duration
+    v_records_per_batch := GREATEST(1, v_total_records / 10); -- 10 batches minimum
+    v_delay_per_batch := (p_target_duration_ms / 10.0 || ' milliseconds')::INTERVAL;
+    
+    -- Update session to processing
+    UPDATE t_import_sessions
+    SET status = 'processing',
+        processing_started_at = CURRENT_TIMESTAMP,
+        total_records = v_total_records
+    WHERE id = p_session_id;
+    
+    -- Process records in batches
+    FOR v_staging_record IN 
+        SELECT * FROM t_import_staging_data
+        WHERE session_id = p_session_id
+        AND processing_status = 'pending'
+        ORDER BY row_number
+        FOR UPDATE SKIP LOCKED
+    LOOP
+        -- Process individual record
+        PERFORM process_single_customer_record(v_staging_record.id);
+        
+        -- Update counters based on result
+        SELECT processing_status INTO v_staging_record
+        FROM t_import_staging_data
+        WHERE id = v_staging_record.id;
+        
+        v_processed_count := v_processed_count + 1;
+        
+        CASE v_staging_record.processing_status
+            WHEN 'success' THEN v_success_count := v_success_count + 1;
+            WHEN 'failed' THEN v_failed_count := v_failed_count + 1;
+            WHEN 'duplicate' THEN v_duplicate_count := v_duplicate_count + 1;
+        END CASE;
+        
+        -- Update progress every batch
+        IF v_processed_count % v_records_per_batch = 0 OR v_processed_count = v_total_records THEN
+            v_batch_count := v_batch_count + 1;
+            
+            UPDATE t_import_sessions
+            SET processed_records = v_processed_count,
+                successful_records = v_success_count,
+                failed_records = v_failed_count,
+                duplicate_records = v_duplicate_count,
+                current_batch = v_batch_count,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = p_session_id;
+            
+            -- Add delay between batches (except for last batch)
+            IF v_processed_count < v_total_records THEN
+                PERFORM pg_sleep(EXTRACT(EPOCH FROM v_delay_per_batch));
+            END IF;
+        END IF;
+    END LOOP;
+    
+    -- Final session update
+    UPDATE t_import_sessions
+    SET status = CASE 
+            WHEN v_failed_count = 0 THEN 'completed'
+            ELSE 'completed_with_errors'
+        END,
+        processing_completed_at = CURRENT_TIMESTAMP,
+        processed_records = v_processed_count,
+        successful_records = v_success_count,
+        failed_records = v_failed_count,
+        duplicate_records = v_duplicate_count
+    WHERE id = p_session_id;
+    
+    -- Return summary
+    v_result := jsonb_build_object(
+        'sessionId', p_session_id,
+        'totalProcessed', v_processed_count,
+        'successful', v_success_count,
+        'failed', v_failed_count,
+        'duplicates', v_duplicate_count,
+        'processingTime', EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - v_start_time)) * 1000,
+        'status', CASE 
+            WHEN v_failed_count = 0 THEN 'completed'
+            ELSE 'completed_with_errors'
+        END
+    );
+    
+    RETURN v_result;
+END;
+$$;
+
+-- Process single customer record
+CREATE OR REPLACE FUNCTION process_single_customer_record(p_staging_id INTEGER)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_staging RECORD;
+    v_mapped_data JSONB;
+    v_contact_id INTEGER;
+    v_customer_id INTEGER;
+    v_is_duplicate BOOLEAN;
+    v_error_messages TEXT[];
+BEGIN
+    -- Get staging record
+    SELECT * INTO v_staging
+    FROM t_import_staging_data
+    WHERE id = p_staging_id;
+    
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+    
+    -- Mark as processing
+    UPDATE t_import_staging_data
+    SET processing_status = 'processing'
+    WHERE id = p_staging_id;
+    
+    v_mapped_data := v_staging.mapped_data;
+    v_error_messages := ARRAY[]::TEXT[];
+    
+    BEGIN
+        -- Check for duplicates
+        v_is_duplicate := check_customer_duplicate(
+            v_mapped_data->>'pan',
+            v_mapped_data->>'email',
+            v_mapped_data->>'mobile'
+        );
+        
+        IF v_is_duplicate THEN
+            UPDATE t_import_staging_data
+            SET processing_status = 'duplicate',
+                warnings = array_append(warnings, 'Customer already exists'),
+                processed_at = CURRENT_TIMESTAMP
+            WHERE id = p_staging_id;
+            RETURN;
+        END IF;
+        
+        -- Create contact
+        INSERT INTO t_contacts (
+            tenant_id,
+            is_live,
+            prefix,
+            name,
+            is_customer,
+            created_at
+        ) VALUES (
+            v_staging.tenant_id,
+            v_staging.is_live,
+            COALESCE(v_mapped_data->>'prefix', 'Mr'),
+            v_mapped_data->>'name',
+            true,
+            CURRENT_TIMESTAMP
+        ) RETURNING id INTO v_contact_id;
+        
+        -- Create contact channels
+        IF v_mapped_data->>'email' IS NOT NULL THEN
+            INSERT INTO t_contact_channels (
+                contact_id,
+                tenant_id,
+                is_live,
+                channel_type,
+                channel_value,
+                is_primary
+            ) VALUES (
+                v_contact_id,
+                v_staging.tenant_id,
+                v_staging.is_live,
+                'email',
+                LOWER(TRIM(v_mapped_data->>'email')),
+                true
+            );
+        END IF;
+        
+        IF v_mapped_data->>'mobile' IS NOT NULL THEN
+            INSERT INTO t_contact_channels (
+                contact_id,
+                tenant_id,
+                is_live,
+                channel_type,
+                channel_value,
+                is_primary
+            ) VALUES (
+                v_contact_id,
+                v_staging.tenant_id,
+                v_staging.is_live,
+                'mobile',
+                REGEXP_REPLACE(v_mapped_data->>'mobile', '[^0-9]', '', 'g'),
+                CASE WHEN v_mapped_data->>'email' IS NULL THEN true ELSE false END
+            );
+        END IF;
+        
+        -- Create customer record
+        INSERT INTO t_customers (
+            contact_id,
+            tenant_id,
+            is_live,
+            pan_encrypted,
+            date_of_birth,
+            family_head_name,
+            created_at
+        ) VALUES (
+            v_contact_id,
+            v_staging.tenant_id,
+            v_staging.is_live,
+            CASE 
+                WHEN v_mapped_data->>'pan' IS NOT NULL 
+                THEN encode(digest(UPPER(v_mapped_data->>'pan'), 'sha256'), 'hex')
+                ELSE NULL
+            END,
+            CASE 
+                WHEN v_mapped_data->>'date_of_birth' IS NOT NULL 
+                THEN (v_mapped_data->>'date_of_birth')::DATE
+                ELSE NULL
+            END,
+            v_mapped_data->>'family_head_name',
+            CURRENT_TIMESTAMP
+        ) RETURNING id INTO v_customer_id;
+        
+        -- Create address if provided
+        IF v_mapped_data->>'address' IS NOT NULL OR v_mapped_data->>'city' IS NOT NULL THEN
+            INSERT INTO t_customer_addresses (
+                customer_id,
+                tenant_id,
+                is_live,
+                address_type,
+                address_line1,
+                city,
+                state,
+                pincode,
+                is_primary
+            ) VALUES (
+                v_customer_id,
+                v_staging.tenant_id,
+                v_staging.is_live,
+                'residential',
+                COALESCE(v_mapped_data->>'address', 'Not Provided'),
+                COALESCE(v_mapped_data->>'city', 'Unknown'),
+                COALESCE(v_mapped_data->>'state', 'Unknown'),
+                COALESCE(v_mapped_data->>'pincode', '000000'),
+                true
+            );
+        END IF;
+        
+        -- Mark as success
+        UPDATE t_import_staging_data
+        SET processing_status = 'success',
+            created_record_id = v_customer_id,
+            created_record_type = 'customer',
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = p_staging_id;
+        
+    EXCEPTION WHEN OTHERS THEN
+        -- Handle errors
+        v_error_messages := array_append(v_error_messages, SQLERRM);
+        
+        UPDATE t_import_staging_data
+        SET processing_status = 'failed',
+            error_messages = v_error_messages,
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = p_staging_id;
+        
+        -- Cleanup partial records if any
+        IF v_contact_id IS NOT NULL THEN
+            DELETE FROM t_contacts WHERE id = v_contact_id;
+        END IF;
+    END;
+END;
+$$;
+
+-- Check for duplicate customers
+CREATE OR REPLACE FUNCTION check_customer_duplicate(
+    p_pan VARCHAR,
+    p_email VARCHAR,
+    p_mobile VARCHAR
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_exists BOOLEAN;
+BEGIN
+    -- Check by PAN if provided
+    IF p_pan IS NOT NULL AND p_pan != '' THEN
+        SELECT EXISTS(
+            SELECT 1 FROM t_customers 
+            WHERE pan_encrypted = encode(digest(UPPER(p_pan), 'sha256'), 'hex')
+            AND is_active = true
+        ) INTO v_exists;
+        
+        IF v_exists THEN
+            RETURN true;
+        END IF;
+    END IF;
+    
+    -- Check by email
+    IF p_email IS NOT NULL AND p_email != '' THEN
+        SELECT EXISTS(
+            SELECT 1 FROM t_contact_channels
+            WHERE channel_type = 'email'
+            AND channel_value = LOWER(TRIM(p_email))
+            AND is_active = true
+        ) INTO v_exists;
+        
+        IF v_exists THEN
+            RETURN true;
+        END IF;
+    END IF;
+    
+    -- Check by mobile
+    IF p_mobile IS NOT NULL AND p_mobile != '' THEN
+        SELECT EXISTS(
+            SELECT 1 FROM t_contact_channels
+            WHERE channel_type = 'mobile'
+            AND channel_value = REGEXP_REPLACE(p_mobile, '[^0-9]', '', 'g')
+            AND is_active = true
+        ) INTO v_exists;
+        
+        IF v_exists THEN
+            RETURN true;
+        END IF;
+    END IF;
+    
+    RETURN false;
+END;
+$$;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION process_customer_import_with_timing TO kewal_admin;
+GRANT EXECUTE ON FUNCTION process_single_customer_record TO kewal_admin;
+GRANT EXECUTE ON FUNCTION check_customer_duplicate TO kewal_admin;
+
+
+
+-- Migration: Create cleanup functions for staging data
+-- Purpose: Remove old staging data after successful processing
+-- Date: 2025
+
+-- Function to clean up old staging data
+CREATE OR REPLACE FUNCTION cleanup_old_staging_data(
+    p_days_to_keep INTEGER DEFAULT 30
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_deleted_sessions INTEGER;
+    v_deleted_staging_records INTEGER;
+    v_cutoff_date TIMESTAMP;
+BEGIN
+    v_cutoff_date := CURRENT_TIMESTAMP - (p_days_to_keep || ' days')::INTERVAL;
+    
+    -- Delete old staging data for completed sessions
+    WITH deleted_staging AS (
+        DELETE FROM t_import_staging_data
+        WHERE session_id IN (
+            SELECT id FROM t_import_sessions
+            WHERE status IN ('completed', 'completed_with_errors', 'cancelled')
+            AND processing_completed_at < v_cutoff_date
+        )
+        RETURNING id
+    )
+    SELECT COUNT(*) INTO v_deleted_staging_records FROM deleted_staging;
+    
+    -- Delete old completed sessions
+    WITH deleted_sessions AS (
+        DELETE FROM t_import_sessions
+        WHERE status IN ('completed', 'completed_with_errors', 'cancelled')
+        AND processing_completed_at < v_cutoff_date
+        RETURNING id
+    )
+    SELECT COUNT(*) INTO v_deleted_sessions FROM deleted_sessions;
+    
+    -- Return summary
+    RETURN jsonb_build_object(
+        'deleted_sessions', v_deleted_sessions,
+        'deleted_staging_records', v_deleted_staging_records,
+        'cutoff_date', v_cutoff_date,
+        'execution_time', CURRENT_TIMESTAMP
+    );
+END;
+$$;
+
+-- Function to clean up staging data immediately after successful import
+CREATE OR REPLACE FUNCTION cleanup_session_staging_data(
+    p_session_id INTEGER,
+    p_keep_failed_records BOOLEAN DEFAULT true
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_session RECORD;
+BEGIN
+    -- Get session details
+    SELECT * INTO v_session
+    FROM t_import_sessions
+    WHERE id = p_session_id;
+    
+    IF NOT FOUND THEN
+        RAISE NOTICE 'Session % not found', p_session_id;
+        RETURN;
+    END IF;
+    
+    -- Only clean up completed sessions
+    IF v_session.status NOT IN ('completed', 'completed_with_errors') THEN
+        RAISE NOTICE 'Session % is not completed (status: %)', p_session_id, v_session.status;
+        RETURN;
+    END IF;
+    
+    IF p_keep_failed_records THEN
+        -- Delete only successful records to save space
+        DELETE FROM t_import_staging_data
+        WHERE session_id = p_session_id
+        AND processing_status IN ('success', 'duplicate');
+    ELSE
+        -- Delete all staging records for this session
+        DELETE FROM t_import_staging_data
+        WHERE session_id = p_session_id;
+    END IF;
+    
+    -- Update session to indicate staging data was cleaned
+    UPDATE t_import_sessions
+    SET processing_metadata = COALESCE(processing_metadata, '{}'::jsonb) || 
+        jsonb_build_object('staging_cleaned_at', CURRENT_TIMESTAMP)
+    WHERE id = p_session_id;
+END;
+$$;
+
+-- Function to get staging storage statistics
+CREATE OR REPLACE FUNCTION get_staging_storage_stats()
+RETURNS TABLE (
+    total_sessions BIGINT,
+    active_sessions BIGINT,
+    completed_sessions BIGINT,
+    total_staging_records BIGINT,
+    pending_records BIGINT,
+    processed_records BIGINT,
+    failed_records BIGINT,
+    total_size_estimate TEXT,
+    oldest_session_date TIMESTAMP,
+    newest_session_date TIMESTAMP
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(DISTINCT s.id) as total_sessions,
+        COUNT(DISTINCT s.id) FILTER (WHERE s.status IN ('pending', 'staged', 'processing')) as active_sessions,
+        COUNT(DISTINCT s.id) FILTER (WHERE s.status IN ('completed', 'completed_with_errors')) as completed_sessions,
+        COUNT(st.id) as total_staging_records,
+        COUNT(st.id) FILTER (WHERE st.processing_status = 'pending') as pending_records,
+        COUNT(st.id) FILTER (WHERE st.processing_status IN ('success', 'duplicate')) as processed_records,
+        COUNT(st.id) FILTER (WHERE st.processing_status = 'failed') as failed_records,
+        pg_size_pretty(
+            pg_relation_size('t_import_staging_data') + 
+            pg_relation_size('t_import_sessions')
+        ) as total_size_estimate,
+        MIN(s.created_at) as oldest_session_date,
+        MAX(s.created_at) as newest_session_date
+    FROM t_import_sessions s
+    LEFT JOIN t_import_staging_data st ON s.id = st.session_id;
+END;
+$$;
+
+-- Create a scheduled job using pg_cron (if available) or document manual execution
+-- Note: pg_cron extension needs to be installed separately
+COMMENT ON FUNCTION cleanup_old_staging_data IS 'Removes staging data older than specified days. Run weekly via cron or pg_cron.';
+COMMENT ON FUNCTION cleanup_session_staging_data IS 'Immediately removes staging data for a completed session to free up space.';
+COMMENT ON FUNCTION get_staging_storage_stats IS 'Returns storage statistics for import staging tables.';
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION cleanup_old_staging_data TO kewal_admin;
+GRANT EXECUTE ON FUNCTION cleanup_session_staging_data TO kewal_admin;
+GRANT EXECUTE ON FUNCTION get_staging_storage_stats TO kewal_admin;
+
+-- Optional: Create an index to speed up cleanup queries
+CREATE INDEX IF NOT EXISTS idx_sessions_cleanup 
+ON t_import_sessions(status, processing_completed_at) 
+WHERE status IN ('completed', 'completed_with_errors', 'cancelled');
+
+
+
+

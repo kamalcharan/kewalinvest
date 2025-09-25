@@ -1,0 +1,28 @@
+# Backend Dockerfile
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies for building native modules
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies
+RUN npm ci --only=production && \
+    npm install -g typescript nodemon
+
+# Copy source code
+COPY . .
+
+# Build TypeScript code
+RUN npm run build || echo "Build script not found, skipping..."
+
+# Expose port
+EXPOSE 5000
+
+# Start the application
+CMD ["npm", "run", "dev"]

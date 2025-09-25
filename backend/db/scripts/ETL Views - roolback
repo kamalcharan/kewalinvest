@@ -1,0 +1,25 @@
+-- Rollback script for staging table implementation
+-- Use only if needed to revert changes
+
+-- Drop views
+DROP VIEW IF EXISTS v_import_staging_progress;
+DROP VIEW IF EXISTS v_import_staging_statistics;
+
+-- Drop staging table
+DROP TABLE IF EXISTS t_import_staging_data CASCADE;
+
+-- Remove columns from import sessions
+ALTER TABLE t_import_sessions
+  DROP COLUMN IF EXISTS n8n_execution_id,
+  DROP COLUMN IF EXISTS n8n_webhook_id,
+  DROP COLUMN IF EXISTS staging_completed_at,
+  DROP COLUMN IF EXISTS staging_total_rows,
+  DROP COLUMN IF EXISTS batch_size,
+  DROP COLUMN IF EXISTS current_batch,
+  DROP COLUMN IF EXISTS total_batches,
+  DROP COLUMN IF EXISTS last_processed_row,
+  DROP COLUMN IF EXISTS processing_metadata;
+
+-- Drop indexes
+DROP INDEX IF EXISTS idx_sessions_n8n_execution;
+DROP INDEX IF EXISTS idx_sessions_processing;

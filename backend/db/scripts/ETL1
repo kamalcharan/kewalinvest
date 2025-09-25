@@ -1,0 +1,118 @@
+-- Migration: Create staging table for ETL processing
+-- Purpose: Store parsed file data for batch processing via N8N
+-- Author: System
+-- Date: 2024
+
+CREATE TABLE IF NOT EXISTS t_import_staging_data (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL,
+  is_live BOOLEAN DEFAULT false,
+  session_id INTEGER NOT NULL REFERENCES t_import_sessions(id) ON DELETE CASCADE,
+  import_type VARCHAR(50) NOT NULL, -- No constraint, allowing future types
+  row_number INTEGER NOT NULL,
+  raw_data JSONB NOT NULL,  -- Original row data from file
+  mapped_data JSONB,  -- After field mapping transformation
+  processing_status VARCHAR(20) DEFAULT 'pending' CHECK (
+    processing_status IN ('pending', 'processing', 'success', 'failed', 'skipped', 'duplicate')
+  ),
+  error_messages TEXT[],
+  warnings TEXT[],
+  created_record_id INTEGER, -- ID of created record in target table
+  created_record_type VARCHAR(50), -- Target table identifier
+  processed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  -- Ensure unique row numbers per session
+  CONSTRAINT idx_unique_session_row UNIQUE(session_id, row_number)
+);
+
+-- Performance indexes
+CREATE INDEX idx_staging_session_status ON t_import_staging_data(session_id, processing_status);
+CREATE INDEX idx_staging_tenant ON t_import_staging_data(tenant_id, is_live);
+CREATE INDEX idx_staging_pending ON t_import_staging_data(processing_status, import_type) 
+  WHERE processing_status = 'pending';
+CREATE INDEX idx_staging_session_processing ON t_import_staging_data(session_id) 
+  WHERE processing_status IN ('pending', 'processing');
+
+-- Add update trigger for updated_at
+CREATE OR REPLACE FUNCTION update_staging_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_staging_updated_at
+  BEFORE UPDATE ON t_import_staging_data
+  FOR EACH ROW
+  EXECUTE FUNCTION update_staging_updated_at();
+
+-- Add comments for documentation
+COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processing';
+COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as received from uploaded file';
+COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
+COMMENT ON COLUMN t_import_staging_data.processing_status IS 'Current processing state of this row';
+COMMENT ON COLUMN t_import_staging_data.created_record_id IS 'Reference to created record in target table';
+
+
+-- Migration: Add staging and N8N tracking columns to import sessions
+-- Purpose: Track staging progress and N8N workflow execution
+-- Author: System  
+-- Date: 2024
+
+-- Add new columns to t_import_sessions
+ALTER TABLE t_import_sessions
+  ADD COLUMN IF NOT EXISTS n8n_execution_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS n8n_webhook_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS staging_completed_at TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS staging_total_rows INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS batch_size INTEGER DEFAULT 100,
+  ADD COLUMN IF NOT EXISTS current_batch INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_batches INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_processed_row INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS processing_metadata JSONB;
+
+-- Add indexes for new columns
+CREATE INDEX IF NOT EXISTS idx_sessions_n8n_execution ON t_import_sessions(n8n_execution_id) 
+  WHERE n8n_execution_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sessions_processing ON t_import_sessions(status) 
+  WHERE status IN ('processing', 'pending');
+
+-- Add comments
+COMMENT ON COLUMN t_import_sessions.n8n_execution_id IS 'N8N workflow execution identifier';
+COMMENT ON COLUMN t_import_sessions.n8n_webhook_id IS 'N8N webhook identifier for this import type';
+COMMENT ON COLUMN t_import_sessions.staging_completed_at IS 'Timestamp when staging table population completed';
+COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
+COMMENT ON COLUMN t_import_sessions.batch_size IS 'Number of records to process per batch';
+COMMENT ON COLUMN t_import_sessions.current_batch IS 'Current batch being processed';
+COMMENT ON COLUMN t_import_sessions.last_processed_row IS 'Last row number successfully processed';
+COMMENT ON COLUMN t_import_sessions.processing_metadata IS 'Additional processing information and statistics';
+
+
+
+
+ALTER TABLE t_import_sessions 
+DROP CONSTRAINT IF EXISTS t_import_sessions_status_check;
+
+ALTER TABLE t_import_sessions 
+ADD CONSTRAINT t_import_sessions_status_check 
+CHECK (status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled'));
+
+-- Add comment for clarity
+COMMENT ON COLUMN t_import_sessions.status IS 'Import session status: pending (created), staged (data in staging), processing (being processed), completed (success), completed_with_errors (partial success), failed (error), cancelled (user cancelled)';
+
+-- Add index for staged sessions that need processing
+CREATE INDEX IF NOT EXISTS idx_sessions_staged 
+ON t_import_sessions(status) 
+WHERE status = 'staged';
+
+-- Update any existing 'completed' sessions that have no processed records to 'staged'
+-- This fixes any sessions that were incorrectly marked as completed
+UPDATE t_import_sessions 
+SET status = 'staged',
+    updated_at = CURRENT_TIMESTAMP
+WHERE status = 'completed' 
+AND processed_records = 0
+AND staging_total_rows > 0;

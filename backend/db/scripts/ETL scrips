@@ -1,0 +1,110 @@
+-- Import sessions to track each processing session
+CREATE TABLE IF NOT EXISTS t_import_sessions (
+    id SERIAL PRIMARY KEY,
+    session_name VARCHAR(255) NOT NULL,
+    file_upload_id INTEGER REFERENCES t_file_uploads(id),
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    
+    import_type VARCHAR(50) NOT NULL CHECK (import_type IN ('CustomerData', 'TransactionData')),
+    status VARCHAR(50) DEFAULT 'pending' CHECK (
+        status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')
+    ),
+    
+    -- Processing stats
+    total_records INTEGER DEFAULT 0,
+    processed_records INTEGER DEFAULT 0,
+    successful_records INTEGER DEFAULT 0,
+    failed_records INTEGER DEFAULT 0,
+    duplicate_records INTEGER DEFAULT 0,
+    
+    -- Metadata
+    processing_started_at TIMESTAMP,
+    processing_completed_at TIMESTAMP,
+    error_summary TEXT,
+    
+    -- N8N integration
+    n8n_webhook_id VARCHAR(255),
+    n8n_execution_id VARCHAR(255),
+    
+    created_by INTEGER REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Import field mapping templates for each import type
+CREATE TABLE IF NOT EXISTS t_import_field_mappings (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    import_type VARCHAR(50) NOT NULL CHECK (import_type IN ('CustomerData', 'TransactionData')),
+    template_name VARCHAR(255) NOT NULL,
+    template_version INTEGER DEFAULT 1,
+    
+    -- Field mapping configuration (JSON format)
+    field_mappings JSONB NOT NULL,
+    -- Example structure:
+    -- {
+    --   "source_fields": ["Name", "Email", "Phone", "PAN"],
+    --   "mappings": {
+    --     "Name": { "target": "name", "required": true, "transformation": null },
+    --     "Email": { "target": "channels.email", "required": false, "transformation": "lowercase" },
+    --     "Phone": { "target": "channels.mobile", "required": false, "transformation": "normalize_phone" },
+    --     "PAN": { "target": "pan", "required": false, "transformation": "uppercase" }
+    --   }
+    -- }
+    
+    -- Validation rules
+    validation_rules JSONB,
+    -- Example structure:
+    -- {
+    --   "pan": { "pattern": "^[A-Z]{5}[0-9]{4}[A-Z]{1}$", "message": "Invalid PAN format" },
+    --   "email": { "pattern": "email", "message": "Invalid email format" },
+    --   "mobile": { "pattern": "^[6-9][0-9]{9}$", "message": "Invalid mobile number" }
+    -- }
+    
+    is_default BOOLEAN DEFAULT false,
+    
+    created_by INTEGER REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_template_per_type UNIQUE (tenant_id, import_type, template_name, is_live)
+);
+
+-- Detailed record-level processing results
+CREATE TABLE IF NOT EXISTS t_import_record_results (
+    id SERIAL PRIMARY KEY,
+    import_session_id INTEGER REFERENCES t_import_sessions(id) ON DELETE CASCADE,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    
+    -- Original data from file
+    row_number INTEGER NOT NULL,
+    raw_data JSONB NOT NULL, -- Original row data as JSON
+    
+    -- Processing results
+    status VARCHAR(50) NOT NULL CHECK (status IN ('success', 'failed', 'duplicate', 'skipped')),
+    error_messages TEXT[], -- Array of error messages
+    warnings TEXT[], -- Array of warning messages
+    
+    -- References to created entities (if successful)
+    created_contact_id INTEGER REFERENCES t_contacts(id),
+    created_customer_id INTEGER REFERENCES t_customers(id),
+    
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Update t_file_uploads table to support folder structure
+ALTER TABLE t_file_uploads ADD COLUMN IF NOT EXISTS folder_path VARCHAR(500);
+ALTER TABLE t_file_uploads ADD COLUMN IF NOT EXISTS is_processed BOOLEAN DEFAULT false;
+ALTER TABLE t_file_uploads ADD COLUMN IF NOT EXISTS processed_folder_path VARCHAR(500);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_import_sessions_tenant_type ON t_import_sessions(tenant_id, import_type, is_live);
+CREATE INDEX IF NOT EXISTS idx_import_sessions_status ON t_import_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_field_mappings_type ON t_import_field_mappings(tenant_id, import_type, is_live);
+CREATE INDEX IF NOT EXISTS idx_record_results_session ON t_import_record_results(import_session_id);
+CREATE INDEX IF NOT EXISTS idx_record_results_status ON t_import_record_results(status);

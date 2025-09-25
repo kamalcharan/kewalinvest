@@ -1,0 +1,793 @@
+// backend/src/services/navDownload.service.ts
+// File 6/14: Download orchestration with progress tracking and UI engagement
+
+import { Pool } from 'pg';
+import { pool } from '../config/database';
+import { NavService } from './nav.service';
+import { AmfiDataSourceService } from './amfiDataSource.service';
+import { SimpleLogger } from './simpleLogger.service';
+import {
+  NavDownloadJob,
+  CreateNavDownloadJobRequest,
+  NavDownloadJobResult,
+  N8nWebhookPayload,
+  N8nCallbackPayload,
+  ParsedNavRecord,
+  NAV_ERROR_CODES
+} from '../types/nav.types';
+
+export interface DownloadProgressUpdate {
+  jobId: number;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progressPercentage: number;
+  currentStep: string;
+  processedSchemes: number;
+  totalSchemes: number;
+  processedRecords: number;
+  estimatedTimeRemaining?: number; // in milliseconds
+  errors?: Array<{ scheme_code: string; error: string }>;
+  startTime: Date;
+  lastUpdate: Date;
+}
+
+export interface DownloadLockInfo {
+  jobId: number;
+  lockType: 'daily' | 'historical' | 'weekly';
+  lockedBy: number; // user_id
+  lockedAt: Date;
+  schemeIds: number[];
+}
+
+export class NavDownloadService {
+  private db: Pool;
+  private navService: NavService;
+  private amfiService: AmfiDataSourceService;
+  
+  // In-memory locks to prevent race conditions
+  private downloadLocks = new Map<string, DownloadLockInfo>();
+  
+  // Progress tracking for UI
+  private progressUpdates = new Map<number, DownloadProgressUpdate>();
+  
+  // N8N webhook configuration
+  private readonly N8N_BASE_URL: string;
+  private readonly API_BASE_URL: string;
+
+  constructor() {
+    this.db = pool;
+    this.navService = new NavService();
+    this.amfiService = new AmfiDataSourceService();
+    this.N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678';
+    this.API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
+  }
+
+  // ==================== PUBLIC DOWNLOAD METHODS ====================
+
+  /**
+   * Trigger daily NAV download (idempotent)
+   * Called by N8N daily trigger or manual UI action
+   */
+  async triggerDailyDownload(
+    tenantId: number,
+    isLive: boolean,
+    userId: number
+  ): Promise<{ jobId: number; message: string; alreadyExists?: boolean }> {
+    const today = new Date().toISOString().split('T')[0];
+    const lockKey = `daily_${tenantId}_${isLive}_${today}`;
+    
+    try {
+      // Check for existing lock (prevent concurrent downloads)
+      if (this.downloadLocks.has(lockKey)) {
+        const existingLock = this.downloadLocks.get(lockKey)!;
+        return {
+          jobId: existingLock.jobId,
+          message: 'Daily download already in progress',
+          alreadyExists: true
+        };
+      }
+
+      // Get all schemes with daily download enabled
+      const bookmarks = await this.navService.getUserBookmarks(
+        tenantId, 
+        isLive, 
+        userId, 
+        { page: 1, page_size: 1000, daily_download_only: true }
+      );
+
+      if (bookmarks.bookmarks.length === 0) {
+        throw new Error('No schemes configured for daily download');
+      }
+
+      const schemeIds = bookmarks.bookmarks.map(b => b.scheme_id);
+
+      // Check if today's data already exists for all schemes
+      const existingData = await this.navService.checkNavDataExists(
+        tenantId,
+        isLive,
+        schemeIds,
+        new Date()
+      );
+
+      const schemesWithoutData = schemeIds.filter(id => !existingData[id]);
+      
+      if (schemesWithoutData.length === 0) {
+        return {
+          jobId: 0,
+          message: `Daily NAV data already exists for all ${schemeIds.length} tracked schemes`,
+          alreadyExists: true
+        };
+      }
+
+      // Create download job
+      const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
+        jobType: 'daily',
+        schemeIds: schemesWithoutData,
+        scheduledDate: new Date()
+      });
+
+      // Create download lock
+      const lockInfo: DownloadLockInfo = {
+        jobId: job.id,
+        lockType: 'daily',
+        lockedBy: userId,
+        lockedAt: new Date(),
+        schemeIds: schemesWithoutData
+      };
+      this.downloadLocks.set(lockKey, lockInfo);
+
+      // Initialize progress tracking
+      this.initializeProgressTracking(job.id, 'daily', schemesWithoutData.length);
+
+      // Execute download asynchronously
+      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, userId));
+
+      SimpleLogger.error('NavDownload', 'Daily download job created', 'triggerDailyDownload', {
+        tenantId, userId, jobId: job.id, totalSchemes: schemesWithoutData.length
+      }, userId, tenantId);
+
+      return {
+        jobId: job.id,
+        message: `Daily download started for ${schemesWithoutData.length} schemes`
+      };
+
+    } catch (error: any) {
+      // Clean up lock on error
+      this.downloadLocks.delete(lockKey);
+      
+      SimpleLogger.error('NavDownload', 'Failed to trigger daily download', 'triggerDailyDownload', {
+        tenantId, userId, error: error.message
+      }, userId, tenantId, error.stack);
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger historical NAV download with progress tracking
+   * For UI engagement during long downloads (4 months data)
+   */
+  async triggerHistoricalDownload(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    request: {
+      schemeIds: number[];
+      startDate: Date;
+      endDate: Date;
+    }
+  ): Promise<{ jobId: number; message: string; estimatedTime: number }> {
+    const lockKey = `historical_${tenantId}_${isLive}_${userId}_${request.schemeIds.join(',')}`;
+    
+    try {
+      // Check for concurrent historical download by same user
+      if (this.downloadLocks.has(lockKey)) {
+        const existingLock = this.downloadLocks.get(lockKey)!;
+        throw new Error(`Historical download already in progress (Job ID: ${existingLock.jobId})`);
+      }
+
+      // Validate date range (max 6 months)
+      const daysDiff = Math.ceil((request.endDate.getTime() - request.startDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 183) {
+        throw new Error('Historical download limited to 6 months per request');
+      }
+
+      // Check if historical download already completed for any scheme
+      for (const schemeId of request.schemeIds) {
+        const bookmarks = await this.navService.getUserBookmarks(
+          tenantId, 
+          isLive, 
+          userId,
+          { page: 1, page_size: 1, search: schemeId.toString() }
+        );
+
+        if (bookmarks.bookmarks.length > 0 && bookmarks.bookmarks[0].historical_download_completed) {
+          throw new Error(NAV_ERROR_CODES.HISTORICAL_DOWNLOAD_COMPLETED);
+        }
+      }
+
+      // Estimate download time (rough calculation)
+      const estimatedTimeMs = this.estimateDownloadTime(request.schemeIds.length, daysDiff);
+
+      // Create download job
+      const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
+        jobType: 'historical',
+        schemeIds: request.schemeIds,
+        scheduledDate: new Date(),
+        startDate: request.startDate,
+        endDate: request.endDate
+      });
+
+      // Create download lock
+      const lockInfo: DownloadLockInfo = {
+        jobId: job.id,
+        lockType: 'historical',
+        lockedBy: userId,
+        lockedAt: new Date(),
+        schemeIds: request.schemeIds
+      };
+      this.downloadLocks.set(lockKey, lockInfo);
+
+      // Initialize progress tracking with estimated time
+      this.initializeProgressTracking(job.id, 'historical', request.schemeIds.length, estimatedTimeMs);
+
+      // Execute download asynchronously
+      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, userId));
+
+      SimpleLogger.error('NavDownload', 'Historical download job created', 'triggerHistoricalDownload', {
+        tenantId, userId, jobId: job.id, schemeCount: request.schemeIds.length, 
+        dayRange: daysDiff, estimatedTimeMs
+      }, userId, tenantId);
+
+      return {
+        jobId: job.id,
+        message: `Historical download started for ${request.schemeIds.length} schemes (${daysDiff} days)`,
+        estimatedTime: estimatedTimeMs
+      };
+
+    } catch (error: any) {
+      this.downloadLocks.delete(lockKey);
+      
+      SimpleLogger.error('NavDownload', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
+        tenantId, userId, request, error: error.message
+      }, userId, tenantId, error.stack);
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger weekly NAV download for untracked schemes
+   * Called by N8N weekly trigger (Fridays)
+   */
+  async triggerWeeklyDownload(
+    tenantId: number,
+    isLive: boolean,
+    systemUserId: number = 1
+  ): Promise<{ jobId: number; message: string }> {
+    const lockKey = `weekly_${tenantId}_${isLive}`;
+    
+    try {
+      if (this.downloadLocks.has(lockKey)) {
+        const existingLock = this.downloadLocks.get(lockKey)!;
+        throw new Error(`Weekly download already in progress (Job ID: ${existingLock.jobId})`);
+      }
+
+      // Get sample of untracked schemes (e.g., top 100 by market cap)
+      const untrackedSchemes = await this.getUntrackedSchemesForWeeklyDownload(tenantId, isLive, 100);
+
+      if (untrackedSchemes.length === 0) {
+        return {
+          jobId: 0,
+          message: 'No untracked schemes found for weekly download'
+        };
+      }
+
+      // Create download job
+      const job = await this.navService.createDownloadJob(tenantId, isLive, systemUserId, {
+        jobType: 'weekly',
+        schemeIds: untrackedSchemes,
+        scheduledDate: new Date()
+      });
+
+      // Create download lock
+      const lockInfo: DownloadLockInfo = {
+        jobId: job.id,
+        lockType: 'weekly',
+        lockedBy: systemUserId,
+        lockedAt: new Date(),
+        schemeIds: untrackedSchemes
+      };
+      this.downloadLocks.set(lockKey, lockInfo);
+
+      // Initialize progress tracking
+      this.initializeProgressTracking(job.id, 'weekly', untrackedSchemes.length);
+
+      // Execute download asynchronously
+      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, systemUserId));
+
+      return {
+        jobId: job.id,
+        message: `Weekly download started for ${untrackedSchemes.length} untracked schemes`
+      };
+
+    } catch (error: any) {
+      this.downloadLocks.delete(lockKey);
+      throw error;
+    }
+  }
+
+  // ==================== DOWNLOAD EXECUTION ====================
+
+  /**
+   * Execute download job with progress updates
+   */
+  private async executeDownload(
+    jobId: number,
+    tenantId: number,
+    isLive: boolean,
+    userId: number
+  ): Promise<void> {
+    const startTime = Date.now();
+    
+    try {
+      // Update job status to running
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: 'running'
+      });
+
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: 'Fetching download job details...',
+        progressPercentage: 5
+      });
+
+      // Get job details
+      const jobs = await this.navService.getDownloadJobs(tenantId, isLive, { page: 1, page_size: 1 });
+      const job = jobs.jobs.find(j => j.id === jobId);
+      
+      if (!job) {
+        throw new Error('Download job not found');
+      }
+
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: 'Downloading NAV data from AMFI...',
+        progressPercentage: 10
+      });
+
+      let navData: ParsedNavRecord[] = [];
+      let amfiResponse;
+
+      // Download data based on job type
+      if (job.job_type === 'daily' || job.job_type === 'weekly') {
+        amfiResponse = await this.amfiService.downloadDailyNavData({
+          requestId: `${job.job_type}_${jobId}_${Date.now()}`
+        });
+      } else if (job.job_type === 'historical') {
+        if (!job.start_date || !job.end_date) {
+          throw new Error('Historical download requires start and end dates');
+        }
+        
+        amfiResponse = await this.amfiService.downloadHistoricalNavData(
+          job.start_date,
+          job.end_date,
+          { requestId: `historical_${jobId}_${Date.now()}` }
+        );
+      }
+
+      if (!amfiResponse.success || !amfiResponse.data) {
+        throw new Error(amfiResponse.error || 'Failed to download NAV data');
+      }
+
+      navData = amfiResponse.data;
+
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: 'Filtering data for tracked schemes...',
+        progressPercentage: 30
+      });
+
+      // Filter data for tracked schemes only
+      const trackedSchemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, job.scheme_ids);
+      const filteredNavData = navData.filter(record => 
+        trackedSchemeCodes.includes(record.scheme_code)
+      );
+
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: `Processing ${filteredNavData.length} NAV records...`,
+        progressPercentage: 50,
+        processedRecords: filteredNavData.length
+      });
+
+      // Upsert NAV data
+      const upsertResult = await this.navService.upsertNavData(
+        tenantId,
+        isLive,
+        filteredNavData
+      );
+
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: 'Finalizing download...',
+        progressPercentage: 90
+      });
+
+      // Create result summary
+      const resultSummary: NavDownloadJobResult = {
+        total_schemes: job.scheme_ids.length,
+        successful_downloads: job.scheme_ids.length - upsertResult.errors.length,
+        failed_downloads: upsertResult.errors.length,
+        total_records_inserted: upsertResult.inserted,
+        total_records_updated: upsertResult.updated,
+        schemes_with_errors: upsertResult.errors,
+        execution_time_ms: Date.now() - startTime,
+        api_calls_made: 1
+      };
+
+      // Update job with completion
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: 'completed',
+        result_summary: resultSummary
+      });
+
+      this.updateProgress(jobId, {
+        status: 'completed',
+        currentStep: 'Download completed successfully',
+        progressPercentage: 100,
+        processedSchemes: resultSummary.successful_downloads,
+        processedRecords: resultSummary.total_records_inserted + resultSummary.total_records_updated
+      });
+
+      // Mark historical download as completed for bookmarks
+      if (job.job_type === 'historical') {
+        await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, job.scheme_ids);
+      }
+
+      // Clean up locks and progress tracking
+      this.cleanupAfterDownload(jobId, job.job_type, tenantId, isLive);
+
+      SimpleLogger.error('NavDownload', 'Download job completed successfully', 'executeDownload', {
+        jobId, tenantId, userId, jobType: job.job_type, resultSummary
+      }, userId, tenantId);
+
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      
+      // Update job with failure
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: 'failed',
+        error_details: errorMessage
+      }).catch(console.error);
+
+      this.updateProgress(jobId, {
+        status: 'failed',
+        currentStep: `Download failed: ${errorMessage}`,
+        progressPercentage: 0
+      });
+
+      // Clean up locks and progress tracking
+      this.cleanupAfterDownload(jobId, 'daily', tenantId, isLive);
+
+      SimpleLogger.error('NavDownload', 'Download job failed', 'executeDownload', {
+        jobId, tenantId, userId, error: errorMessage
+      }, userId, tenantId, error.stack);
+
+      throw error;
+    }
+  }
+
+  // ==================== PROGRESS TRACKING FOR UI ====================
+
+  /**
+   * Initialize progress tracking for UI engagement
+   */
+  private initializeProgressTracking(
+    jobId: number, 
+    jobType: string, 
+    totalSchemes: number,
+    estimatedTime?: number
+  ): void {
+    const progressUpdate: DownloadProgressUpdate = {
+      jobId,
+      status: 'pending',
+      progressPercentage: 0,
+      currentStep: 'Initializing download...',
+      processedSchemes: 0,
+      totalSchemes,
+      processedRecords: 0,
+      startTime: new Date(),
+      lastUpdate: new Date(),
+      estimatedTimeRemaining: estimatedTime
+    };
+
+    this.progressUpdates.set(jobId, progressUpdate);
+  }
+
+  /**
+   * Update progress for UI (called frequently during download)
+   */
+  private updateProgress(jobId: number, updates: Partial<DownloadProgressUpdate>): void {
+    const existing = this.progressUpdates.get(jobId);
+    if (!existing) return;
+
+    const updated: DownloadProgressUpdate = {
+      ...existing,
+      ...updates,
+      lastUpdate: new Date()
+    };
+
+    // Calculate estimated time remaining
+    if (updates.progressPercentage && updates.progressPercentage > 0) {
+      const elapsedTime = Date.now() - existing.startTime.getTime();
+      const estimatedTotal = (elapsedTime / updates.progressPercentage) * 100;
+      updated.estimatedTimeRemaining = Math.max(0, estimatedTotal - elapsedTime);
+    }
+
+    this.progressUpdates.set(jobId, updated);
+
+    // In production, you might emit this to websocket or SSE for real-time UI updates
+    SimpleLogger.error('NavDownload', 'Progress update', 'updateProgress', {
+      jobId, ...updates
+    });
+  }
+
+  /**
+   * Get current progress for UI polling
+   */
+  async getDownloadProgress(jobId: number): Promise<DownloadProgressUpdate | null> {
+    return this.progressUpdates.get(jobId) || null;
+  }
+
+  /**
+   * Get all active downloads for user dashboard
+   */
+  async getActiveDownloads(): Promise<DownloadProgressUpdate[]> {
+    return Array.from(this.progressUpdates.values()).filter(
+      progress => progress.status === 'running' || progress.status === 'pending'
+    );
+  }
+
+  // ==================== N8N WEBHOOK INTEGRATION ====================
+
+  /**
+   * Trigger N8N workflow (simple HTTP call)
+   */
+  async triggerN8nWorkflow(
+    webhookName: string,
+    payload: any
+  ): Promise<{ success: boolean; executionId?: string; error?: string }> {
+    try {
+      const webhookUrl = `${this.N8N_BASE_URL}/webhook/${webhookName}`;
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json() as any;
+      
+      return {
+        success: true,
+        executionId: result.executionId || `n8n_${Date.now()}`
+      };
+
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Handle N8N callback (if using async N8N workflows)
+   */
+  async handleN8nCallback(payload: N8nCallbackPayload): Promise<void> {
+    try {
+      const { job_id, status, result, error } = payload;
+
+      if (status === 'completed' && result) {
+        await this.navService.updateDownloadJob(
+          result.total_schemes, // Using as placeholder - you'd need proper tenant/isLive from payload
+          true,
+          job_id,
+          { status: 'completed', result_summary: result }
+        );
+      } else if (status === 'failed') {
+        await this.navService.updateDownloadJob(
+          1, // Placeholder
+          true,
+          job_id,
+          { status: 'failed', error_details: error }
+        );
+      }
+
+    } catch (error: any) {
+      SimpleLogger.error('NavDownload', 'Failed to handle N8N callback', 'handleN8nCallback', {
+        payload, error: error.message
+      }, undefined, undefined, error.stack);
+    }
+  }
+
+  // ==================== UTILITY METHODS ====================
+
+  /**
+   * Cancel running download
+   */
+  async cancelDownload(
+    tenantId: number,
+    isLive: boolean,
+    jobId: number,
+    userId: number
+  ): Promise<void> {
+    try {
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: 'cancelled'
+      });
+
+      this.updateProgress(jobId, {
+        status: 'cancelled',
+        currentStep: 'Download cancelled by user'
+      });
+
+      // Clean up locks
+      const locksToRemove: string[] = [];
+      for (const [key, lock] of this.downloadLocks.entries()) {
+        if (lock.jobId === jobId) {
+          locksToRemove.push(key);
+        }
+      }
+      locksToRemove.forEach(key => this.downloadLocks.delete(key));
+
+      SimpleLogger.error('NavDownload', 'Download cancelled by user', 'cancelDownload', {
+        jobId, tenantId, userId
+      }, userId, tenantId);
+
+    } catch (error: any) {
+      SimpleLogger.error('NavDownload', 'Failed to cancel download', 'cancelDownload', {
+        jobId, tenantId, userId, error: error.message
+      }, userId, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Estimate download time for UI (rough calculation)
+   */
+  private estimateDownloadTime(schemeCount: number, dayCount: number): number {
+    // Base time: ~2 seconds per scheme per API call
+    // Historical data might require multiple API calls for large date ranges
+    const baseTimePerScheme = 2000; // 2 seconds
+    const apiCallsNeeded = Math.ceil(dayCount / 30); // Rough estimate of API calls needed
+    
+    return schemeCount * baseTimePerScheme * apiCallsNeeded;
+  }
+
+  /**
+   * Get scheme codes by IDs
+   */
+  private async getSchemeCodesByIds(
+    tenantId: number,
+    isLive: boolean,
+    schemeIds: number[]
+  ): Promise<string[]> {
+    try {
+      const query = `
+        SELECT scheme_code FROM t_scheme_details
+        WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
+      `;
+      
+      const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
+      return result.rows.map(row => row.scheme_code);
+    } catch (error) {
+      SimpleLogger.error('NavDownload', 'Failed to get scheme codes', 'getSchemeCodesByIds', {
+        tenantId, schemeIds
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get untracked schemes for weekly download
+   */
+  private async getUntrackedSchemesForWeeklyDownload(
+    tenantId: number,
+    isLive: boolean,
+    limit: number
+  ): Promise<number[]> {
+    try {
+      const query = `
+        SELECT sd.id 
+        FROM t_scheme_details sd
+        WHERE sd.tenant_id = $1 AND sd.is_live = $2 AND sd.is_active = true
+        AND NOT EXISTS (
+          SELECT 1 FROM t_scheme_bookmarks sb 
+          WHERE sb.scheme_id = sd.id 
+          AND sb.tenant_id = $1 
+          AND sb.is_live = $2 
+          AND sb.is_active = true
+        )
+        ORDER BY sd.scheme_name
+        LIMIT $3
+      `;
+      
+      const result = await this.db.query(query, [tenantId, isLive, limit]);
+      return result.rows.map(row => row.id);
+    } catch (error) {
+      SimpleLogger.error('NavDownload', 'Failed to get untracked schemes', 'getUntrackedSchemesForWeeklyDownload', {
+        tenantId, limit
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Mark historical download as completed
+   */
+  private async markHistoricalDownloadCompleted(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    schemeIds: number[]
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_scheme_bookmarks
+        SET historical_download_completed = true, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND scheme_id = ANY($4) AND is_active = true
+      `;
+      
+      await this.db.query(query, [tenantId, isLive, userId, schemeIds]);
+    } catch (error) {
+      SimpleLogger.error('NavDownload', 'Failed to mark historical download completed', 'markHistoricalDownloadCompleted', {
+        tenantId, userId, schemeIds
+      });
+    }
+  }
+
+  /**
+   * Clean up after download completion
+   */
+  private cleanupAfterDownload(
+    jobId: number,
+    jobType: string,
+    tenantId: number,
+    isLive: boolean
+  ): void {
+    // Remove from progress tracking after 5 minutes (allow UI to fetch final status)
+    setTimeout(() => {
+      this.progressUpdates.delete(jobId);
+    }, 5 * 60 * 1000);
+
+    // Remove download locks
+    const locksToRemove: string[] = [];
+    for (const [key, lock] of this.downloadLocks.entries()) {
+      if (lock.jobId === jobId) {
+        locksToRemove.push(key);
+      }
+    }
+    locksToRemove.forEach(key => this.downloadLocks.delete(key));
+  }
+
+  /**
+   * Get download lock status (for debugging)
+   */
+  public getDownloadLocks(): DownloadLockInfo[] {
+    return Array.from(this.downloadLocks.values());
+  }
+
+  /**
+   * Clear all locks and progress (for testing/recovery)
+   */
+  public clearAllLocks(): void {
+    this.downloadLocks.clear();
+    this.progressUpdates.clear();
+    SimpleLogger.error('NavDownload', 'All download locks and progress cleared', 'clearAllLocks');
+  }
+}

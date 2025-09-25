@@ -1,0 +1,51 @@
+CREATE TABLE t_scheme_bookmarks (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
+  user_id INTEGER NOT NULL,
+  scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
+  scheme_code VARCHAR(100) NOT NULL,           -- Denormalized for performance
+  scheme_name VARCHAR(500) NOT NULL,           -- Denormalized for performance
+  amc_name VARCHAR(255),                       -- Denormalized for performance
+  is_live BOOLEAN DEFAULT true,
+  is_active BOOLEAN DEFAULT true,
+  daily_download_enabled BOOLEAN DEFAULT false,
+  download_time VARCHAR(5) DEFAULT '22:00',    -- HH:MM format
+  historical_download_completed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(tenant_id, user_id, scheme_id, is_live)
+);
+
+CREATE TABLE t_nav_data (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
+  scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
+  scheme_code VARCHAR(100) NOT NULL,           -- Denormalized for performance
+  nav_date DATE NOT NULL,
+  nav_value DECIMAL(15,4) NOT NULL,
+  repurchase_price DECIMAL(15,4),
+  sale_price DECIMAL(15,4),
+  is_live BOOLEAN DEFAULT true,
+  data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(tenant_id, scheme_id, nav_date, is_live)
+);
+
+CREATE TABLE t_nav_download_jobs (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
+  job_type VARCHAR(20) NOT NULL CHECK (job_type IN ('daily', 'historical', 'weekly')),
+  scheme_ids INTEGER[] NOT NULL,
+  scheduled_date TIMESTAMP NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+  start_date DATE,                             -- For historical downloads
+  end_date DATE,                               -- For historical downloads
+  n8n_execution_id VARCHAR(255),               -- n8n workflow execution reference
+  result_summary JSONB,                        -- {total_schemes: X, successful: Y, failed: Z, records: N}
+  error_details TEXT,
+  is_live BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by INTEGER
+);

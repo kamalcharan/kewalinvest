@@ -1,0 +1,221 @@
+-- Main contacts table
+CREATE TABLE IF NOT EXISTS t_contacts (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    is_customer Boolean Default false,
+    
+    -- Contact basic info
+    prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof')),
+    name VARCHAR(255) NOT NULL,
+    
+    -- System fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id)
+);
+
+-- Unified communication channels
+CREATE TABLE IF NOT EXISTS t_contact_channels (
+    id SERIAL PRIMARY KEY,
+    contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    channel_type VARCHAR(50) NOT NULL CHECK (
+        channel_type IN ('email', 'mobile', 'whatsapp', 'instagram', 'twitter', 'linkedin', 'other')
+    ),
+    channel_value VARCHAR(255) NOT NULL,
+    channel_subtype VARCHAR(50) DEFAULT 'personal' CHECK (
+        channel_subtype IN ('personal', 'work', 'other')
+    ),
+    is_primary BOOLEAN DEFAULT false,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_channel_per_contact UNIQUE (contact_id, channel_type, channel_value, is_live)
+);
+-- Customers (extended from contacts)
+CREATE TABLE IF NOT EXISTS t_customers (
+    id SERIAL PRIMARY KEY,
+    contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    -- Encrypted sensitive data
+    pan_encrypted VARCHAR(500),
+    iwell_code_encrypted VARCHAR(500),
+    
+    -- Personal details
+    date_of_birth DATE,
+    anniversary_date DATE,
+    
+    -- Survival status
+    survival_status VARCHAR(20) DEFAULT 'alive' CHECK (survival_status IN ('alive', 'deceased')),
+    date_of_death DATE,
+    
+    -- Family details
+    family_head_name VARCHAR(255),
+    family_head_iwell_code VARCHAR(100),
+    
+    -- Referral information
+    referred_by INTEGER REFERENCES t_contacts(id),
+    referred_by_name VARCHAR(255),
+    
+    -- Onboarding status
+    onboarding_form_id INTEGER,
+    onboarding_status VARCHAR(50) DEFAULT 'pending' CHECK (
+        onboarding_status IN ('pending', 'in_progress', 'completed', 'cancelled')
+    ),
+    
+    -- System fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id),
+    
+    CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan_encrypted, is_live),
+    CONSTRAINT death_date_logic CHECK (
+        (survival_status = 'alive' AND date_of_death IS NULL) OR 
+        (survival_status = 'deceased' AND date_of_death IS NOT NULL)
+    )
+);
+
+-- Customer addresses
+CREATE TABLE IF NOT EXISTS t_customer_addresses (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id) ON DELETE CASCADE,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    address_type VARCHAR(50) DEFAULT 'residential' CHECK (
+        address_type IN ('residential', 'office', 'mailing', 'permanent', 'temporary', 'other')
+    ),
+    address_line1 VARCHAR(255) NOT NULL,
+    address_line2 VARCHAR(255),
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    country VARCHAR(100) DEFAULT 'India',
+    pincode VARCHAR(20) NOT NULL,
+    
+    is_primary BOOLEAN DEFAULT false,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_address_type_per_customer UNIQUE (customer_id, address_type, is_live)
+);
+-- File upload tracking
+CREATE TABLE IF NOT EXISTS t_file_uploads (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    file_type VARCHAR(50) NOT NULL CHECK (file_type IN ('customer_import', 'transaction_import', 'customer_document')),
+    original_filename VARCHAR(255) NOT NULL,
+    stored_filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    mime_type VARCHAR(100),
+    
+    -- For customer-specific files
+    customer_id INTEGER REFERENCES t_customers(id),
+    
+    -- Import processing status
+    processing_status VARCHAR(50) DEFAULT 'pending' CHECK (
+        processing_status IN ('pending', 'processing', 'completed', 'failed')
+    ),
+    processed_records INTEGER DEFAULT 0,
+    failed_records INTEGER DEFAULT 0,
+    error_details TEXT,
+    
+    uploaded_by INTEGER REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP
+);
+
+-- Import audit trail
+CREATE TABLE IF NOT EXISTS t_import_logs (
+    id SERIAL PRIMARY KEY,
+    file_upload_id INTEGER REFERENCES t_file_uploads(id),
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    
+    import_type VARCHAR(50) NOT NULL,
+    total_records INTEGER,
+    successful_records INTEGER,
+    failed_records INTEGER,
+    duplicate_records INTEGER,
+    
+    import_summary JSONB,
+    error_details TEXT,
+    
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    imported_by INTEGER REFERENCES t_users(id)
+);
+-- Communication campaigns/rules (placeholder for future)
+CREATE TABLE IF NOT EXISTS t_communication_campaigns (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    campaign_name VARCHAR(255) NOT NULL,
+    campaign_type VARCHAR(50) CHECK (campaign_type IN ('reminder', 'alert', 'report', 'wish', 'other')),
+    trigger_rule JSONB, -- Rule definition (future implementation)
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id)
+);
+
+-- Communication tracking
+CREATE TABLE IF NOT EXISTS t_customer_communications (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id),
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    communication_type VARCHAR(50) NOT NULL CHECK (
+        communication_type IN ('email', 'sms', 'whatsapp', 'call', 'letter', 'report')
+    ),
+    channel_used INTEGER REFERENCES t_contact_channels(id),
+    
+    subject VARCHAR(500),
+    content TEXT,
+    
+    -- Status tracking
+    status VARCHAR(50) DEFAULT 'sent' CHECK (
+        status IN ('scheduled', 'sent', 'delivered', 'failed', 'bounced')
+    ),
+    
+    -- Scheduling
+    scheduled_at TIMESTAMP,
+    sent_at TIMESTAMP,
+    delivered_at TIMESTAMP,
+    
+    -- Metadata
+    campaign_id INTEGER REFERENCES t_communication_campaigns(id),
+    reference_data JSONB, -- Additional context data
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id)
+);
+-- Portfolio/transaction data (basic structure)
+CREATE TABLE IF NOT EXISTS t_customer_portfolios (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id),
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    portfolio_name VARCHAR(255),
+    portfolio_data JSONB, -- Flexible structure for transaction data
+    
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,0 +1,59 @@
+-- 1. Master table for scheme types and categories
+CREATE TABLE t_scheme_masters (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    master_type VARCHAR(50) CHECK (master_type IN ('scheme_type', 'scheme_category')),
+    code VARCHAR(50) UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    display_order INTEGER DEFAULT 0,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Scheme details table
+CREATE TABLE t_scheme_details (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    is_live BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true,
+    
+    amc_name VARCHAR(255),
+    scheme_code VARCHAR(100) UNIQUE,
+    scheme_name VARCHAR(500) NOT NULL,
+    scheme_type_id INTEGER, -- References t_scheme_masters
+    scheme_category_id INTEGER, -- References t_scheme_masters
+    scheme_nav_name VARCHAR(500),
+    scheme_minimum_amount DECIMAL(15,2),
+    launch_date DATE,
+    closure_date DATE,
+    isin_div_payout VARCHAR(50),
+    isin_growth VARCHAR(50),
+    isin_div_reinvestment VARCHAR(50),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id)
+);
+
+-- 3. Import staging for schemes
+CREATE TABLE t_scheme_staging_data (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER,
+    is_live BOOLEAN,
+    session_id INTEGER,
+    row_number INTEGER,
+    
+    raw_data JSONB,
+    mapped_data JSONB,
+    
+    processing_status VARCHAR(50) DEFAULT 'pending',
+    error_messages TEXT[],
+    warnings TEXT[],
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP
+);

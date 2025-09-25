@@ -1,0 +1,413 @@
+/* src/styles/dashboardStyles.css */
+
+/* Animation Definitions */
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 0.4; 
+  }
+  50% { 
+    opacity: 0.6; 
+  }
+}
+
+@keyframes spin {
+  from { 
+    transform: rotate(0deg); 
+  }
+  to { 
+    transform: rotate(360deg); 
+  }
+}
+
+@keyframes slideIn {
+  from { 
+    transform: translateX(100%); 
+  }
+  to { 
+    transform: translateX(0); 
+  }
+}
+
+@keyframes slideInLeft {
+  from { 
+    transform: translateX(-100%); 
+  }
+  to { 
+    transform: translateX(0); 
+  }
+}
+
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes countUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes drawChart {
+  from { 
+    stroke-dashoffset: 1000; 
+  }
+  to { 
+    stroke-dashoffset: 0; 
+  }
+}
+
+@keyframes priorityPulse {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+  50% { 
+    transform: scale(1.05); 
+    opacity: 0.8; 
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Dashboard Container Styles */
+.dashboard-container {
+  min-height: 100vh;
+  animation: fadeIn 0.3s ease;
+}
+
+.dashboard-header {
+  animation: slideInLeft 0.4s ease;
+}
+
+.dashboard-grid {
+  display: grid;
+  gap: 24px;
+  transition: all 0.3s ease;
+}
+
+.dashboard-grid.with-sidebar {
+  grid-template-columns: 1fr 450px;
+}
+
+/* Card Styles */
+.dashboard-card {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.05), 
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.dashboard-card:hover::before {
+  left: 100%;
+}
+
+/* Metric Cards */
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.5s ease backwards;
+}
+
+.metric-card:nth-child(1) { animation-delay: 0.1s; }
+.metric-card:nth-child(2) { animation-delay: 0.2s; }
+.metric-card:nth-child(3) { animation-delay: 0.3s; }
+.metric-card:nth-child(4) { animation-delay: 0.4s; }
+
+.metric-value {
+  animation: countUp 0.6s ease-out;
+}
+
+/* Chart Animations */
+.donut-chart-segment {
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.donut-chart-segment:hover {
+  filter: brightness(1.1);
+  transform: scale(1.02);
+}
+
+.sparkline-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawChart 1s ease forwards;
+}
+
+/* Priority Indicators */
+.priority-critical {
+  animation: priorityPulse 2s ease-in-out infinite;
+}
+
+.priority-badge {
+  transition: all 0.2s ease;
+}
+
+.priority-badge:hover {
+  transform: scale(1.1);
+}
+
+/* Action Cards */
+.action-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.action-card:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+  transform: translateX(4px);
+}
+
+.action-button {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.action-button:hover::after {
+  width: 100px;
+  height: 100px;
+}
+
+/* Loading States */
+.skeleton-loader {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.1) 25%,
+    rgba(0, 0, 0, 0.05) 50%,
+    rgba(0, 0, 0, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Tabs */
+.tab-button {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.tab-button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: currentColor;
+  transform: translateX(-50%);
+  transition: width 0.3s ease;
+}
+
+.tab-button.active::after {
+  width: 100%;
+}
+
+/* Tooltips */
+.tooltip {
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  animation: none;
+}
+
+.tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+  animation: fadeIn 0.2s ease;
+}
+
+/* Filter Pills */
+.filter-pill {
+  transition: all 0.2s ease;
+}
+
+.filter-pill:hover {
+  transform: scale(1.05);
+}
+
+.filter-pill.active {
+  animation: pulse 0.3s ease;
+}
+
+/* Scroll Animations */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.5s ease;
+}
+
+.scroll-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Progress Bars */
+.progress-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s linear infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .dashboard-grid.with-sidebar {
+    grid-template-columns: 1fr 400px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-grid.with-sidebar {
+    grid-template-columns: 1fr;
+  }
+  
+  .customer-detail-panel {
+    position: fixed;
+    width: 100%;
+    max-width: 500px;
+    right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    padding: 16px;
+  }
+  
+  .metric-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .customer-card {
+    padding: 16px;
+  }
+  
+  .portfolio-summary-compact {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .dashboard-card {
+    background: rgba(30, 30, 30, 0.5);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .skeleton-loader {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 25%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 75%
+    );
+  }
+  
+  .dashboard-card::before {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.02),
+      transparent
+    );
+  }
+}
+
+/* Print Styles */
+@media print {
+  .dashboard-header button,
+  .action-buttons,
+  .filter-bar {
+    display: none;
+  }
+  
+  .dashboard-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

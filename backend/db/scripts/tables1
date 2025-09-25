@@ -1,0 +1,108 @@
+    -- Drop existing tables and recreate fresh
+
+    -- Drop existing indexes if they exist
+    DROP INDEX IF EXISTS idx_users_email;
+    DROP INDEX IF EXISTS idx_users_tenant;
+    DROP INDEX IF EXISTS idx_chat_sessions_user;
+    DROP INDEX IF EXISTS idx_chat_messages_session;
+
+    -- Drop existing tables in correct order (due to foreign keys)
+    DROP TABLE IF EXISTS t_chat_messages CASCADE;
+    DROP TABLE IF EXISTS t_chat_sessions CASCADE;
+    DROP TABLE IF EXISTS t_users CASCADE;
+    DROP TABLE IF EXISTS t_tenants CASCADE;
+
+    -- Drop trigger function
+    DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+
+    -- Now create everything fresh
+    -- Enable UUID extension
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    -- Create tenants table for future multitenancy support
+    CREATE TABLE t_tenants (
+        id SERIAL PRIMARY KEY,
+        tenant_code VARCHAR(50) UNIQUE NOT NULL,
+        tenant_name VARCHAR(255) NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        settings JSONB DEFAULT '{}'::jsonb,
+        subscription_plan VARCHAR(50) DEFAULT 'basic'
+    );
+
+    -- Insert default tenant
+    INSERT INTO t_tenants (tenant_code, tenant_name) 
+    VALUES ('default', 'Default Tenant');
+
+    -- Create users table
+    CREATE TABLE t_users (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+        email VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true,
+        theme_preference VARCHAR(50) DEFAULT 'techy-simple',
+        environment_preference VARCHAR(10) DEFAULT 'live',
+        is_live BOOLEAN DEFAULT true,
+        
+        CONSTRAINT unique_email_per_tenant UNIQUE (tenant_id, email)
+    );
+
+    -- Create chat sessions table (for AI chat later)
+    CREATE TABLE t_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+        user_id INTEGER REFERENCES t_users(id),
+        session_name VARCHAR(255),
+        is_live BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT check_tenant_consistency CHECK (tenant_id IS NOT NULL AND user_id IS NOT NULL)
+    );
+
+    -- Create chat messages table
+    CREATE TABLE t_chat_messages (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+        session_id INTEGER REFERENCES t_chat_sessions(id),
+        message_type VARCHAR(20) NOT NULL,
+        content TEXT NOT NULL,
+        metadata JSONB,
+        is_live BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create indexes
+    CREATE INDEX idx_users_email ON t_users(email);
+    CREATE INDEX idx_users_tenant ON t_users(tenant_id);
+    CREATE INDEX idx_chat_sessions_user ON t_chat_sessions(user_id);
+    CREATE INDEX idx_chat_messages_session ON t_chat_messages(session_id);
+
+    -- Create updated_at trigger function
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+
+    -- Create triggers
+    CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON t_users
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TRIGGER update_tenants_updated_at BEFORE UPDATE ON t_tenants
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO kewal_admin;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO kewal_admin;
+
+    -- Show created tables
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    ORDER BY table_name;
