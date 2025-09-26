@@ -81,6 +81,12 @@ export const API_ENDPOINTS = {
     BOOKMARKS: `${API_BASE}/nav/bookmarks`,
     UPDATE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
     DELETE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
+    
+    // ENHANCED: New bookmark-specific endpoints
+    BOOKMARK_NAV_DATA: (id: number) => `${API_BASE}/nav/bookmarks/${id}/nav-data`,
+    BOOKMARK_STATS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/stats`,
+    BOOKMARK_DOWNLOAD_STATUS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/download-status`,
+    
     NAV_DATA: `${API_BASE}/nav/data`,
     LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
     DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
@@ -354,6 +360,16 @@ export const NAV_URLS = {
   deleteBookmark: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DELETE_BOOKMARK(id)}${buildQueryParams({}, environment)}`,
   
+  // ENHANCED: New bookmark-specific endpoints
+  getBookmarkNavData: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_NAV_DATA(id)}${buildQueryParams(params || {}, environment)}`,
+  
+  getBookmarkStats: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_STATS(id)}${buildQueryParams({}, environment)}`,
+  
+  updateBookmarkDownloadStatus: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_DOWNLOAD_STATUS(id)}${buildQueryParams({}, environment)}`,
+  
   // Get NAV data with query parameters
   getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
@@ -438,6 +454,13 @@ if (process.env.NODE_ENV === 'development') {
     SCHEDULER_STATUS: API_ENDPOINTS.NAV.SCHEDULER_STATUS,
     SCHEDULER_TRIGGER: API_ENDPOINTS.NAV.SCHEDULER_TRIGGER,
     SCHEDULER_ALL_ACTIVE: API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE,
+  });
+  
+  // Log enhanced bookmark endpoints
+  console.log('📋 Enhanced Bookmark Endpoints:', {
+    BOOKMARK_NAV_DATA: 'GET /nav/bookmarks/:id/nav-data',
+    BOOKMARK_STATS: 'GET /nav/bookmarks/:id/stats', 
+    BOOKMARK_DOWNLOAD_STATUS: 'PUT /nav/bookmarks/:id/download-status',
   });
 }
 

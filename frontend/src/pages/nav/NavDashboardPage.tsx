@@ -1,19 +1,24 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// Enhanced NAV Dashboard with scheduler integration - PRODUCTION READY
+// Enhanced NAV Dashboard with EnhancedBookmarkCard integration - COMPLETE FILE
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useNavDashboard, useDownloads } from '../../hooks/useNavData';
+import { useNavDashboard, useDownloads, useDownloadProgress } from '../../hooks/useNavData';
+import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
+import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
+import type { SchemeBookmark } from '../../services/nav.service';
+import '../../components/nav/BookmarkCard.css';
 
 const NavDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Main dashboard data
   const {
     bookmarks,
     statistics,
@@ -27,11 +32,18 @@ const NavDashboardPage: React.FC = () => {
   } = useNavDashboard();
 
   const { triggerDailyDownload } = useDownloads();
+  const { progress, startPolling, stopPolling } = useDownloadProgress();
 
   // Modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(null);
   const [isTriggeringDownload, setIsTriggeringDownload] = useState(false);
+
+  // Enhanced bookmark card modals
+  const [showHistoricalModal, setShowHistoricalModal] = useState(false);
+  const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
+  const [showNavDataModal, setShowNavDataModal] = useState(false);
+  const [currentDownloadJobId, setCurrentDownloadJobId] = useState<number | null>(null);
 
   // Handle manual daily download
   const handleTriggerDailyDownload = async () => {
@@ -59,6 +71,47 @@ const NavDashboardPage: React.FC = () => {
     } finally {
       setIsTriggeringDownload(false);
     }
+  };
+
+  // Enhanced bookmark card event handlers
+  const handleToggleDaily = async (bookmarkId: number, enabled: boolean) => {
+    try {
+      // The EnhancedBookmarkCard handles the API call internally
+      // Just refresh the data after change
+      refetchAll();
+    } catch (error: any) {
+      console.error('Failed to toggle daily download:', error);
+    }
+  };
+
+  const handleViewNavData = (bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowNavDataModal(true);
+    // TODO: Implement NAV data viewer modal in Phase 2
+    toastService.info('NAV Data Viewer coming soon in Phase 2');
+  };
+
+  const handleHistoricalDownload = (bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowHistoricalModal(true);
+  };
+
+  const handleHistoricalDownloadStarted = (jobId: number) => {
+    setCurrentDownloadJobId(jobId);
+    setShowProgressModal(true);
+    startPolling(jobId, (progressData) => {
+      setCurrentProgress(progressData);
+    });
+  };
+
+  const handleCloseHistoricalModal = () => {
+    setShowHistoricalModal(false);
+    setSelectedBookmark(null);
+  };
+
+  const handleCloseNavDataModal = () => {
+    setShowNavDataModal(false);
+    setSelectedBookmark(null);
   };
 
   // Navigation handlers
@@ -516,7 +569,7 @@ const NavDashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Recent Bookmarks */}
+        {/* Recent Bookmarks - ENHANCED VERSION */}
         <div style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
@@ -606,72 +659,111 @@ const NavDashboardPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {bookmarks.slice(0, 5).map((bookmark) => (
-                <div key={bookmark.id} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '16px',
-                  backgroundColor: colors.utility.primaryBackground,
-                  borderRadius: '8px'
-                }}>
-                  <div>
-                    <div style={{
-                      fontWeight: '500',
-                      color: colors.utility.primaryText,
-                      marginBottom: '4px'
-                    }}>
-                      {bookmark.scheme_name}
-                    </div>
-                    <div style={{
-                      fontSize: '12px',
-                      color: colors.utility.secondaryText
-                    }}>
-                      {bookmark.scheme_code} • {bookmark.amc_name}
-                    </div>
-                    <div style={{
-                      fontSize: '12px',
-                      color: colors.utility.secondaryText,
-                      marginTop: '4px'
-                    }}>
-                      {bookmark.nav_records_count || 0} NAV records
-                      {bookmark.latest_nav_date && ` • Latest: ${new Date(bookmark.latest_nav_date).toLocaleDateString()}`}
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
-                  }}>
-                    {bookmark.daily_download_enabled && (
-                      <div style={{
-                        padding: '4px 8px',
-                        backgroundColor: colors.semantic.success + '20',
-                        color: colors.semantic.success,
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}>
-                        Auto-Download
-                      </div>
-                    )}
-                    {bookmark.latest_nav_value && (
-                      <div style={{
-                        fontWeight: '600',
-                        color: colors.utility.primaryText
-                      }}>
-                        ₹{bookmark.latest_nav_value.toFixed(4)}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <EnhancedBookmarkCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  onToggleDaily={handleToggleDaily}
+                  onViewNavData={handleViewNavData}
+                  onHistoricalDownload={handleHistoricalDownload}
+                  showActions={true}
+                />
               ))}
+              
+              {/* Show "View All" link if there are more bookmarks */}
+              {bookmarks.length > 5 && (
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: `1px solid ${colors.utility.primaryText}10`
+                }}>
+                  <button
+                    onClick={handleNavigateToBookmarks}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: colors.brand.secondary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    View All {bookmarks.length} Bookmarks →
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Historical Download Modal */}
+      <HistoricalDownloadModal
+        isOpen={showHistoricalModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseHistoricalModal}
+        onDownloadStarted={handleHistoricalDownloadStarted}
+        onShowProgress={(jobId) => {
+          setCurrentDownloadJobId(jobId);
+          setShowProgressModal(true);
+        }}
+      />
+
+      {/* NAV Data Viewer Modal - TODO: Implement in Phase 2 */}
+      {showNavDataModal && selectedBookmark && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: colors.utility.primaryBackground,
+            borderRadius: '16px',
+            padding: '24px',
+            minWidth: '400px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+          }}>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '16px'
+            }}>
+              📊 NAV Data Viewer
+            </h3>
+            <p style={{
+              color: colors.utility.secondaryText,
+              marginBottom: '20px'
+            }}>
+              NAV Data Viewer for <strong>{selectedBookmark.scheme_name}</strong> coming soon in Phase 2!
+            </p>
+            <button
+              onClick={handleCloseNavDataModal}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: colors.brand.primary,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Progress Modal */}
       <NavProgressModal

@@ -1,5 +1,5 @@
 // frontend/src/services/nav.service.ts
-// File 5/14: Complete frontend service for NAV operations using existing serviceURLs
+// File 5/14: Complete frontend service for NAV operations with enhanced bookmark functionality
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -52,7 +52,7 @@ export interface SchemeSearchParams {
   scheme_category?: number;
 }
 
-// Bookmark types
+// ENHANCED: Updated bookmark types with new fields
 export interface SchemeBookmark {
   id: number;
   scheme_id: number;
@@ -65,8 +65,14 @@ export interface SchemeBookmark {
   nav_records_count: number;
   latest_nav_date?: string;
   latest_nav_value?: number;
+  earliest_nav_date?: string; // ADDED: First NAV record date
   created_at: string;
   updated_at: string;
+  
+  // ADDED: Download status tracking
+  last_download_status?: 'success' | 'failed' | 'pending' | null;
+  last_download_error?: string;
+  last_download_attempt?: string;
 }
 
 export interface BookmarkSearchParams {
@@ -87,6 +93,38 @@ export interface UpdateBookmarkRequest {
   daily_download_enabled?: boolean;
   download_time?: string;
   historical_download_completed?: boolean;
+}
+
+// ADDED: New interfaces for enhanced bookmark functionality
+export interface BookmarkNavDataParams {
+  bookmark_id: number;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface BookmarkStats {
+  bookmark_id: number;
+  scheme_name: string;
+  scheme_code: string;
+  amc_name: string;
+  nav_records_count: number;
+  earliest_nav_date?: string;
+  latest_nav_date?: string;
+  latest_nav_value?: number;
+  daily_download_enabled: boolean;
+  historical_download_completed: boolean;
+  last_download_status?: 'success' | 'failed' | 'pending' | null;
+  last_download_error?: string;
+  last_download_attempt?: string;
+  date_range_days: number;
+}
+
+export interface UpdateBookmarkDownloadStatus {
+  last_download_status: 'success' | 'failed' | 'pending';
+  last_download_error?: string;
+  last_download_attempt?: string;
 }
 
 // NAV data types
@@ -183,7 +221,7 @@ export interface NavStatistics {
   failed_downloads_today: number;
 }
 
-// NEW: Scheduler types
+// Scheduler types
 export interface SchedulerConfig {
   id?: number;
   schedule_type: 'daily' | 'weekly' | 'custom';
@@ -217,13 +255,13 @@ export interface SchedulerStatus {
 // ==================== NAV SERVICE CLASS ====================
 
 export class NavService {
-  private getAuthHeaders(): Record<string, string> {
-    const token = localStorage.getItem('authToken');
-    const tenantId = localStorage.getItem('tenantId');
-    const environment = localStorage.getItem('environment') as 'live' | 'test' || 'test';
+ private getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('access_token'); 
+  const tenantId = localStorage.getItem('tenant_id'); 
+  const environment = localStorage.getItem('environment') as 'live' | 'test' || 'test';
 
-    return buildHeaders(token || '', tenantId || '', environment);
-  }
+  return buildHeaders(token || '', tenantId || '', environment);
+}
 
   private getEnvironment(): 'live' | 'test' {
     return (localStorage.getItem('environment') as 'live' | 'test') || 'test';
@@ -346,6 +384,173 @@ export class NavService {
     }
     
     return response as ApiResponse<void>;
+  }
+
+  // ==================== ENHANCED BOOKMARK METHODS ====================
+
+  /**
+   * Get NAV data for a specific bookmark
+   */
+  async getBookmarkNavData(params: BookmarkNavDataParams): Promise<PaginatedResponse<{ nav_data: NavData[] }>> {
+    const url = NAV_URLS.getBookmarkNavData(params.bookmark_id, {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      page: params.page,
+      page_size: params.page_size
+    }, this.getEnvironment());
+    
+    const response = await this.handleRequest<{ nav_data: NavData[] }>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load bookmark NAV data');
+    }
+    
+    return response as PaginatedResponse<{ nav_data: NavData[] }>;
+  }
+
+  /**
+   * Get comprehensive statistics for a bookmark
+   */
+  async getBookmarkStats(bookmarkId: number): Promise<ApiResponse<BookmarkStats>> {
+    const url = NAV_URLS.getBookmarkStats(bookmarkId, this.getEnvironment());
+    
+    const response = await this.handleRequest<BookmarkStats>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load bookmark statistics');
+    }
+    
+    return response as ApiResponse<BookmarkStats>;
+  }
+
+  /**
+   * Update bookmark download status (internal use)
+   */
+  async updateBookmarkDownloadStatus(
+    bookmarkId: number, 
+    status: UpdateBookmarkDownloadStatus
+  ): Promise<ApiResponse<void>> {
+    const url = NAV_URLS.updateBookmarkDownloadStatus(bookmarkId, this.getEnvironment());
+    
+    const response = await this.handleRequest<void>(url, {
+      method: 'PUT',
+      body: JSON.stringify(status)
+    });
+    
+    if (!response.success) {
+      console.warn('Failed to update bookmark download status:', response.error);
+    }
+    
+    return response as ApiResponse<void>;
+  }
+
+  /**
+   * ENHANCED: Trigger historical download with bookmark status updates
+   */
+  async triggerHistoricalDownloadForBookmarks(
+    bookmarkIds: number[], 
+    startDate: string, 
+    endDate: string
+  ): Promise<ApiResponse<{ jobId: number; message: string; estimatedTime: number }>> {
+    // First get the scheme IDs for these bookmarks
+    const bookmarksResponse = await this.getBookmarks({ page: 1, page_size: 1000 });
+    
+    if (!bookmarksResponse.success || !bookmarksResponse.data) {
+      return {
+        success: false,
+        error: 'Failed to get bookmark details'
+      };
+    }
+
+    const relevantBookmarks = bookmarksResponse.data.bookmarks.filter(b => 
+      bookmarkIds.includes(b.id)
+    );
+
+    if (relevantBookmarks.length === 0) {
+      return {
+        success: false,
+        error: 'No valid bookmarks found'
+      };
+    }
+
+    const schemeIds = relevantBookmarks.map(b => b.scheme_id);
+
+    // Trigger the historical download using existing method
+    const request: HistoricalDownloadRequest = {
+      scheme_ids: schemeIds,
+      start_date: startDate,
+      end_date: endDate
+    };
+
+    const response = await this.triggerHistoricalDownload(request);
+
+    // If successful, update bookmark statuses to pending
+    if (response.success) {
+      try {
+        for (const bookmarkId of bookmarkIds) {
+          await this.updateBookmarkDownloadStatus(bookmarkId, {
+            last_download_status: 'pending',
+            last_download_attempt: new Date().toISOString()
+          });
+        }
+      } catch (statusError) {
+        console.warn('Failed to update bookmark status after triggering download:', statusError);
+        // Don't fail the main operation if status update fails
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Get bookmark download status summary
+   */
+  async getBookmarkDownloadStatus(bookmarkIds: number[]): Promise<ApiResponse<{
+    [bookmarkId: number]: {
+      status: 'success' | 'failed' | 'pending' | 'no-data';
+      lastAttempt?: string;
+      error?: string;
+    }
+  }>> {
+    try {
+      const bookmarksResponse = await this.getBookmarks({ page: 1, page_size: 1000 });
+      
+      if (!bookmarksResponse.success || !bookmarksResponse.data) {
+        return {
+          success: false,
+          error: 'Failed to get bookmark status'
+        };
+      }
+
+      const statusMap: { [bookmarkId: number]: any } = {};
+
+      bookmarkIds.forEach(bookmarkId => {
+        const bookmark = bookmarksResponse.data!.bookmarks.find(b => b.id === bookmarkId);
+        
+        if (bookmark) {
+          statusMap[bookmarkId] = {
+            status: bookmark.last_download_status || 
+                   (bookmark.nav_records_count > 0 ? 'success' : 'no-data'),
+            lastAttempt: bookmark.last_download_attempt,
+            error: bookmark.last_download_error
+          };
+        } else {
+          statusMap[bookmarkId] = {
+            status: 'no-data'
+          };
+        }
+      });
+
+      return {
+        success: true,
+        data: statusMap
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to get download status'
+      };
+    }
   }
 
   // ==================== NAV DATA OPERATIONS ====================
@@ -529,7 +734,7 @@ export class NavService {
     }>;
   }
 
-  // ==================== NEW: SCHEDULER OPERATIONS ====================
+  // ==================== SCHEDULER OPERATIONS ====================
 
   /**
    * Get scheduler configuration
@@ -707,6 +912,71 @@ export class NavService {
       default:
         return `${minutes} ${hours} * * *`;
     }
+  }
+
+ /**
+ * ADDED: Utility - Format date range for display
+ */
+static formatDateRange(earliestDate?: string, latestDate?: string): string {
+  if (!earliestDate && !latestDate) return 'No NAV data';
+  if (!earliestDate && latestDate) return `Latest: ${new Date(latestDate).toLocaleDateString()}`;
+  if (earliestDate && !latestDate) return `From: ${new Date(earliestDate).toLocaleDateString()}`;
+  
+  // Both dates exist at this point, but TypeScript needs explicit checks
+  if (!earliestDate || !latestDate) return 'No NAV data';
+  
+  const earliest = new Date(earliestDate).toLocaleDateString();
+  const latest = new Date(latestDate).toLocaleDateString();
+  
+  if (earliest === latest) {
+    return `Single date: ${earliest}`;
+  }
+  
+  return `${earliest} - ${latest}`;
+}
+
+  /**
+   * ADDED: Utility - Get download status display info
+   */
+  static getDownloadStatusDisplay(bookmark: SchemeBookmark): {
+    status: 'success' | 'failed' | 'pending' | 'no-data';
+    color: string;
+    label: string;
+    icon: string;
+  } {
+    if (bookmark.last_download_status === 'failed') {
+      return {
+        status: 'failed',
+        color: '#ef4444', // red-500
+        label: 'Download Failed',
+        icon: '❌'
+      };
+    }
+    
+    if (bookmark.last_download_status === 'pending') {
+      return {
+        status: 'pending',
+        color: '#f59e0b', // amber-500
+        label: 'Download Pending',
+        icon: '⏳'
+      };
+    }
+    
+    if (bookmark.nav_records_count > 0) {
+      return {
+        status: 'success',
+        color: '#22c55e', // green-500
+        label: 'Data Available',
+        icon: '✅'
+      };
+    }
+    
+    return {
+      status: 'no-data',
+      color: '#6b7280', // gray-500
+      label: 'No Data',
+      icon: '⚪'
+    };
   }
 }
 

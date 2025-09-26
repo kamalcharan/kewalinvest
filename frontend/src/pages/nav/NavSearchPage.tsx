@@ -142,7 +142,7 @@ const NavSearchPage: React.FC = () => {
     try {
       const bookmarkRequest: CreateBookmarkRequest = {
         scheme_id: scheme.id,
-        daily_download_enabled: false, // Default to false, user can enable later
+        daily_download_enabled: true, 
         download_time: '23:00' // Default download time
       };
 

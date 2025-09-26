@@ -1,5 +1,5 @@
 // frontend/src/hooks/useNavData.ts
-// Complete NAV hooks with scheduler integration - PRODUCTION READY
+// Fixed TypeScript errors with enhanced bookmark functionality - PRODUCTION READY
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -17,6 +17,9 @@ import type {
   NavDataParams,
   HistoricalDownloadRequest,
   DownloadJobParams,
+  BookmarkNavDataParams,
+  BookmarkStats,
+  UpdateBookmarkDownloadStatus,
   PaginatedResponse,
   ApiResponse
 } from '../services/nav.service';
@@ -130,7 +133,315 @@ export const useSchemeSearch = (): UseSchemeSearchReturn => {
   };
 };
 
-// ==================== BOOKMARK MANAGEMENT HOOK ====================
+// ==================== ENHANCED BOOKMARK HOOKS ====================
+
+/**
+ * Hook for managing bookmark NAV data viewing
+ */
+export interface UseBookmarkNavDataReturn {
+  navData: NavData[];
+  isLoading: boolean;
+  error: string | null;
+  fetchNavData: (params: BookmarkNavDataParams) => Promise<void>;
+  clearData: () => void;
+  pagination: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  } | null;
+}
+
+export const useBookmarkNavData = (): UseBookmarkNavDataReturn => {
+  const [navData, setNavData] = useState<NavData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<UseBookmarkNavDataReturn['pagination']>(null);
+
+  const fetchNavDataStable = useCallback(async (params: BookmarkNavDataParams) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await navService.getBookmarkNavData(params);
+      
+      if (response.success && response.data) {
+        setNavData(response.data.nav_data || []);
+        setPagination({
+          total: response.data.total || 0,
+          page: response.data.page || 1,
+          pageSize: response.data.page_size || 50,
+          totalPages: response.data.total_pages || 0,
+          hasNext: response.data.has_next || false,
+          hasPrev: response.data.has_prev || false,
+        });
+      } else {
+        setError(response.error || 'Failed to load NAV data');
+        setNavData([]);
+        setPagination(null);
+      }
+    } catch (err: any) {
+      console.error('Fetch bookmark NAV data error:', err);
+      setError(err.message || 'Failed to load NAV data');
+      setNavData([]);
+      setPagination(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchNavData = useCallback((params: BookmarkNavDataParams) => {
+    return fetchNavDataStable(params);
+  }, [fetchNavDataStable]);
+
+  const clearData = useCallback(() => {
+    setNavData([]);
+    setPagination(null);
+    setError(null);
+  }, []);
+
+  return {
+    navData,
+    isLoading,
+    error,
+    fetchNavData,
+    clearData,
+    pagination,
+  };
+};
+
+/**
+ * Hook for managing bookmark statistics
+ */
+export interface UseBookmarkStatsReturn {
+  stats: BookmarkStats | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchStats: (bookmarkId: number) => Promise<void>;
+  refreshStats: () => void;
+}
+
+export const useBookmarkStats = (bookmarkId?: number): UseBookmarkStatsReturn => {
+  const [stats, setStats] = useState<BookmarkStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentBookmarkId, setCurrentBookmarkId] = useState<number | undefined>(bookmarkId);
+
+  const fetchStatsStable = useCallback(async (id: number) => {
+    setIsLoading(true);
+    setError(null);
+    setCurrentBookmarkId(id);
+
+    try {
+      const response = await navService.getBookmarkStats(id);
+      
+      if (response.success && response.data) {
+        setStats(response.data);
+      } else {
+        setError(response.error || 'Failed to load bookmark statistics');
+        setStats(null);
+      }
+    } catch (err: any) {
+      console.error('Fetch bookmark stats error:', err);
+      setError(err.message || 'Failed to load statistics');
+      setStats(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchStats = useCallback((id: number) => {
+    return fetchStatsStable(id);
+  }, [fetchStatsStable]);
+
+  const refreshStats = useCallback(() => {
+    if (currentBookmarkId) {
+      fetchStatsStable(currentBookmarkId);
+    }
+  }, [currentBookmarkId, fetchStatsStable]);
+
+  useEffect(() => {
+    if (bookmarkId) {
+      fetchStatsStable(bookmarkId);
+    }
+  }, [bookmarkId, fetchStatsStable]);
+
+  return {
+    stats,
+    isLoading,
+    error,
+    fetchStats,
+    refreshStats,
+  };
+};
+
+/**
+ * Hook for managing historical downloads for bookmarks
+ */
+export interface UseBookmarkHistoricalDownloadReturn {
+  isTriggering: boolean;
+  error: string | null;
+  triggerDownload: (bookmarkIds: number[], startDate: string, endDate: string) => Promise<{ jobId: number }>;
+  clearError: () => void;
+}
+
+export const useBookmarkHistoricalDownload = (): UseBookmarkHistoricalDownloadReturn => {
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const triggerDownload = useCallback(async (
+    bookmarkIds: number[], 
+    startDate: string, 
+    endDate: string
+  ): Promise<{ jobId: number }> => {
+    if (isTriggering) {
+      throw new Error('Download already in progress');
+    }
+
+    // Validate date range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const validation = NavService.validateDateRange(start, end);
+    
+    if (!validation.valid) {
+      const validationError = new Error(validation.error);
+      setError(validationError.message);
+      throw validationError;
+    }
+
+    setIsTriggering(true);
+    setError(null);
+
+    try {
+      const response = await navService.triggerHistoricalDownloadForBookmarks(
+        bookmarkIds,
+        startDate,
+        endDate
+      );
+      
+      if (response.success && response.data) {
+        return { jobId: response.data.jobId };
+      } else {
+        const errorMsg = response.error || 'Failed to trigger historical download';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Trigger bookmark historical download error:', err);
+      const errorMsg = err.message || 'Failed to trigger download';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setIsTriggering(false);
+    }
+  }, [isTriggering]);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  return {
+    isTriggering,
+    error,
+    triggerDownload,
+    clearError,
+  };
+};
+
+/**
+ * Hook for managing bookmark download status
+ */
+export interface UseBookmarkDownloadStatusReturn {
+  statusMap: { [bookmarkId: number]: any };
+  isLoading: boolean;
+  error: string | null;
+  fetchStatus: (bookmarkIds: number[]) => Promise<void>;
+  updateStatus: (bookmarkId: number, status: UpdateBookmarkDownloadStatus) => Promise<void>;
+  refreshStatus: () => void;
+}
+
+export const useBookmarkDownloadStatus = (initialBookmarkIds: number[] = []): UseBookmarkDownloadStatusReturn => {
+  const [statusMap, setStatusMap] = useState<{ [bookmarkId: number]: any }>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentBookmarkIds, setCurrentBookmarkIds] = useState<number[]>(initialBookmarkIds);
+
+  const fetchStatusStable = useCallback(async (bookmarkIds: number[]) => {
+    if (bookmarkIds.length === 0) return;
+
+    setIsLoading(true);
+    setError(null);
+    setCurrentBookmarkIds(bookmarkIds);
+
+    try {
+      const response = await navService.getBookmarkDownloadStatus(bookmarkIds);
+      
+      if (response.success && response.data) {
+        setStatusMap(response.data);
+      } else {
+        setError(response.error || 'Failed to load download status');
+      }
+    } catch (err: any) {
+      console.error('Fetch bookmark download status error:', err);
+      setError(err.message || 'Failed to load download status');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchStatus = useCallback((bookmarkIds: number[]) => {
+    return fetchStatusStable(bookmarkIds);
+  }, [fetchStatusStable]);
+
+  const updateStatus = useCallback(async (bookmarkId: number, status: UpdateBookmarkDownloadStatus) => {
+    try {
+      const response = await navService.updateBookmarkDownloadStatus(bookmarkId, status);
+      
+      if (response.success) {
+        // Update local status map
+        setStatusMap(prev => ({
+          ...prev,
+          [bookmarkId]: {
+            status: status.last_download_status,
+            lastAttempt: status.last_download_attempt || new Date().toISOString(),
+            error: status.last_download_error
+          }
+        }));
+      } else {
+        throw new Error(response.error || 'Failed to update status');
+      }
+    } catch (err: any) {
+      console.error('Update bookmark download status error:', err);
+      setError(err.message || 'Failed to update status');
+      throw err;
+    }
+  }, []);
+
+  const refreshStatus = useCallback(() => {
+    if (currentBookmarkIds.length > 0) {
+      fetchStatusStable(currentBookmarkIds);
+    }
+  }, [currentBookmarkIds, fetchStatusStable]);
+
+  useEffect(() => {
+    if (initialBookmarkIds.length > 0) {
+      fetchStatusStable(initialBookmarkIds);
+    }
+  }, [initialBookmarkIds, fetchStatusStable]);
+
+  return {
+    statusMap,
+    isLoading,
+    error,
+    fetchStatus,
+    updateStatus,
+    refreshStatus,
+  };
+};
+
+// ==================== ENHANCED BOOKMARK MANAGEMENT HOOK ====================
 
 export interface UseBookmarksReturn {
   bookmarks: SchemeBookmark[];
@@ -149,6 +460,8 @@ export interface UseBookmarksReturn {
     hasNext: boolean;
     hasPrev: boolean;
   } | null;
+  // ENHANCED: Add download status tracking
+  downloadStatus: { [bookmarkId: number]: any };
 }
 
 export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarksReturn => {
@@ -213,9 +526,16 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     return fetchBookmarksStableRef.current(params || {});
   }, []);
 
+  // ENHANCED: Create bookmark with default daily download enabled
   const createBookmark = useCallback(async (request: CreateBookmarkRequest) => {
     try {
-      const response: ApiResponse<SchemeBookmark> = await navService.createBookmark(request);
+      // Default to daily download enabled unless explicitly set to false
+      const enhancedRequest = {
+        ...request,
+        daily_download_enabled: request.daily_download_enabled !== false
+      };
+
+      const response: ApiResponse<SchemeBookmark> = await navService.createBookmark(enhancedRequest);
       
       if (response.success) {
         await fetchBookmarksStable(lastParamsRef.current);
@@ -279,6 +599,17 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     fetchBookmarksStable(lastParamsRef.current);
   }, [fetchBookmarksStable]);
 
+  // ENHANCED: Add download status tracking
+  const bookmarkIds = bookmarks.map(b => b.id);
+  const { statusMap, fetchStatus } = useBookmarkDownloadStatus(bookmarkIds);
+
+  // Refresh download status when bookmarks change
+  useEffect(() => {
+    if (bookmarkIds.length > 0) {
+      fetchStatus(bookmarkIds);
+    }
+  }, [bookmarkIds, fetchStatus]);
+
   useEffect(() => {
     fetchBookmarksStable(initialParams || {});
   }, []);
@@ -293,6 +624,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     deleteBookmark,
     refetch,
     pagination,
+    downloadStatus: statusMap, // ENHANCED: Add download status data
   };
 };
 
@@ -437,7 +769,7 @@ export const useScheduler = (): UseSchedulerReturn => {
       
       if (response.success && response.data) {
         await fetchStatusStable();
-        return { executionId: response.data.execution_id || response.data.executionId || 'unknown' };
+        return { executionId: response.data.execution_id || 'unknown' };
       } else {
         const errorMsg = response.error || 'Failed to trigger download';
         setError(errorMsg);
@@ -994,6 +1326,7 @@ export interface UseNavDashboardReturn {
   todayDataStatus: UseNavStatisticsReturn['todayDataStatus'];
   schedulerConfig: SchedulerConfig | null;
   schedulerStatus: SchedulerStatus | null;
+  downloadStatus: { [bookmarkId: number]: any }; // ENHANCED: Add download status
   isLoading: boolean;
   error: string | null;
   refetchAll: () => void;
@@ -1004,7 +1337,8 @@ export const useNavDashboard = (): UseNavDashboardReturn => {
     bookmarks, 
     isLoading: bookmarksLoading, 
     error: bookmarksError, 
-    refetch: refetchBookmarks 
+    refetch: refetchBookmarks,
+    downloadStatus // ENHANCED: Get download status from enhanced hook
   } = useBookmarks({ page_size: 10 });
   
   const { 
@@ -1047,6 +1381,7 @@ export const useNavDashboard = (): UseNavDashboardReturn => {
     todayDataStatus,
     schedulerConfig,
     schedulerStatus,
+    downloadStatus, // ENHANCED: Include download status
     isLoading,
     error,
     refetchAll,
