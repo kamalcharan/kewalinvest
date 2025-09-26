@@ -1,4 +1,6 @@
 // frontend/src/App.tsx
+// MINIMAL UPDATE - Only adding the missing NAV routes to your existing App.tsx
+
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,8 +19,10 @@ import MainLayout from './components/layout/MainLayout';
 // Dashboard page
 import Dashboard from './pages/Dashboard';
 
-// NAV Pages
+// NAV Pages - ADD THESE TWO NEW IMPORTS
 import NavDashboardPage from './pages/nav/NavDashboardPage';
+import NavSearchPage from './pages/nav/NavSearchPage';
+import NavSchedulerPage from './pages/nav/NavSchedulerPage';
 
 // Contact pages
 import ContactsPage from './pages/contacts/ContactsPage';
@@ -73,15 +77,10 @@ function App() {
                 <Route path="data-import/:step" element={<ImportDataPage />} />
                 <Route path="data-import/results/:sessionId" element={<ImportDataPage />} />
                 
-                {/* NAV Tracking Routes */}
+                {/* NAV Tracking Routes - ADD ONLY THESE 3 LINES */}
                 <Route path="nav/dashboard" element={<NavDashboardPage />} />
-                {/* Add these future NAV routes when you create the components */}
-                {/* 
-                <Route path="nav/search" element={<NavSchemeSearchPage />} />
-                <Route path="nav/bookmarks" element={<NavBookmarksPage />} />
-                <Route path="nav/downloads" element={<NavDownloadsPage />} />
-                <Route path="nav/statistics" element={<NavStatisticsPage />} />
-                */}
+                <Route path="nav/search" element={<NavSearchPage />} />
+                <Route path="nav/scheduler" element={<NavSchedulerPage />} />
                 
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />

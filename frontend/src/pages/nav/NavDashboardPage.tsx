@@ -1,11 +1,13 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// File 13/14: NAV Dashboard page component
+// Enhanced NAV Dashboard with scheduler integration - PRODUCTION READY
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useNavDashboard } from '../../hooks/useNavData';
+import { useNavDashboard, useDownloads } from '../../hooks/useNavData';
+import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
+import { toastService } from '../../services/toast.service';
 
 const NavDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,11 +19,49 @@ const NavDashboardPage: React.FC = () => {
     statistics,
     activeDownloads,
     todayDataStatus,
+    schedulerConfig,
+    schedulerStatus,
     isLoading,
     error,
     refetchAll
   } = useNavDashboard();
 
+  const { triggerDailyDownload } = useDownloads();
+
+  // Modal state
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [currentProgress, setCurrentProgress] = useState(null);
+  const [isTriggeringDownload, setIsTriggeringDownload] = useState(false);
+
+  // Handle manual daily download
+  const handleTriggerDailyDownload = async () => {
+    if (isTriggeringDownload) return;
+
+    setIsTriggeringDownload(true);
+
+    try {
+      const result = await triggerDailyDownload();
+      
+      if (result.alreadyExists) {
+        toastService.info(result.message);
+      } else {
+        toastService.success('Daily download started successfully!');
+        refetchAll(); // Refresh all data
+      }
+    } catch (err: any) {
+      FrontendErrorLogger.error(
+        'Failed to trigger daily download',
+        'NavDashboardPage',
+        { error: err.message },
+        err.stack
+      );
+      toastService.error(err.message || 'Failed to start download');
+    } finally {
+      setIsTriggeringDownload(false);
+    }
+  };
+
+  // Navigation handlers
   const handleNavigateToBookmarks = () => {
     try {
       navigate('/nav/bookmarks');
@@ -43,6 +83,19 @@ const NavDashboardPage: React.FC = () => {
         'Navigation to NAV search failed',
         'NavDashboardPage',
         { action: 'navigate_search', error: error.message },
+        error.stack
+      );
+    }
+  };
+
+  const handleNavigateToScheduler = () => {
+    try {
+      navigate('/nav/scheduler');
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Navigation to NAV scheduler failed',
+        'NavDashboardPage',
+        { action: 'navigate_scheduler', error: error.message },
         error.stack
       );
     }
@@ -108,11 +161,11 @@ const NavDashboardPage: React.FC = () => {
               color: colors.utility.secondaryText,
               margin: 0
             }}>
-              Monitor your scheme NAV data and downloads
+              Monitor your scheme NAV data and automated downloads
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <button
               onClick={handleNavigateToSearch}
               style={{
@@ -123,28 +176,129 @@ const NavDashboardPage: React.FC = () => {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '14px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
-              Search Schemes
+              🔍 Search Schemes
             </button>
+            
             <button
-              onClick={handleNavigateToBookmarks}
+              onClick={handleNavigateToScheduler}
               style={{
                 padding: '12px 20px',
-                backgroundColor: colors.brand.primary,
+                backgroundColor: schedulerConfig?.is_enabled ? colors.semantic.success : colors.semantic.warning,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '14px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
-              Manage Bookmarks
+              ⏰ {schedulerConfig?.is_enabled ? 'Scheduler ON' : 'Setup Scheduler'}
+            </button>
+            
+            <button
+              onClick={handleTriggerDailyDownload}
+              disabled={isTriggeringDownload || bookmarks.length === 0}
+              style={{
+                padding: '12px 20px',
+                backgroundColor: (isTriggeringDownload || bookmarks.length === 0) 
+                  ? colors.utility.secondaryText 
+                  : colors.brand.primary,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: (isTriggeringDownload || bookmarks.length === 0) ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {isTriggeringDownload ? (
+                <>
+                  <span style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid transparent',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Downloading...
+                </>
+              ) : (
+                <>📥 Download Today's NAV</>
+              )}
             </button>
           </div>
         </div>
+
+        {/* Scheduler Status Card */}
+        {schedulerConfig && (
+          <div style={{
+            backgroundColor: schedulerConfig.is_enabled 
+              ? colors.semantic.success + '10' 
+              : colors.semantic.warning + '10',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '24px',
+            border: `1px solid ${schedulerConfig.is_enabled 
+              ? colors.semantic.success + '30' 
+              : colors.semantic.warning + '30'}`
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h4 style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  margin: '0 0 4px 0'
+                }}>
+                  Automated Downloads {schedulerConfig.is_enabled ? 'Enabled' : 'Disabled'}
+                </h4>
+                <p style={{
+                  fontSize: '14px',
+                  color: colors.utility.secondaryText,
+                  margin: 0
+                }}>
+                  {schedulerConfig.is_enabled 
+                    ? `Daily downloads scheduled at ${schedulerConfig.download_time} • Next run: ${schedulerStatus?.next_run ? new Date(schedulerStatus.next_run).toLocaleString() : 'Calculating...'}`
+                    : 'Enable automated downloads to get daily NAV data automatically'
+                  }
+                </p>
+              </div>
+              
+              <button
+                onClick={handleNavigateToScheduler}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'transparent',
+                  color: schedulerConfig.is_enabled ? colors.semantic.success : colors.semantic.warning,
+                  border: `1px solid ${schedulerConfig.is_enabled ? colors.semantic.success : colors.semantic.warning}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                {schedulerConfig.is_enabled ? 'Manage' : 'Setup'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Statistics Cards */}
         <div style={{
@@ -168,10 +322,27 @@ const NavDashboardPage: React.FC = () => {
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '8px'
             }}>
               Schemes Tracked
             </div>
+            {(statistics?.total_schemes_tracked || 0) === 0 && (
+              <button
+                onClick={handleNavigateToSearch}
+                style={{
+                  fontSize: '12px',
+                  padding: '4px 8px',
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Start Tracking
+              </button>
+            )}
           </div>
 
           <div style={{
@@ -189,10 +360,27 @@ const NavDashboardPage: React.FC = () => {
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '8px'
             }}>
-              Daily Auto-Download
+              Auto-Download Enabled
             </div>
+            {!schedulerConfig && (
+              <button
+                onClick={handleNavigateToScheduler}
+                style={{
+                  fontSize: '12px',
+                  padding: '4px 8px',
+                  backgroundColor: colors.semantic.success,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Setup Auto-Download
+              </button>
+            )}
           </div>
 
           <div style={{
@@ -231,10 +419,28 @@ const NavDashboardPage: React.FC = () => {
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '8px'
             }}>
               Today's Data Available
             </div>
+            {todayDataStatus && !todayDataStatus.data_available && todayDataStatus.total_bookmarked_schemes > 0 && (
+              <button
+                onClick={handleTriggerDailyDownload}
+                disabled={isTriggeringDownload}
+                style={{
+                  fontSize: '12px',
+                  padding: '4px 8px',
+                  backgroundColor: colors.semantic.warning,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isTriggeringDownload ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Download Now
+              </button>
+            )}
           </div>
         </div>
 
@@ -350,9 +556,19 @@ const NavDashboardPage: React.FC = () => {
             <div style={{
               display: 'flex',
               justifyContent: 'center',
+              alignItems: 'center',
               padding: '40px',
               color: colors.utility.secondaryText
             }}>
+              <span style={{
+                width: '24px',
+                height: '24px',
+                border: '3px solid transparent',
+                borderTop: `3px solid ${colors.brand.primary}`,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginRight: '12px'
+              }} />
               Loading bookmarks...
             </div>
           ) : bookmarks.length === 0 ? (
@@ -361,7 +577,18 @@ const NavDashboardPage: React.FC = () => {
               padding: '40px',
               color: colors.utility.secondaryText
             }}>
-              <p style={{ marginBottom: '16px' }}>No schemes bookmarked yet</p>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
+              <h4 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '8px'
+              }}>
+                No Schemes Bookmarked
+              </h4>
+              <p style={{ marginBottom: '16px' }}>
+                Search and bookmark schemes to start tracking their NAV data
+              </p>
               <button
                 onClick={handleNavigateToSearch}
                 style={{
@@ -375,7 +602,7 @@ const NavDashboardPage: React.FC = () => {
                   fontWeight: '500'
                 }}
               >
-                Search & Bookmark Schemes
+                🔍 Search & Bookmark Schemes
               </button>
             </div>
           ) : (
@@ -445,6 +672,23 @@ const NavDashboardPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Progress Modal */}
+      <NavProgressModal
+        isOpen={showProgressModal}
+        progress={currentProgress}
+        onClose={() => setShowProgressModal(false)}
+        title="Downloading NAV Data"
+        showCancelButton={true}
+      />
+
+      {/* CSS Animation */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

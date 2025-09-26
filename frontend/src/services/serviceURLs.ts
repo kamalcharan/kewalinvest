@@ -94,7 +94,7 @@ export const API_ENDPOINTS = {
     HEALTH: `${API_BASE}/nav/health`,
     DOCS: `${API_BASE}/nav/docs`,
     
-    // NEW: Scheduler endpoints
+    // Scheduler endpoints
     SCHEDULER_CONFIG: `${API_BASE}/nav/scheduler/config`,
     SCHEDULER_CONFIG_UPDATE: (id: number) => `${API_BASE}/nav/scheduler/config/${id}`,
     SCHEDULER_STATUS: `${API_BASE}/nav/scheduler/status`,
@@ -395,7 +395,7 @@ export const NAV_URLS = {
   getDocs: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOCS}${buildQueryParams({}, environment)}`,
   
-  // NEW: Scheduler endpoints
+  // Scheduler endpoints
   getSchedulerConfig: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
   
@@ -432,8 +432,8 @@ if (process.env.NODE_ENV === 'development') {
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
   });
   
-  // Log new scheduler endpoints
-  console.log('📅 New NAV Scheduler Endpoints:', {
+  // Log scheduler endpoints
+  console.log('📅 NAV Scheduler Endpoints:', {
     SCHEDULER_CONFIG: API_ENDPOINTS.NAV.SCHEDULER_CONFIG,
     SCHEDULER_STATUS: API_ENDPOINTS.NAV.SCHEDULER_STATUS,
     SCHEDULER_TRIGGER: API_ENDPOINTS.NAV.SCHEDULER_TRIGGER,

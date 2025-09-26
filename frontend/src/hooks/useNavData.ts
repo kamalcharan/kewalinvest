@@ -1,5 +1,5 @@
 // frontend/src/hooks/useNavData.ts
-// File 12/14: React hooks for NAV operations - TYPESCRIPT FIXED
+// Complete NAV hooks with scheduler integration - PRODUCTION READY
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -20,6 +20,38 @@ import type {
   PaginatedResponse,
   ApiResponse
 } from '../services/nav.service';
+
+// ==================== INTERFACES ====================
+
+export interface SchedulerConfig {
+  id?: number;
+  schedule_type: 'daily' | 'weekly' | 'custom';
+  cron_expression?: string;
+  download_time: string;
+  is_enabled: boolean;
+  next_execution_at?: string;
+  last_executed_at?: string;
+  execution_count?: number;
+  failure_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SchedulerStatus {
+  config: SchedulerConfig;
+  is_running: boolean;
+  cron_job_active: boolean;
+  next_run: string | null;
+  last_run: string | null;
+  recent_executions: Array<{
+    id: number;
+    execution_time: string;
+    status: 'success' | 'failed' | 'skipped';
+    n8n_execution_id?: string;
+    error_message?: string;
+    execution_duration_ms?: number;
+  }>;
+}
 
 // ==================== SCHEME SEARCH HOOK ====================
 
@@ -55,10 +87,9 @@ export const useSchemeSearch = (): UseSchemeSearchReturn => {
     setError(null);
 
     try {
-      const response: PaginatedResponse<SchemeSearchResult> = await navService.searchSchemes(params);
+      const response = await navService.searchSchemes(params);
       
       if (response.success && response.data) {
-        // FIXED: Access data structure correctly - response.data IS the data
         setSchemes(response.data.schemes || []);
         setPagination({
           total: response.data.total || 0,
@@ -133,10 +164,9 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     lastParamsRef.current = params;
 
     try {
-      const response: PaginatedResponse<SchemeBookmark> = await navService.getBookmarks(params);
+      const response = await navService.getBookmarks(params);
       
       if (response.success && response.data) {
-        // FIXED: Access data structure correctly - response.data IS the data
         setBookmarks(response.data.bookmarks || []);
         setPagination({
           total: response.data.total || 0,
@@ -266,6 +296,186 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
   };
 };
 
+// ==================== SCHEDULER MANAGEMENT HOOK ====================
+
+export interface UseSchedulerReturn {
+  config: SchedulerConfig | null;
+  status: SchedulerStatus | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchConfig: () => Promise<void>;
+  fetchStatus: () => Promise<void>;
+  saveConfig: (config: Omit<SchedulerConfig, 'id' | 'tenant_id' | 'user_id' | 'is_live'>) => Promise<void>;
+  updateConfig: (updates: Partial<SchedulerConfig>) => Promise<void>;
+  deleteConfig: () => Promise<void>;
+  manualTrigger: () => Promise<{ executionId: string }>;
+  refetch: () => void;
+}
+
+export const useScheduler = (): UseSchedulerReturn => {
+  const [config, setConfig] = useState<SchedulerConfig | null>(null);
+  const [status, setStatus] = useState<SchedulerStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchConfigStable = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await navService.getSchedulerConfig();
+      
+      if (response.success && response.data) {
+        setConfig(response.data);
+      } else {
+        // No config exists yet - this is normal
+        setConfig(null);
+      }
+    } catch (err: any) {
+      console.error('Fetch scheduler config error:', err);
+      setError(err.message || 'Failed to fetch scheduler config');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchStatusStable = useCallback(async () => {
+    try {
+      const response = await navService.getSchedulerStatus();
+      
+      if (response.success && response.data) {
+        setStatus(response.data);
+      } else {
+        setStatus(null);
+      }
+    } catch (err: any) {
+      console.error('Fetch scheduler status error:', err);
+      setStatus(null);
+    }
+  }, []);
+
+  const fetchConfigStableRef = useRef(fetchConfigStable);
+  const fetchStatusStableRef = useRef(fetchStatusStable);
+  fetchConfigStableRef.current = fetchConfigStable;
+  fetchStatusStableRef.current = fetchStatusStable;
+
+  const fetchConfig = useCallback(() => {
+    return fetchConfigStableRef.current();
+  }, []);
+
+  const fetchStatus = useCallback(() => {
+    return fetchStatusStableRef.current();
+  }, []);
+
+  const saveConfig = useCallback(async (configData: Omit<SchedulerConfig, 'id' | 'tenant_id' | 'user_id' | 'is_live'>) => {
+    try {
+      const response = await navService.saveSchedulerConfig(configData);
+      
+      if (response.success && response.data) {
+        setConfig(response.data);
+        await fetchStatusStable();
+      } else {
+        const errorMsg = response.error || 'Failed to save scheduler config';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Save scheduler config error:', err);
+      const errorMsg = err.message || 'Failed to save scheduler config';
+      setError(errorMsg);
+      throw err;
+    }
+  }, [fetchStatusStable]);
+
+  const updateConfig = useCallback(async (updates: Partial<SchedulerConfig>) => {
+    if (!config?.id) {
+      throw new Error('No scheduler config to update');
+    }
+
+    try {
+      const response = await navService.updateSchedulerConfig(config.id, updates);
+      
+      if (response.success && response.data) {
+        setConfig(response.data);
+        await fetchStatusStable();
+      } else {
+        const errorMsg = response.error || 'Failed to update scheduler config';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Update scheduler config error:', err);
+      const errorMsg = err.message || 'Failed to update scheduler config';
+      setError(errorMsg);
+      throw err;
+    }
+  }, [config, fetchStatusStable]);
+
+  const deleteConfig = useCallback(async () => {
+    try {
+      const response = await navService.deleteSchedulerConfig();
+      
+      if (response.success) {
+        setConfig(null);
+        setStatus(null);
+      } else {
+        const errorMsg = response.error || 'Failed to delete scheduler config';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Delete scheduler config error:', err);
+      const errorMsg = err.message || 'Failed to delete scheduler config';
+      setError(errorMsg);
+      throw err;
+    }
+  }, []);
+
+  const manualTrigger = useCallback(async () => {
+    try {
+      const response = await navService.triggerScheduledDownload();
+      
+      if (response.success && response.data) {
+        await fetchStatusStable();
+        return { executionId: response.data.execution_id || response.data.executionId || 'unknown' };
+      } else {
+        const errorMsg = response.error || 'Failed to trigger download';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Manual trigger error:', err);
+      const errorMsg = err.message || 'Failed to trigger download';
+      setError(errorMsg);
+      throw err;
+    }
+  }, [fetchStatusStable]);
+
+  const refetch = useCallback(() => {
+    fetchConfigStable();
+    fetchStatusStable();
+  }, [fetchConfigStable, fetchStatusStable]);
+
+  useEffect(() => {
+    fetchConfigStable();
+    fetchStatusStable();
+  }, []);
+
+  return {
+    config,
+    status,
+    isLoading,
+    error,
+    fetchConfig,
+    fetchStatus,
+    saveConfig,
+    updateConfig,
+    deleteConfig,
+    manualTrigger,
+    refetch,
+  };
+};
+
 // ==================== NAV DATA HOOK ====================
 
 export interface UseNavDataReturn {
@@ -295,10 +505,9 @@ export const useNavData = (): UseNavDataReturn => {
     setError(null);
 
     try {
-      const response: PaginatedResponse<NavData> = await navService.getNavData(params);
+      const response = await navService.getNavData(params);
       
       if (response.success && response.data) {
-        // FIXED: Access data structure correctly - response.data IS the data
         setNavData(response.data.nav_data || []);
         setPagination({
           total: response.data.total || 0,
@@ -386,10 +595,9 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     lastParamsRef.current = params;
 
     try {
-      const response: PaginatedResponse<DownloadJob> = await navService.getDownloadJobs(params);
+      const response = await navService.getDownloadJobs(params);
       
       if (response.success && response.data) {
-        // FIXED: Access data structure correctly - response.data IS the data
         setDownloadJobs(response.data.jobs || []);
         setPagination({
           total: response.data.total || 0,
@@ -784,6 +992,8 @@ export interface UseNavDashboardReturn {
   statistics: NavStatistics | null;
   activeDownloads: DownloadProgress[];
   todayDataStatus: UseNavStatisticsReturn['todayDataStatus'];
+  schedulerConfig: SchedulerConfig | null;
+  schedulerStatus: SchedulerStatus | null;
   isLoading: boolean;
   error: string | null;
   refetchAll: () => void;
@@ -812,20 +1022,31 @@ export const useNavDashboard = (): UseNavDashboardReturn => {
     fetchActiveDownloads 
   } = useDownloads();
 
-  const isLoading = bookmarksLoading || statsLoading || downloadsLoading;
-  const error = bookmarksError || statsError || downloadsError;
+  const {
+    config: schedulerConfig,
+    status: schedulerStatus,
+    isLoading: schedulerLoading,
+    error: schedulerError,
+    refetch: refetchScheduler
+  } = useScheduler();
+
+  const isLoading = bookmarksLoading || statsLoading || downloadsLoading || schedulerLoading;
+  const error = bookmarksError || statsError || downloadsError || schedulerError;
 
   const refetchAll = useCallback(() => {
     refetchBookmarks();
     refetchStats();
     fetchActiveDownloads();
-  }, [refetchBookmarks, refetchStats, fetchActiveDownloads]);
+    refetchScheduler();
+  }, [refetchBookmarks, refetchStats, fetchActiveDownloads, refetchScheduler]);
 
   return {
     bookmarks,
     statistics,
     activeDownloads,
     todayDataStatus,
+    schedulerConfig,
+    schedulerStatus,
     isLoading,
     error,
     refetchAll,
