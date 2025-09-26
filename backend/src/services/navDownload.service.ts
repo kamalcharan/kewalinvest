@@ -1,5 +1,5 @@
 // backend/src/services/navDownload.service.ts
-// File 6/14: Download orchestration with progress tracking and optimized direct AMFI calls
+// File 6/14: Download orchestration with progress tracking and optimized direct AMFI calls - FIXED line 536
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -117,7 +117,7 @@ export class NavDownloadService {
       }
 
       // Create download job with correct property names
-      const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
+      const downloadJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
         job_type: 'daily',
         scheme_ids: schemesWithoutData,
         scheduled_date: new Date()
@@ -125,7 +125,7 @@ export class NavDownloadService {
 
       // Create download lock
       const lockInfo: DownloadLockInfo = {
-        jobId: job.id,
+        jobId: downloadJob.id,
         lockType: 'daily',
         lockedBy: userId,
         lockedAt: new Date(),
@@ -134,18 +134,18 @@ export class NavDownloadService {
       this.downloadLocks.set(lockKey, lockInfo);
 
       // Initialize progress tracking
-      this.initializeProgressTracking(job.id, 'daily', schemesWithoutData.length);
+      this.initializeProgressTracking(downloadJob.id, 'daily', schemesWithoutData.length);
 
       // Execute download asynchronously (DIRECT AMFI CALL - NO N8N)
-      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, userId));
+      setImmediate(() => this.executeDownload(downloadJob.id, tenantId, isLive, userId));
 
       SimpleLogger.error('NavDownload', 'Daily download job created', 'triggerDailyDownload', {
-        tenantId, userId, jobId: job.id, totalSchemes: schemesWithoutData.length,
+        tenantId, userId, jobId: downloadJob.id, totalSchemes: schemesWithoutData.length,
         directAmfiCall: true
       }, userId, tenantId);
 
       return {
-        jobId: job.id,
+        jobId: downloadJob.id,
         message: `Daily download started for ${schemesWithoutData.length} schemes`
       };
 
@@ -208,7 +208,7 @@ export class NavDownloadService {
       const estimatedTimeMs = this.estimateDownloadTime(request.schemeIds.length, daysDiff);
 
       // Create download job with correct property names
-      const job = await this.navService.createDownloadJob(tenantId, isLive, userId, {
+      const downloadJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
         job_type: 'historical',
         scheme_ids: request.schemeIds,
         scheduled_date: new Date(),
@@ -218,7 +218,7 @@ export class NavDownloadService {
 
       // Create download lock
       const lockInfo: DownloadLockInfo = {
-        jobId: job.id,
+        jobId: downloadJob.id,
         lockType: 'historical',
         lockedBy: userId,
         lockedAt: new Date(),
@@ -227,18 +227,18 @@ export class NavDownloadService {
       this.downloadLocks.set(lockKey, lockInfo);
 
       // Initialize progress tracking with estimated time
-      this.initializeProgressTracking(job.id, 'historical', request.schemeIds.length, estimatedTimeMs);
+      this.initializeProgressTracking(downloadJob.id, 'historical', request.schemeIds.length, estimatedTimeMs);
 
       // Execute download asynchronously (DIRECT AMFI CALL - NO N8N)
-      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, userId));
+      setImmediate(() => this.executeDownload(downloadJob.id, tenantId, isLive, userId));
 
       SimpleLogger.error('NavDownload', 'Historical download job created', 'triggerHistoricalDownload', {
-        tenantId, userId, jobId: job.id, schemeCount: request.schemeIds.length, 
+        tenantId, userId, jobId: downloadJob.id, schemeCount: request.schemeIds.length, 
         dayRange: daysDiff, estimatedTimeMs, directAmfiCall: true
       }, userId, tenantId);
 
       return {
-        jobId: job.id,
+        jobId: downloadJob.id,
         message: `Historical download started for ${request.schemeIds.length} schemes (${daysDiff} days)`,
         estimatedTime: estimatedTimeMs
       };
@@ -282,7 +282,7 @@ export class NavDownloadService {
       }
 
       // Create download job with correct property names
-      const job = await this.navService.createDownloadJob(tenantId, isLive, systemUserId, {
+      const downloadJob = await this.navService.createDownloadJob(tenantId, isLive, systemUserId, {
         job_type: 'weekly',
         scheme_ids: untrackedSchemes,
         scheduled_date: new Date()
@@ -290,7 +290,7 @@ export class NavDownloadService {
 
       // Create download lock
       const lockInfo: DownloadLockInfo = {
-        jobId: job.id,
+        jobId: downloadJob.id,
         lockType: 'weekly',
         lockedBy: systemUserId,
         lockedAt: new Date(),
@@ -299,13 +299,13 @@ export class NavDownloadService {
       this.downloadLocks.set(lockKey, lockInfo);
 
       // Initialize progress tracking
-      this.initializeProgressTracking(job.id, 'weekly', untrackedSchemes.length);
+      this.initializeProgressTracking(downloadJob.id, 'weekly', untrackedSchemes.length);
 
       // Execute download asynchronously (DIRECT AMFI CALL - NO N8N)
-      setImmediate(() => this.executeDownload(job.id, tenantId, isLive, systemUserId));
+      setImmediate(() => this.executeDownload(downloadJob.id, tenantId, isLive, systemUserId));
 
       return {
-        jobId: job.id,
+        jobId: downloadJob.id,
         message: `Weekly download started for ${untrackedSchemes.length} untracked schemes`
       };
 
@@ -341,9 +341,9 @@ export class NavDownloadService {
         progressPercentage: 5
       });
 
-      // Get job details
-      const jobs = await this.navService.getDownloadJobs(tenantId, isLive, { page: 1, page_size: 1 });
-      const job = jobs.jobs.find(j => j.id === jobId);
+      // Get job details - FIXED: Properly declare and check 'job' variable
+      const jobsResponse = await this.navService.getDownloadJobs(tenantId, isLive, { page: 1, page_size: 1000 });
+      const job = jobsResponse.jobs.find(j => j.id === jobId);
       
       if (!job) {
         throw new Error('Download job not found');
@@ -376,19 +376,19 @@ export class NavDownloadService {
         
         this.updateProgress(jobId, {
           status: 'running',
-          currentStep: `Fetching historical data from ${job.start_date.toDateString()} to ${job.end_date.toDateString()}...`,
+          currentStep: `Fetching historical data from ${job.start_date} to ${job.end_date}...`,
           progressPercentage: 20
         });
         
         amfiResponse = await this.amfiService.downloadHistoricalNavData(
-          job.start_date,
-          job.end_date,
+          new Date(job.start_date),
+          new Date(job.end_date),
           { requestId: `historical_${jobId}_${Date.now()}` }
         );
       }
 
-      if (!amfiResponse.success || !amfiResponse.data) {
-        throw new Error(amfiResponse.error || 'Failed to download NAV data from AMFI');
+      if (!amfiResponse || !amfiResponse.success || !amfiResponse.data) {
+        throw new Error(amfiResponse?.error || 'Failed to download NAV data from AMFI');
       }
 
       navData = amfiResponse.data;
@@ -400,7 +400,7 @@ export class NavDownloadService {
       });
 
       // OPTIMIZED: More efficient scheme filtering
-      const trackedSchemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, job.scheme_ids);
+      const trackedSchemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, job.schemes.map(s => s.scheme_id));
       const schemeCodeSet = new Set(trackedSchemeCodes); // Use Set for O(1) lookups
       
       const filteredNavData = navData.filter(record => 
@@ -472,8 +472,8 @@ export class NavDownloadService {
 
       // Create comprehensive result summary
       const resultSummary: NavDownloadJobResult = {
-        total_schemes: job.scheme_ids.length,
-        successful_downloads: job.scheme_ids.length - upsertResult.errors.length,
+        total_schemes: job.schemes.length,
+        successful_downloads: job.schemes.length - upsertResult.errors.length,
         failed_downloads: upsertResult.errors.length,
         total_records_inserted: upsertResult.inserted,
         total_records_updated: upsertResult.updated,
@@ -502,7 +502,7 @@ export class NavDownloadService {
 
       // Mark historical download as completed for bookmarks
       if (job.job_type === 'historical') {
-        await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, job.scheme_ids);
+        await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, job.schemes.map(s => s.scheme_id));
       }
 
       // Clean up locks and progress tracking
@@ -533,7 +533,7 @@ export class NavDownloadService {
       });
 
       // Clean up locks and progress tracking
-      this.cleanupAfterDownload(jobId, job.job_type, tenantId, isLive);
+      this.cleanupAfterDownload(jobId, 'unknown', tenantId, isLive);
 
       SimpleLogger.error('NavDownload', 'Download job failed', 'executeDownload', {
         jobId, tenantId, userId, error: errorMessage,

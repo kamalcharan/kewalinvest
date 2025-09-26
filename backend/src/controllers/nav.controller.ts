@@ -974,7 +974,9 @@ export class NavController {
         schedule_type,
         cron_expression: finalCronExpression,
         download_time,
-        is_enabled
+        is_enabled,
+        execution_count: 0, 
+        failure_count: 0 
       };
 
       const savedConfig = await this.schedulerService.saveSchedulerConfig(config);

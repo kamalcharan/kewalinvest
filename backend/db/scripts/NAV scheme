@@ -49,3 +49,46 @@ CREATE TABLE t_nav_download_jobs (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_by INTEGER
 );
+
+
+-- Table for scheduler configurations
+CREATE TABLE IF NOT EXISTS t_nav_scheduler_configs (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    schedule_type VARCHAR(20) NOT NULL CHECK (schedule_type IN ('daily', 'weekly', 'custom')),
+    cron_expression VARCHAR(100) NOT NULL,
+    download_time VARCHAR(5) NOT NULL, -- HH:MM format
+    is_enabled BOOLEAN NOT NULL DEFAULT true,
+    n8n_webhook_url TEXT,
+    last_executed_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    UNIQUE(tenant_id, user_id, is_live)
+);
+
+-- Table for execution history
+CREATE TABLE IF NOT EXISTS t_nav_schedule_executions (
+    id SERIAL PRIMARY KEY,
+    scheduler_config_id INTEGER NOT NULL REFERENCES t_nav_scheduler_configs(id) ON DELETE CASCADE,
+    execution_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failed', 'skipped', 'running')),
+    job_id INTEGER,
+    n8n_execution_id VARCHAR(100),
+    error_message TEXT,
+    execution_duration_ms INTEGER,
+    
+    -- Indexes for performance
+    INDEX idx_schedule_executions_config_id (scheduler_config_id),
+    INDEX idx_schedule_executions_time (execution_time)
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_scheduler_configs_tenant_user ON t_nav_scheduler_configs(tenant_id, user_id, is_live);
+CREATE INDEX IF NOT EXISTS idx_scheduler_configs_enabled ON t_nav_scheduler_configs(is_enabled) WHERE is_enabled = true;

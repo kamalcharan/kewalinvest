@@ -1,13 +1,12 @@
 // backend/src/services/navScheduler.service.ts
-// File: NAV Scheduler Service with N8N webhook triggers and cron management
+// NAV Scheduler Service with built-in Node.js timers (no node-cron dependency)
 
-import cron from 'node-cron';
 import { Pool } from 'pg';
 import { pool } from '../config/database';
 import { NavService } from './nav.service';
 import { SimpleLogger } from './simpleLogger.service';
 
-// ==================== INTERFACES ====================
+// ==================== INTERFACES (UNCHANGED) ====================
 
 export interface SchedulerConfig {
   id?: number;
@@ -30,7 +29,7 @@ export interface SchedulerConfig {
 export interface SchedulerStatus {
   config: SchedulerConfig;
   is_running: boolean;
-  cron_job_active: boolean;
+  cron_job_active: boolean; // Kept for compatibility
   next_run: Date | null;
   last_run: Date | null;
   recent_executions: ScheduleExecution[];
@@ -57,12 +56,21 @@ export interface N8nWebhookPayload {
   scheduler_config_id: number;
 }
 
+// ==================== CUSTOM TIMER MANAGEMENT ====================
+
+interface ScheduledTimer {
+  timerId: NodeJS.Timeout;
+  nextRun: Date;
+  config: SchedulerConfig;
+  isActive: boolean;
+}
+
 // ==================== MAIN SERVICE CLASS ====================
 
 export class NavSchedulerService {
   private db: Pool;
   private navService: NavService;
-  private activeCronJobs = new Map<string, cron.ScheduledTask>();
+  private activeTimers = new Map<string, ScheduledTimer>();
   
   // N8N Configuration
   private readonly N8N_BASE_URL: string;
@@ -79,7 +87,7 @@ export class NavSchedulerService {
     this.N8N_WEBHOOK_NAME = process.env.N8N_NAV_WEBHOOK_NAME || 'nav-download-trigger';
   }
 
-  // ==================== SCHEDULER CONFIGURATION CRUD ====================
+  // ==================== SCHEDULER CONFIGURATION CRUD (UNCHANGED) ====================
 
   /**
    * Create or update scheduler configuration
@@ -165,7 +173,7 @@ export class NavSchedulerService {
 
       const savedConfig = result.rows[0];
 
-      // Restart cron job with new configuration
+      // Restart timer with new configuration
       if (savedConfig.is_enabled) {
         await this.startSchedulerForConfig(savedConfig);
       } else {
@@ -230,7 +238,7 @@ export class NavSchedulerService {
     userId: number
   ): Promise<void> {
     try {
-      // Stop any running cron job first
+      // Stop any running timer first
       const config = await this.getSchedulerConfig(tenantId, isLive, userId);
       if (config) {
         await this.stopSchedulerForConfig(config);
@@ -259,7 +267,7 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== SCHEDULER CONTROL ====================
+  // ==================== SCHEDULER CONTROL (UPDATED) ====================
 
   /**
    * Start scheduler for specific configuration
@@ -268,28 +276,37 @@ export class NavSchedulerService {
     try {
       const jobKey = this.getJobKey(config);
       
-      // Stop existing job if running
+      // Stop existing timer if running
       await this.stopSchedulerForConfig(config);
 
-      // Create new cron job
-      const cronJob = cron.schedule(config.cron_expression, async () => {
-        await this.executeScheduledDownload(config);
-      }, {
-        scheduled: false, // Start manually
-        timezone: 'Asia/Kolkata' // Indian timezone
-      });
+      // Calculate next execution time
+      const nextExecution = this.getNextExecutionTime(config.cron_expression);
+      const msUntilExecution = nextExecution.getTime() - Date.now();
 
-      // Start the job
-      cronJob.start();
+      // Set timer for next execution
+      const timerId = setTimeout(async () => {
+        await this.executeScheduledDownload(config);
+        // After execution, schedule the next one
+        this.scheduleNextExecution(config);
+      }, msUntilExecution);
+
+      // Store timer reference
+      const scheduledTimer: ScheduledTimer = {
+        timerId,
+        nextRun: nextExecution,
+        config,
+        isActive: true
+      };
       
-      // Store job reference
-      this.activeCronJobs.set(jobKey, cronJob);
+      this.activeTimers.set(jobKey, scheduledTimer);
 
       SimpleLogger.error('NavScheduler', 'Scheduler started', 'startSchedulerForConfig', {
         tenantId: config.tenant_id,
         userId: config.user_id,
         scheduleType: config.schedule_type,
         cronExpression: config.cron_expression,
+        nextRun: nextExecution.toISOString(),
+        msUntilExecution,
         jobKey
       }, config.user_id, config.tenant_id);
 
@@ -310,12 +327,11 @@ export class NavSchedulerService {
   async stopSchedulerForConfig(config: SchedulerConfig): Promise<void> {
     try {
       const jobKey = this.getJobKey(config);
-      const cronJob = this.activeCronJobs.get(jobKey);
+      const scheduledTimer = this.activeTimers.get(jobKey);
       
-      if (cronJob) {
-        cronJob.stop();
-        cronJob.destroy();
-        this.activeCronJobs.delete(jobKey);
+      if (scheduledTimer) {
+        clearTimeout(scheduledTimer.timerId);
+        this.activeTimers.delete(jobKey);
 
         SimpleLogger.error('NavScheduler', 'Scheduler stopped', 'stopSchedulerForConfig', {
           tenantId: config.tenant_id,
@@ -325,6 +341,28 @@ export class NavSchedulerService {
       }
     } catch (error: any) {
       SimpleLogger.error('NavScheduler', 'Failed to stop scheduler', 'stopSchedulerForConfig', {
+        tenantId: config.tenant_id,
+        userId: config.user_id,
+        error: error.message
+      }, config.user_id, config.tenant_id, error.stack);
+    }
+  }
+
+  /**
+   * Schedule next execution after current one completes
+   */
+  private async scheduleNextExecution(config: SchedulerConfig): Promise<void> {
+    try {
+      // Get fresh config from database (in case it was updated)
+      const freshConfig = await this.getSchedulerConfig(config.tenant_id, config.is_live, config.user_id);
+      if (!freshConfig || !freshConfig.is_enabled) {
+        return; // Configuration was deleted or disabled
+      }
+
+      // Start scheduler again for next execution
+      await this.startSchedulerForConfig(freshConfig);
+    } catch (error: any) {
+      SimpleLogger.error('NavScheduler', 'Failed to schedule next execution', 'scheduleNextExecution', {
         tenantId: config.tenant_id,
         userId: config.user_id,
         error: error.message
@@ -347,9 +385,8 @@ export class NavSchedulerService {
       }
 
       const jobKey = this.getJobKey(config);
-      const cronJob = this.activeCronJobs.get(jobKey);
-      const isRunning = cronJob !== undefined;
-      const cronJobActive = cronJob ? cronJob.getStatus() === 'scheduled' : false;
+      const scheduledTimer = this.activeTimers.get(jobKey);
+      const isRunning = scheduledTimer !== undefined && scheduledTimer.isActive;
 
       // Get recent executions
       const executionsQuery = `
@@ -364,8 +401,8 @@ export class NavSchedulerService {
       return {
         config,
         is_running: isRunning,
-        cron_job_active: cronJobActive,
-        next_run: config.next_execution_at || null,
+        cron_job_active: isRunning, // For compatibility
+        next_run: scheduledTimer?.nextRun || config.next_execution_at || null,
         last_run: config.last_executed_at || null,
         recent_executions: recentExecutions
       };
@@ -378,10 +415,10 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== EXECUTION LOGIC ====================
+  // ==================== EXECUTION LOGIC (UNCHANGED) ====================
 
   /**
-   * Execute scheduled download (called by cron job)
+   * Execute scheduled download (called by timer)
    */
   private async executeScheduledDownload(config: SchedulerConfig): Promise<void> {
     const startTime = Date.now();
@@ -449,7 +486,7 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== N8N INTEGRATION ====================
+  // ==================== N8N INTEGRATION (UNCHANGED) ====================
 
   /**
    * Trigger N8N workflow via webhook
@@ -488,7 +525,7 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== DATABASE HELPERS ====================
+  // ==================== DATABASE HELPERS (UNCHANGED) ====================
 
   /**
    * Create execution record
@@ -575,10 +612,10 @@ export class NavSchedulerService {
     await this.db.query(query, [configId]);
   }
 
-  // ==================== UTILITY METHODS ====================
+  // ==================== UTILITY METHODS (UPDATED) ====================
 
   /**
-   * Generate unique job key for cron job tracking
+   * Generate unique job key for timer tracking
    */
   private getJobKey(config: SchedulerConfig): string {
     return `nav_scheduler_${config.tenant_id}_${config.is_live ? 'live' : 'test'}_${config.user_id}`;
@@ -592,15 +629,44 @@ export class NavSchedulerService {
   }
 
   /**
-   * Validate cron expression
+   * Validate cron expression (simplified validation)
    */
   private isValidCronExpression(cronExpression: string): boolean {
     try {
-      cron.validate(cronExpression);
-      return true;
+      // Basic validation: should have 5 parts (minute hour day month dayOfWeek)
+      const parts = cronExpression.trim().split(/\s+/);
+      if (parts.length !== 5) {
+        return false;
+      }
+
+      // Check each part is either * or a valid number/range
+      const [minute, hour, day, month, dayOfWeek] = parts;
+      
+      return this.isValidCronPart(minute, 0, 59) &&
+             this.isValidCronPart(hour, 0, 23) &&
+             this.isValidCronPart(day, 1, 31) &&
+             this.isValidCronPart(month, 1, 12) &&
+             this.isValidCronPart(dayOfWeek, 0, 7);
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Validate individual cron part
+   */
+  private isValidCronPart(part: string, min: number, max: number): boolean {
+    if (part === '*') return true;
+    
+    // Handle simple numbers
+    const num = parseInt(part);
+    if (!isNaN(num)) {
+      return num >= min && num <= max;
+    }
+    
+    // For now, accept any other format (ranges, lists, etc.)
+    // In production, you might want more comprehensive validation
+    return true;
   }
 
   /**
@@ -608,13 +674,54 @@ export class NavSchedulerService {
    */
   private getNextExecutionTime(cronExpression: string): Date {
     try {
-      const task = cron.schedule(cronExpression, () => {}, { scheduled: false });
-      // Note: node-cron doesn't have direct getNextExecutionTime method
-      // This is a simplified implementation - in production, use a cron parsing library
+      const parts = cronExpression.trim().split(/\s+/);
+      if (parts.length !== 5) {
+        // Fallback to 1 hour from now
+        const fallback = new Date();
+        fallback.setHours(fallback.getHours() + 1);
+        return fallback;
+      }
+
+      const [minutePart, hourPart, dayPart, monthPart, dayOfWeekPart] = parts;
+      
       const now = new Date();
-      now.setHours(now.getHours() + 1); // Simplified - add 1 hour for next execution
-      return now;
-    } catch {
+      const next = new Date(now);
+      
+      // Handle simple cases: fixed minute and hour
+      if (minutePart !== '*' && hourPart !== '*') {
+        const minute = parseInt(minutePart);
+        const hour = parseInt(hourPart);
+        
+        if (!isNaN(minute) && !isNaN(hour)) {
+          next.setHours(hour, minute, 0, 0);
+          
+          // If time has passed today, move to next occurrence
+          if (next <= now) {
+            if (dayOfWeekPart !== '*' && !isNaN(parseInt(dayOfWeekPart))) {
+              // Weekly schedule
+              const targetDayOfWeek = parseInt(dayOfWeekPart);
+              const currentDayOfWeek = next.getDay();
+              let daysToAdd = targetDayOfWeek - currentDayOfWeek;
+              if (daysToAdd <= 0) {
+                daysToAdd += 7; // Next week
+              }
+              next.setDate(next.getDate() + daysToAdd);
+            } else {
+              // Daily schedule
+              next.setDate(next.getDate() + 1);
+            }
+          }
+          
+          return next;
+        }
+      }
+      
+      // Fallback for complex cron expressions
+      const fallback = new Date();
+      fallback.setHours(fallback.getHours() + 1);
+      return fallback;
+      
+    } catch (error) {
       // Fallback: next day at same time
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -622,7 +729,7 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== SYSTEM MANAGEMENT ====================
+  // ==================== SYSTEM MANAGEMENT (UPDATED) ====================
 
   /**
    * Initialize all active schedulers on service startup
@@ -656,7 +763,7 @@ export class NavSchedulerService {
 
       SimpleLogger.error('NavScheduler', 'Scheduler initialization completed', 'initializeSchedulers', {
         totalConfigs: activeConfigs.length,
-        activeJobs: this.activeCronJobs.size
+        activeTimers: this.activeTimers.size
       });
 
     } catch (error: any) {
@@ -674,21 +781,20 @@ export class NavSchedulerService {
   async shutdownSchedulers(): Promise<void> {
     try {
       SimpleLogger.error('NavScheduler', 'Shutting down all schedulers', 'shutdownSchedulers', {
-        activeJobs: this.activeCronJobs.size
+        activeTimers: this.activeTimers.size
       });
 
-      for (const [jobKey, cronJob] of this.activeCronJobs.entries()) {
+      for (const [jobKey, scheduledTimer] of this.activeTimers.entries()) {
         try {
-          cronJob.stop();
-          cronJob.destroy();
+          clearTimeout(scheduledTimer.timerId);
         } catch (error: any) {
-          SimpleLogger.error('NavScheduler', 'Error stopping cron job', 'shutdownSchedulers', {
+          SimpleLogger.error('NavScheduler', 'Error stopping timer', 'shutdownSchedulers', {
             jobKey, error: error.message
           });
         }
       }
 
-      this.activeCronJobs.clear();
+      this.activeTimers.clear();
 
       SimpleLogger.error('NavScheduler', 'All schedulers stopped successfully', 'shutdownSchedulers');
     } catch (error: any) {
@@ -714,7 +820,7 @@ export class NavSchedulerService {
       return configs.map(config => ({
         jobKey: this.getJobKey(config),
         config,
-        isActive: this.activeCronJobs.has(this.getJobKey(config))
+        isActive: this.activeTimers.has(this.getJobKey(config))
       }));
     } catch (error: any) {
       SimpleLogger.error('NavScheduler', 'Failed to get all active schedulers', 'getAllActiveSchedulers', {
@@ -725,7 +831,7 @@ export class NavSchedulerService {
     }
   }
 
-  // ==================== MANUAL TRIGGER SUPPORT ====================
+  // ==================== MANUAL TRIGGER SUPPORT (UNCHANGED) ====================
 
   /**
    * Manually trigger download for user (bypassing schedule)

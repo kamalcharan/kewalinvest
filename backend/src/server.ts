@@ -22,8 +22,8 @@ import { testConnection } from './config/database';
 import { LogsController } from './controllers/logs.controller';
 import { SimpleLogger } from './services/simpleLogger.service';
 
-// NEW: Import NAV Scheduler Service for initialization
-import { NavSchedulerService } from './services/navScheduler.service';
+// CHANGED: Remove problematic import, use dynamic import instead
+// OLD: import { NavSchedulerService } from './services/navScheduler.service';
 
 // Load environment variables
 dotenv.config();
@@ -32,8 +32,8 @@ dotenv.config();
 const app: Application = express();
 const PORT = process.env.PORT || 8080;
 
-// NEW: Initialize NAV Scheduler Service (will be initialized after DB connection)
-let navScheduler: NavSchedulerService;
+// CHANGED: Declare without import
+let navScheduler: any;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -307,36 +307,36 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction): void => {
   });
 });
 
-// NEW: Graceful shutdown handlers for NAV Scheduler
+// CHANGED: Updated graceful shutdown handlers
 process.on('SIGTERM', async () => {
-  console.log('📅 SIGTERM received, shutting down NAV scheduler gracefully...');
+  console.log('SIGTERM received, shutting down NAV scheduler gracefully...');
   try {
-    if (navScheduler) {
+    if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
-      console.log('✅ NAV Scheduler shut down successfully');
+      console.log('NAV Scheduler shut down successfully');
     }
   } catch (error) {
-    console.error('❌ Error shutting down NAV scheduler:', error);
+    console.error('Error shutting down NAV scheduler:', error);
   } finally {
     process.exit(0);
   }
 });
 
 process.on('SIGINT', async () => {
-  console.log('📅 SIGINT received, shutting down NAV scheduler gracefully...');
+  console.log('SIGINT received, shutting down NAV scheduler gracefully...');
   try {
-    if (navScheduler) {
+    if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
-      console.log('✅ NAV Scheduler shut down successfully');
+      console.log('NAV Scheduler shut down successfully');
     }
   } catch (error) {
-    console.error('❌ Error shutting down NAV scheduler:', error);
+    console.error('Error shutting down NAV scheduler:', error);
   } finally {
     process.exit(0);
   }
 });
 
-// Start server
+// CHANGED: Use dynamic import in server startup
 app.listen(PORT, async () => {
   console.log(`
 ╔════════════════════════════════════════╗
@@ -443,11 +443,15 @@ app.listen(PORT, async () => {
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
     
-    // NEW: Initialize NAV Scheduler Service after successful DB connection
+    // CHANGED: Dynamic import and initialization of NAV Scheduler Service
     try {
       console.log('📅 Initializing NAV Scheduler Service...');
+      
+      // Use dynamic import to avoid TypeScript compilation issues
+      const { NavSchedulerService } = await import('./services/navScheduler.service');
       navScheduler = new NavSchedulerService();
       await navScheduler.initializeSchedulers();
+      
       console.log('✅ NAV Scheduler Service initialized successfully');
     } catch (schedulerError: any) {
       console.error('⚠️  NAV Scheduler initialization failed:', schedulerError.message);
