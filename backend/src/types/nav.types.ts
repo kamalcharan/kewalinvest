@@ -1,5 +1,6 @@
 // backend/src/types/nav.types.ts
 // File 3/14: TypeScript interfaces for NAV tracking system
+// UPDATED: Add enhanced bookmark fields for download status and date ranges
 
 export interface SchemeBookmark {
   id: number;
@@ -8,7 +9,7 @@ export interface SchemeBookmark {
   scheme_id: number;
   scheme_code: string;                    // Denormalized from t_scheme_details
   scheme_name: string;                    // Denormalized from t_scheme_details  
-  amc_name?: string;                      // Denormalized from t_scheme_details
+  amc_name: string;                       // Denormalized from t_scheme_details (no longer optional)
   is_live: boolean;
   is_active: boolean;
   daily_download_enabled: boolean;
@@ -16,6 +17,17 @@ export interface SchemeBookmark {
   historical_download_completed: boolean;
   created_at: Date;
   updated_at: Date;
+  
+  // ADDED: Enhanced fields for UI display
+  nav_records_count?: number;
+  latest_nav_date?: Date;
+  latest_nav_value?: number;
+  earliest_nav_date?: Date;               // NEW: First NAV record date
+  
+  // ADDED: Download status tracking
+  last_download_status?: 'success' | 'failed' | 'pending' | null;
+  last_download_error?: string;
+  last_download_attempt?: Date;
 }
 
 export interface CreateSchemeBookmarkRequest {
@@ -50,8 +62,26 @@ export interface SchemeBookmarkListResponse {
 
 export interface SchemeBookmarkWithStats extends SchemeBookmark {
   nav_records_count: number;              // Total NAV records available
-  latest_nav_date?: Date;                 // Most recent NAV date
-  latest_nav_value?: number;              // Most recent NAV value
+  latest_nav_date: Date | null;           // Most recent NAV date
+  latest_nav_value: number | null;        // Most recent NAV value
+  earliest_nav_date: Date | null;         // NEW: Added to stats interface
+  last_download_status: 'success' | 'failed' | 'pending' | null; // NEW
+}
+
+// ADDED: New interface for bookmark-specific NAV data requests
+export interface BookmarkNavDataParams {
+  bookmark_id: number;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// ADDED: Bookmark download status update interface
+export interface UpdateBookmarkDownloadStatus {
+  last_download_status: 'success' | 'failed' | 'pending';
+  last_download_error?: string;
+  last_download_attempt?: Date;
 }
 
 // ==================== NAV DATA TYPES ====================

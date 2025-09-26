@@ -1,5 +1,5 @@
 // backend/src/services/nav.service.ts
-// File 4/14: Core NAV operations service - FIXED for production empty state handling
+// File 4/14: Core NAV operations service - ENHANCED with bookmark download status tracking
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -12,6 +12,8 @@ import {
   SchemeBookmarkSearchParams,
   SchemeBookmarkListResponse,
   SchemeBookmarkWithStats,
+  BookmarkNavDataParams,
+  UpdateBookmarkDownloadStatus,
   NavData,
   NavDataSearchParams,
   NavDataListResponse,
@@ -41,7 +43,7 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
-   * Get user's bookmarked schemes with NAV statistics - FIXED for empty state
+   * Get user's bookmarked schemes with NAV statistics - ENHANCED for UI requirements
    */
   async getUserBookmarks(
     tenantId: number,
@@ -100,7 +102,7 @@ export class NavService {
         };
       }
 
-      // Get paginated results with NAV stats
+      // ENHANCED: Get paginated results with comprehensive NAV stats and download status
       const dataQuery = `
         SELECT 
           sb.*,
@@ -115,6 +117,11 @@ export class NavService {
            AND nd.tenant_id = $1 
            AND nd.is_live = $2
           ) as latest_nav_date,
+          (SELECT MIN(nav_date) FROM t_nav_data nd 
+           WHERE nd.scheme_id = sb.scheme_id 
+           AND nd.tenant_id = $1 
+           AND nd.is_live = $2
+          ) as earliest_nav_date,
           (SELECT nav_value FROM t_nav_data nd 
            WHERE nd.scheme_id = sb.scheme_id 
            AND nd.tenant_id = $1 
@@ -159,6 +166,95 @@ export class NavService {
   }
 
   /**
+   * ADDED: Update bookmark download status after download operations
+   */
+  async updateBookmarkDownloadStatus(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    schemeId: number,
+    status: UpdateBookmarkDownloadStatus
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_scheme_bookmarks
+        SET 
+          last_download_status = $5,
+          last_download_error = $6,
+          last_download_attempt = $7,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = $1 
+          AND is_live = $2 
+          AND user_id = $3 
+          AND scheme_id = $4 
+          AND is_active = true
+      `;
+
+      await this.db.query(query, [
+        tenantId,
+        isLive,
+        userId,
+        schemeId,
+        status.last_download_status,
+        status.last_download_error || null,
+        status.last_download_attempt || new Date()
+      ]);
+
+      SimpleLogger.error('NavService', 'Bookmark download status updated', 'updateBookmarkDownloadStatus', {
+        tenantId, userId, schemeId, status: status.last_download_status
+      }, userId, tenantId);
+
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to update bookmark download status', 'updateBookmarkDownloadStatus', {
+        tenantId, userId, schemeId, status, error: error.message
+      }, userId, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * ADDED: Get NAV data for a specific bookmark
+   */
+  async getBookmarkNavData(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    params: BookmarkNavDataParams
+  ): Promise<NavDataListResponse> {
+    try {
+      // First verify the bookmark belongs to the user
+      const bookmarkQuery = `
+        SELECT scheme_id FROM t_scheme_bookmarks
+        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
+      `;
+      const bookmarkResult = await this.db.query(bookmarkQuery, [tenantId, isLive, userId, params.bookmark_id]);
+      
+      if (bookmarkResult.rows.length === 0) {
+        throw new Error('Bookmark not found or access denied');
+      }
+
+      const schemeId = bookmarkResult.rows[0].scheme_id;
+
+      // Get NAV data for this scheme
+      const navParams: NavDataSearchParams = {
+        scheme_id: schemeId,
+        start_date: params.start_date ? new Date(params.start_date) : undefined,
+        end_date: params.end_date ? new Date(params.end_date) : undefined,
+        page: params.page || 1,
+        page_size: params.page_size || 50
+      };
+
+      return await this.getNavData(tenantId, isLive, navParams);
+
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+        tenantId, userId, params, error: error.message
+      }, userId, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Add scheme to user's bookmarks with denormalized scheme data - FIXED validation
    */
   async addBookmark(
@@ -177,8 +273,8 @@ export class NavService {
         throw new Error('Valid scheme_id is required');
       }
 
-      // Get scheme details using existing scheme service
-      const scheme = await this.schemeService.getSchemeByCode(tenantId, isLive, request.scheme_id.toString());
+      // FIXED: Get scheme details using scheme ID, not scheme code
+      const scheme = await this.schemeService.getSchemeById(tenantId, isLive, request.scheme_id);
       if (!scheme) {
         throw new Error(NAV_ERROR_CODES.SCHEME_NOT_FOUND);
       }
@@ -552,8 +648,6 @@ export class NavService {
       };
     }
   }
-
-  // ==================== KEEP ALL OTHER EXISTING METHODS UNCHANGED ====================
 
   /**
    * Bulk insert/update NAV data (upsert by scheme_id + nav_date)

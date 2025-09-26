@@ -89,7 +89,8 @@ app.get('/health', (_req: Request, res: Response) => {
       staging: true,
       logs: true,
       nav: true,
-      nav_scheduler: !!navScheduler, // NEW: Indicate if scheduler is initialized
+      nav_enhanced_bookmarks: true, // NEW: Enhanced bookmark features
+      nav_scheduler: !!navScheduler, // Indicate if scheduler is initialized
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -220,6 +221,12 @@ app.use((_req: Request, res: Response) => {
       'POST /api/nav/bookmarks',
       'PUT /api/nav/bookmarks/:id',
       'DELETE /api/nav/bookmarks/:id',
+      
+      // ENHANCED: New bookmark endpoints
+      'GET /api/nav/bookmarks/:id/nav-data',
+      'GET /api/nav/bookmarks/:id/stats',
+      'PUT /api/nav/bookmarks/:id/download-status',
+      
       'GET /api/nav/data',
       'GET /api/nav/schemes/:id/latest',
       'POST /api/nav/download/daily',
@@ -233,7 +240,7 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/health',
       'POST /api/nav/n8n-callback',
       
-      // NEW: NAV Scheduler endpoints
+      // NAV Scheduler endpoints
       'GET /api/nav/scheduler/config',
       'POST /api/nav/scheduler/config',
       'PUT /api/nav/scheduler/config/:id',
@@ -398,7 +405,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/download/progress/:id ║
 ║  • GET  /api/nav/statistics            ║
 ║                                        ║
-║  📅 NAV Scheduler (NEW):               ║
+║  📋 Enhanced Bookmarks (NEW):          ║
+║  • GET  /api/nav/bookmarks/:id/nav-data║
+║  • GET  /api/nav/bookmarks/:id/stats   ║
+║  • PUT  /api/nav/bookmarks/:id/download║
+║                                        ║
+║  📅 NAV Scheduler:                     ║
 ║  • GET  /api/nav/scheduler/config      ║
 ║  • POST /api/nav/scheduler/config      ║
 ║  • GET  /api/nav/scheduler/status      ║
@@ -439,6 +451,7 @@ app.listen(PORT, async () => {
     console.log('✅ Customer management endpoints ready');
     console.log('✅ Scheme management endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
+    console.log('✅ Enhanced bookmark endpoints ready'); // NEW
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
@@ -505,6 +518,7 @@ app.listen(PORT, async () => {
 ╠════════════════════════════════════════╣
 ║  Database: ✅ Connected                ║
 ║  NAV Routes: ✅ Ready                  ║
+║  Enhanced Bookmarks: ✅ Ready          ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

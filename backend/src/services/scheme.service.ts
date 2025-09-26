@@ -143,6 +143,32 @@ export class SchemeService {
   }
 
   /**
+   * Get scheme by ID - ADDED METHOD TO FIX BOOKMARK ISSUE
+   */
+  async getSchemeById(
+    tenantId: number,
+    isLive: boolean,
+    schemeId: number
+  ): Promise<SchemeDetail | null> {
+    try {
+      const query = `
+        SELECT * FROM t_scheme_details
+        WHERE tenant_id = $1 
+          AND is_live = $2 
+          AND id = $3
+          AND is_active = true
+        LIMIT 1
+      `;
+      
+      const result = await this.db.query(query, [tenantId, isLive, schemeId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error fetching scheme by ID:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Create a new scheme
    */
   async createScheme(scheme: Partial<SchemeDetail>): Promise<SchemeDetail> {
@@ -292,84 +318,99 @@ export class SchemeService {
    * Get all schemes with pagination
    */
   async getSchemes(
-    tenantId: number,
-    isLive: boolean,
-    params: {
-      page?: number;
-      pageSize?: number;
-      search?: string;
-      amcName?: string;
-      schemeType?: number;
-      schemeCategory?: number;
+  tenantId: number,
+  isLive: boolean,
+  params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    amcName?: string;
+    schemeType?: number;
+    schemeCategory?: number;
+  }
+): Promise<{
+  schemes: SchemeDetail[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  try {
+    const { page = 1, pageSize = 20, search, amcName, schemeType, schemeCategory } = params;
+    const offset = (page - 1) * pageSize;
+    
+    let baseQuery = `
+      FROM t_scheme_details sd
+      LEFT JOIN t_scheme_masters st ON sd.scheme_type_id = st.id
+      LEFT JOIN t_scheme_masters sc ON sd.scheme_category_id = sc.id
+      WHERE sd.tenant_id = $1 AND sd.is_live = $2 AND sd.is_active = true
+    `;
+    
+    const queryParams: any[] = [tenantId, isLive];
+    let paramIndex = 3;
+    
+    // Add filters
+    if (search) {
+      baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
     }
-  ): Promise<{
-    schemes: SchemeDetail[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }> {
-    try {
-      const { page = 1, pageSize = 20, search, amcName, schemeType, schemeCategory } = params;
-      const offset = (page - 1) * pageSize;
-      
-      let query = `
-        SELECT sd.*, 
-               st.name as scheme_type_name,
-               sc.name as scheme_category_name
-        FROM t_scheme_details sd
-        LEFT JOIN t_scheme_masters st ON sd.scheme_type_id = st.id
-        LEFT JOIN t_scheme_masters sc ON sd.scheme_category_id = sc.id
-        WHERE sd.tenant_id = $1 AND sd.is_live = $2 AND sd.is_active = true
-      `;
-      
-      const queryParams: any[] = [tenantId, isLive];
-      let paramIndex = 3;
-      
-      // Add filters
-      if (search) {
-        query += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex})`;
-        queryParams.push(`%${search}%`);
-        paramIndex++;
-      }
-      
-      if (amcName) {
-        query += ` AND sd.amc_name = $${paramIndex}`;
-        queryParams.push(amcName);
-        paramIndex++;
-      }
-      
-      if (schemeType) {
-        query += ` AND sd.scheme_type_id = $${paramIndex}`;
-        queryParams.push(schemeType);
-        paramIndex++;
-      }
-      
-      if (schemeCategory) {
-        query += ` AND sd.scheme_category_id = $${paramIndex}`;
-        queryParams.push(schemeCategory);
-        paramIndex++;
-      }
-      
-      // Get total count
-      const countQuery = query.replace('SELECT sd.*, st.name as scheme_type_name, sc.name as scheme_category_name', 'SELECT COUNT(*) as total');
-      const countResult = await this.db.query(countQuery, queryParams);
-      const total = parseInt(countResult.rows[0].total);
-      
-      // Add pagination
-      query += ` ORDER BY sd.scheme_name ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-      queryParams.push(pageSize, offset);
-      
-      const result = await this.db.query(query, queryParams);
-      
+    
+    if (amcName) {
+      baseQuery += ` AND sd.amc_name = $${paramIndex}`;
+      queryParams.push(amcName);
+      paramIndex++;
+    }
+    
+    if (schemeType) {
+      baseQuery += ` AND sd.scheme_type_id = $${paramIndex}`;
+      queryParams.push(schemeType);
+      paramIndex++;
+    }
+    
+    if (schemeCategory) {
+      baseQuery += ` AND sd.scheme_category_id = $${paramIndex}`;
+      queryParams.push(schemeCategory);
+      paramIndex++;
+    }
+    
+    // Get total count with proper error handling
+    const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+    const countResult = await this.db.query(countQuery, queryParams);
+    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
+      parseInt(countResult.rows[0].total) : 0;
+    
+    // Early return for empty results
+    if (total === 0) {
       return {
-        schemes: result.rows,
-        total,
+        schemes: [],
+        total: 0,
         page,
         pageSize
       };
-    } catch (error) {
-      console.error('Error fetching schemes:', error);
-      throw error;
     }
+    
+    // Get paginated data
+    const dataQuery = `
+      SELECT sd.*, 
+             st.name as scheme_type_name,
+             sc.name as scheme_category_name
+      ${baseQuery}
+      ORDER BY sd.scheme_name ASC 
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    
+    queryParams.push(pageSize, offset);
+    const result = await this.db.query(dataQuery, queryParams);
+    
+    return {
+      schemes: result.rows || [],
+      total,
+      page,
+      pageSize
+    };
+  } catch (error) {
+    console.error('Error fetching schemes:', error);
+    throw error;
   }
+}
 }

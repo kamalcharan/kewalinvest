@@ -1,5 +1,5 @@
 // backend/src/routes/nav.routes.ts
-// File 8/14: NAV routing with proper middleware following existing patterns + NEW SCHEDULER ROUTES
+// File 8/14: NAV routing with enhanced bookmark endpoints and scheduler management
 
 import { Router } from 'express';
 import { NavController } from '../controllers/nav.controller';
@@ -65,7 +65,7 @@ const historicalDownloadRateLimit = rateLimit({
   }
 });
 
-// NEW: Scheduler configuration rate limiting (prevent spam configuration changes)
+// Scheduler configuration rate limiting (prevent spam configuration changes)
 const schedulerConfigRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20, // 20 scheduler config changes per hour
@@ -81,7 +81,7 @@ const schedulerConfigRateLimit = rateLimit({
   }
 });
 
-// NEW: Manual trigger rate limiting (prevent abuse of manual triggers)
+// Manual trigger rate limiting (prevent abuse of manual triggers)
 const manualTriggerRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour  
   max: 5, // 5 manual triggers per hour
@@ -136,6 +136,50 @@ router.put('/bookmarks/:id', navController.updateBookmark);
  */
 router.delete('/bookmarks/:id', navController.removeBookmark);
 
+// ==================== ENHANCED BOOKMARK ENDPOINTS ====================
+
+/**
+ * Get NAV data for a specific bookmark
+ * GET /api/nav/bookmarks/:id/nav-data
+ * Query params: start_date, end_date, page, page_size
+ * 
+ * Returns paginated NAV data for the specific bookmarked scheme
+ * with optional date range filtering
+ */
+router.get('/bookmarks/:id/nav-data', navController.getBookmarkNavData);
+
+/**
+ * Get comprehensive statistics for a specific bookmark
+ * GET /api/nav/bookmarks/:id/stats
+ * 
+ * Returns: {
+ *   bookmark_id: number,
+ *   scheme_name: string,
+ *   nav_records_count: number,
+ *   earliest_nav_date: string,
+ *   latest_nav_date: string,
+ *   latest_nav_value: number,
+ *   daily_download_enabled: boolean,
+ *   last_download_status: string,
+ *   date_range_days: number
+ * }
+ */
+router.get('/bookmarks/:id/stats', navController.getBookmarkStats);
+
+/**
+ * Update bookmark download status (internal endpoint)
+ * PUT /api/nav/bookmarks/:id/download-status
+ * Body: {
+ *   last_download_status: 'success' | 'failed' | 'pending',
+ *   last_download_error?: string,
+ *   last_download_attempt?: string
+ * }
+ * 
+ * Note: This endpoint is primarily for internal use by download services
+ * but can be used by admin interfaces for manual status updates
+ */
+router.put('/bookmarks/:id/download-status', navController.updateBookmarkDownloadStatus);
+
 // ==================== NAV DATA ROUTES ====================
 
 /**
@@ -173,6 +217,7 @@ router.post('/download/daily', downloadRateLimit, navController.triggerDailyDown
  * 
  * Limited to 6 months per request and 3 requests per day
  * Returns job_id for progress tracking
+ * ENHANCED: Now updates bookmark download status automatically
  */
 router.post('/download/historical', historicalDownloadRateLimit, navController.triggerHistoricalDownload);
 
@@ -243,7 +288,7 @@ router.get('/statistics', navController.getNavStatistics);
  */
 router.get('/check-today', navController.checkTodayNavData);
 
-// ==================== NEW: SCHEDULER MANAGEMENT ROUTES ====================
+// ==================== SCHEDULER MANAGEMENT ROUTES ====================
 
 /**
  * Get user's scheduler configuration
@@ -397,9 +442,10 @@ router.get('/health', (req, res) => {
       features: {
         schemes_search: true,
         bookmarks: true,
+        enhanced_bookmarks: true, // NEW: Enhanced bookmark features
         nav_data: true,
         downloads: true,
-        scheduler: true, // NEW: Indicate scheduler feature is available
+        scheduler: true,
         n8n_integration: !!process.env.N8N_BASE_URL,
         amfi_integration: true
       }
@@ -467,7 +513,7 @@ router.use((error: any, req: any, res: any, next: any) => {
       status: 404,
       message: 'Download job not found'
     },
-    // NEW: Scheduler-specific error codes
+    // Scheduler-specific error codes
     'SCHEDULER_CONFIG_NOT_FOUND': {
       status: 404,
       message: 'Scheduler configuration not found'
@@ -487,6 +533,19 @@ router.use((error: any, req: any, res: any, next: any) => {
     'SCHEDULER_NOT_ENABLED': {
       status: 400,
       message: 'Scheduler is not enabled for this user'
+    },
+    // NEW: Bookmark-specific error codes
+    'BOOKMARK_ACCESS_DENIED': {
+      status: 403,
+      message: 'You do not have permission to access this bookmark'
+    },
+    'INVALID_DOWNLOAD_STATUS': {
+      status: 400,
+      message: 'Invalid download status provided'
+    },
+    'NAV_DATA_NOT_AVAILABLE': {
+      status: 404,
+      message: 'NAV data is not available for the requested parameters'
     }
   };
 
@@ -514,7 +573,7 @@ router.use((error: any, req: any, res: any, next: any) => {
   }
 });
 
-// ==================== ROUTE DOCUMENTATION ====================
+// ==================== API DOCUMENTATION ====================
 
 /**
  * API documentation endpoint
@@ -540,7 +599,24 @@ router.get('/docs', (req, res) => {
         list: { method: 'GET', path: '/bookmarks' },
         create: { method: 'POST', path: '/bookmarks' },
         update: { method: 'PUT', path: '/bookmarks/:id' },
-        delete: { method: 'DELETE', path: '/bookmarks/:id' }
+        delete: { method: 'DELETE', path: '/bookmarks/:id' },
+        // NEW: Enhanced bookmark endpoints
+        nav_data: { 
+          method: 'GET', 
+          path: '/bookmarks/:id/nav-data',
+          description: 'Get NAV data for specific bookmark',
+          parameters: ['start_date', 'end_date', 'page', 'page_size']
+        },
+        stats: { 
+          method: 'GET', 
+          path: '/bookmarks/:id/stats',
+          description: 'Get comprehensive bookmark statistics'
+        },
+        download_status: { 
+          method: 'PUT', 
+          path: '/bookmarks/:id/download-status',
+          description: 'Update bookmark download status (internal)'
+        }
       },
       nav_data: {
         list: { method: 'GET', path: '/data' },
@@ -554,7 +630,6 @@ router.get('/docs', (req, res) => {
         cancel: { method: 'DELETE', path: '/download/jobs/:jobId' },
         active: { method: 'GET', path: '/download/active' }
       },
-      // NEW: Scheduler endpoints documentation
       scheduler: {
         get_config: { method: 'GET', path: '/scheduler/config' },
         save_config: { method: 'POST', path: '/scheduler/config', rate_limit: '20/hour' },
@@ -577,8 +652,8 @@ router.get('/docs', (req, res) => {
       general: '100 requests per 15 minutes',
       downloads: '10 requests per hour',
       historical_downloads: '3 requests per day',
-      scheduler_config: '20 requests per hour', // NEW
-      manual_trigger: '5 requests per hour' // NEW
+      scheduler_config: '20 requests per hour',
+      manual_trigger: '5 requests per hour'
     },
     error_codes: Object.keys({
       'SCHEME_NOT_FOUND': 404,
@@ -588,12 +663,15 @@ router.get('/docs', (req, res) => {
       'INVALID_DATE_RANGE': 400,
       'AMFI_API_ERROR': 503,
       'RATE_LIMIT_EXCEEDED': 429,
-      // NEW: Scheduler error codes
       'SCHEDULER_CONFIG_NOT_FOUND': 404,
       'INVALID_CRON_EXPRESSION': 400,
       'SCHEDULER_ALREADY_EXISTS': 409,
       'N8N_WEBHOOK_FAILED': 502,
-      'SCHEDULER_NOT_ENABLED': 400
+      'SCHEDULER_NOT_ENABLED': 400,
+      // NEW: Bookmark-specific error codes
+      'BOOKMARK_ACCESS_DENIED': 403,
+      'INVALID_DOWNLOAD_STATUS': 400,
+      'NAV_DATA_NOT_AVAILABLE': 404
     })
   };
 

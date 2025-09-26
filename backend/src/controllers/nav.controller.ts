@@ -1,5 +1,5 @@
 // backend/src/controllers/nav.controller.ts
-// File 7/14: NAV API controller with proper TypeScript types + NEW SCHEDULER ENDPOINTS
+// File 7/14: NAV API controller with enhanced bookmark endpoints and scheduler management
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
@@ -12,6 +12,8 @@ import {
   SchemeBookmarkSearchParams,
   CreateSchemeBookmarkRequest,
   UpdateSchemeBookmarkRequest,
+  BookmarkNavDataParams,
+  UpdateBookmarkDownloadStatus,
   NavDataSearchParams,
   CreateNavDownloadJobRequest,
   NavDownloadJobSearchParams,
@@ -358,6 +360,225 @@ export class NavController {
     }
   };
 
+  // ==================== ENHANCED BOOKMARK ENDPOINTS ====================
+
+  /**
+   * Get NAV data for a specific bookmark
+   * GET /api/nav/bookmarks/:id/nav-data
+   */
+  getBookmarkNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const bookmarkId = parseInt(req.params.id);
+
+      if (isNaN(bookmarkId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid bookmark ID'
+        });
+        return;
+      }
+
+      const params: BookmarkNavDataParams = {
+        bookmark_id: bookmarkId,
+        start_date: req.query.start_date as string,
+        end_date: req.query.end_date as string,
+        page: req.query.page ? Number(req.query.page) : 1,
+        page_size: req.query.page_size ? Number(req.query.page_size) : 50
+      };
+
+      // Validate date range if provided
+      if (params.start_date && params.end_date) {
+        const startDate = new Date(params.start_date);
+        const endDate = new Date(params.end_date);
+        
+        if (startDate > endDate) {
+          res.status(400).json({
+            success: false,
+            error: 'Start date cannot be after end date'
+          });
+          return;
+        }
+      }
+
+      const result = await this.navService.getBookmarkNavData(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        params
+      );
+
+      res.json({
+        success: true,
+        data: result
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        bookmarkId: req.params.id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      if (error.message === 'Bookmark not found or access denied') {
+        res.status(404).json({
+          success: false,
+          error: 'Bookmark not found'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to get bookmark NAV data'
+        });
+      }
+    }
+  };
+
+  /**
+   * Update bookmark download status (called internally after downloads)
+   * PUT /api/nav/bookmarks/:id/download-status
+   */
+  updateBookmarkDownloadStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const bookmarkId = parseInt(req.params.id);
+
+      if (isNaN(bookmarkId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid bookmark ID'
+        });
+        return;
+      }
+
+      // First get the bookmark to find the scheme_id
+      const bookmarks = await this.navService.getUserBookmarks(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        { page: 1, page_size: 1000 }
+      );
+
+      const bookmark = bookmarks.bookmarks.find(b => b.id === bookmarkId);
+      if (!bookmark) {
+        res.status(404).json({
+          success: false,
+          error: 'Bookmark not found'
+        });
+        return;
+      }
+
+      const status: UpdateBookmarkDownloadStatus = {
+        last_download_status: req.body.last_download_status,
+        last_download_error: req.body.last_download_error,
+        last_download_attempt: req.body.last_download_attempt ? new Date(req.body.last_download_attempt) : new Date()
+      };
+
+      await this.navService.updateBookmarkDownloadStatus(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        bookmark.scheme_id,
+        status
+      );
+
+      res.json({
+        success: true,
+        message: 'Bookmark download status updated'
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to update bookmark download status', 'updateBookmarkDownloadStatus', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        bookmarkId: req.params.id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update download status'
+      });
+    }
+  };
+
+  /**
+   * Get bookmark statistics summary
+   * GET /api/nav/bookmarks/:id/stats
+   */
+  getBookmarkStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const bookmarkId = parseInt(req.params.id);
+
+      if (isNaN(bookmarkId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid bookmark ID'
+        });
+        return;
+      }
+
+      // Get bookmark details with stats
+      const bookmarks = await this.navService.getUserBookmarks(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        { page: 1, page_size: 1000 }
+      );
+
+      const bookmark = bookmarks.bookmarks.find(b => b.id === bookmarkId);
+      if (!bookmark) {
+        res.status(404).json({
+          success: false,
+          error: 'Bookmark not found'
+        });
+        return;
+      }
+
+      // Calculate additional stats
+      const stats = {
+        bookmark_id: bookmark.id,
+        scheme_name: bookmark.scheme_name,
+        scheme_code: bookmark.scheme_code,
+        amc_name: bookmark.amc_name,
+        nav_records_count: bookmark.nav_records_count || 0,
+        earliest_nav_date: bookmark.earliest_nav_date,
+        latest_nav_date: bookmark.latest_nav_date,
+        latest_nav_value: bookmark.latest_nav_value,
+        daily_download_enabled: bookmark.daily_download_enabled,
+        historical_download_completed: bookmark.historical_download_completed,
+        last_download_status: bookmark.last_download_status,
+        last_download_error: bookmark.last_download_error,
+        last_download_attempt: bookmark.last_download_attempt,
+        date_range_days: bookmark.earliest_nav_date && bookmark.latest_nav_date ? 
+          Math.ceil((new Date(bookmark.latest_nav_date).getTime() - new Date(bookmark.earliest_nav_date).getTime()) / (1000 * 60 * 60 * 24)) : 0
+      };
+
+      res.json({
+        success: true,
+        data: stats
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get bookmark stats', 'getBookmarkStats', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        bookmarkId: req.params.id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get bookmark statistics'
+      });
+    }
+  };
+
   // ==================== NAV DATA OPERATIONS ====================
 
   /**
@@ -503,7 +724,7 @@ export class NavController {
   };
 
   /**
-   * Trigger historical NAV download
+   * ENHANCED: Trigger historical NAV download with bookmark status update
    * POST /api/nav/download/historical
    */
   triggerHistoricalDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -551,6 +772,29 @@ export class NavController {
           endDate
         }
       );
+
+      // ENHANCED: Update bookmark download status for each scheme
+      try {
+        for (const schemeId of scheme_ids) {
+          await this.navService.updateBookmarkDownloadStatus(
+            user!.tenant_id,
+            isLive,
+            user!.user_id,
+            schemeId,
+            {
+              last_download_status: 'pending',
+              last_download_attempt: new Date()
+            }
+          );
+        }
+      } catch (statusError) {
+        // Log but don't fail the download if status update fails
+        SimpleLogger.error('NavController', 'Failed to update bookmark status during historical download', 'triggerHistoricalDownload', {
+          tenantId: user!.tenant_id,
+          userId: user!.user_id,
+          error: statusError
+        });
+      }
 
       res.status(202).json({ // 202 Accepted for async processing
         success: true,
