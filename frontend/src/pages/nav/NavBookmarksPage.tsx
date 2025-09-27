@@ -11,15 +11,10 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
-import type { SchemeBookmark } from '../../services/nav.service';
+import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
 
-// Define DownloadProgress interface locally
-interface DownloadProgress {
-  jobId: number;
-  progressPercentage: number;
-  currentStep: string;
-}
+
 
 const NavBookmarksPage: React.FC = () => {
   const navigate = useNavigate();
