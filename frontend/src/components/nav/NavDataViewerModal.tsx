@@ -1,5 +1,5 @@
 // frontend/src/components/nav/NavDataViewerModal.tsx
-// FIXED: Moved from pages to components directory and enhanced functionality
+// FIXED: Safe number conversion for NAV values - prevents .toFixed() errors
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -37,6 +37,17 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
+
+  // FIXED: Safe number formatting function
+  const formatNavValue = (value: any): string => {
+    if (value === null || value === undefined) return 'N/A';
+    
+    // Handle both string and number types
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return 'N/A';
+    
+    return numValue.toFixed(4);
+  };
 
   // Load NAV data when modal opens
   useEffect(() => {
@@ -127,15 +138,15 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
     }
 
     try {
-      // Create CSV content
+      // Create CSV content with safe number formatting
       const headers = ['Date', 'NAV Value', 'Repurchase Price', 'Sale Price'];
       const csvContent = [
         headers.join(','),
         ...navData.map(row => [
           new Date(row.nav_date).toLocaleDateString(),
-          row.nav_value.toFixed(4),
-          row.repurchase_price?.toFixed(4) || 'N/A',
-          row.sale_price?.toFixed(4) || 'N/A'
+          formatNavValue(row.nav_value),
+          formatNavValue(row.repurchase_price) || 'N/A',
+          formatNavValue(row.sale_price) || 'N/A'
         ].join(','))
       ].join('\n');
 
@@ -271,7 +282,7 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
           </div>
         </div>
 
-        {/* Bookmark Info Summary */}
+        {/* Bookmark Info Summary - FIXED: Safe number formatting */}
         <div style={{
           padding: '12px 16px',
           backgroundColor: colors.utility.secondaryBackground,
@@ -308,7 +319,7 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
             <div>
               <strong style={{ color: colors.utility.primaryText }}>Current NAV:</strong>
               <div style={{ color: colors.brand.primary, fontWeight: '600' }}>
-                ₹{bookmark.latest_nav_value.toFixed(4)}
+                ₹{formatNavValue(bookmark.latest_nav_value)}
               </div>
             </div>
           )}
@@ -565,7 +576,7 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
                       fontWeight: '600',
                       borderRight: `1px solid ${colors.utility.primaryText}05`
                     }}>
-                      ₹{row.nav_value.toFixed(4)}
+                      ₹{formatNavValue(row.nav_value)}
                     </td>
                     <td style={{
                       padding: '10px 16px',
@@ -573,14 +584,14 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
                       color: colors.utility.secondaryText,
                       borderRight: `1px solid ${colors.utility.primaryText}05`
                     }}>
-                      {row.repurchase_price ? `₹${row.repurchase_price.toFixed(4)}` : 'N/A'}
+                      {row.repurchase_price ? `₹${formatNavValue(row.repurchase_price)}` : 'N/A'}
                     </td>
                     <td style={{
                       padding: '10px 16px',
                       textAlign: 'right',
                       color: colors.utility.secondaryText
                     }}>
-                      {row.sale_price ? `₹${row.sale_price.toFixed(4)}` : 'N/A'}
+                      {row.sale_price ? `₹${formatNavValue(row.sale_price)}` : 'N/A'}
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavSearchPage.tsx
-// Complete search and bookmark interface for NAV schemes
+// FIXED: Rate limiting, double toasts, navigation after bookmark, page size 10
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -34,7 +34,11 @@ const NavSearchPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [bookmarkingIds, setBookmarkingIds] = useState<Set<number>>(new Set());
   
-  // Pagination state
+  // FIXED: Rate limiting state
+  const [lastSearchTime, setLastSearchTime] = useState<number>(0);
+  const SEARCH_COOLDOWN = 1000; // 1 second between searches
+  
+  // Pagination state - FIXED: Page size set to 10
   const [pagination, setPagination] = useState({
     page: 1,
     total: 0,
@@ -43,21 +47,30 @@ const NavSearchPage: React.FC = () => {
     hasPrev: false
   });
 
-  // Search function
-  const searchSchemes = useCallback(async (page: number = 1) => {
+  // FIXED: Debounced search function with rate limiting
+  const searchSchemes = useCallback(async (page: number = 1, skipCooldown: boolean = false) => {
     if (!filters.search.trim() || filters.search.trim().length < 2) {
       setError('Please enter at least 2 characters to search');
       return;
     }
 
+    // Rate limiting check
+    const now = Date.now();
+    if (!skipCooldown && now - lastSearchTime < SEARCH_COOLDOWN) {
+      const remainingTime = SEARCH_COOLDOWN - (now - lastSearchTime);
+      setError(`Please wait ${Math.ceil(remainingTime / 1000)} second(s) before searching again`);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
+    setLastSearchTime(now);
 
     try {
       const searchParams = {
         search: filters.search.trim(),
         page,
-        page_size: 20,
+        page_size: 10, // FIXED: Set to 10 items per page
         ...(filters.amc_name && { amc_name: filters.amc_name }),
         ...(filters.scheme_type && { scheme_type: Number(filters.scheme_type) }),
         ...(filters.scheme_category && { scheme_category: Number(filters.scheme_category) })
@@ -86,16 +99,22 @@ const NavSearchPage: React.FC = () => {
         { searchParams: filters, error: err.message },
         err.stack
       );
-      setError('Search failed. Please try again.');
+      
+      // Handle rate limiting specifically
+      if (err.message.includes('429') || err.message.includes('rate limit')) {
+        setError('Too many requests. Please wait a moment before searching again.');
+      } else {
+        setError('Search failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters, lastSearchTime]);
 
-  // Handle search form submission
+  // Handle search form submission with rate limiting
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    searchSchemes(1);
+    searchSchemes(1, false); // Don't skip cooldown for manual searches
   };
 
   // Handle input changes
@@ -129,11 +148,11 @@ const NavSearchPage: React.FC = () => {
   // Handle pagination
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
-      searchSchemes(newPage);
+      searchSchemes(newPage, true); // Skip cooldown for pagination
     }
   };
 
-  // Handle bookmark creation
+  // FIXED: Handle bookmark creation with single toast and navigation
   const handleBookmark = async (scheme: SchemeSearchResult) => {
     if (bookmarkingIds.has(scheme.id)) return;
 
@@ -143,13 +162,21 @@ const NavSearchPage: React.FC = () => {
       const bookmarkRequest: CreateBookmarkRequest = {
         scheme_id: scheme.id,
         daily_download_enabled: true, 
-        download_time: '23:00' // Default download time
+        download_time: '23:00'
       };
 
-      const response = await navService.createBookmark(bookmarkRequest);
+      // FIXED: Use navService directly without additional toast
+      const response = await fetch('/api/nav/bookmarks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(bookmarkRequest)
+      });
 
-      if (response.success) {
-        // Update the scheme's bookmark status in local state
+      if (response.ok) {
+        // Update local state
         setSchemes(prev => 
           prev.map(s => 
             s.id === scheme.id 
@@ -158,9 +185,17 @@ const NavSearchPage: React.FC = () => {
           )
         );
 
+        // FIXED: Single meaningful toast with scheme name
         toastService.success(`${scheme.scheme_name} bookmarked successfully`);
+        
+        // FIXED: Navigate to dashboard to avoid race conditions
+        setTimeout(() => {
+          navigate('/nav/dashboard');
+        }, 1500); // Give user time to see the success message
+
       } else {
-        toastService.error(response.error || 'Failed to bookmark scheme');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to bookmark scheme');
       }
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -169,7 +204,7 @@ const NavSearchPage: React.FC = () => {
         { schemeId: scheme.id, schemeName: scheme.scheme_name, error: err.message },
         err.stack
       );
-      toastService.error('Failed to bookmark scheme. Please try again.');
+      toastService.error(`Failed to bookmark ${scheme.scheme_name}`);
     } finally {
       setBookmarkingIds(prev => {
         const newSet = new Set(prev);
@@ -177,6 +212,19 @@ const NavSearchPage: React.FC = () => {
         return newSet;
       });
     }
+  };
+
+  // FIXED: Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('access_token');
+    const tenantId = localStorage.getItem('tenant_id');
+    const environment = localStorage.getItem('environment') || 'test';
+    
+    return {
+      'Authorization': `Bearer ${token}`,
+      'X-Tenant-ID': tenantId,
+      'X-Environment': environment
+    };
   };
 
   // Navigate to bookmarks page
@@ -498,7 +546,7 @@ const NavSearchPage: React.FC = () => {
                   margin: 0
                 }}>
                   {pagination.total > 0 
-                    ? `Found ${pagination.total} schemes` 
+                    ? `Found ${pagination.total} schemes (showing 10 per page)` 
                     : 'No schemes found'}
                 </p>
               </div>
@@ -567,7 +615,9 @@ const NavSearchPage: React.FC = () => {
                           color: colors.brand.primary,
                           fontWeight: '500'
                         }}>
-                          Latest NAV: ₹{scheme.latest_nav_value.toFixed(4)}
+                          Latest NAV: ₹{typeof scheme.latest_nav_value === 'string' 
+                            ? parseFloat(scheme.latest_nav_value).toFixed(4) 
+                            : scheme.latest_nav_value.toFixed(4)}
                           {scheme.latest_nav_date && (
                             <span style={{ color: colors.utility.secondaryText, fontWeight: 'normal' }}>
                               {' '}({new Date(scheme.latest_nav_date).toLocaleDateString()})
@@ -647,8 +697,8 @@ const NavSearchPage: React.FC = () => {
               </div>
             ) : null}
 
-            {/* Pagination */}
-            {pagination.total > 20 && (
+            {/* Pagination - FIXED: Updated for 10 items per page */}
+            {pagination.total > 10 && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
@@ -700,7 +750,7 @@ const NavSearchPage: React.FC = () => {
                       : 'white',
                     border: 'none',
                     borderRadius: '6px',
-                    cursor: (!pagination.hasNext || isLoading) ? 'not-allowed' : 'cursor',
+                    cursor: (!pagination.hasNext || isLoading) ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
                     fontWeight: '500'
                   }}
