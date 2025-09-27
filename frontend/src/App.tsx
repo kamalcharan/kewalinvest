@@ -23,6 +23,8 @@ import Dashboard from './pages/Dashboard';
 import NavDashboardPage from './pages/nav/NavDashboardPage';
 import NavSearchPage from './pages/nav/NavSearchPage';
 import NavSchedulerPage from './pages/nav/NavSchedulerPage';
+import NavBookmarksPage from './pages/nav/NavBookmarksPage';
+
 
 // Contact pages
 import ContactsPage from './pages/contacts/ContactsPage';
@@ -77,9 +79,10 @@ function App() {
                 <Route path="data-import/:step" element={<ImportDataPage />} />
                 <Route path="data-import/results/:sessionId" element={<ImportDataPage />} />
                 
-                {/* NAV Tracking Routes - ADD ONLY THESE 3 LINES */}
+               {/* NAV Tracking Routes - ADDED */}
                 <Route path="nav/dashboard" element={<NavDashboardPage />} />
                 <Route path="nav/search" element={<NavSearchPage />} />
+                <Route path="nav/bookmarks" element={<NavBookmarksPage />} />
                 <Route path="nav/scheduler" element={<NavSchedulerPage />} />
                 
                 {/* Admin Routes */}

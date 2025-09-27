@@ -1,7 +1,11 @@
+// frontend/src/services/errorLogger.service.ts
+// FIXED: Added missing info and debug methods
+
 import apiService from './api.service';
 
 export class FrontendErrorLogger {
-  static async logError(
+  static async logMessage(
+    level: 'error' | 'warn' | 'info' | 'debug',
     message: string,
     context?: string,
     metadata?: any,
@@ -10,7 +14,7 @@ export class FrontendErrorLogger {
     try {
       // Don't wait for the API call to complete - fire and forget
       apiService.post('/logs/frontend-error', {
-        level: 'error',
+        level,
         source: 'frontend',
         message,
         context,
@@ -27,14 +31,23 @@ export class FrontendErrorLogger {
         stack_trace: stack
       }).catch(err => {
         // Fallback to console if API fails
-        console.error('Failed to log error to backend:', err);
-        console.error('Original error:', message, metadata);
+        console.error('Failed to log to backend:', err);
+        console[level]('Original log:', message, metadata);
       });
     } catch (err) {
       // Always fallback to console
-      console.error('Error logging failed:', err);
-      console.error('Original error:', message, metadata);
+      console.error('Logging failed:', err);
+      console[level]('Original log:', message, metadata);
     }
+  }
+
+  static async logError(
+    message: string,
+    context?: string,
+    metadata?: any,
+    stack?: string
+  ): Promise<void> {
+    return this.logMessage('error', message, context, metadata, stack);
   }
 
   static error(message: string, context?: string, metadata?: any, stack?: string) {
@@ -42,7 +55,17 @@ export class FrontendErrorLogger {
   }
 
   static warn(message: string, context?: string, metadata?: any) {
-    this.logError(message, context, metadata);
+    this.logMessage('warn', message, context, metadata);
+  }
+
+  // FIXED: Added missing info method
+  static info(message: string, context?: string, metadata?: any) {
+    this.logMessage('info', message, context, metadata);
+  }
+
+  // FIXED: Added debug method for completeness
+  static debug(message: string, context?: string, metadata?: any) {
+    this.logMessage('debug', message, context, metadata);
   }
 
   // Helper to capture and log React component errors
@@ -86,6 +109,24 @@ export class FrontendErrorLogger {
         responseData: error?.response?.data
       },
       error?.stack
+    );
+  }
+
+  // FIXED: Added helper for successful operations logging
+  static operationSuccess(operation: string, context?: string, metadata?: any) {
+    this.info(
+      `Operation completed successfully: ${operation}`,
+      context || 'OperationSuccess',
+      metadata
+    );
+  }
+
+  // FIXED: Added helper for user action tracking
+  static userAction(action: string, context?: string, metadata?: any) {
+    this.info(
+      `User action: ${action}`,
+      context || 'UserAction',
+      metadata
     );
   }
 }

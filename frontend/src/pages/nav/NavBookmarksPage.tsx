@@ -1,25 +1,30 @@
 // frontend/src/pages/nav/NavBookmarksPage.tsx
-// Complete bookmarks management page with enhanced cards and full functionality
+// Complete bookmarks management page with enhanced cards and full functionality - CLEAN VERSION
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookmarks, useDownloads, useDownloadProgress } from '../../hooks/useNavData';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
+import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
 
+// Define DownloadProgress interface locally
+interface DownloadProgress {
+  jobId: number;
+  progressPercentage: number;
+  currentStep: string;
+}
+
 const NavBookmarksPage: React.FC = () => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-
-  // Navigation function - replace with your routing method
-  const navigate = (path: string) => {
-    window.location.href = path;
-  };
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,7 +38,7 @@ const NavBookmarksPage: React.FC = () => {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
   const [showNavDataModal, setShowNavDataModal] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(null);
+  const [currentProgress, setCurrentProgress] = useState<DownloadProgress | null>(null);
 
   // Bulk selection state
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<number>>(new Set());
@@ -111,10 +116,24 @@ const NavBookmarksPage: React.FC = () => {
   };
 
   const handleViewNavData = (bookmark: SchemeBookmark) => {
+    // Check if bookmark has NAV data
+    if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
+      toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
+      return;
+    }
+
     setSelectedBookmark(bookmark);
     setShowNavDataModal(true);
-    // TODO: Implement in Phase 2
-    toastService.info('NAV Data Viewer coming soon in Phase 2');
+    
+    FrontendErrorLogger.info(
+      'Opening NAV Data Viewer from Bookmarks page',
+      'NavBookmarksPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name,
+        navRecordsCount: bookmark.nav_records_count
+      }
+    );
   };
 
   const handleHistoricalDownload = (bookmark: SchemeBookmark) => {
@@ -770,8 +789,8 @@ const NavBookmarksPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination */}
-              {pagination && pagination.total_pages > 1 && (
+              {/* Pagination - FIXED property names */}
+              {pagination && pagination.totalPages > 1 && (
                 <div style={{
                   display: 'flex',
                   justifyContent: 'center',
@@ -783,18 +802,18 @@ const NavBookmarksPage: React.FC = () => {
                 }}>
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={!pagination.has_prev}
+                    disabled={!pagination.hasPrev}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: !pagination.has_prev 
+                      backgroundColor: !pagination.hasPrev 
                         ? colors.utility.secondaryBackground 
                         : colors.brand.primary,
-                      color: !pagination.has_prev 
+                      color: !pagination.hasPrev 
                         ? colors.utility.secondaryText 
                         : 'white',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: !pagination.has_prev ? 'not-allowed' : 'pointer',
+                      cursor: !pagination.hasPrev ? 'not-allowed' : 'pointer',
                       fontSize: '14px',
                       fontWeight: '500'
                     }}
@@ -807,23 +826,23 @@ const NavBookmarksPage: React.FC = () => {
                     color: colors.utility.primaryText,
                     fontWeight: '500'
                   }}>
-                    Page {pagination.page} of {pagination.total_pages}
+                    Page {pagination.page} of {pagination.totalPages}
                   </span>
 
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={!pagination.has_next}
+                    disabled={!pagination.hasNext}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: !pagination.has_next 
+                      backgroundColor: !pagination.hasNext 
                         ? colors.utility.secondaryBackground 
                         : colors.brand.primary,
-                      color: !pagination.has_next 
+                      color: !pagination.hasNext 
                         ? colors.utility.secondaryText 
                         : 'white',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: !pagination.has_next ? 'not-allowed' : 'pointer',
+                      cursor: !pagination.hasNext ? 'not-allowed' : 'pointer',
                       fontSize: '14px',
                       fontWeight: '500'
                     }}
@@ -845,57 +864,12 @@ const NavBookmarksPage: React.FC = () => {
         onDownloadStarted={handleHistoricalDownloadStarted}
       />
 
-      {/* NAV Data Viewer Modal - TODO: Phase 2 */}
-      {showNavDataModal && selectedBookmark && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '16px',
-            padding: '24px',
-            minWidth: '400px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              marginBottom: '16px'
-            }}>
-              📊 NAV Data Viewer
-            </h3>
-            <p style={{
-              color: colors.utility.secondaryText,
-              marginBottom: '20px'
-            }}>
-              NAV Data Viewer for <strong>{selectedBookmark.scheme_name}</strong> coming soon in Phase 2!
-            </p>
-            <button
-              onClick={handleCloseNavDataModal}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {/* NAV Data Viewer Modal */}
+      <NavDataViewerModal
+        isOpen={showNavDataModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseNavDataModal}
+      />
 
       {/* Progress Modal */}
       <NavProgressModal

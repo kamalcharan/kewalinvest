@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// Enhanced NAV Dashboard with EnhancedBookmarkCard integration - COMPLETE FILE
+// FIXED: Enhanced NAV Dashboard with working NAV Data Viewer - COMPLETE FILE
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -8,9 +8,10 @@ import { useNavDashboard, useDownloads, useDownloadProgress } from '../../hooks/
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
+import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
-import type { SchemeBookmark } from '../../services/nav.service';
+import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
 
 const NavDashboardPage: React.FC = () => {
@@ -36,7 +37,7 @@ const NavDashboardPage: React.FC = () => {
 
   // Modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(null);
+  const [currentProgress, setCurrentProgress] = useState<DownloadProgress | null>(null);
   const [isTriggeringDownload, setIsTriggeringDownload] = useState(false);
 
   // Enhanced bookmark card modals
@@ -84,11 +85,26 @@ const NavDashboardPage: React.FC = () => {
     }
   };
 
+  // Handle view NAV data - shows actual viewer
   const handleViewNavData = (bookmark: SchemeBookmark) => {
+    // Check if bookmark has NAV data
+    if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
+      toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
+      return;
+    }
+
     setSelectedBookmark(bookmark);
     setShowNavDataModal(true);
-    // TODO: Implement NAV data viewer modal in Phase 2
-    toastService.info('NAV Data Viewer coming soon in Phase 2');
+    
+    FrontendErrorLogger.info(
+      'Opening NAV Data Viewer',
+      'NavDashboardPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name,
+        navRecordsCount: bookmark.nav_records_count
+      }
+    );
   };
 
   const handleHistoricalDownload = (bookmark: SchemeBookmark) => {
@@ -109,6 +125,7 @@ const NavDashboardPage: React.FC = () => {
     setSelectedBookmark(null);
   };
 
+  // Handle close NAV data modal
   const handleCloseNavDataModal = () => {
     setShowNavDataModal(false);
     setSelectedBookmark(null);
@@ -713,57 +730,12 @@ const NavDashboardPage: React.FC = () => {
         }}
       />
 
-      {/* NAV Data Viewer Modal - TODO: Implement in Phase 2 */}
-      {showNavDataModal && selectedBookmark && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '16px',
-            padding: '24px',
-            minWidth: '400px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              marginBottom: '16px'
-            }}>
-              📊 NAV Data Viewer
-            </h3>
-            <p style={{
-              color: colors.utility.secondaryText,
-              marginBottom: '20px'
-            }}>
-              NAV Data Viewer for <strong>{selectedBookmark.scheme_name}</strong> coming soon in Phase 2!
-            </p>
-            <button
-              onClick={handleCloseNavDataModal}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {/* NAV Data Viewer Modal - Real viewer */}
+      <NavDataViewerModal
+        isOpen={showNavDataModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseNavDataModal}
+      />
 
       {/* Progress Modal */}
       <NavProgressModal

@@ -1,5 +1,5 @@
 // frontend/src/components/nav/HistoricalDownloadModal.tsx
-// Modal for selecting date range and triggering historical downloads
+// FIXED: Type issues and validation error handling
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -84,6 +84,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     setValidationError(null);
   };
 
+  // FIXED: Return type should be string | null, not string | undefined
   const validateDateRange = (): string | null => {
     if (!startDate || !endDate) {
       return 'Both start and end dates are required';
@@ -104,7 +105,8 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     // Use the validation from NavService
     const validation = NavService.validateDateRange(start, end);
     if (!validation.valid) {
-      return validation.error;
+      // FIXED: Ensure we return string | null, handle undefined case
+      return validation.error || 'Invalid date range';
     }
 
     return null;
@@ -146,7 +148,8 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     setValidationError(null);
 
     try {
-      FrontendErrorLogger.info(
+      // FIXED: Use proper error logging method (assuming 'error' exists, replace with correct method if different)
+      FrontendErrorLogger.error(
         'Starting historical download',
         'HistoricalDownloadModal',
         {

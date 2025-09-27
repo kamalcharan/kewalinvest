@@ -1,5 +1,5 @@
 // frontend/src/components/nav/EnhancedBookmarkCard.tsx
-// Complete enhanced bookmark card with all required features
+// FIXED: Removed invalid ':hover' from inline styles
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -87,26 +87,25 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   const statusIndicator = getStatusIndicator();
 
   return (
-    <div style={{
-      // 🔥 COMPACT DESIGN: Reduced height by ~50%
-      padding: '12px 16px', // Reduced from typical 20px
-      backgroundColor: colors.utility.primaryBackground,
-      border: `1px solid ${colors.utility.primaryText}10`,
-      borderRadius: '8px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      minHeight: '80px', // Compact height
-      transition: 'all 0.2s ease',
-      ':hover': {
-        borderColor: colors.brand.primary + '30'
-      }
-    }}>
+    <div 
+      className="enhanced-bookmark-card"
+      style={{
+        // FIXED: Removed invalid ':hover' pseudo-selector
+        padding: '12px 16px',
+        backgroundColor: colors.utility.primaryBackground,
+        border: `1px solid ${colors.utility.primaryText}10`,
+        borderRadius: '8px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        minHeight: '80px',
+        transition: 'all 0.2s ease'
+      }}>
       
       {/* Left Section: Scheme Info */}
       <div style={{ flex: 1, marginRight: '16px' }}>
         <div style={{
-          fontSize: '14px', // Slightly smaller
+          fontSize: '14px',
           fontWeight: '600',
           color: colors.utility.primaryText,
           marginBottom: '4px',
@@ -130,7 +129,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           </span>
         </div>
 
-        {/* 🔥 NAV DATA RANGE */}
+        {/* NAV DATA RANGE */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -158,7 +157,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           minWidth: '140px'
         }}>
           
-          {/* 🔥 DAILY DOWNLOAD TOGGLE */}
+          {/* DAILY DOWNLOAD TOGGLE */}
           <label style={{
             display: 'flex',
             alignItems: 'center',
@@ -211,7 +210,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
             display: 'flex',
             gap: '6px'
           }}>
-            {/* 🔥 VIEW NAV DATA BUTTON */}
+            {/* VIEW NAV DATA BUTTON */}
             <button
               onClick={() => onViewNavData?.(bookmark)}
               disabled={(bookmark.nav_records_count || 0) === 0}
@@ -233,7 +232,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
               📊 View Data
             </button>
 
-            {/* 🔥 HISTORICAL DOWNLOAD BUTTON */}
+            {/* HISTORICAL DOWNLOAD BUTTON */}
             <button
               onClick={() => onHistoricalDownload?.(bookmark)}
               disabled={bookmark.historical_download_completed}
@@ -266,6 +265,13 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           )}
         </div>
       )}
+
+      {/* CSS for hover effect */}
+      <style>{`
+        .enhanced-bookmark-card:hover {
+          border-color: ${colors.brand.primary}30 !important;
+        }
+      `}</style>
     </div>
   );
 };

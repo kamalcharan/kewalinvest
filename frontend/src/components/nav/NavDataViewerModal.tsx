@@ -1,9 +1,9 @@
 // frontend/src/components/nav/NavDataViewerModal.tsx
-// Modal to view paginated NAV data for specific bookmark
+// FIXED: Moved from pages to components directory and enhanced functionality
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useNavData } from '../../hooks/useNavData';
+import { useBookmarkNavData } from '../../hooks/useNavData';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark, NavData } from '../../services/nav.service';
@@ -21,28 +21,30 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  const { fetchNavData } = useNavData();
+  
+  // Use the enhanced hook for bookmark NAV data
+  const { 
+    navData, 
+    isLoading, 
+    error, 
+    fetchNavData, 
+    clearData, 
+    pagination 
+  } = useBookmarkNavData();
 
   // State
-  const [navData, setNavData] = useState<NavData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const pageSize = 20;
 
   // Load NAV data when modal opens
   useEffect(() => {
     if (isOpen && bookmark) {
       resetFilters();
-      loadNavData();
+      loadInitialData();
+    } else if (!isOpen) {
+      clearData();
     }
   }, [isOpen, bookmark]);
 
@@ -50,7 +52,6 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
     setCurrentPage(1);
     setStartDate('');
     setEndDate('');
-    setError(null);
     
     // Set default date range if bookmark has data
     if (bookmark?.earliest_nav_date && bookmark?.latest_nav_date) {
@@ -64,60 +65,59 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
     }
   };
 
-  const loadNavData = async (page: number = 1) => {
+  const loadInitialData = () => {
     if (!bookmark) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const params = {
-        scheme_id: bookmark.scheme_id,
-        page,
-        page_size: pageSize,
-        ...(startDate && { start_date: startDate }),
-        ...(endDate && { end_date: endDate })
-      };
-
-      const response = await fetchNavData(params);
+    
+    // Calculate default date range
+    let defaultStartDate = '';
+    let defaultEndDate = '';
+    
+    if (bookmark.earliest_nav_date && bookmark.latest_nav_date) {
+      const end = new Date(bookmark.latest_nav_date);
+      const start = new Date(end);
+      start.setMonth(start.getMonth() - 3);
       
-      if (response.success && response.data) {
-        setNavData(response.data.nav_data || []);
-        setTotalRecords(response.data.total || 0);
-        setTotalPages(response.data.total_pages || 0);
-        setCurrentPage(response.data.page || 1);
-      } else {
-        setError(response.error || 'Failed to load NAV data');
-        setNavData([]);
-      }
-    } catch (err: any) {
-      FrontendErrorLogger.error(
-        'Failed to load NAV data',
-        'NavDataViewerModal',
-        {
-          bookmarkId: bookmark.id,
-          schemeId: bookmark.scheme_id,
-          error: err.message
-        },
-        err.stack
-      );
-      setError(err.message || 'Failed to load NAV data');
-      setNavData([]);
-    } finally {
-      setIsLoading(false);
+      defaultEndDate = end.toISOString().split('T')[0];
+      defaultStartDate = start.toISOString().split('T')[0];
+      
+      setEndDate(defaultEndDate);
+      setStartDate(defaultStartDate);
     }
+
+    // Load data with default parameters
+    fetchNavData({
+      bookmark_id: bookmark.id,
+      page: 1,
+      page_size: pageSize,
+      ...(defaultStartDate && { start_date: defaultStartDate }),
+      ...(defaultEndDate && { end_date: defaultEndDate })
+    });
   };
 
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages && !isLoading) {
-      setCurrentPage(newPage);
-      loadNavData(newPage);
-    }
+    if (!bookmark || newPage < 1 || (pagination && newPage > pagination.totalPages)) return;
+    
+    setCurrentPage(newPage);
+    fetchNavData({
+      bookmark_id: bookmark.id,
+      page: newPage,
+      page_size: pageSize,
+      ...(startDate && { start_date: startDate }),
+      ...(endDate && { end_date: endDate })
+    });
   };
 
   const handleFilterChange = () => {
+    if (!bookmark) return;
+    
     setCurrentPage(1);
-    loadNavData(1);
+    fetchNavData({
+      bookmark_id: bookmark.id,
+      page: 1,
+      page_size: pageSize,
+      ...(startDate && { start_date: startDate }),
+      ...(endDate && { end_date: endDate })
+    });
   };
 
   const handleExportData = () => {
@@ -151,7 +151,26 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
       document.body.removeChild(link);
 
       toastService.success('NAV data exported successfully');
+      
+      FrontendErrorLogger.info(
+        'NAV data exported',
+        'NavDataViewerModal',
+        {
+          bookmarkId: bookmark?.id,
+          recordCount: navData.length,
+          exportFormat: 'CSV'
+        }
+      );
     } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Failed to export NAV data',
+        'NavDataViewerModal',
+        {
+          bookmarkId: bookmark?.id,
+          error: error.message
+        },
+        error.stack
+      );
       toastService.error('Failed to export data');
     }
   };
@@ -252,6 +271,49 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
           </div>
         </div>
 
+        {/* Bookmark Info Summary */}
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: colors.utility.secondaryBackground,
+          borderRadius: '8px',
+          marginBottom: '20px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '12px',
+          fontSize: '12px'
+        }}>
+          <div>
+            <strong style={{ color: colors.utility.primaryText }}>Total Records:</strong>
+            <div style={{ color: colors.brand.primary, fontWeight: '600' }}>
+              {bookmark.nav_records_count?.toLocaleString() || 0}
+            </div>
+          </div>
+          {bookmark.earliest_nav_date && (
+            <div>
+              <strong style={{ color: colors.utility.primaryText }}>First Record:</strong>
+              <div style={{ color: colors.utility.secondaryText }}>
+                {new Date(bookmark.earliest_nav_date).toLocaleDateString()}
+              </div>
+            </div>
+          )}
+          {bookmark.latest_nav_date && (
+            <div>
+              <strong style={{ color: colors.utility.primaryText }}>Latest Record:</strong>
+              <div style={{ color: colors.utility.secondaryText }}>
+                {new Date(bookmark.latest_nav_date).toLocaleDateString()}
+              </div>
+            </div>
+          )}
+          {bookmark.latest_nav_value && (
+            <div>
+              <strong style={{ color: colors.utility.primaryText }}>Current NAV:</strong>
+              <div style={{ color: colors.brand.primary, fontWeight: '600' }}>
+                ₹{bookmark.latest_nav_value.toFixed(4)}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Filters */}
         <div style={{
           display: 'flex',
@@ -334,7 +396,7 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
           <button
             onClick={() => {
               resetFilters();
-              loadNavData(1);
+              loadInitialData();
             }}
             disabled={isLoading}
             style={{
@@ -365,15 +427,15 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
             color: colors.utility.primaryText,
             fontWeight: '500'
           }}>
-            {totalRecords > 0 ? `${totalRecords.toLocaleString()} records found` : 'No records found'}
+            {pagination?.total ? `${pagination.total.toLocaleString()} records found` : 'No records found'}
           </div>
           
-          {totalPages > 1 && (
+          {pagination && pagination.totalPages > 1 && (
             <div style={{
               fontSize: '12px',
               color: colors.utility.secondaryText
             }}>
-              Page {currentPage} of {totalPages}
+              Page {pagination.page} of {pagination.totalPages}
             </div>
           )}
         </div>
@@ -528,7 +590,7 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {pagination && pagination.totalPages > 1 && (
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -540,18 +602,18 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
           }}>
             <button
               onClick={() => handlePageChange(1)}
-              disabled={currentPage === 1 || isLoading}
+              disabled={pagination.page === 1 || isLoading}
               style={{
                 padding: '6px 10px',
-                backgroundColor: (currentPage === 1 || isLoading) 
+                backgroundColor: (pagination.page === 1 || isLoading) 
                   ? colors.utility.secondaryBackground 
                   : colors.brand.primary,
-                color: (currentPage === 1 || isLoading) 
+                color: (pagination.page === 1 || isLoading) 
                   ? colors.utility.secondaryText 
                   : 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (currentPage === 1 || isLoading) ? 'not-allowed' : 'pointer',
+                cursor: (pagination.page === 1 || isLoading) ? 'not-allowed' : 'pointer',
                 fontSize: '12px'
               }}
             >
@@ -559,19 +621,19 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
             </button>
             
             <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1 || isLoading}
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={pagination.page === 1 || isLoading}
               style={{
                 padding: '6px 10px',
-                backgroundColor: (currentPage === 1 || isLoading) 
+                backgroundColor: (pagination.page === 1 || isLoading) 
                   ? colors.utility.secondaryBackground 
                   : colors.brand.primary,
-                color: (currentPage === 1 || isLoading) 
+                color: (pagination.page === 1 || isLoading) 
                   ? colors.utility.secondaryText 
                   : 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (currentPage === 1 || isLoading) ? 'not-allowed' : 'pointer',
+                cursor: (pagination.page === 1 || isLoading) ? 'not-allowed' : 'pointer',
                 fontSize: '12px'
               }}
             >
@@ -584,23 +646,23 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
               color: colors.utility.primaryText,
               fontWeight: '500'
             }}>
-              {currentPage} / {totalPages}
+              {pagination.page} / {pagination.totalPages}
             </span>
 
             <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages || isLoading}
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={pagination.page === pagination.totalPages || isLoading}
               style={{
                 padding: '6px 10px',
-                backgroundColor: (currentPage === totalPages || isLoading) 
+                backgroundColor: (pagination.page === pagination.totalPages || isLoading) 
                   ? colors.utility.secondaryBackground 
                   : colors.brand.primary,
-                color: (currentPage === totalPages || isLoading) 
+                color: (pagination.page === pagination.totalPages || isLoading) 
                   ? colors.utility.secondaryText 
                   : 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (currentPage === totalPages || isLoading) ? 'not-allowed' : 'pointer',
+                cursor: (pagination.page === pagination.totalPages || isLoading) ? 'not-allowed' : 'pointer',
                 fontSize: '12px'
               }}
             >
@@ -608,19 +670,19 @@ export const NavDataViewerModal: React.FC<NavDataViewerModalProps> = ({
             </button>
             
             <button
-              onClick={() => handlePageChange(totalPages)}
-              disabled={currentPage === totalPages || isLoading}
+              onClick={() => handlePageChange(pagination.totalPages)}
+              disabled={pagination.page === pagination.totalPages || isLoading}
               style={{
                 padding: '6px 10px',
-                backgroundColor: (currentPage === totalPages || isLoading) 
+                backgroundColor: (pagination.page === pagination.totalPages || isLoading) 
                   ? colors.utility.secondaryBackground 
                   : colors.brand.primary,
-                color: (currentPage === totalPages || isLoading) 
+                color: (pagination.page === pagination.totalPages || isLoading) 
                   ? colors.utility.secondaryText 
                   : 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (currentPage === totalPages || isLoading) ? 'not-allowed' : 'pointer',
+                cursor: (pagination.page === pagination.totalPages || isLoading) ? 'not-allowed' : 'pointer',
                 fontSize: '12px'
               }}
             >
