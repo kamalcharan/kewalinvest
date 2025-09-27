@@ -1,7 +1,7 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// FIXED: Enhanced NAV Dashboard with working NAV Data Viewer - COMPLETE FILE
+// MINIMAL FIX: Only remove the non-existent import and add basic debouncing
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavDashboard, useDownloads, useDownloadProgress } from '../../hooks/useNavData';
@@ -14,10 +14,28 @@ import { toastService } from '../../services/toast.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
 
+// MINIMAL FIX: Simple debounce function instead of importing from non-existent service
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 const NavDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  // Refs to prevent unnecessary re-renders
+  const isMountedRef = useRef(true);
+  const lastRefreshRef = useRef<number>(0);
+  const refreshCooldown = 5000; // 5 seconds between refreshes
 
   // Main dashboard data
   const {
@@ -46,8 +64,20 @@ const NavDashboardPage: React.FC = () => {
   const [showNavDataModal, setShowNavDataModal] = useState(false);
   const [currentDownloadJobId, setCurrentDownloadJobId] = useState<number | null>(null);
 
-  // Handle manual daily download
-  const handleTriggerDailyDownload = async () => {
+  // FIXED: Debounced refresh function to prevent excessive API calls
+  const debouncedRefresh = useCallback(
+    debounce(() => {
+      const now = Date.now();
+      if (now - lastRefreshRef.current > refreshCooldown && isMountedRef.current) {
+        lastRefreshRef.current = now;
+        refetchAll();
+      }
+    }, 1000),
+    [refetchAll]
+  );
+
+  // FIXED: Stable handler functions to prevent re-renders
+  const handleTriggerDailyDownload = useCallback(async () => {
     if (isTriggeringDownload) return;
 
     setIsTriggeringDownload(true);
@@ -59,7 +89,8 @@ const NavDashboardPage: React.FC = () => {
         toastService.info(result.message);
       } else {
         toastService.success('Daily download started successfully!');
-        refetchAll(); // Refresh all data
+        // Debounced refresh instead of immediate
+        debouncedRefresh();
       }
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -72,22 +103,27 @@ const NavDashboardPage: React.FC = () => {
     } finally {
       setIsTriggeringDownload(false);
     }
-  };
+  }, [isTriggeringDownload, triggerDailyDownload, debouncedRefresh]);
 
-  // Enhanced bookmark card event handlers
-  const handleToggleDaily = async (bookmarkId: number, enabled: boolean) => {
+  // FIXED: Stable toggle handler that doesn't trigger unnecessary refreshes
+  const handleToggleDaily = useCallback(async (bookmarkId: number, enabled: boolean) => {
     try {
       // The EnhancedBookmarkCard handles the API call internally
-      // Just refresh the data after change
-      refetchAll();
+      // Only refresh if we're not already loading
+      if (!isLoading) {
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            debouncedRefresh();
+          }
+        }, 1000); // Delay refresh to allow backend to update
+      }
     } catch (error: any) {
       console.error('Failed to toggle daily download:', error);
     }
-  };
+  }, [isLoading, debouncedRefresh]);
 
-  // Handle view NAV data - shows actual viewer
-  const handleViewNavData = (bookmark: SchemeBookmark) => {
-    // Check if bookmark has NAV data
+  // FIXED: Stable nav data viewer handler
+  const handleViewNavData = useCallback((bookmark: SchemeBookmark) => {
     if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
       toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
       return;
@@ -105,34 +141,33 @@ const NavDashboardPage: React.FC = () => {
         navRecordsCount: bookmark.nav_records_count
       }
     );
-  };
+  }, []);
 
-  const handleHistoricalDownload = (bookmark: SchemeBookmark) => {
+  const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
     setSelectedBookmark(bookmark);
     setShowHistoricalModal(true);
-  };
+  }, []);
 
-  const handleHistoricalDownloadStarted = (jobId: number) => {
+  const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
     setCurrentDownloadJobId(jobId);
     setShowProgressModal(true);
     startPolling(jobId, (progressData) => {
       setCurrentProgress(progressData);
     });
-  };
+  }, [startPolling]);
 
-  const handleCloseHistoricalModal = () => {
+  const handleCloseHistoricalModal = useCallback(() => {
     setShowHistoricalModal(false);
     setSelectedBookmark(null);
-  };
+  }, []);
 
-  // Handle close NAV data modal
-  const handleCloseNavDataModal = () => {
+  const handleCloseNavDataModal = useCallback(() => {
     setShowNavDataModal(false);
     setSelectedBookmark(null);
-  };
+  }, []);
 
-  // Navigation handlers
-  const handleNavigateToBookmarks = () => {
+  // FIXED: Stable navigation handlers
+  const handleNavigateToBookmarks = useCallback(() => {
     try {
       navigate('/nav/bookmarks');
     } catch (error: any) {
@@ -143,9 +178,9 @@ const NavDashboardPage: React.FC = () => {
         error.stack
       );
     }
-  };
+  }, [navigate]);
 
-  const handleNavigateToSearch = () => {
+  const handleNavigateToSearch = useCallback(() => {
     try {
       navigate('/nav/search');
     } catch (error: any) {
@@ -156,9 +191,9 @@ const NavDashboardPage: React.FC = () => {
         error.stack
       );
     }
-  };
+  }, [navigate]);
 
-  const handleNavigateToScheduler = () => {
+  const handleNavigateToScheduler = useCallback(() => {
     try {
       navigate('/nav/scheduler');
     } catch (error: any) {
@@ -169,9 +204,24 @@ const NavDashboardPage: React.FC = () => {
         error.stack
       );
     }
-  };
+  }, [navigate]);
 
-  if (error) {
+  // FIXED: Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      stopPolling();
+    };
+  }, [stopPolling]);
+
+  // FIXED: Rate limit error handling
+  useEffect(() => {
+    if (error && error.includes('Rate limit')) {
+      toastService.warning('Rate limit reached. Please wait before refreshing.');
+    }
+  }, [error]);
+
+  if (error && !error.includes('Rate limit')) {
     return (
       <div style={{ padding: '24px' }}>
         <div style={{
@@ -183,7 +233,14 @@ const NavDashboardPage: React.FC = () => {
         }}>
           <p style={{ marginBottom: '16px' }}>Failed to load NAV dashboard</p>
           <button
-            onClick={refetchAll}
+            onClick={() => {
+              if (Date.now() - lastRefreshRef.current > refreshCooldown) {
+                refetchAll();
+                lastRefreshRef.current = Date.now();
+              } else {
+                toastService.info('Please wait before retrying');
+              }
+            }}
             style={{
               padding: '8px 16px',
               backgroundColor: colors.semantic.error,
@@ -311,6 +368,28 @@ const NavDashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Rate Limit Warning */}
+        {error && error.includes('Rate limit') && (
+          <div style={{
+            backgroundColor: colors.semantic.warning + '10',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '24px',
+            border: `1px solid ${colors.semantic.warning}30`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <div>
+              <strong style={{ color: colors.semantic.warning }}>Rate Limit Reached</strong>
+              <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                Too many requests. Please wait before refreshing the page.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Scheduler Status Card */}
         {schedulerConfig && (

@@ -1,5 +1,5 @@
 // frontend/src/components/nav/EnhancedBookmarkCard.tsx
-// FIXED: Removed invalid ':hover' from inline styles
+// QUICK FIX: Handle cases where latest_nav_value might be a string
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -27,6 +27,16 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   const { updateBookmark } = useBookmarks();
   
   const [isToggling, setIsToggling] = useState(false);
+
+  // FIXED: Safe number conversion for NAV value
+  const formatNavValue = (value: any): string => {
+    if (value === null || value === undefined) return 'N/A';
+    
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return 'N/A';
+    
+    return numValue.toFixed(4);
+  };
 
   // Handle daily download toggle
   const handleToggleDaily = async (enabled: boolean) => {
@@ -90,7 +100,6 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
     <div 
       className="enhanced-bookmark-card"
       style={{
-        // FIXED: Removed invalid ':hover' pseudo-selector
         padding: '12px 16px',
         backgroundColor: colors.utility.primaryBackground,
         border: `1px solid ${colors.utility.primaryText}10`,
@@ -141,7 +150,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           <span><strong>Records:</strong> {bookmark.nav_records_count || 0}</span>
           {bookmark.latest_nav_value && (
             <span style={{ color: colors.brand.primary, fontWeight: '500' }}>
-              <strong>Latest:</strong> ₹{bookmark.latest_nav_value.toFixed(4)}
+              <strong>Latest:</strong> ₹{formatNavValue(bookmark.latest_nav_value)}
             </span>
           )}
         </div>
