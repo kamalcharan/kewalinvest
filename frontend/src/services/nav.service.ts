@@ -1,5 +1,5 @@
 // frontend/src/services/nav.service.ts
-// UPDATED: Added sequential download types and launch_date support
+// UPDATED: Removed sequential download complexity - simplified to scheme-based downloads using MFAPI.in
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -63,7 +63,7 @@ export interface SchemeBookmark {
   latest_nav_date?: string;
   latest_nav_value?: number;
   earliest_nav_date?: string;
-  launch_date?: string; // ADDED: Launch date support
+  launch_date?: string;
   created_at: string;
   updated_at: string;
   last_download_status?: 'success' | 'failed' | 'pending' | null;
@@ -157,9 +157,6 @@ export interface DownloadJob {
   scheduled_date: string;
   start_date?: string;
   end_date?: string;
-  parent_job_id?: number; // ADDED: For sequential downloads
-  chunk_number?: number; // ADDED: For sequential downloads
-  total_chunks?: number; // ADDED: For sequential downloads
   result_summary?: {
     total_schemes: number;
     successful_downloads: number;
@@ -181,63 +178,14 @@ export interface DownloadJobParams {
   date_to?: string;
 }
 
-// ADDED: Sequential download types
-export interface DownloadChunk {
-  chunk_number: number;
-  start_date: Date;
-  end_date: Date;
-  day_count: number;
-}
-
-export interface SequentialDownloadRequest {
-  scheme_ids: number[];
-  start_date: Date;
-  end_date: Date;
-}
-
-export interface SequentialDownloadResponse {
-  parent_job_id: number;
-  total_chunks: number;
-  chunks: DownloadChunk[];
-  estimated_time_ms: number;
-  message: string;
-}
-
-export interface SequentialJobProgress {
-  parent_job_id: number;
-  total_chunks: number;
-  completed_chunks: number;
-  overall_status: 'pending' | 'running' | 'completed' | 'failed';
-  progress_percentage: number;
-  start_time: Date;
-  estimated_completion?: Date;
-  current_chunk?: {
-    chunk_number: number;
-    start_date: Date;
-    end_date: Date;
-    status: 'pending' | 'running' | 'completed' | 'failed';
-  };
-  errors: Array<{
-    chunk_number: number;
-    error: string;
-    date_range: string;
-  }>;
-}
-
-export interface DateRangeValidationResult {
-  valid: boolean;
-  error?: string;
-  day_count?: number;
-  chunks_required?: number;
-}
-
-// UPDATED: Historical download request interface
+// SIMPLIFIED: Historical download request - backend handles MFAPI.in single-call approach
 export interface HistoricalDownloadRequest {
   scheme_ids: number[];
   start_date: string;
   end_date: string;
 }
 
+// SIMPLIFIED: Download progress - removed all chunk-related fields
 export interface DownloadProgress {
   jobId: number;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -254,15 +202,6 @@ export interface DownloadProgress {
   }>;
   startTime: string;
   lastUpdate: string;
-  // ADDED: Sequential download progress fields
-  parentJobId?: number;
-  totalChunks?: number;
-  completedChunks?: number;
-  currentChunk?: {
-    chunkNumber: number;
-    startDate: Date;
-    endDate: Date;
-  };
 }
 
 export interface NavStatistics {
@@ -530,7 +469,7 @@ export class NavService {
     bookmarkIds: number[], 
     startDate: string, 
     endDate: string
-  ): Promise<ApiResponse<SequentialDownloadResponse>> {
+  ): Promise<ApiResponse<{ job_id: number; message: string; total_schemes: number; estimated_time_ms: number }>> {
     const bookmarksResponse = await this.getBookmarks({ page: 1, page_size: 1000 });
     
     if (!bookmarksResponse.success || !bookmarksResponse.data) {
@@ -621,22 +560,36 @@ export class NavService {
     return response as ApiResponse<{ jobId: number; message: string; alreadyExists?: boolean }>;
   }
 
-  // UPDATED: Historical download now returns sequential download response
-  async triggerHistoricalDownload(request: HistoricalDownloadRequest): Promise<ApiResponse<SequentialDownloadResponse>> {
+  // SIMPLIFIED: Historical download - backend returns simple response with job_id
+  async triggerHistoricalDownload(
+    request: HistoricalDownloadRequest
+  ): Promise<ApiResponse<{ job_id: number; message: string; total_schemes: number; estimated_time_ms: number }>> {
     const url = NAV_URLS.triggerHistoricalDownload(this.getEnvironment());
     
-    const response = await this.handleRequest<SequentialDownloadResponse>(url, {
+    const response = await this.handleRequest<{ 
+      job_id: number; 
+      message: string;
+      total_schemes: number;
+      estimated_time_ms: number;
+    }>(url, {
       method: 'POST',
       body: JSON.stringify(request)
     });
     
     if (response.success) {
-      toastService.success(response.data?.message || 'Historical download started');
+      // Show success toast with scheme count
+      const schemeCount = response.data?.total_schemes || request.scheme_ids.length;
+      toastService.success(`Historical download started for ${schemeCount} scheme${schemeCount > 1 ? 's' : ''}`);
     } else {
       toastService.error(response.error || 'Failed to trigger historical download');
     }
     
-    return response as ApiResponse<SequentialDownloadResponse>;
+    return response as ApiResponse<{ 
+      job_id: number; 
+      message: string;
+      total_schemes: number;
+      estimated_time_ms: number;
+    }>;
   }
 
   async getDownloadProgress(jobId: number): Promise<ApiResponse<DownloadProgress>> {
@@ -650,19 +603,6 @@ export class NavService {
     console.log('📊 Response:', response);
     
     return response as ApiResponse<DownloadProgress>;
-  }
-
-  // ADDED: Get sequential download progress
-  async getSequentialProgress(parentJobId: number): Promise<ApiResponse<SequentialJobProgress>> {
-    console.log('📊 getSequentialProgress called with parentJobId:', parentJobId);
-    
-    const url = NAV_URLS.getSequentialProgress(parentJobId, this.getEnvironment());
-    console.log('📊 Generated URL:', url);
-    
-    const response = await this.handleRequest<SequentialJobProgress>(url);
-    console.log('📊 Sequential progress response:', response);
-    
-    return response as ApiResponse<SequentialJobProgress>;
   }
 
   async getDownloadJobs(params?: DownloadJobParams): Promise<PaginatedResponse<{ jobs: DownloadJob[] }>> {
@@ -851,7 +791,7 @@ export class NavService {
     return response as ApiResponse<{ active_schedulers: any[]; total_active: number }>;
   }
 
-  // ==================== UTILITY METHODS ====================
+  // ==================== SIMPLIFIED UTILITY METHODS ====================
 
   static formatEstimatedTime(ms: number): string {
     if (ms < 60000) {
@@ -863,8 +803,8 @@ export class NavService {
     }
   }
 
-  // UPDATED: Validate date range with 90-day limit and chunking info
-  static validateDateRange(startDate: Date, endDate: Date): DateRangeValidationResult {
+  // SIMPLIFIED: Validate date range without chunking calculations
+  static validateDateRange(startDate: Date, endDate: Date): { valid: boolean; error?: string; day_count?: number } {
     if (startDate >= endDate) {
       return { valid: false, error: 'Start date must be before end date' };
     }
@@ -875,54 +815,12 @@ export class NavService {
     }
 
     const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const chunksRequired = Math.ceil(dayCount / 90);
-
+    
+    // No chunking needed anymore - MFAPI.in returns full history
     return {
       valid: true,
-      day_count: dayCount,
-      chunks_required: chunksRequired
+      day_count: dayCount
     };
-  }
-
-  // ADDED: Calculate required chunks for a date range
-  static calculateChunks(startDate: Date, endDate: Date): DownloadChunk[] {
-    const chunks: DownloadChunk[] = [];
-    let currentStart = new Date(startDate);
-    let chunkNumber = 1;
-
-    while (currentStart < endDate) {
-      let currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentEnd.getDate() + 89); // 90-day chunk
-
-      if (currentEnd > endDate) {
-        currentEnd = new Date(endDate);
-      }
-
-      const dayCount = Math.ceil((currentEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-      chunks.push({
-        chunk_number: chunkNumber,
-        start_date: new Date(currentStart),
-        end_date: new Date(currentEnd),
-        day_count: dayCount
-      });
-
-      // Move to next chunk
-      currentStart = new Date(currentEnd);
-      currentStart.setDate(currentStart.getDate() + 1);
-      chunkNumber++;
-    }
-
-    return chunks;
-  }
-
-  // ADDED: Estimate download time for chunks
-  static estimateDownloadTime(schemeCount: number, totalDays: number): number {
-    // Base time: ~2 seconds per scheme per chunk
-    const baseTimePerScheme = 2000; // 2 seconds
-    const chunksRequired = Math.ceil(totalDays / 90);
-    
-    return schemeCount * baseTimePerScheme * chunksRequired;
   }
 
   static generateCronExpression(scheduleType: string, downloadTime: string): string {
