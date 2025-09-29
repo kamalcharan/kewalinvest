@@ -1,32 +1,28 @@
 // backend/src/types/nav.types.ts
-// File 3/14: TypeScript interfaces for NAV tracking system
-// UPDATED: Add enhanced bookmark fields for download status and date ranges
-// UPDATED: Add sequential download support
+// UPDATED: Removed sequential download types (chunking no longer needed with MFAPI.in)
 
 export interface SchemeBookmark {
   id: number;
   tenant_id: number;
   user_id: number;
   scheme_id: number;
-  scheme_code: string;                    // Denormalized from t_scheme_details
-  scheme_name: string;                    // Denormalized from t_scheme_details  
-  amc_name: string;                       // Denormalized from t_scheme_details (no longer optional)
+  scheme_code: string;
+  scheme_name: string;
+  amc_name: string;
   is_live: boolean;
   is_active: boolean;
   daily_download_enabled: boolean;
-  download_time: string;                  // HH:MM format (e.g., "22:00")
+  download_time: string;
   historical_download_completed: boolean;
   created_at: Date;
   updated_at: Date;
   
-  // ADDED: Enhanced fields for UI display
   nav_records_count?: number;
   latest_nav_date?: Date;
   latest_nav_value?: number;
-  earliest_nav_date?: Date;               // NEW: First NAV record date
-  launch_date?: Date;                     // NEW: Fund launch date
+  earliest_nav_date?: Date;
+  launch_date?: Date;
   
-  // ADDED: Download status tracking
   last_download_status?: 'success' | 'failed' | 'pending' | null;
   last_download_error?: string;
   last_download_attempt?: Date;
@@ -35,7 +31,7 @@ export interface SchemeBookmark {
 export interface CreateSchemeBookmarkRequest {
   scheme_id: number;
   daily_download_enabled?: boolean;
-  download_time?: string;                 // Defaults to "22:00"
+  download_time?: string;
 }
 
 export interface UpdateSchemeBookmarkRequest {
@@ -47,7 +43,7 @@ export interface UpdateSchemeBookmarkRequest {
 export interface SchemeBookmarkSearchParams {
   page?: number;
   page_size?: number;
-  search?: string;                        // Search in scheme_name, scheme_code, amc_name
+  search?: string;
   daily_download_only?: boolean;
   amc_name?: string;
 }
@@ -63,15 +59,14 @@ export interface SchemeBookmarkListResponse {
 }
 
 export interface SchemeBookmarkWithStats extends SchemeBookmark {
-  nav_records_count: number;              // Total NAV records available
-  latest_nav_date: Date | null;           // Most recent NAV date
-  latest_nav_value: number | null;        // Most recent NAV value
-  earliest_nav_date: Date | null;         // NEW: Added to stats interface
-  launch_date: Date | null;               // NEW: Fund launch date in stats
-  last_download_status: 'success' | 'failed' | 'pending' | null; // NEW
+  nav_records_count: number;
+  latest_nav_date: Date | null;
+  latest_nav_value: number | null;
+  earliest_nav_date: Date | null;
+  launch_date: Date | null;
+  last_download_status: 'success' | 'failed' | 'pending' | null;
 }
 
-// ADDED: New interface for bookmark-specific NAV data requests
 export interface BookmarkNavDataParams {
   bookmark_id: number;
   start_date?: string;
@@ -80,7 +75,6 @@ export interface BookmarkNavDataParams {
   page_size?: number;
 }
 
-// ADDED: Bookmark download status update interface
 export interface UpdateBookmarkDownloadStatus {
   last_download_status: 'success' | 'failed' | 'pending';
   last_download_error?: string;
@@ -93,16 +87,15 @@ export interface NavData {
   id: number;
   tenant_id: number;
   scheme_id: number;
-  scheme_code: string;                    // Denormalized for performance
+  scheme_code: string;
   nav_date: Date;
-  nav_value: number;                      // Decimal(15,4)
-  repurchase_price?: number;              // Decimal(15,4)
-  sale_price?: number;                    // Decimal(15,4)
+  nav_value: number;
+  repurchase_price?: number;
+  sale_price?: number;
   is_live: boolean;
   data_source: 'daily' | 'historical' | 'weekly';
   created_at: Date;
   updated_at: Date;
-  // Joined fields from scheme_details (when needed)
   scheme_name?: string;
   amc_name?: string;
 }
@@ -144,20 +137,15 @@ export interface NavDownloadJob {
   scheme_ids: number[];
   scheduled_date: Date;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  start_date?: Date;                      // For historical downloads
-  end_date?: Date;                        // For historical downloads
-  n8n_execution_id?: string;              // n8n workflow execution reference
+  start_date?: Date;
+  end_date?: Date;
+  n8n_execution_id?: string;
   result_summary?: NavDownloadJobResult;
   error_details?: string;
   is_live: boolean;
   created_at: Date;
   updated_at: Date;
   created_by?: number;
-  
-  // NEW: Sequential download fields
-  parent_job_id?: number;
-  chunk_number?: number;
-  total_chunks?: number;
 }
 
 export interface NavDownloadJobResult {
@@ -178,14 +166,9 @@ export interface NavDownloadJobResult {
 export interface CreateNavDownloadJobRequest {
   job_type: 'daily' | 'historical' | 'weekly';
   scheme_ids: number[];
-  scheduled_date?: Date;                  // Defaults to now for immediate execution
-  start_date?: Date;                      // Required for historical downloads
-  end_date?: Date;                        // Required for historical downloads
-  
-  // NEW: Sequential download fields
-  parent_job_id?: number;
-  chunk_number?: number;
-  total_chunks?: number;
+  scheduled_date?: Date;
+  start_date?: Date;
+  end_date?: Date;
 }
 
 export interface NavDownloadJobSearchParams {
@@ -215,57 +198,6 @@ export interface NavDownloadJobWithSchemes extends NavDownloadJob {
   }>;
 }
 
-// ==================== SEQUENTIAL DOWNLOAD TYPES (NEW) ====================
-
-export interface DownloadChunk {
-  chunk_number: number;
-  start_date: Date;
-  end_date: Date;
-  day_count: number;
-}
-
-export interface SequentialDownloadRequest {
-  scheme_ids: number[];
-  start_date: Date;
-  end_date: Date;
-}
-
-export interface SequentialDownloadResponse {
-  parent_job_id: number;
-  total_chunks: number;
-  chunks: DownloadChunk[];
-  estimated_time_ms: number;
-  message: string;
-}
-
-export interface SequentialJobProgress {
-  parent_job_id: number;
-  total_chunks: number;
-  completed_chunks: number;
-  current_chunk?: {
-    chunk_number: number;
-    start_date: Date;
-    end_date: Date;
-    status: 'pending' | 'running' | 'completed' | 'failed';
-  };
-  overall_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  progress_percentage: number;
-  start_time: Date;
-  estimated_completion?: Date;
-  errors: Array<{
-    chunk_number: number;
-    error: string;
-    date_range: string;
-  }>;
-}
-
-export interface DateRangeValidationResult {
-  valid: boolean;
-  error?: string;
-  day_count?: number;
-  chunks_required?: number;
-}
-
 // ==================== AMFI DATA SOURCE TYPES ====================
 
 export interface AmfiNavRecord {
@@ -277,22 +209,13 @@ export interface AmfiNavRecord {
   'Date': string;
 }
 
-export interface AmfiHistoricalNavRecord {
-  'Scheme Code': string;
-  'Scheme Name': string;
-  'Net Asset Value': string;
-  'Repurchase Price': string;
-  'Sale Price': string;
-  'Date': string;
-}
-
 export interface ParsedNavRecord {
   scheme_code: string;
   scheme_name: string;
   nav_value: number;
   repurchase_price?: number;
   sale_price?: number;
-  nav_date: Date;
+  nav_date: Date | null;
   isin_div_payout_growth?: string;
   isin_div_reinvestment?: string;
 }
@@ -305,10 +228,10 @@ export interface N8nWebhookPayload {
   is_live: boolean;
   job_type: 'daily' | 'historical' | 'weekly';
   scheme_ids: number[];
-  start_date?: string;                    // ISO date string
-  end_date?: string;                      // ISO date string
-  api_base_url: string;                   // Backend API URL for callbacks
-  auth_token?: string;                    // For authenticated callbacks
+  start_date?: string;
+  end_date?: string;
+  api_base_url: string;
+  auth_token?: string;
 }
 
 export interface N8nCallbackPayload {
@@ -359,7 +282,6 @@ export interface NavValidationError extends NavError {
   value: any;
 }
 
-// Common error codes
 export const NAV_ERROR_CODES = {
   SCHEME_NOT_FOUND: 'SCHEME_NOT_FOUND',
   SCHEME_ALREADY_BOOKMARKED: 'SCHEME_ALREADY_BOOKMARKED',
@@ -371,12 +293,7 @@ export const NAV_ERROR_CODES = {
   N8N_EXECUTION_FAILED: 'N8N_EXECUTION_FAILED',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   INVALID_NAV_FORMAT: 'INVALID_NAV_FORMAT',
-  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND',
-  // NEW: Sequential download error codes
-  DATE_RANGE_EXCEEDS_LIMIT: 'DATE_RANGE_EXCEEDS_LIMIT',
-  SEQUENTIAL_DOWNLOAD_IN_PROGRESS: 'SEQUENTIAL_DOWNLOAD_IN_PROGRESS',
-  CHUNK_CREATION_FAILED: 'CHUNK_CREATION_FAILED',
-  PARENT_JOB_NOT_FOUND: 'PARENT_JOB_NOT_FOUND'
+  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND'
 } as const;
 
 // ==================== FRONTEND-SPECIFIC TYPES ====================
@@ -412,7 +329,6 @@ export type NavDataSource = 'daily' | 'historical' | 'weekly';
 export type DownloadJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type DownloadJobType = 'daily' | 'historical' | 'weekly';
 
-// Environment-aware request interface
 export interface AuthenticatedNavRequest {
   user?: {
     user_id: number;
@@ -421,7 +337,6 @@ export interface AuthenticatedNavRequest {
   environment?: 'live' | 'test';
 }
 
-// Success response wrapper
 export interface NavApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -429,7 +344,6 @@ export interface NavApiResponse<T = any> {
   message?: string;
 }
 
-// Pagination helper
 export interface PaginationParams {
   page: number;
   page_size: number;

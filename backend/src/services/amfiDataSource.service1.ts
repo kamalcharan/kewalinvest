@@ -1,6 +1,6 @@
 // backend/src/services/amfiDataSource.service.ts
-// UPDATED: Added MFAPI.in integration for historical NAV data
-// REMOVED: Broken AMFI historical download endpoint
+// File 5/14: AMFI API integration with idempotency and race condition handling
+// UPDATED: Fixed historical endpoint with mf=62 parameter and 90-day limit
 
 import { SimpleLogger } from './simpleLogger.service';
 import { ParsedNavRecord } from '../types/nav.types';
@@ -16,307 +16,120 @@ export interface AmfiApiResponse {
 }
 
 export interface AmfiDownloadOptions {
-  requestId?: string;
-  retryAttempts?: number;
-  retryDelay?: number;
-  rateLimitDelay?: number;
-  timeout?: number;
-  validateData?: boolean;
-}
-
-// NEW: MFAPI.in specific response interface
-export interface MfapiResponse {
-  meta: {
-    fund_house: string;
-    scheme_name: string;
-    scheme_code: number;
-  };
-  data: Array<{
-    date: string;
-    nav: string;
-  }>;
-  status: string;
+  requestId?: string;              // For idempotency tracking
+  retryAttempts?: number;          // Default: 3
+  retryDelay?: number;             // Default: 1000ms
+  rateLimitDelay?: number;         // Default: 1000ms (1 req/sec)
+  timeout?: number;                // Default: 30000ms
+  validateData?: boolean;          // Default: true
 }
 
 export class AmfiDataSourceService {
   private readonly DAILY_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt';
-  private readonly MFAPI_BASE_URL = 'https://api.mfapi.in/mf';
+  private readonly HISTORICAL_BASE_URL = 'http://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx';
   
   private readonly DEFAULT_RETRY_ATTEMPTS = 3;
   private readonly DEFAULT_RETRY_DELAY = 1000;
-  private readonly DEFAULT_RATE_LIMIT_DELAY = 500; // 500ms for MFAPI
+  private readonly DEFAULT_RATE_LIMIT_DELAY = 1000; // 1 request per second
   private readonly DEFAULT_TIMEOUT = 30000;
   
+  // In-memory cache for request deduplication (prevent concurrent identical requests)
   private requestCache = new Map<string, Promise<AmfiApiResponse>>();
   private lastRequestTime = 0;
 
   constructor() {}
 
   /**
-   * Download daily NAV data for all schemes (UNCHANGED)
+   * Download daily NAV data for all schemes
+   * Idempotent: Same requestId returns cached result
    */
   async downloadDailyNavData(options: AmfiDownloadOptions = {}): Promise<AmfiApiResponse> {
     const requestId = options.requestId || `daily_${new Date().toISOString().split('T')[0]}`;
     
     try {
+      // Check for concurrent requests with same ID (prevents race conditions)
       if (this.requestCache.has(requestId)) {
-        SimpleLogger.info('AmfiDataSource', 'Daily NAV request already in progress, returning cached promise', 'downloadDailyNavData', { requestId });
+        SimpleLogger.error('AmfiDataSource', 'Daily NAV request already in progress, returning cached promise', 'downloadDailyNavData', { requestId });
         return await this.requestCache.get(requestId)!;
       }
 
+      // Create and cache the request promise
       const requestPromise = this.executeDailyDownload(requestId, options);
       this.requestCache.set(requestId, requestPromise);
 
       const result = await requestPromise;
-      setTimeout(() => this.requestCache.delete(requestId), 60000);
+
+      // Clean up cache after completion
+      setTimeout(() => this.requestCache.delete(requestId), 60000); // Cache for 1 minute
 
       return result;
+
     } catch (error: any) {
+      // Clean up cache on error
       this.requestCache.delete(requestId);
+      
       SimpleLogger.error('AmfiDataSource', 'Daily NAV download failed', 'downloadDailyNavData', {
         requestId, error: error.message
       }, undefined, undefined, error.stack);
+      
       throw error;
     }
   }
 
   /**
-   * NEW: Download historical NAV data from MFAPI.in
-   * Provides complete history for a single scheme in one API call
+   * Download historical NAV data for date range
+   * Idempotent: Same date range returns same data
    */
-  async downloadFromMFAPI(
-    schemeCode: string, 
-    startDate?: Date, 
-    endDate?: Date,
+  async downloadHistoricalNavData(
+    startDate: Date, 
+    endDate: Date, 
     options: AmfiDownloadOptions = {}
   ): Promise<AmfiApiResponse> {
-    const startTime = Date.now();
-    const requestId = options.requestId || `mfapi_${schemeCode}_${Date.now()}`;
-
+    const startDateStr = this.formatDate(startDate);
+    const endDateStr = this.formatDate(endDate);
+    const requestId = options.requestId || `historical_${startDateStr}_${endDateStr}`;
+    
     try {
-      // Validate scheme code
-      if (!schemeCode || schemeCode.trim() === '') {
-        throw new Error('Valid scheme code is required');
+      // Validate date range
+      if (startDate > endDate) {
+        throw new Error('Start date cannot be after end date');
       }
 
-      const trimmedSchemeCode = schemeCode.trim();
-      const url = `${this.MFAPI_BASE_URL}/${trimmedSchemeCode}`;
-
-      SimpleLogger.info('AmfiDataSource', 'Starting MFAPI download', 'downloadFromMFAPI', {
-        requestId, schemeCode: trimmedSchemeCode, url
-      });
-
-      // Rate limiting: enforce 500ms minimum between requests
-      const timeSinceLastRequest = Date.now() - this.lastRequestTime;
-      if (timeSinceLastRequest < this.DEFAULT_RATE_LIMIT_DELAY) {
-        const waitTime = this.DEFAULT_RATE_LIMIT_DELAY - timeSinceLastRequest;
-        await this.sleep(waitTime);
+      const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 90) { // UPDATED: Changed from 183 to 90 days (AMFI restriction)
+        throw new Error('Historical download limited to 90 days per request (AMFI restriction)');
       }
 
-      // Make request with retry logic
-      const retryAttempts = options.retryAttempts || this.DEFAULT_RETRY_ATTEMPTS;
-      const timeout = options.timeout || this.DEFAULT_TIMEOUT;
-      let lastError: Error | null = null;
-
-      for (let attempt = 1; attempt <= retryAttempts; attempt++) {
-        try {
-          this.lastRequestTime = Date.now();
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              'Accept': 'application/json'
-            },
-            signal: controller.signal
-          });
-
-          clearTimeout(timeoutId);
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          const mfapiData = await response.json() as MfapiResponse;
-
-          // Validate response
-          if (!mfapiData.data || mfapiData.data.length === 0) {
-            throw new Error('No NAV data returned from MFAPI.in');
-          }
-
-          // Convert MFAPI format to internal format
-          const parsedData = this.convertMfapiToInternal(mfapiData);
-
-          // Apply date range filtering if provided
-          let filteredData = parsedData;
-          if (startDate || endDate) {
-            filteredData = parsedData.filter(record => {
-              if (!record.nav_date) return false;
-              if (startDate && record.nav_date < startDate) return false;
-              if (endDate && record.nav_date > endDate) return false;
-              return true;
-            });
-
-            if (filteredData.length === 0) {
-              SimpleLogger.warn('AmfiDataSource', 'No records found in specified date range', 'downloadFromMFAPI', {
-                requestId, schemeCode: trimmedSchemeCode, startDate, endDate, totalRecords: parsedData.length
-              });
-            }
-          }
-
-          const processingTime = Date.now() - startTime;
-
-          SimpleLogger.info('AmfiDataSource', 'MFAPI download completed successfully', 'downloadFromMFAPI', {
-            requestId, schemeCode: trimmedSchemeCode, totalRecords: filteredData.length, processingTime
-          });
-
-          return {
-            success: true,
-            data: filteredData,
-            source: 'historical',
-            requestId,
-            totalRecords: filteredData.length,
-            processingTime
-          };
-
-        } catch (fetchError: any) {
-          lastError = fetchError;
-          
-          SimpleLogger.error('AmfiDataSource', `MFAPI request attempt ${attempt} failed`, 'downloadFromMFAPI', {
-            requestId, schemeCode: trimmedSchemeCode, attempt, error: fetchError.message
-          });
-
-          if (attempt < retryAttempts) {
-            const delay = this.DEFAULT_RETRY_DELAY * Math.pow(2, attempt - 1);
-            SimpleLogger.info('AmfiDataSource', `Retrying MFAPI request in ${delay}ms`, 'downloadFromMFAPI', {
-              requestId, attempt, delay
-            });
-            await this.sleep(delay);
-          }
-        }
+      // Check for concurrent requests
+      if (this.requestCache.has(requestId)) {
+        SimpleLogger.error('AmfiDataSource', 'Historical NAV request already in progress', 'downloadHistoricalNavData', { requestId, startDate, endDate });
+        return await this.requestCache.get(requestId)!;
       }
 
-      throw lastError || new Error('All retry attempts failed');
+      // Create and cache the request promise
+      const requestPromise = this.executeHistoricalDownload(startDate, endDate, requestId, options);
+      this.requestCache.set(requestId, requestPromise);
+
+      const result = await requestPromise;
+
+      // Clean up cache
+      setTimeout(() => this.requestCache.delete(requestId), 300000); // Cache for 5 minutes
+
+      return result;
 
     } catch (error: any) {
-      const processingTime = Date.now() - startTime;
+      this.requestCache.delete(requestId);
       
-      SimpleLogger.error('AmfiDataSource', 'MFAPI download failed', 'downloadFromMFAPI', {
-        requestId, schemeCode, startDate, endDate, error: error.message, processingTime
+      SimpleLogger.error('AmfiDataSource', 'Historical NAV download failed', 'downloadHistoricalNavData', {
+        requestId, startDate, endDate, error: error.message
       }, undefined, undefined, error.stack);
       
-      return {
-        success: false,
-        error: error.message || 'MFAPI download failed',
-        source: 'historical',
-        requestId,
-        totalRecords: 0,
-        processingTime
-      };
+      throw error;
     }
   }
 
   /**
-   * NEW: Convert MFAPI.in response to internal ParsedNavRecord format
-   */
-  private convertMfapiToInternal(mfapiResponse: MfapiResponse): ParsedNavRecord[] {
-    try {
-      if (!mfapiResponse.data || mfapiResponse.data.length === 0) {
-        return [];
-      }
-
-      const schemeCode = String(mfapiResponse.meta.scheme_code);
-      const schemeName = mfapiResponse.meta.scheme_name;
-
-      const parsedRecords: ParsedNavRecord[] = [];
-
-      for (const entry of mfapiResponse.data) {
-        try {
-          const navDate = this.parseMfapiDate(entry.date);
-          const navValue = parseFloat(entry.nav);
-
-          if (!navDate || isNaN(navValue) || navValue <= 0) {
-            continue;
-          }
-
-          const record: ParsedNavRecord = {
-            scheme_code: schemeCode,
-            scheme_name: schemeName,
-            nav_value: navValue,
-            nav_date: navDate,
-            repurchase_price: undefined,
-            sale_price: undefined,
-            isin_div_payout_growth: undefined,
-            isin_div_reinvestment: undefined
-          };
-
-          parsedRecords.push(record);
-        } catch (entryError: any) {
-          SimpleLogger.error('AmfiDataSource', 'Failed to parse MFAPI entry', 'convertMfapiToInternal', {
-            entry, error: entryError.message
-          });
-        }
-      }
-
-      return parsedRecords;
-    } catch (error: any) {
-      SimpleLogger.error('AmfiDataSource', 'Failed to convert MFAPI response', 'convertMfapiToInternal', {
-        error: error.message
-      }, undefined, undefined, error.stack);
-      return [];
-    }
-  }
-
-  /**
-   * NEW: Parse MFAPI date format (DD-MM-YYYY) to Date object
-   */
-  private parseMfapiDate(dateStr: string): Date | null {
-    try {
-      if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '') {
-        return null;
-      }
-
-      const trimmed = dateStr.trim();
-      const parts = trimmed.split('-');
-
-      if (parts.length !== 3) {
-        return null;
-      }
-
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
-      const year = parseInt(parts[2], 10);
-
-      if (isNaN(day) || isNaN(month) || isNaN(year)) {
-        return null;
-      }
-
-      if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900) {
-        return null;
-      }
-
-      const date = new Date(year, month - 1, day);
-
-      if (date.getFullYear() !== year || 
-          date.getMonth() !== (month - 1) || 
-          date.getDate() !== day) {
-        return null;
-      }
-
-      return date;
-    } catch (error: any) {
-      SimpleLogger.error('AmfiDataSource', 'Date parsing failed', 'parseMfapiDate', {
-        dateStr, error: error.message
-      });
-      return null;
-    }
-  }
-
-  /**
-   * Download NAV data for specific scheme (daily) - UNCHANGED
+   * Download NAV data for specific scheme (daily)
    */
   async downloadSchemeNavData(schemeCode: string, options: AmfiDownloadOptions = {}): Promise<AmfiApiResponse> {
     const requestId = options.requestId || `scheme_${schemeCode}_${new Date().toISOString().split('T')[0]}`;
@@ -333,6 +146,7 @@ export class AmfiDataSourceService {
       setTimeout(() => this.requestCache.delete(requestId), 60000);
 
       return result;
+
     } catch (error: any) {
       this.requestCache.delete(requestId);
       throw error;
@@ -341,11 +155,14 @@ export class AmfiDataSourceService {
 
   // ==================== PRIVATE EXECUTION METHODS ====================
 
+  /**
+   * Execute daily NAV download with retry logic
+   */
   private async executeDailyDownload(requestId: string, options: AmfiDownloadOptions): Promise<AmfiApiResponse> {
     const startTime = Date.now();
 
     try {
-      SimpleLogger.info('AmfiDataSource', 'Starting daily NAV download', 'executeDailyDownload', { requestId });
+      SimpleLogger.error('AmfiDataSource', 'Starting daily NAV download', 'executeDailyDownload', { requestId });
 
       const body = await this.makeAmfiRequest(this.DAILY_NAV_URL, options);
       const parsedData = this.parseDailyNavData(body);
@@ -356,7 +173,7 @@ export class AmfiDataSourceService {
 
       const processingTime = Date.now() - startTime;
 
-      SimpleLogger.info('AmfiDataSource', 'Daily NAV download completed successfully', 'executeDailyDownload', {
+      SimpleLogger.error('AmfiDataSource', 'Daily NAV download completed successfully', 'executeDailyDownload', {
         requestId, totalRecords: parsedData.length, processingTime
       });
 
@@ -368,6 +185,7 @@ export class AmfiDataSourceService {
         totalRecords: parsedData.length,
         processingTime
       };
+
     } catch (error: any) {
       const processingTime = Date.now() - startTime;
       
@@ -382,6 +200,66 @@ export class AmfiDataSourceService {
     }
   }
 
+  /**
+   * Execute historical NAV download with retry logic
+   */
+  private async executeHistoricalDownload(
+    startDate: Date, 
+    endDate: Date, 
+    requestId: string, 
+    options: AmfiDownloadOptions
+  ): Promise<AmfiApiResponse> {
+    const startTime = Date.now();
+
+    try {
+      const startDateStr = this.formatDate(startDate);
+      const endDateStr = this.formatDate(endDate);
+      // UPDATED: Added mf=62 parameter to fix 404 error
+      const url = `${this.HISTORICAL_BASE_URL}?mf=62&frmdt=${startDateStr}&todt=${endDateStr}&tp=1`;
+
+      SimpleLogger.error('AmfiDataSource', 'Starting historical NAV download', 'executeHistoricalDownload', {
+        requestId, startDate, endDate, url
+      });
+
+      const body = await this.makeAmfiRequest(url, options);
+      const parsedData = this.parseHistoricalNavData(body);
+
+      if (options.validateData !== false) {
+        this.validateNavData(parsedData);
+      }
+
+      const processingTime = Date.now() - startTime;
+
+      SimpleLogger.error('AmfiDataSource', 'Historical NAV download completed successfully', 'executeHistoricalDownload', {
+        requestId, totalRecords: parsedData.length, processingTime
+      });
+
+      return {
+        success: true,
+        data: parsedData,
+        source: 'historical',
+        requestId,
+        totalRecords: parsedData.length,
+        processingTime
+      };
+
+    } catch (error: any) {
+      const processingTime = Date.now() - startTime;
+      
+      return {
+        success: false,
+        error: error.message,
+        source: 'historical',
+        requestId,
+        totalRecords: 0,
+        processingTime
+      };
+    }
+  }
+
+  /**
+   * Execute single scheme NAV download
+   */
   private async executeSchemeDownload(schemeCode: string, requestId: string, options: AmfiDownloadOptions): Promise<AmfiApiResponse> {
     const startTime = Date.now();
 
@@ -400,6 +278,7 @@ export class AmfiDataSourceService {
         totalRecords: schemeData.length,
         processingTime
       };
+
     } catch (error: any) {
       const processingTime = Date.now() - startTime;
       
@@ -416,12 +295,16 @@ export class AmfiDataSourceService {
 
   // ==================== HTTP REQUEST HANDLING ====================
 
+  /**
+   * Make HTTP request to AMFI with rate limiting and retry logic
+   */
   private async makeAmfiRequest(url: string, options: AmfiDownloadOptions): Promise<string> {
     const retryAttempts = options.retryAttempts || this.DEFAULT_RETRY_ATTEMPTS;
     const retryDelay = options.retryDelay || this.DEFAULT_RETRY_DELAY;
     const timeout = options.timeout || this.DEFAULT_TIMEOUT;
     const rateLimitDelay = options.rateLimitDelay || this.DEFAULT_RATE_LIMIT_DELAY;
 
+    // Rate limiting: Ensure minimum delay between requests
     const timeSinceLastRequest = Date.now() - this.lastRequestTime;
     if (timeSinceLastRequest < rateLimitDelay) {
       const waitTime = rateLimitDelay - timeSinceLastRequest;
@@ -438,16 +321,16 @@ export class AmfiDataSourceService {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/plain, text/html, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Referer': 'http://portal.amfiindia.com/'
-          },
-          signal: controller.signal
-        });
+  method: 'GET',
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/plain, text/html, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    'Referer': 'http://portal.amfiindia.com/'
+  },
+  signal: controller.signal
+});
 
         clearTimeout(timeoutId);
 
@@ -461,11 +344,12 @@ export class AmfiDataSourceService {
           throw new Error('Empty response from AMFI API');
         }
 
-        SimpleLogger.info('AmfiDataSource', 'AMFI API request successful', 'makeAmfiRequest', {
+        SimpleLogger.error('AmfiDataSource', 'AMFI API request successful', 'makeAmfiRequest', {
           url, attempt, responseLength: body.length
         });
 
         return body;
+
       } catch (error: any) {
         lastError = error;
         
@@ -477,9 +361,10 @@ export class AmfiDataSourceService {
           lastError = new Error(`Request timeout after ${timeout}ms`);
         }
 
+        // If this isn't the last attempt, wait before retrying
         if (attempt < retryAttempts) {
-          const delay = retryDelay * Math.pow(2, attempt - 1);
-          SimpleLogger.info('AmfiDataSource', `Retrying AMFI API request in ${delay}ms`, 'makeAmfiRequest', { url, attempt, delay });
+          const delay = retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          SimpleLogger.error('AmfiDataSource', `Retrying AMFI API request in ${delay}ms`, 'makeAmfiRequest', { url, attempt, delay });
           await this.sleep(delay);
         }
       }
@@ -490,6 +375,9 @@ export class AmfiDataSourceService {
 
   // ==================== DATA PARSING METHODS ====================
 
+  /**
+   * Parse daily NAV data (based on your provided logic)
+   */
   private parseDailyNavData(body: string): ParsedNavRecord[] {
     try {
       const fundData: ParsedNavRecord[] = [];
@@ -502,10 +390,12 @@ export class AmfiDataSourceService {
         if (funds[i].length === 6 && funds[i][0].trim() !== '') {
           const record: any = {};
           
+          // Map headers to record
           for (let j = 0; j < 6; j++) {
             record[headers[j]] = funds[i][j];
           }
 
+          // Convert to our internal format
           const parsedRecord: ParsedNavRecord = {
             scheme_code: record['Scheme Code']?.trim() || '',
             scheme_name: record['Scheme Name']?.trim() || '',
@@ -515,6 +405,7 @@ export class AmfiDataSourceService {
             isin_div_reinvestment: record['ISIN Div Reinvestment']?.trim()
           };
 
+          // Only include valid records
           if (parsedRecord.scheme_code && parsedRecord.nav_value > 0 && parsedRecord.nav_date) {
             fundData.push(parsedRecord);
           }
@@ -522,6 +413,7 @@ export class AmfiDataSourceService {
       }
 
       return fundData;
+
     } catch (error: any) {
       SimpleLogger.error('AmfiDataSource', 'Failed to parse daily NAV data', 'parseDailyNavData', {
         error: error.message, bodyLength: body.length
@@ -530,8 +422,61 @@ export class AmfiDataSourceService {
     }
   }
 
+  /**
+   * Parse historical NAV data (based on your provided logic)
+   */
+  private parseHistoricalNavData(body: string): ParsedNavRecord[] {
+    try {
+      const fundData: ParsedNavRecord[] = [];
+      const bodyClean = body.replace(/\r?\n/g, "\n");
+      const bodyArr = bodyClean.split("\n");
+      const funds = bodyArr.map((str) => str.split(";"));
+      const headers = funds[0];
+
+      for (let i = 1; i < funds.length; i++) {
+        if (funds[i].length === 8 && funds[i][0].trim() !== '') {
+          const record: any = {};
+          
+          // Map headers to record (skip columns 2, 3, 5, 6 as per your logic)
+          for (let j = 0; j < 8; j++) {
+            if (j === 2 || j === 3 || j === 5 || j === 6) {
+              continue; // Skip these columns
+            }
+            record[headers[j]] = funds[i][j];
+          }
+
+          // Convert to our internal format
+          const parsedRecord: ParsedNavRecord = {
+            scheme_code: record['Scheme Code']?.trim() || '',
+            scheme_name: record['Scheme Name']?.trim() || '',
+            nav_value: this.parseFloatSafe(record['Net Asset Value']),
+            repurchase_price: this.parseFloatSafe(record['Repurchase Price']),
+            sale_price: this.parseFloatSafe(record['Sale Price']),
+            nav_date: this.parseNavDate(record['Date'])
+          };
+
+          // Only include valid records
+          if (parsedRecord.scheme_code && parsedRecord.nav_value > 0 && parsedRecord.nav_date) {
+            fundData.push(parsedRecord);
+          }
+        }
+      }
+
+      return fundData;
+
+    } catch (error: any) {
+      SimpleLogger.error('AmfiDataSource', 'Failed to parse historical NAV data', 'parseHistoricalNavData', {
+        error: error.message, bodyLength: body.length
+      });
+      throw new Error(`Failed to parse historical NAV data: ${error.message}`);
+    }
+  }
+
   // ==================== UTILITY METHODS ====================
 
+  /**
+   * Validate NAV data for consistency
+   */
   private validateNavData(data: ParsedNavRecord[]): void {
     if (!data || data.length === 0) {
       throw new Error('No valid NAV records found');
@@ -545,15 +490,18 @@ export class AmfiDataSourceService {
     }
 
     const invalidPercentage = (invalidRecords / data.length) * 100;
-    if (invalidPercentage > 10) {
+    if (invalidPercentage > 10) { // More than 10% invalid records
       throw new Error(`Data quality issue: ${invalidPercentage.toFixed(1)}% invalid records`);
     }
 
-    SimpleLogger.info('AmfiDataSource', 'NAV data validation completed', 'validateNavData', {
+    SimpleLogger.error('AmfiDataSource', 'NAV data validation completed', 'validateNavData', {
       totalRecords: data.length, invalidRecords, invalidPercentage: invalidPercentage.toFixed(1)
     });
   }
 
+  /**
+   * Parse float values safely
+   */
   private parseFloatSafe(value: string): number {
     if (!value || value.trim() === '' || value.trim() === '-' || value.trim() === 'N.A.') {
       return 0;
@@ -563,12 +511,16 @@ export class AmfiDataSourceService {
     return isNaN(parsed) ? 0 : parsed;
   }
 
+  /**
+   * Parse NAV date from AMFI format (DD-MMM-YYYY)
+   */
   private parseNavDate(dateStr: string): Date | null {
     try {
       if (!dateStr || dateStr.trim() === '') {
         return null;
       }
 
+      // AMFI format: "25-Sep-2024"
       const parts = dateStr.trim().split('-');
       if (parts.length !== 3) {
         return null;
@@ -590,30 +542,54 @@ export class AmfiDataSourceService {
 
       const date = new Date(year, month, day);
       
+      // Validate the date
       if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
         return null;
       }
 
       return date;
+
     } catch (error) {
       SimpleLogger.error('AmfiDataSource', 'Failed to parse NAV date', 'parseNavDate', { dateStr });
       return null;
     }
   }
 
+  /**
+   * Format date for AMFI API (DD-MMM-YYYY)
+   */
+ private formatDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = months[date.getMonth()];  // ← FIX: use month name
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;  // Will output: 27-May-2025 (CORRECT)
+}
+
+  /**
+   * Sleep utility for delays
+   */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Clear request cache (for testing or cleanup)
+   */
   public clearCache(): void {
     this.requestCache.clear();
-    SimpleLogger.info('AmfiDataSource', 'Request cache cleared', 'clearCache');
+    SimpleLogger.error('AmfiDataSource', 'Request cache cleared', 'clearCache');
   }
 
+  /**
+   * Get cache statistics (for monitoring)
+   */
   public getCacheStats(): { activeRequests: number; cacheKeys: string[] } {
     return {
       activeRequests: this.requestCache.size,
-      cacheKeys: Array.from(this.requestCache.keys())
+      cacheKeys: Array.from(this.requestCache.keys()    )
     };
   }
 }

@@ -1,5 +1,6 @@
 // backend/src/controllers/nav.controller.ts
-// File 7/14: NAV API controller with enhanced bookmark endpoints and scheduler management
+// UPDATED: Modified triggerHistoricalDownload to use simplified MFAPI.in approach
+// UNCHANGED: All routes maintained for frontend compatibility
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
@@ -15,7 +16,6 @@ import {
   BookmarkNavDataParams,
   UpdateBookmarkDownloadStatus,
   NavDataSearchParams,
-  CreateNavDownloadJobRequest,
   NavDownloadJobSearchParams,
   N8nCallbackPayload
 } from '../types/nav.types';
@@ -28,7 +28,6 @@ interface AuthenticatedRequest extends Request {
   environment?: 'live' | 'test';
 }
 
-// Enhanced scheme type with NAV info
 interface SchemeWithNavInfo extends SchemeDetail {
   is_bookmarked: boolean;
   latest_nav_value: number | null;
@@ -52,10 +51,6 @@ export class NavController {
 
   // ==================== SCHEME SEARCH & MANAGEMENT ====================
 
-  /**
-   * Search available schemes for bookmarking
-   * GET /api/nav/schemes/search
-   */
   searchSchemes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -91,7 +86,6 @@ export class NavController {
         }
       );
 
-      // Check which schemes are already bookmarked by this user
       const bookmarks = await this.navService.getUserBookmarks(
         user!.tenant_id,
         isLive,
@@ -104,7 +98,6 @@ export class NavController {
       const schemesWithBookmarkStatus: SchemeWithNavInfo[] = searchResults.schemes.map(scheme => ({
         ...scheme,
         is_bookmarked: bookmarkedSchemeIds.has(scheme.id),
-        // Add latest NAV info if available - properly typed as null initially
         latest_nav_value: null as number | null,
         latest_nav_date: null as Date | null
       }));
@@ -121,7 +114,6 @@ export class NavController {
           has_prev: searchResults.page > 1
         }
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to search schemes', 'searchSchemes', {
         tenantId: req.user?.tenant_id,
@@ -139,10 +131,6 @@ export class NavController {
 
   // ==================== BOOKMARK MANAGEMENT ====================
 
-  /**
-   * Get user's bookmarked schemes
-   * GET /api/nav/bookmarks
-   */
   getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -167,7 +155,6 @@ export class NavController {
         success: true,
         data: result
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get bookmarks', 'getBookmarks', {
         tenantId: req.user?.tenant_id,
@@ -183,10 +170,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Add scheme to bookmarks
-   * POST /api/nav/bookmarks
-   */
   addBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -198,7 +181,6 @@ export class NavController {
         download_time: req.body.download_time
       };
 
-      // Validate scheme_id
       if (!request.scheme_id || !Number.isInteger(request.scheme_id)) {
         res.status(400).json({
           success: false,
@@ -219,7 +201,6 @@ export class NavController {
         data: bookmark,
         message: 'Scheme bookmarked successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to add bookmark', 'addBookmark', {
         tenantId: req.user?.tenant_id,
@@ -247,10 +228,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Update bookmark settings
-   * PUT /api/nav/bookmarks/:id
-   */
   updateBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -284,7 +261,6 @@ export class NavController {
         data: bookmark,
         message: 'Bookmark updated successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to update bookmark', 'updateBookmark', {
         tenantId: req.user?.tenant_id,
@@ -308,10 +284,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Remove bookmark
-   * DELETE /api/nav/bookmarks/:id
-   */
   removeBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -337,7 +309,6 @@ export class NavController {
         success: true,
         message: 'Bookmark removed successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to remove bookmark', 'removeBookmark', {
         tenantId: req.user?.tenant_id,
@@ -360,12 +331,6 @@ export class NavController {
     }
   };
 
-  // ==================== ENHANCED BOOKMARK ENDPOINTS ====================
-
-  /**
-   * Get NAV data for a specific bookmark
-   * GET /api/nav/bookmarks/:id/nav-data
-   */
   getBookmarkNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -388,7 +353,6 @@ export class NavController {
         page_size: req.query.page_size ? Number(req.query.page_size) : 50
       };
 
-      // Validate date range if provided
       if (params.start_date && params.end_date) {
         const startDate = new Date(params.start_date);
         const endDate = new Date(params.end_date);
@@ -413,7 +377,6 @@ export class NavController {
         success: true,
         data: result
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
         tenantId: req.user?.tenant_id,
@@ -436,10 +399,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Update bookmark download status (called internally after downloads)
-   * PUT /api/nav/bookmarks/:id/download-status
-   */
   updateBookmarkDownloadStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -454,7 +413,6 @@ export class NavController {
         return;
       }
 
-      // First get the bookmark to find the scheme_id
       const bookmarks = await this.navService.getUserBookmarks(
         user!.tenant_id,
         isLive,
@@ -489,7 +447,6 @@ export class NavController {
         success: true,
         message: 'Bookmark download status updated'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to update bookmark download status', 'updateBookmarkDownloadStatus', {
         tenantId: req.user?.tenant_id,
@@ -505,10 +462,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get bookmark statistics summary
-   * GET /api/nav/bookmarks/:id/stats
-   */
   getBookmarkStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -523,7 +476,6 @@ export class NavController {
         return;
       }
 
-      // Get bookmark details with stats
       const bookmarks = await this.navService.getUserBookmarks(
         user!.tenant_id,
         isLive,
@@ -540,7 +492,6 @@ export class NavController {
         return;
       }
 
-      // Calculate additional stats
       const stats = {
         bookmark_id: bookmark.id,
         scheme_name: bookmark.scheme_name,
@@ -563,7 +514,6 @@ export class NavController {
         success: true,
         data: stats
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get bookmark stats', 'getBookmarkStats', {
         tenantId: req.user?.tenant_id,
@@ -581,10 +531,6 @@ export class NavController {
 
   // ==================== NAV DATA OPERATIONS ====================
 
-  /**
-   * Get NAV data for schemes
-   * GET /api/nav/data
-   */
   getNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -599,7 +545,6 @@ export class NavController {
         page_size: req.query.page_size ? Number(req.query.page_size) : 50
       };
 
-      // Validate date range if provided
       if (params.start_date && params.end_date && params.start_date > params.end_date) {
         res.status(400).json({
           success: false,
@@ -618,7 +563,6 @@ export class NavController {
         success: true,
         data: result
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get NAV data', 'getNavData', {
         tenantId: req.user?.tenant_id,
@@ -633,10 +577,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get latest NAV for a specific scheme
-   * GET /api/nav/schemes/:id/latest
-   */
   getLatestNav = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -669,7 +609,6 @@ export class NavController {
         success: true,
         data: latestNav
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get latest NAV', 'getLatestNav', {
         tenantId: req.user?.tenant_id,
@@ -686,10 +625,6 @@ export class NavController {
 
   // ==================== DOWNLOAD OPERATIONS ====================
 
-  /**
-   * Trigger daily NAV download
-   * POST /api/nav/download/daily
-   */
   triggerDailyDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -701,14 +636,13 @@ export class NavController {
         user!.user_id
       );
 
-      const statusCode = result.alreadyExists ? 200 : 202; // 202 Accepted for async processing
+      const statusCode = result.alreadyExists ? 200 : 202;
       
       res.status(statusCode).json({
         success: true,
         data: result,
         message: result.message
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to trigger daily download', 'triggerDailyDownload', {
         tenantId: req.user?.tenant_id,
@@ -724,8 +658,8 @@ export class NavController {
   };
 
   /**
-   * ENHANCED: Trigger historical NAV download with bookmark status update
-   * POST /api/nav/download/historical
+   * UPDATED: Trigger historical NAV download using simplified MFAPI.in approach
+   * Route unchanged for frontend compatibility
    */
   triggerHistoricalDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -734,7 +668,6 @@ export class NavController {
 
       const { scheme_ids, start_date, end_date } = req.body;
 
-      // Validate required fields
       if (!scheme_ids || !Array.isArray(scheme_ids) || scheme_ids.length === 0) {
         res.status(400).json({
           success: false,
@@ -762,18 +695,17 @@ export class NavController {
         return;
       }
 
-     const result = await this.downloadService.triggerHistoricalDownload(
-  user!.tenant_id,
-  isLive,
-  user!.user_id,
-  {
-    scheme_ids: scheme_ids.map(Number), // ✅ Correct property name
-    start_date: startDate,              // ✅ Correct property name
-    end_date: endDate                   // ✅ Correct property name
-  }
-);
+      const result = await this.downloadService.triggerHistoricalDownload(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        {
+          scheme_ids: scheme_ids.map(Number),
+          start_date: startDate,
+          end_date: endDate
+        }
+      );
 
-      // ENHANCED: Update bookmark download status for each scheme
       try {
         for (const schemeId of scheme_ids) {
           await this.navService.updateBookmarkDownloadStatus(
@@ -788,7 +720,6 @@ export class NavController {
           );
         }
       } catch (statusError) {
-        // Log but don't fail the download if status update fails
         SimpleLogger.error('NavController', 'Failed to update bookmark status during historical download', 'triggerHistoricalDownload', {
           tenantId: user!.tenant_id,
           userId: user!.user_id,
@@ -796,12 +727,13 @@ export class NavController {
         });
       }
 
-      res.status(202).json({ // 202 Accepted for async processing
+      res.status(202).json({
         success: true,
-        data: result,
-        message: result.message
+        data: {
+          job_id: result.jobId,
+          message: result.message
+        }
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
         tenantId: req.user?.tenant_id,
@@ -824,10 +756,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get download progress (for UI polling during long downloads)
-   * GET /api/nav/download/progress/:jobId
-   */
   getDownloadProgress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const jobId = parseInt(req.params.jobId);
@@ -854,7 +782,6 @@ export class NavController {
         success: true,
         data: progress
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get download progress', 'getDownloadProgress', {
         tenantId: req.user?.tenant_id,
@@ -869,10 +796,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get download jobs history
-   * GET /api/nav/download/jobs
-   */
   getDownloadJobs = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -897,7 +820,6 @@ export class NavController {
         success: true,
         data: result
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get download jobs', 'getDownloadJobs', {
         tenantId: req.user?.tenant_id,
@@ -912,10 +834,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Cancel running download
-   * DELETE /api/nav/download/jobs/:jobId
-   */
   cancelDownloadJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -941,7 +859,6 @@ export class NavController {
         success: true,
         message: 'Download cancelled successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to cancel download', 'cancelDownloadJob', {
         tenantId: req.user?.tenant_id,
@@ -957,17 +874,10 @@ export class NavController {
     }
   };
 
-  // ==================== N8N WEBHOOK ENDPOINTS ====================
-
-  /**
-   * N8N callback endpoint (called by N8N workflows)
-   * POST /api/nav/n8n-callback
-   */
   handleN8nCallback = async (req: Request, res: Response): Promise<void> => {
     try {
       const payload: N8nCallbackPayload = req.body;
 
-      // Basic validation
       if (!payload.job_id || !payload.status) {
         res.status(400).json({
           success: false,
@@ -982,7 +892,6 @@ export class NavController {
         success: true,
         message: 'Callback processed successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to handle N8N callback', 'handleN8nCallback', {
         payload: req.body,
@@ -996,12 +905,6 @@ export class NavController {
     }
   };
 
-  // ==================== STATISTICS & DASHBOARD ====================
-
-  /**
-   * Get NAV statistics for dashboard
-   * GET /api/nav/statistics
-   */
   getNavStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1017,7 +920,6 @@ export class NavController {
         success: true,
         data: statistics
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get NAV statistics', 'getNavStatistics', {
         tenantId: req.user?.tenant_id,
@@ -1032,10 +934,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get active downloads for user dashboard
-   * GET /api/nav/download/active
-   */
   getActiveDownloads = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const activeDownloads = await this.downloadService.getActiveDownloads();
@@ -1047,7 +945,6 @@ export class NavController {
           total_active: activeDownloads.length
         }
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get active downloads', 'getActiveDownloads', {
         tenantId: req.user?.tenant_id,
@@ -1061,18 +958,11 @@ export class NavController {
     }
   };
 
-  // ==================== MANUAL/ON-DEMAND OPERATIONS ====================
-
-  /**
-   * Check if NAV data exists for today (manual check)
-   * GET /api/nav/check-today
-   */
   checkTodayNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
 
-      // Get user's bookmarked schemes
       const bookmarks = await this.navService.getUserBookmarks(
         user!.tenant_id,
         isLive,
@@ -1119,7 +1009,6 @@ export class NavController {
             : `${schemesMissingData} schemes missing today's data`
         }
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to check today NAV data', 'checkTodayNavData', {
         tenantId: req.user?.tenant_id,
@@ -1134,12 +1023,8 @@ export class NavController {
     }
   };
 
-  // ==================== SCHEDULER MANAGEMENT ENDPOINTS ====================
+  // ==================== SCHEDULER MANAGEMENT (UNCHANGED) ====================
 
-  /**
-   * Get scheduler configuration
-   * GET /api/nav/scheduler/config
-   */
   getSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1155,7 +1040,6 @@ export class NavController {
         success: true,
         data: config
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get scheduler config', 'getSchedulerConfig', {
         tenantId: req.user?.tenant_id,
@@ -1170,16 +1054,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Save scheduler configuration
-   * POST /api/nav/scheduler/config
-   * Body: {
-   *   schedule_type: 'daily' | 'weekly' | 'custom',
-   *   download_time: 'HH:MM',
-   *   cron_expression?: string,
-   *   is_enabled: boolean
-   * }
-   */
   saveSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1187,7 +1061,6 @@ export class NavController {
 
       const { schedule_type, download_time, cron_expression, is_enabled } = req.body;
 
-      // Validation
       if (!schedule_type || !download_time || is_enabled === undefined) {
         res.status(400).json({
           success: false,
@@ -1196,7 +1069,6 @@ export class NavController {
         return;
       }
 
-      // Validate time format (HH:MM)
       if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(download_time)) {
         res.status(400).json({
           success: false,
@@ -1205,7 +1077,6 @@ export class NavController {
         return;
       }
 
-      // Generate cron expression if not provided
       let finalCronExpression = cron_expression;
       if (!finalCronExpression) {
         finalCronExpression = this.generateCronExpression(schedule_type, download_time);
@@ -1230,7 +1101,6 @@ export class NavController {
         data: savedConfig,
         message: 'Scheduler configuration saved successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to save scheduler config', 'saveSchedulerConfig', {
         tenantId: req.user?.tenant_id,
@@ -1246,10 +1116,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Update existing scheduler configuration
-   * PUT /api/nav/scheduler/config/:id
-   */
   updateSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1266,7 +1132,6 @@ export class NavController {
 
       const { schedule_type, download_time, cron_expression, is_enabled } = req.body;
 
-      // Get existing config first
       const existingConfig = await this.schedulerService.getSchedulerConfig(
         user!.tenant_id,
         isLive,
@@ -1281,7 +1146,6 @@ export class NavController {
         return;
       }
 
-      // Generate cron expression if schedule changed
       let finalCronExpression = cron_expression;
       if (schedule_type && download_time && !cron_expression) {
         finalCronExpression = this.generateCronExpression(schedule_type, download_time);
@@ -1302,7 +1166,6 @@ export class NavController {
         data: savedConfig,
         message: 'Scheduler configuration updated successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to update scheduler config', 'updateSchedulerConfig', {
         tenantId: req.user?.tenant_id,
@@ -1319,10 +1182,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Delete scheduler configuration
-   * DELETE /api/nav/scheduler/config
-   */
   deleteSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1338,7 +1197,6 @@ export class NavController {
         success: true,
         message: 'Scheduler configuration deleted successfully'
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to delete scheduler config', 'deleteSchedulerConfig', {
         tenantId: req.user?.tenant_id,
@@ -1353,10 +1211,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Get scheduler status
-   * GET /api/nav/scheduler/status
-   */
   getSchedulerStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1372,7 +1226,6 @@ export class NavController {
         success: true,
         data: status
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get scheduler status', 'getSchedulerStatus', {
         tenantId: req.user?.tenant_id,
@@ -1387,10 +1240,6 @@ export class NavController {
     }
   };
 
-  /**
-   * Manually trigger download (bypassing schedule)
-   * POST /api/nav/scheduler/trigger
-   */
   triggerScheduledDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -1416,7 +1265,6 @@ export class NavController {
           error: result.error || 'Failed to trigger download'
         });
       }
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to trigger scheduled download', 'triggerScheduledDownload', {
         tenantId: req.user?.tenant_id,
@@ -1431,13 +1279,8 @@ export class NavController {
     }
   };
 
-  /**
-   * Get all active schedulers (admin endpoint)
-   * GET /api/nav/scheduler/all-active
-   */
   getAllActiveSchedulers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      // This could be restricted to admin users only
       const activeSchedulers = await this.schedulerService.getAllActiveSchedulers();
 
       res.json({
@@ -1447,7 +1290,6 @@ export class NavController {
           total_active: activeSchedulers.length
         }
       });
-
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get all active schedulers', 'getAllActiveSchedulers', {
         error: error.message
@@ -1460,27 +1302,16 @@ export class NavController {
     }
   };
 
-  // ==================== HELPER METHODS ====================
-
-  /**
-   * Generate cron expression based on schedule type and time
-   */
   private generateCronExpression(scheduleType: string, downloadTime: string): string {
     const [hours, minutes] = downloadTime.split(':').map(Number);
 
     switch (scheduleType) {
       case 'daily':
-        // Every day at specified time
         return `${minutes} ${hours} * * *`;
-      
       case 'weekly':
-        // Every Friday at specified time
         return `${minutes} ${hours} * * 5`;
-      
       case 'custom':
-        // Default to daily if custom not specified
         return `${minutes} ${hours} * * *`;
-      
       default:
         throw new Error('Invalid schedule type');
     }

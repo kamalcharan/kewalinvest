@@ -1,5 +1,6 @@
 // backend/src/services/navDownload.service.ts
-// PRODUCTION READY: Sequential downloads with comprehensive error handling and crash prevention
+// UPDATED: Simplified historical downloads using MFAPI.in scheme-by-scheme approach
+// REMOVED: Complex sequential chunking logic (400+ lines removed)
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -8,17 +9,10 @@ import { AmfiDataSourceService } from './amfiDataSource.service';
 import { SimpleLogger } from './simpleLogger.service';
 import {
   NavDownloadJob,
-  CreateNavDownloadJobRequest,
   NavDownloadJobResult,
-  N8nWebhookPayload,
   N8nCallbackPayload,
   ParsedNavRecord,
-  NAV_ERROR_CODES,
-  DownloadChunk,
-  SequentialDownloadRequest,
-  SequentialDownloadResponse,
-  SequentialJobProgress,
-  DateRangeValidationResult
+  NAV_ERROR_CODES
 } from '../types/nav.types';
 
 export interface DownloadProgressUpdate {
@@ -33,16 +27,6 @@ export interface DownloadProgressUpdate {
   errors?: Array<{ scheme_id: number; scheme_code: string; error: string }>;
   startTime: Date;
   lastUpdate: Date;
-  
-  // Sequential download progress fields
-  parentJobId?: number;
-  totalChunks?: number;
-  completedChunks?: number;
-  currentChunk?: {
-    chunkNumber: number;
-    startDate: Date;
-    endDate: Date;
-  };
 }
 
 export interface DownloadLockInfo {
@@ -58,16 +42,9 @@ export class NavDownloadService {
   private navService: NavService;
   private amfiService: AmfiDataSourceService;
   
-  // In-memory locks to prevent race conditions
   private downloadLocks = new Map<string, DownloadLockInfo>();
-  
-  // Progress tracking for UI
   private progressUpdates = new Map<number, DownloadProgressUpdate>();
   
-  // Sequential job progress tracking
-  private sequentialProgress = new Map<number, SequentialJobProgress>();
-  
-  // API configuration
   private readonly API_BASE_URL: string;
 
   constructor() {
@@ -80,7 +57,7 @@ export class NavDownloadService {
   // ==================== PUBLIC DOWNLOAD METHODS ====================
 
   /**
-   * Trigger daily NAV download (idempotent)
+   * Trigger daily NAV download (idempotent) - UNCHANGED
    */
   async triggerDailyDownload(
     tenantId: number,
@@ -91,7 +68,6 @@ export class NavDownloadService {
     const lockKey = `daily_${tenantId}_${isLive}_${today}`;
     
     try {
-      // Check for existing lock
       if (this.downloadLocks.has(lockKey)) {
         const existingLock = this.downloadLocks.get(lockKey)!;
         return {
@@ -101,7 +77,6 @@ export class NavDownloadService {
         };
       }
 
-      // Get all schemes with daily download enabled
       const bookmarks = await this.navService.getUserBookmarks(
         tenantId, 
         isLive, 
@@ -115,7 +90,6 @@ export class NavDownloadService {
 
       const schemeIds = bookmarks.bookmarks.map(b => b.scheme_id);
 
-      // Check if today's data already exists
       const existingData = await this.navService.checkNavDataExists(
         tenantId,
         isLive,
@@ -133,14 +107,12 @@ export class NavDownloadService {
         };
       }
 
-      // Create download job
       const downloadJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
         job_type: 'daily',
         scheme_ids: schemesWithoutData,
         scheduled_date: new Date()
       });
 
-      // Create download lock
       const lockInfo: DownloadLockInfo = {
         jobId: downloadJob.id,
         lockType: 'daily',
@@ -150,10 +122,8 @@ export class NavDownloadService {
       };
       this.downloadLocks.set(lockKey, lockInfo);
 
-      // Initialize progress tracking
       this.initializeProgressTracking(downloadJob.id, 'daily', schemesWithoutData.length);
 
-      // CRASH PREVENTION: Execute download asynchronously with proper error handling
       setImmediate(async () => {
         try {
           await this.executeDownload(downloadJob.id, tenantId, isLive, userId);
@@ -162,7 +132,6 @@ export class NavDownloadService {
             jobId: downloadJob.id, tenantId, userId, error: error.message
           }, userId, tenantId, error.stack);
           
-          // Update job status to failed
           try {
             await this.navService.updateDownloadJob(tenantId, isLive, downloadJob.id, {
               status: 'failed',
@@ -189,7 +158,6 @@ export class NavDownloadService {
         jobId: downloadJob.id,
         message: `Daily download started for ${schemesWithoutData.length} schemes`
       };
-
     } catch (error: any) {
       this.downloadLocks.delete(lockKey);
       
@@ -202,52 +170,170 @@ export class NavDownloadService {
   }
 
   /**
-   * Trigger historical NAV download with automatic chunking for >90 day requests
+   * UPDATED: Trigger historical NAV download using MFAPI.in (scheme-by-scheme)
+   * No date chunking needed - MFAPI provides complete history per scheme
    */
   async triggerHistoricalDownload(
     tenantId: number,
     isLive: boolean,
     userId: number,
-    request: SequentialDownloadRequest
-  ): Promise<SequentialDownloadResponse> {
+    request: { scheme_ids: number[]; start_date: Date; end_date: Date }
+  ): Promise<{ jobId: number; message: string }> {
     const lockKey = `historical_${tenantId}_${isLive}_${userId}_${request.scheme_ids.join(',')}`;
     
     try {
+      // Validate scheme_ids array
+      if (!request.scheme_ids || !Array.isArray(request.scheme_ids) || request.scheme_ids.length === 0) {
+        throw new Error('scheme_ids array is required and cannot be empty');
+      }
+      
+      // Validate date range
+      if (!request.start_date || !request.end_date) {
+        throw new Error('start_date and end_date are required');
+      }
+      
+      const startDate = new Date(request.start_date);
+      const endDate = new Date(request.end_date);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid date format');
+      }
+      
+      if (startDate >= endDate) {
+        throw new Error('start_date must be before end_date');
+      }
+      
+      const today = new Date();
+      if (endDate > today) {
+        throw new Error('end_date cannot be in the future');
+      }
+
       // Check for concurrent historical download
       if (this.downloadLocks.has(lockKey)) {
         const existingLock = this.downloadLocks.get(lockKey)!;
         throw new Error(`Historical download already in progress (Job ID: ${existingLock.jobId})`);
       }
 
-      // Validate date range
-      const validation = this.validateDateRange(request.start_date, request.end_date);
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
-
-      // Check if historical download already completed
+      // Check historical download completion
       for (const schemeId of request.scheme_ids) {
         const bookmarks = await this.navService.getUserBookmarks(
           tenantId, 
           isLive, 
           userId,
-          { page: 1, page_size: 1, search: schemeId.toString() }
+          { page: 1, page_size: 1000 }
         );
-
-        if (bookmarks.bookmarks.length > 0 && bookmarks.bookmarks[0].historical_download_completed) {
+        
+        const bookmark = bookmarks.bookmarks.find(b => b.scheme_id === schemeId);
+        
+        if (bookmark && bookmark.historical_download_completed) {
           throw new Error(NAV_ERROR_CODES.HISTORICAL_DOWNLOAD_COMPLETED);
         }
       }
 
-      // Determine if sequential download is needed
-      const chunksRequired = validation.chunks_required!;
+      // Create download job
+      const downloadJob = await this.navService.createDownloadJob(
+        tenantId, 
+        isLive, 
+        userId, 
+        {
+          job_type: 'historical',
+          scheme_ids: request.scheme_ids,
+          scheduled_date: new Date(),
+          start_date: startDate,
+          end_date: endDate
+        }
+      );
 
-      if (chunksRequired === 1) {
-        return await this.executeSingleHistoricalDownload(tenantId, isLive, userId, request);
-      } else {
-        return await this.executeSequentialHistoricalDownload(tenantId, isLive, userId, request, validation);
-      }
+      // Create download lock
+      const lockInfo: DownloadLockInfo = {
+        jobId: downloadJob.id,
+        lockType: 'historical',
+        lockedBy: userId,
+        lockedAt: new Date(),
+        schemeIds: request.scheme_ids
+      };
+      this.downloadLocks.set(lockKey, lockInfo);
 
+      // Initialize progress tracking (2 seconds per scheme estimate)
+      const estimatedTimeMs = request.scheme_ids.length * 2000;
+      this.initializeProgressTracking(
+        downloadJob.id, 
+        'historical', 
+        request.scheme_ids.length, 
+        estimatedTimeMs
+      );
+
+      // Execute download asynchronously with crash prevention
+      setImmediate(async () => {
+        try {
+          await this.executeHistoricalDownload(
+            downloadJob.id, 
+            tenantId, 
+            isLive, 
+            userId, 
+            request.scheme_ids,
+            startDate,
+            endDate
+          );
+        } catch (error: any) {
+          SimpleLogger.error(
+            'NavDownload', 
+            'Async historical download execution failed - SERVER DID NOT CRASH', 
+            'triggerHistoricalDownload-async',
+            {
+              jobId: downloadJob.id, 
+              tenantId, 
+              userId, 
+              error: error.message
+            }, 
+            userId, 
+            tenantId, 
+            error.stack
+          );
+          
+          try {
+            await this.navService.updateDownloadJob(tenantId, isLive, downloadJob.id, {
+              status: 'failed',
+              error_details: error.message
+            });
+            
+            this.updateProgress(downloadJob.id, {
+              status: 'failed',
+              currentStep: `Download failed: ${error.message}`,
+              progressPercentage: 0
+            });
+          } catch (updateError: any) {
+            SimpleLogger.error(
+              'NavDownload', 
+              'Failed to update job status after async error', 
+              'triggerHistoricalDownload-cleanup',
+              { jobId: downloadJob.id, updateError: updateError.message },
+              userId, 
+              tenantId
+            );
+          }
+        }
+      });
+
+      SimpleLogger.info(
+        'NavDownload', 
+        'Historical download job created (MFAPI.in - scheme-by-scheme)', 
+        'triggerHistoricalDownload',
+        {
+          tenantId, 
+          userId, 
+          jobId: downloadJob.id, 
+          totalSchemes: request.scheme_ids.length,
+          dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+        }, 
+        userId, 
+        tenantId
+      );
+
+      return {
+        jobId: downloadJob.id,
+        message: `Historical download started for ${request.scheme_ids.length} schemes using MFAPI.in`
+      };
     } catch (error: any) {
       this.downloadLocks.delete(lockKey);
       
@@ -260,7 +346,220 @@ export class NavDownloadService {
   }
 
   /**
-   * Trigger weekly NAV download for untracked schemes
+   * NEW: Execute historical download scheme-by-scheme using MFAPI.in
+   */
+  private async executeHistoricalDownload(
+    jobId: number,
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    schemeIds: number[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<void> {
+    const startTime = Date.now();
+    let processedSchemes = 0;
+    let totalRecordsInserted = 0;
+    let totalRecordsUpdated = 0;
+    const schemeErrors: Array<{ scheme_id: number; scheme_code: string; error: string }> = [];
+
+    try {
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: 'running'
+      });
+      
+      this.updateProgress(jobId, {
+        status: 'running',
+        currentStep: 'Starting historical download using MFAPI.in...',
+        progressPercentage: 0
+      });
+
+      // Get scheme codes upfront
+      const schemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, schemeIds);
+      
+      if (schemeCodes.length !== schemeIds.length) {
+        throw new Error('Could not fetch all scheme codes');
+      }
+      
+      SimpleLogger.info('NavDownload', 'Starting scheme-by-scheme processing', 'executeHistoricalDownload', {
+        jobId,
+        totalSchemes: schemeIds.length,
+        dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+      });
+
+      // Process each scheme individually
+      for (let i = 0; i < schemeIds.length; i++) {
+        const schemeId = schemeIds[i];
+        const schemeCode = schemeCodes[i];
+        
+        try {
+          const currentProgress = Math.round(((i + 1) / schemeIds.length) * 100);
+          this.updateProgress(jobId, {
+            status: 'running',
+            currentStep: `Processing scheme ${i + 1} of ${schemeIds.length}: ${schemeCode}`,
+            progressPercentage: currentProgress,
+            processedSchemes: i
+          });
+          
+          SimpleLogger.info('NavDownload', `Processing scheme ${i + 1}/${schemeIds.length}`, 'executeHistoricalDownload', {
+            jobId, schemeId, schemeCode
+          });
+          
+          // Call MFAPI.in for this scheme with date range filtering
+          const mfapiResponse = await this.amfiService.downloadFromMFAPI(
+            schemeCode,
+            startDate,
+            endDate,
+            {
+              requestId: `hist_${jobId}_${schemeCode}`,
+              retryAttempts: 3,
+              timeout: 30000
+            }
+          );
+          
+          if (!mfapiResponse.success || !mfapiResponse.data || mfapiResponse.data.length === 0) {
+            throw new Error(mfapiResponse.error || 'No data returned from MFAPI.in');
+          }
+          
+          SimpleLogger.info('NavDownload', `Received ${mfapiResponse.data.length} NAV records from MFAPI.in`, 'executeHistoricalDownload', {
+            jobId, schemeCode, recordCount: mfapiResponse.data.length
+          });
+          
+          // Upsert NAV data to database
+          const upsertResult = await this.navService.upsertNavData(
+            tenantId,
+            isLive,
+            mfapiResponse.data
+          );
+          
+          totalRecordsInserted += upsertResult.inserted;
+          totalRecordsUpdated += upsertResult.updated;
+          processedSchemes++;
+          
+          SimpleLogger.info('NavDownload', `Upserted NAV data for scheme`, 'executeHistoricalDownload', {
+            jobId, schemeCode, inserted: upsertResult.inserted, updated: upsertResult.updated
+          });
+          
+          this.updateProgress(jobId, {
+            processedSchemes: processedSchemes,
+            processedRecords: totalRecordsInserted + totalRecordsUpdated
+          });
+          
+          // Rate limiting: wait 500ms before next scheme (except for last)
+          if (i < schemeIds.length - 1) {
+            await this.sleep(500);
+          }
+          
+        } catch (schemeError: any) {
+          SimpleLogger.error('NavDownload', 'Failed to process scheme, continuing with others', 'executeHistoricalDownload', {
+            jobId, schemeId, schemeCode, error: schemeError.message
+          }, userId, tenantId, schemeError.stack);
+          
+          schemeErrors.push({
+            scheme_id: schemeId,
+            scheme_code: schemeCode,
+            error: schemeError.message || 'Unknown error'
+          });
+          
+          this.updateProgress(jobId, {
+            errors: schemeErrors
+          });
+        }
+      }
+
+      // Determine final status
+      const finalStatus: 'completed' | 'failed' = 
+        processedSchemes > 0 ? 'completed' : 'failed';
+      
+      const finalMessage = processedSchemes === schemeIds.length
+        ? 'All schemes processed successfully'
+        : schemeErrors.length === schemeIds.length
+        ? 'All schemes failed to process'
+        : `${processedSchemes} of ${schemeIds.length} schemes processed successfully`;
+
+      // Create result summary
+      const resultSummary: NavDownloadJobResult = {
+        total_schemes: schemeIds.length,
+        successful_downloads: processedSchemes,
+        failed_downloads: schemeErrors.length,
+        total_records_inserted: totalRecordsInserted,
+        total_records_updated: totalRecordsUpdated,
+        schemes_with_errors: schemeErrors,
+        execution_time_ms: Date.now() - startTime,
+        api_calls_made: schemeIds.length
+      };
+
+      await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+        status: finalStatus,
+        result_summary: resultSummary
+      });
+
+      this.updateProgress(jobId, {
+        status: finalStatus,
+        currentStep: finalMessage,
+        progressPercentage: 100,
+        processedSchemes: processedSchemes,
+        processedRecords: totalRecordsInserted + totalRecordsUpdated,
+        errors: schemeErrors
+      });
+
+      // Mark historical download complete only if all schemes succeeded
+      if (schemeErrors.length === 0) {
+        try {
+          await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, schemeIds);
+        } catch (markError: any) {
+          SimpleLogger.error('NavDownload', 'Failed to mark historical download complete', 'executeHistoricalDownload', {
+            jobId, error: markError.message
+          });
+        }
+      }
+
+      this.cleanupAfterDownload(jobId, 'historical', tenantId, isLive);
+      
+      SimpleLogger.info('NavDownload', 'Historical download completed', 'executeHistoricalDownload', {
+        jobId,
+        tenantId,
+        userId,
+        totalSchemes: schemeIds.length,
+        successfulSchemes: processedSchemes,
+        failedSchemes: schemeErrors.length,
+        recordsInserted: totalRecordsInserted,
+        recordsUpdated: totalRecordsUpdated,
+        executionTimeMs: Date.now() - startTime
+      }, userId, tenantId);
+
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      
+      SimpleLogger.error('NavDownload', 'Historical download failed catastrophically', 'executeHistoricalDownload', {
+        jobId, tenantId, userId, error: errorMessage, executionTimeMs: Date.now() - startTime
+      }, userId, tenantId, error.stack);
+      
+      try {
+        await this.navService.updateDownloadJob(tenantId, isLive, jobId, {
+          status: 'failed',
+          error_details: errorMessage
+        });
+        
+        this.updateProgress(jobId, {
+          status: 'failed',
+          currentStep: `Download failed: ${errorMessage}`,
+          progressPercentage: 0
+        });
+      } catch (updateError: any) {
+        SimpleLogger.error('NavDownload', 'Failed to update job after error', 'executeHistoricalDownload', {
+          jobId, updateError: updateError.message
+        });
+      }
+      
+      this.cleanupAfterDownload(jobId, 'historical', tenantId, isLive);
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger weekly NAV download - UNCHANGED
    */
   async triggerWeeklyDownload(
     tenantId: number,
@@ -301,7 +600,6 @@ export class NavDownloadService {
 
       this.initializeProgressTracking(downloadJob.id, 'weekly', untrackedSchemes.length);
 
-      // CRASH PREVENTION: Execute download asynchronously with proper error handling
       setImmediate(async () => {
         try {
           await this.executeDownload(downloadJob.id, tenantId, isLive, systemUserId);
@@ -332,314 +630,17 @@ export class NavDownloadService {
         jobId: downloadJob.id,
         message: `Weekly download started for ${untrackedSchemes.length} untracked schemes`
       };
-
     } catch (error: any) {
       this.downloadLocks.delete(lockKey);
       throw error;
     }
   }
 
-  // ==================== SEQUENTIAL DOWNLOAD METHODS ====================
+  // ==================== DOWNLOAD EXECUTION (DAILY/WEEKLY) ====================
 
   /**
-   * Execute single historical download (<=90 days)
-   */
-  private async executeSingleHistoricalDownload(
-    tenantId: number,
-    isLive: boolean,
-    userId: number,
-    request: SequentialDownloadRequest
-  ): Promise<SequentialDownloadResponse> {
-    const daysDiff = Math.ceil((request.end_date.getTime() - request.start_date.getTime()) / (1000 * 60 * 60 * 24));
-    const estimatedTimeMs = this.estimateDownloadTime(request.scheme_ids.length, daysDiff);
-
-    const downloadJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
-      job_type: 'historical',
-      scheme_ids: request.scheme_ids,
-      scheduled_date: new Date(),
-      start_date: request.start_date,
-      end_date: request.end_date
-    });
-
-    this.initializeProgressTracking(downloadJob.id, 'historical', request.scheme_ids.length, estimatedTimeMs);
-
-    // CRASH PREVENTION: Execute download asynchronously with proper error handling
-    setImmediate(async () => {
-      try {
-        await this.executeDownload(downloadJob.id, tenantId, isLive, userId);
-      } catch (error: any) {
-        SimpleLogger.error('NavDownload', 'Async single historical download execution failed - SERVER DID NOT CRASH', 'executeSingleHistoricalDownload-async', {
-          jobId: downloadJob.id, tenantId, userId, error: error.message
-        }, userId, tenantId, error.stack);
-        
-        try {
-          await this.navService.updateDownloadJob(tenantId, isLive, downloadJob.id, {
-            status: 'failed',
-            error_details: error.message
-          });
-          this.updateProgress(downloadJob.id, {
-            status: 'failed',
-            currentStep: `Download failed: ${error.message}`,
-            progressPercentage: 0
-          });
-        } catch (updateError: any) {
-          SimpleLogger.error('NavDownload', 'Failed to update job status after async error', 'executeSingleHistoricalDownload-cleanup', {
-            jobId: downloadJob.id, updateError: updateError.message
-          }, userId, tenantId);
-        }
-      }
-    });
-
-    return {
-      parent_job_id: downloadJob.id,
-      total_chunks: 1,
-      chunks: [{
-        chunk_number: 1,
-        start_date: request.start_date,
-        end_date: request.end_date,
-        day_count: daysDiff
-      }],
-      estimated_time_ms: estimatedTimeMs,
-      message: `Historical download started for ${request.scheme_ids.length} schemes (${daysDiff} days)`
-    };
-  }
-
-  /**
-   * Execute sequential historical download (>90 days)
-   */
-  private async executeSequentialHistoricalDownload(
-    tenantId: number,
-    isLive: boolean,
-    userId: number,
-    request: SequentialDownloadRequest,
-    validation: DateRangeValidationResult
-  ): Promise<SequentialDownloadResponse> {
-    const chunks = this.splitDateRangeIntoChunks(request.start_date, request.end_date);
-    const totalEstimatedTime = chunks.reduce((total, chunk) => 
-      total + this.estimateDownloadTime(request.scheme_ids.length, chunk.day_count), 0
-    );
-
-    // Create parent job
-    const parentJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
-      job_type: 'historical',
-      scheme_ids: request.scheme_ids,
-      scheduled_date: new Date(),
-      start_date: request.start_date,
-      end_date: request.end_date
-    });
-
-    // Create child jobs for each chunk
-    const childJobs: NavDownloadJob[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const childJob = await this.navService.createDownloadJob(tenantId, isLive, userId, {
-        job_type: 'historical',
-        scheme_ids: request.scheme_ids,
-        scheduled_date: new Date(),
-        start_date: chunk.start_date,
-        end_date: chunk.end_date,
-        parent_job_id: parentJob.id,
-        chunk_number: i + 1,
-        total_chunks: chunks.length
-      });
-      childJobs.push(childJob);
-    }
-
-    this.initializeSequentialProgress(parentJob.id, chunks, childJobs);
-
-    // CRASH PREVENTION: Execute sequential downloads asynchronously with proper error handling
-    setImmediate(async () => {
-      try {
-        await this.executeSequentialDownloads(parentJob.id, childJobs, tenantId, isLive, userId);
-      } catch (error: any) {
-        SimpleLogger.error('NavDownload', 'Async sequential download execution failed - SERVER DID NOT CRASH', 'executeSequentialHistoricalDownload-async', {
-          parentJobId: parentJob.id, tenantId, userId, error: error.message
-        }, userId, tenantId, error.stack);
-        
-        try {
-          await this.navService.updateDownloadJob(tenantId, isLive, parentJob.id, {
-            status: 'failed',
-            error_details: error.message
-          });
-          this.updateSequentialProgress(parentJob.id, {
-            overall_status: 'failed'
-          });
-        } catch (updateError: any) {
-          SimpleLogger.error('NavDownload', 'Failed to update parent job status after async error', 'executeSequentialHistoricalDownload-cleanup', {
-            parentJobId: parentJob.id, updateError: updateError.message
-          }, userId, tenantId);
-        }
-      }
-    });
-
-    SimpleLogger.info('NavDownload', 'Sequential historical download initiated', 'executeSequentialHistoricalDownload', {
-      tenantId, userId, parentJobId: parentJob.id, totalChunks: chunks.length,
-      dateRange: `${request.start_date.toISOString().split('T')[0]} to ${request.end_date.toISOString().split('T')[0]}`,
-      estimatedTimeMs: totalEstimatedTime
-    }, userId, tenantId);
-
-    return {
-      parent_job_id: parentJob.id,
-      total_chunks: chunks.length,
-      chunks,
-      estimated_time_ms: totalEstimatedTime,
-      message: `Sequential download started: ${chunks.length} chunks for ${request.scheme_ids.length} schemes`
-    };
-  }
-
-  /**
-   * Execute sequential downloads one by one
-   */
-  private async executeSequentialDownloads(
-    parentJobId: number,
-    childJobs: NavDownloadJob[],
-    tenantId: number,
-    isLive: boolean,
-    userId: number
-  ): Promise<void> {
-    try {
-      await this.navService.updateDownloadJob(tenantId, isLive, parentJobId, {
-        status: 'running'
-      });
-
-      for (let i = 0; i < childJobs.length; i++) {
-        const childJob = childJobs[i];
-        
-        this.updateSequentialProgress(parentJobId, {
-          current_chunk: {
-            chunk_number: childJob.chunk_number!,
-            start_date: childJob.start_date!,
-            end_date: childJob.end_date!,
-            status: 'running'
-          }
-        });
-
-        SimpleLogger.info('NavDownload', 'Starting sequential chunk download', 'executeSequentialDownloads', {
-          parentJobId, childJobId: childJob.id, chunkNumber: childJob.chunk_number,
-          dateRange: `${childJob.start_date} to ${childJob.end_date}`
-        }, userId, tenantId);
-
-        try {
-          await this.executeDownload(childJob.id, tenantId, isLive, userId);
-          
-          this.updateSequentialProgress(parentJobId, {
-            completed_chunks: i + 1,
-            progress_percentage: Math.round(((i + 1) / childJobs.length) * 100)
-          });
-
-        } catch (error: any) {
-          SimpleLogger.error('NavDownload', 'Sequential chunk download failed but continuing', 'executeSequentialDownloads', {
-            parentJobId, childJobId: childJob.id, chunkNumber: childJob.chunk_number,
-            error: error.message
-          }, userId, tenantId, error.stack);
-
-          const currentProgress = this.sequentialProgress.get(parentJobId);
-          if (currentProgress) {
-            currentProgress.errors.push({
-              chunk_number: childJob.chunk_number!,
-              error: error.message,
-              date_range: `${childJob.start_date} to ${childJob.end_date}`
-            });
-          }
-        }
-      }
-
-      await this.navService.updateDownloadJob(tenantId, isLive, parentJobId, {
-        status: 'completed'
-      });
-
-      this.updateSequentialProgress(parentJobId, {
-        overall_status: 'completed'
-      });
-
-      SimpleLogger.info('NavDownload', 'Sequential download completed', 'executeSequentialDownloads', {
-        parentJobId, totalChunks: childJobs.length, completedChunks: childJobs.length
-      }, userId, tenantId);
-
-    } catch (error: any) {
-      await this.navService.updateDownloadJob(tenantId, isLive, parentJobId, {
-        status: 'failed',
-        error_details: error.message
-      });
-
-      this.updateSequentialProgress(parentJobId, {
-        overall_status: 'failed'
-      });
-
-      SimpleLogger.error('NavDownload', 'Sequential download failed', 'executeSequentialDownloads', {
-        parentJobId, error: error.message
-      }, userId, tenantId, error.stack);
-
-      throw error;
-    }
-  }
-
-  /**
-   * Split date range into 90-day chunks
-   */
-  private splitDateRangeIntoChunks(startDate: Date, endDate: Date): DownloadChunk[] {
-    const chunks: DownloadChunk[] = [];
-    let currentStart = new Date(startDate);
-    let chunkNumber = 1;
-
-    while (currentStart < endDate) {
-      let currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentEnd.getDate() + 89);
-
-      if (currentEnd > endDate) {
-        currentEnd = new Date(endDate);
-      }
-
-      const dayCount = Math.ceil((currentEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-      chunks.push({
-        chunk_number: chunkNumber,
-        start_date: new Date(currentStart),
-        end_date: new Date(currentEnd),
-        day_count: dayCount
-      });
-
-      currentStart = new Date(currentEnd);
-      currentStart.setDate(currentStart.getDate() + 1);
-      chunkNumber++;
-    }
-
-    return chunks;
-  }
-
-  /**
-   * Validate date range and determine chunking requirements
-   */
-  private validateDateRange(startDate: Date, endDate: Date): DateRangeValidationResult {
-    if (startDate > endDate) {
-      return {
-        valid: false,
-        error: 'Start date cannot be after end date'
-      };
-    }
-
-    const today = new Date();
-    if (endDate > today) {
-      return {
-        valid: false,
-        error: 'End date cannot be in the future'
-      };
-    }
-
-    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const chunksRequired = Math.ceil(dayCount / 90);
-
-    return {
-      valid: true,
-      day_count: dayCount,
-      chunks_required: chunksRequired
-    };
-  }
-
-  // ==================== DOWNLOAD EXECUTION ====================
-
-  /**
-   * Execute download job with comprehensive error handling
+   * Execute download job - UPDATED to handle only daily/weekly
+   * Historical downloads now use executeHistoricalDownload() instead
    */
   private async executeDownload(
     jobId: number,
@@ -676,7 +677,6 @@ export class NavDownloadService {
       let navData: ParsedNavRecord[] = [];
       let amfiResponse;
 
-      // Download data from AMFI with proper error handling
       try {
         if (job.job_type === 'daily' || job.job_type === 'weekly') {
           this.updateProgress(jobId, {
@@ -689,28 +689,13 @@ export class NavDownloadService {
             requestId: `${job.job_type}_${jobId}_${Date.now()}`
           });
         } else if (job.job_type === 'historical') {
-          if (!job.start_date || !job.end_date) {
-            throw new Error('Historical download requires start and end dates');
-          }
-          
-          this.updateProgress(jobId, {
-            status: 'running',
-            currentStep: `Fetching historical data from ${job.start_date} to ${job.end_date}...`,
-            progressPercentage: 20
-          });
-          
-          amfiResponse = await this.amfiService.downloadHistoricalNavData(
-            new Date(job.start_date),
-            new Date(job.end_date),
-            { requestId: `historical_${jobId}_${Date.now()}` }
-          );
+          // Historical downloads should use executeHistoricalDownload() method
+          throw new Error('Historical downloads should use executeHistoricalDownload() method');
         }
       } catch (amfiError: any) {
-        // AMFI API errors should not crash the server
         const errorMessage = `AMFI API Error: ${amfiError.message}`;
         SimpleLogger.error('NavDownload', 'AMFI API call failed but server did not crash', 'executeDownload-amfi', {
-          jobId, jobType: job.job_type, error: errorMessage,
-          startDate: job.start_date, endDate: job.end_date
+          jobId, jobType: job.job_type, error: errorMessage
         }, userId, tenantId, amfiError.stack);
         
         throw new Error(errorMessage);
@@ -728,21 +713,12 @@ export class NavDownloadService {
         progressPercentage: 35
       });
 
-      // Filter data for tracked schemes
       const trackedSchemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, job.schemes.map(s => s.scheme_id));
       const schemeCodeSet = new Set(trackedSchemeCodes);
       
       const filteredNavData = navData.filter(record => 
         schemeCodeSet.has(record.scheme_code)
       );
-
-      // Add this debug logging:
-SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
-  totalAmfiRecords: navData.length,
-  trackedSchemeCodes: Array.from(schemeCodeSet),
-  filteredRecords: filteredNavData.length,
-  sampleFilteredCodes: filteredNavData.slice(0, 5).map(r => r.scheme_code)
-});
 
       this.updateProgress(jobId, {
         status: 'running',
@@ -775,7 +751,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
         progressPercentage: 90
       });
 
-      // Process errors if any
       let schemesWithErrors: Array<{ scheme_id: number; scheme_code: string; error: string }> = [];
       
       if (upsertResult.errors.length > 0) {
@@ -805,7 +780,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
         });
       }
 
-      // Create result summary
       const resultSummary: NavDownloadJobResult = {
         total_schemes: job.schemes.length,
         successful_downloads: job.schemes.length - upsertResult.errors.length,
@@ -833,10 +807,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
         errors: schemesWithErrors
       });
 
-      if (job.job_type === 'historical') {
-        await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, job.schemes.map(s => s.scheme_id));
-      }
-
       this.cleanupAfterDownload(jobId, job.job_type, tenantId, isLive);
 
       SimpleLogger.info('NavDownload', 'Download job completed successfully', 'executeDownload', {
@@ -844,11 +814,8 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
         successfulDownloads: resultSummary.successful_downloads,
         failedDownloads: resultSummary.failed_downloads,
         recordsProcessed: resultSummary.total_records_inserted + resultSummary.total_records_updated,
-        executionTimeMs: resultSummary.execution_time_ms,
-        parentJobId: job.parent_job_id,
-        chunkNumber: job.chunk_number
+        executionTimeMs: resultSummary.execution_time_ms
       }, userId, tenantId);
-
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error';
       
@@ -878,53 +845,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
 
       throw error;
     }
-  }
-
-  // ==================== SEQUENTIAL PROGRESS TRACKING ====================
-
-  private initializeSequentialProgress(
-    parentJobId: number,
-    chunks: DownloadChunk[],
-    childJobs: NavDownloadJob[]
-  ): void {
-    const sequentialProgress: SequentialJobProgress = {
-      parent_job_id: parentJobId,
-      total_chunks: chunks.length,
-      completed_chunks: 0,
-      overall_status: 'pending',
-      progress_percentage: 0,
-      start_time: new Date(),
-      errors: []
-    };
-
-    this.sequentialProgress.set(parentJobId, sequentialProgress);
-  }
-
-  private updateSequentialProgress(
-    parentJobId: number,
-    updates: Partial<SequentialJobProgress>
-  ): void {
-    const existing = this.sequentialProgress.get(parentJobId);
-    if (!existing) return;
-
-    const updated: SequentialJobProgress = {
-      ...existing,
-      ...updates
-    };
-
-    if (updated.completed_chunks > 0 && updated.total_chunks > 0) {
-      const elapsedTime = Date.now() - existing.start_time.getTime();
-      const avgTimePerChunk = elapsedTime / updated.completed_chunks;
-      const remainingChunks = updated.total_chunks - updated.completed_chunks;
-      const estimatedCompletion = new Date(Date.now() + (avgTimePerChunk * remainingChunks));
-      updated.estimated_completion = estimatedCompletion;
-    }
-
-    this.sequentialProgress.set(parentJobId, updated);
-  }
-
-  async getSequentialProgress(parentJobId: number): Promise<SequentialJobProgress | null> {
-    return this.sequentialProgress.get(parentJobId) || null;
   }
 
   // ==================== UTILITY METHODS ====================
@@ -973,6 +893,7 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
       const query = `
         SELECT scheme_code FROM t_scheme_details
         WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
+        ORDER BY ARRAY_POSITION($3, id)
       `;
       
       const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
@@ -1063,19 +984,12 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
       SimpleLogger.info('NavDownload', 'Download cancelled by user', 'cancelDownload', {
         jobId, tenantId, userId
       }, userId, tenantId);
-
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to cancel download', 'cancelDownload', {
         jobId, tenantId, userId, error: error.message
       }, userId, tenantId, error.stack);
       throw error;
     }
-  }
-
-  private estimateDownloadTime(schemeCount: number, dayCount: number): number {
-    const baseTimePerScheme = 2000;
-    const apiCallsNeeded = Math.ceil(dayCount / 30);
-    return schemeCount * baseTimePerScheme * apiCallsNeeded;
   }
 
   private async getUntrackedSchemesForWeeklyDownload(
@@ -1153,6 +1067,10 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
     locksToRemove.forEach(key => this.downloadLocks.delete(key));
   }
 
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   // ==================== DEPRECATED N8N INTEGRATION ====================
 
   async handleN8nCallback(payload: N8nCallbackPayload): Promise<void> {
@@ -1173,7 +1091,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
           jobId: job_id, status, error
         });
       }
-
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to handle N8N callback (deprecated)', 'handleN8nCallback', {
         payload, error: error.message
@@ -1190,7 +1107,6 @@ SimpleLogger.info('NavDownload', 'Filtering debug', 'executeDownload', {
   public clearAllLocks(): void {
     this.downloadLocks.clear();
     this.progressUpdates.clear();
-    this.sequentialProgress.clear();
     SimpleLogger.info('NavDownload', 'All download locks and progress cleared', 'clearAllLocks');
   }
 }
