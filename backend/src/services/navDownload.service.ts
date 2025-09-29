@@ -1,6 +1,5 @@
 // backend/src/services/navDownload.service.ts
-// UPDATED: Simplified historical downloads using MFAPI.in scheme-by-scheme approach
-// REMOVED: Complex sequential chunking logic (400+ lines removed)
+// UPDATED: Fixed historical download status update to properly mark as completed
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -214,21 +213,7 @@ export class NavDownloadService {
         throw new Error(`Historical download already in progress (Job ID: ${existingLock.jobId})`);
       }
 
-      // Check historical download completion
-      for (const schemeId of request.scheme_ids) {
-        const bookmarks = await this.navService.getUserBookmarks(
-          tenantId, 
-          isLive, 
-          userId,
-          { page: 1, page_size: 1000 }
-        );
-        
-        const bookmark = bookmarks.bookmarks.find(b => b.scheme_id === schemeId);
-        
-        if (bookmark && bookmark.historical_download_completed) {
-          throw new Error(NAV_ERROR_CODES.HISTORICAL_DOWNLOAD_COMPLETED);
-        }
-      }
+      // REMOVED: Check for historical_download_completed - allow re-downloads for earlier data
 
       // Create download job
       const downloadJob = await this.navService.createDownloadJob(
@@ -346,7 +331,8 @@ export class NavDownloadService {
   }
 
   /**
-   * NEW: Execute historical download scheme-by-scheme using MFAPI.in
+   * FIXED: Execute historical download scheme-by-scheme using MFAPI.in
+   * Now properly updates bookmark status to 'success' after completion
    */
   private async executeHistoricalDownload(
     jobId: number,
@@ -440,6 +426,27 @@ export class NavDownloadService {
             jobId, schemeCode, inserted: upsertResult.inserted, updated: upsertResult.updated
           });
           
+          // ADDED: Update bookmark status to success for this scheme
+          try {
+            await this.navService.updateBookmarkDownloadStatus(
+              tenantId,
+              isLive,
+              userId,
+              schemeId,
+              {
+                last_download_status: 'success',
+                last_download_attempt: new Date()
+              }
+            );
+            SimpleLogger.info('NavDownload', `Updated bookmark status to success for scheme ${schemeCode}`, 'executeHistoricalDownload', {
+              jobId, schemeId, schemeCode
+            });
+          } catch (statusError: any) {
+            SimpleLogger.error('NavDownload', 'Failed to update bookmark status but continuing', 'executeHistoricalDownload', {
+              jobId, schemeId, schemeCode, error: statusError.message
+            });
+          }
+          
           this.updateProgress(jobId, {
             processedSchemes: processedSchemes,
             processedRecords: totalRecordsInserted + totalRecordsUpdated
@@ -460,6 +467,25 @@ export class NavDownloadService {
             scheme_code: schemeCode,
             error: schemeError.message || 'Unknown error'
           });
+          
+          // ADDED: Update bookmark status to failed for this scheme
+          try {
+            await this.navService.updateBookmarkDownloadStatus(
+              tenantId,
+              isLive,
+              userId,
+              schemeId,
+              {
+                last_download_status: 'failed',
+                last_download_error: schemeError.message,
+                last_download_attempt: new Date()
+              }
+            );
+          } catch (statusError: any) {
+            SimpleLogger.error('NavDownload', 'Failed to update bookmark status to failed', 'executeHistoricalDownload', {
+              jobId, schemeId, schemeCode, error: statusError.message
+            });
+          }
           
           this.updateProgress(jobId, {
             errors: schemeErrors
@@ -503,10 +529,13 @@ export class NavDownloadService {
         errors: schemeErrors
       });
 
-      // Mark historical download complete only if all schemes succeeded
+      // FIXED: Mark historical download complete only if all schemes succeeded
       if (schemeErrors.length === 0) {
         try {
           await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, schemeIds);
+          SimpleLogger.info('NavDownload', 'Marked all schemes as historical_download_completed', 'executeHistoricalDownload', {
+            jobId, schemeIds
+          });
         } catch (markError: any) {
           SimpleLogger.error('NavDownload', 'Failed to mark historical download complete', 'executeHistoricalDownload', {
             jobId, error: markError.message
@@ -546,6 +575,25 @@ export class NavDownloadService {
           currentStep: `Download failed: ${errorMessage}`,
           progressPercentage: 0
         });
+
+        // ADDED: Update all schemes to failed status
+        for (const schemeId of schemeIds) {
+          try {
+            await this.navService.updateBookmarkDownloadStatus(
+              tenantId,
+              isLive,
+              userId,
+              schemeId,
+              {
+                last_download_status: 'failed',
+                last_download_error: errorMessage,
+                last_download_attempt: new Date()
+              }
+            );
+          } catch (statusError: any) {
+            // Continue even if status update fails
+          }
+        }
       } catch (updateError: any) {
         SimpleLogger.error('NavDownload', 'Failed to update job after error', 'executeHistoricalDownload', {
           jobId, updateError: updateError.message

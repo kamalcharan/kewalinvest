@@ -260,29 +260,29 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
 
             {/* UPDATED: Historical Download Button with improved tooltip */}
             <button
-              onClick={() => onHistoricalDownload?.(bookmark)}
-              disabled={bookmark.historical_download_completed}
-              title={bookmark.historical_download_completed 
-                ? 'Historical data already downloaded' 
-                : 'Download complete historical NAV data using MFAPI.in'}
-              style={{
-                padding: '4px 8px',
-                fontSize: '11px',
-                backgroundColor: bookmark.historical_download_completed 
-                  ? colors.semantic.success 
-                  : colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: bookmark.historical_download_completed ? 'default' : 'pointer',
-                fontWeight: '500',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                lineHeight: '1.2'
-              }}
-            >
-              {bookmark.historical_download_completed ? '✓ Historical' : '📥 Historical'}
-            </button>
+  onClick={() => onHistoricalDownload?.(bookmark)}
+  disabled={false} // CHANGED: Never disable, always allow historical downloads
+  title={bookmark.historical_download_completed 
+    ? "Download additional historical NAV data" 
+    : "Download complete historical NAV data using MFAPI.in"}
+  style={{
+    padding: '4px 8px',
+    fontSize: '11px',
+    backgroundColor: bookmark.historical_download_completed 
+      ? colors.semantic.success 
+      : colors.brand.primary,
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer', // CHANGED: Always allow clicking
+    fontWeight: '500',
+    transition: 'all 0.2s ease',
+    whiteSpace: 'nowrap',
+    lineHeight: '1.2'
+  }}
+>
+  {bookmark.historical_download_completed ? '✓ Download More' : '📥 Historical'}
+</button>
           </div>
 
           {/* Download Time Display */}

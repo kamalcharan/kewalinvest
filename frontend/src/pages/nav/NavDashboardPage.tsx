@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// MINIMAL FIX: Only remove the non-existent import and add basic debouncing
+// UPDATED: Simplified for MFAPI.in - removed sequential download complexity
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,19 +13,6 @@ import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
-
-// MINIMAL FIX: Simple debounce function instead of importing from non-existent service
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
-  return function executedFunction(...args: Parameters<T>) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
 
 const NavDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -51,7 +38,7 @@ const NavDashboardPage: React.FC = () => {
   } = useNavDashboard();
 
   const { triggerDailyDownload } = useDownloads();
-  const { progress, startPolling, stopPolling } = useDownloadProgress();
+  const { startPolling, stopPolling } = useDownloadProgress();
 
   // Modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -62,21 +49,17 @@ const NavDashboardPage: React.FC = () => {
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
   const [showNavDataModal, setShowNavDataModal] = useState(false);
-  const [currentDownloadJobId, setCurrentDownloadJobId] = useState<number | null>(null);
 
-  // FIXED: Debounced refresh function to prevent excessive API calls
-  const debouncedRefresh = useCallback(
-    debounce(() => {
-      const now = Date.now();
-      if (now - lastRefreshRef.current > refreshCooldown && isMountedRef.current) {
-        lastRefreshRef.current = now;
-        refetchAll();
-      }
-    }, 1000),
-    [refetchAll]
-  );
+  // Debounced refresh to prevent excessive API calls
+  const debouncedRefresh = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefreshRef.current > refreshCooldown && isMountedRef.current) {
+      lastRefreshRef.current = now;
+      refetchAll();
+    }
+  }, [refetchAll]);
 
-  // FIXED: Stable handler functions to prevent re-renders
+  // Handle daily download trigger
   const handleTriggerDailyDownload = useCallback(async () => {
     if (isTriggeringDownload) return;
 
@@ -89,8 +72,11 @@ const NavDashboardPage: React.FC = () => {
         toastService.info(result.message);
       } else {
         toastService.success('Daily download started successfully!');
-        // Debounced refresh instead of immediate
-        debouncedRefresh();
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            debouncedRefresh();
+          }
+        }, 1000);
       }
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -105,24 +91,23 @@ const NavDashboardPage: React.FC = () => {
     }
   }, [isTriggeringDownload, triggerDailyDownload, debouncedRefresh]);
 
-  // FIXED: Stable toggle handler that doesn't trigger unnecessary refreshes
+  // Handle toggle daily download
   const handleToggleDaily = useCallback(async (bookmarkId: number, enabled: boolean) => {
     try {
-      // The EnhancedBookmarkCard handles the API call internally
-      // Only refresh if we're not already loading
+      // EnhancedBookmarkCard handles the API call internally
       if (!isLoading) {
         setTimeout(() => {
           if (isMountedRef.current) {
             debouncedRefresh();
           }
-        }, 1000); // Delay refresh to allow backend to update
+        }, 1000);
       }
     } catch (error: any) {
       console.error('Failed to toggle daily download:', error);
     }
   }, [isLoading, debouncedRefresh]);
 
-  // FIXED: Stable nav data viewer handler
+  // Handle view NAV data
   const handleViewNavData = useCallback((bookmark: SchemeBookmark) => {
     if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
       toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
@@ -143,19 +128,48 @@ const NavDashboardPage: React.FC = () => {
     );
   }, []);
 
+  // Handle historical download
   const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
     setSelectedBookmark(bookmark);
     setShowHistoricalModal(true);
   }, []);
 
+  // UPDATED: Simplified historical download handler - removed sequential complexity
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
-    setCurrentDownloadJobId(jobId);
+    console.log('Historical download started with job ID:', jobId);
+    
+    // Validate job ID
+    if (!jobId || jobId <= 0) {
+      toastService.error('Invalid download job ID received');
+      return;
+    }
+
     setShowProgressModal(true);
-    startPolling(jobId, (progressData) => {
+    setCurrentProgress(null);
+
+    // SIMPLIFIED: Single polling - no sequential complexity
+    startPolling(jobId, (progressData: DownloadProgress) => {
       setCurrentProgress(progressData);
+      
+      FrontendErrorLogger.info(
+        'Progress update',
+        'NavDashboardPage',
+        {
+          jobId,
+          status: progressData.status,
+          progressPercentage: progressData.progressPercentage,
+          processedSchemes: progressData.processedSchemes,
+          totalSchemes: progressData.totalSchemes
+        }
+      );
+    }).catch((error) => {
+      console.error('Progress polling failed:', error);
+      toastService.error('Failed to track download progress: ' + error.message);
+      setShowProgressModal(false);
     });
   }, [startPolling]);
 
+  // Modal close handlers
   const handleCloseHistoricalModal = useCallback(() => {
     setShowHistoricalModal(false);
     setSelectedBookmark(null);
@@ -166,7 +180,13 @@ const NavDashboardPage: React.FC = () => {
     setSelectedBookmark(null);
   }, []);
 
-  // FIXED: Stable navigation handlers
+  const handleCloseProgressModal = useCallback(() => {
+    setShowProgressModal(false);
+    setCurrentProgress(null);
+    stopPolling();
+  }, [stopPolling]);
+
+  // Navigation handlers
   const handleNavigateToBookmarks = useCallback(() => {
     try {
       navigate('/nav/bookmarks');
@@ -206,7 +226,7 @@ const NavDashboardPage: React.FC = () => {
     }
   }, [navigate]);
 
-  // FIXED: Cleanup on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -214,13 +234,7 @@ const NavDashboardPage: React.FC = () => {
     };
   }, [stopPolling]);
 
-  // FIXED: Rate limit error handling
-  useEffect(() => {
-    if (error && error.includes('Rate limit')) {
-      toastService.warning('Rate limit reached. Please wait before refreshing.');
-    }
-  }, [error]);
-
+  // Error display
   if (error && !error.includes('Rate limit')) {
     return (
       <div style={{ padding: '24px' }}>
@@ -368,28 +382,6 @@ const NavDashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Rate Limit Warning */}
-        {error && error.includes('Rate limit') && (
-          <div style={{
-            backgroundColor: colors.semantic.warning + '10',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            marginBottom: '24px',
-            border: `1px solid ${colors.semantic.warning}30`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span style={{ fontSize: '20px' }}>⚠️</span>
-            <div>
-              <strong style={{ color: colors.semantic.warning }}>Rate Limit Reached</strong>
-              <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
-                Too many requests. Please wait before refreshing the page.
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Scheduler Status Card */}
         {schedulerConfig && (
@@ -665,7 +657,7 @@ const NavDashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Recent Bookmarks - ENHANCED VERSION */}
+        {/* Recent Bookmarks */}
         <div style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
@@ -767,7 +759,6 @@ const NavDashboardPage: React.FC = () => {
                 />
               ))}
               
-              {/* Show "View All" link if there are more bookmarks */}
               {bookmarks.length > 5 && (
                 <div style={{
                   textAlign: 'center',
@@ -803,25 +794,22 @@ const NavDashboardPage: React.FC = () => {
         bookmark={selectedBookmark}
         onClose={handleCloseHistoricalModal}
         onDownloadStarted={handleHistoricalDownloadStarted}
-        onShowProgress={(jobId) => {
-          setCurrentDownloadJobId(jobId);
-          setShowProgressModal(true);
-        }}
+        onShowProgress={handleHistoricalDownloadStarted}
       />
 
-      {/* NAV Data Viewer Modal - Real viewer */}
+      {/* NAV Data Viewer Modal */}
       <NavDataViewerModal
         isOpen={showNavDataModal}
         bookmark={selectedBookmark}
         onClose={handleCloseNavDataModal}
       />
 
-      {/* Progress Modal */}
+      {/* UPDATED: Simplified Progress Modal - removed sequential props */}
       <NavProgressModal
         isOpen={showProgressModal}
         progress={currentProgress}
-        onClose={() => setShowProgressModal(false)}
-        title="Downloading NAV Data"
+        onClose={handleCloseProgressModal}
+        title="Downloading Historical NAV Data"
         showCancelButton={true}
       />
 

@@ -273,46 +273,61 @@ export class NavService {
   }
 
   private async handleRequest<T>(
-    url: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T> | PaginatedResponse<T>> {
-    try {
-      console.log('🌐 NavService handleRequest:');
-      console.log('🌐 - URL:', url);
-      console.log('🌐 - Environment check:', this.getEnvironment());
-      
-      const headers = this.getAuthHeaders();
-      console.log('🌐 - Headers:', headers);
-      
-      const response = await fetch(url, {
-        headers,
-        ...options
-      });
+  url: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T> | PaginatedResponse<T>> {
+  try {
+    console.log('🌐 NavService handleRequest:');
+    console.log('🌐 - URL:', url);
+    
+    const headers = this.getAuthHeaders();
+    console.log('🌐 - Headers:', headers);
+    
+    const response = await fetch(url, {
+      headers,
+      ...options
+    });
 
-      console.log('🌐 - Response status:', response.status);
-      console.log('🌐 - Response ok:', response.ok);
+    console.log('🌐 - Response status:', response.status);
+    console.log('🌐 - Response ok:', response.ok);
 
-      if (!response.ok) {
-        console.error('🌐 - Response not ok, status:', response.status);
-        const errorText = await response.text();
-        console.error('🌐 - Error response text:', errorText);
-        
-        const errorData = errorText ? JSON.parse(errorText) : {};
-        throw new Error(getAPIErrorMessage(errorData));
+    if (!response.ok) {
+      console.error('🌐 - Response not ok, status:', response.status);
+      const errorText = await response.text();
+      console.error('🌐 - Error response text:', errorText);
+      
+      // ADDED: Special handling for rate limiting
+      if (response.status === 429) {
+        return {
+          success: false,
+          error: 'Too many requests. Please wait a moment before trying again.'
+        };
       }
-
-      const data = await response.json();
-      console.log('🌐 - Success response data:', data);
-      return data;
-    } catch (error: any) {
-      console.error('🌐 NavService Error:', error);
-      console.error('🌐 URL was:', url);
-      return {
-        success: false,
-        error: error.message || 'An unexpected error occurred'
-      };
+      
+      // FIXED: Try to parse JSON, but handle plain text errors
+      let errorData: any = {};
+      try {
+        errorData = errorText ? JSON.parse(errorText) : {};
+      } catch (parseError) {
+        // If it's not JSON, use the text directly
+        errorData = { error: errorText };
+      }
+      
+      throw new Error(getAPIErrorMessage(errorData));
     }
+
+    const data = await response.json();
+    console.log('🌐 - Success response data:', data);
+    return data;
+  } catch (error: any) {
+    console.error('🌐 NavService Error:', error);
+    console.error('🌐 URL was:', url);
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred'
+    };
   }
+}   
 
   // ==================== SCHEME SEARCH OPERATIONS ====================
 

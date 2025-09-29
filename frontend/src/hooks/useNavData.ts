@@ -1031,7 +1031,7 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
   const startPolling = useCallback(async (
     jobId: number, 
     onProgress?: (progress: DownloadProgress) => void,
-    interval: number = 2000
+    interval: number = 3000
   ): Promise<DownloadProgress> => {
     stopPolling();
     setError(null);
