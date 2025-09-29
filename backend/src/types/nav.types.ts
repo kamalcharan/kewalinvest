@@ -1,6 +1,7 @@
 // backend/src/types/nav.types.ts
 // File 3/14: TypeScript interfaces for NAV tracking system
 // UPDATED: Add enhanced bookmark fields for download status and date ranges
+// UPDATED: Add sequential download support
 
 export interface SchemeBookmark {
   id: number;
@@ -23,6 +24,7 @@ export interface SchemeBookmark {
   latest_nav_date?: Date;
   latest_nav_value?: number;
   earliest_nav_date?: Date;               // NEW: First NAV record date
+  launch_date?: Date;                     // NEW: Fund launch date
   
   // ADDED: Download status tracking
   last_download_status?: 'success' | 'failed' | 'pending' | null;
@@ -65,6 +67,7 @@ export interface SchemeBookmarkWithStats extends SchemeBookmark {
   latest_nav_date: Date | null;           // Most recent NAV date
   latest_nav_value: number | null;        // Most recent NAV value
   earliest_nav_date: Date | null;         // NEW: Added to stats interface
+  launch_date: Date | null;               // NEW: Fund launch date in stats
   last_download_status: 'success' | 'failed' | 'pending' | null; // NEW
 }
 
@@ -150,6 +153,11 @@ export interface NavDownloadJob {
   created_at: Date;
   updated_at: Date;
   created_by?: number;
+  
+  // NEW: Sequential download fields
+  parent_job_id?: number;
+  chunk_number?: number;
+  total_chunks?: number;
 }
 
 export interface NavDownloadJobResult {
@@ -173,6 +181,11 @@ export interface CreateNavDownloadJobRequest {
   scheduled_date?: Date;                  // Defaults to now for immediate execution
   start_date?: Date;                      // Required for historical downloads
   end_date?: Date;                        // Required for historical downloads
+  
+  // NEW: Sequential download fields
+  parent_job_id?: number;
+  chunk_number?: number;
+  total_chunks?: number;
 }
 
 export interface NavDownloadJobSearchParams {
@@ -200,6 +213,57 @@ export interface NavDownloadJobWithSchemes extends NavDownloadJob {
     scheme_code: string;
     scheme_name: string;
   }>;
+}
+
+// ==================== SEQUENTIAL DOWNLOAD TYPES (NEW) ====================
+
+export interface DownloadChunk {
+  chunk_number: number;
+  start_date: Date;
+  end_date: Date;
+  day_count: number;
+}
+
+export interface SequentialDownloadRequest {
+  scheme_ids: number[];
+  start_date: Date;
+  end_date: Date;
+}
+
+export interface SequentialDownloadResponse {
+  parent_job_id: number;
+  total_chunks: number;
+  chunks: DownloadChunk[];
+  estimated_time_ms: number;
+  message: string;
+}
+
+export interface SequentialJobProgress {
+  parent_job_id: number;
+  total_chunks: number;
+  completed_chunks: number;
+  current_chunk?: {
+    chunk_number: number;
+    start_date: Date;
+    end_date: Date;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+  };
+  overall_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress_percentage: number;
+  start_time: Date;
+  estimated_completion?: Date;
+  errors: Array<{
+    chunk_number: number;
+    error: string;
+    date_range: string;
+  }>;
+}
+
+export interface DateRangeValidationResult {
+  valid: boolean;
+  error?: string;
+  day_count?: number;
+  chunks_required?: number;
 }
 
 // ==================== AMFI DATA SOURCE TYPES ====================
@@ -307,7 +371,12 @@ export const NAV_ERROR_CODES = {
   N8N_EXECUTION_FAILED: 'N8N_EXECUTION_FAILED',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   INVALID_NAV_FORMAT: 'INVALID_NAV_FORMAT',
-  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND'
+  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND',
+  // NEW: Sequential download error codes
+  DATE_RANGE_EXCEEDS_LIMIT: 'DATE_RANGE_EXCEEDS_LIMIT',
+  SEQUENTIAL_DOWNLOAD_IN_PROGRESS: 'SEQUENTIAL_DOWNLOAD_IN_PROGRESS',
+  CHUNK_CREATION_FAILED: 'CHUNK_CREATION_FAILED',
+  PARENT_JOB_NOT_FOUND: 'PARENT_JOB_NOT_FOUND'
 } as const;
 
 // ==================== FRONTEND-SPECIFIC TYPES ====================

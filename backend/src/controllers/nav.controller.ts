@@ -762,16 +762,16 @@ export class NavController {
         return;
       }
 
-      const result = await this.downloadService.triggerHistoricalDownload(
-        user!.tenant_id,
-        isLive,
-        user!.user_id,
-        {
-          schemeIds: scheme_ids.map(Number),
-          startDate,
-          endDate
-        }
-      );
+     const result = await this.downloadService.triggerHistoricalDownload(
+  user!.tenant_id,
+  isLive,
+  user!.user_id,
+  {
+    scheme_ids: scheme_ids.map(Number), // ✅ Correct property name
+    start_date: startDate,              // ✅ Correct property name
+    end_date: endDate                   // ✅ Correct property name
+  }
+);
 
       // ENHANCED: Update bookmark download status for each scheme
       try {

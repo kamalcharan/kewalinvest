@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavSearchPage.tsx
-// FIXED: Rate limiting, double toasts, navigation after bookmark, page size 10
+// FIXED: Single toast, navigation to dashboard, page size 10, better rate limiting
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -34,9 +34,9 @@ const NavSearchPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [bookmarkingIds, setBookmarkingIds] = useState<Set<number>>(new Set());
   
-  // FIXED: Rate limiting state
+  // FIXED: Reduced rate limiting for better UX
   const [lastSearchTime, setLastSearchTime] = useState<number>(0);
-  const SEARCH_COOLDOWN = 1000; // 1 second between searches
+  const SEARCH_COOLDOWN = 500; // Reduced from 1000ms to 500ms
   
   // Pagination state - FIXED: Page size set to 10
   const [pagination, setPagination] = useState({
@@ -47,18 +47,22 @@ const NavSearchPage: React.FC = () => {
     hasPrev: false
   });
 
-  // FIXED: Debounced search function with rate limiting
+  // FIXED: Improved search function with better rate limiting
   const searchSchemes = useCallback(async (page: number = 1, skipCooldown: boolean = false) => {
     if (!filters.search.trim() || filters.search.trim().length < 2) {
       setError('Please enter at least 2 characters to search');
       return;
     }
 
-    // Rate limiting check
+    // FIXED: More lenient rate limiting check
     const now = Date.now();
     if (!skipCooldown && now - lastSearchTime < SEARCH_COOLDOWN) {
-      const remainingTime = SEARCH_COOLDOWN - (now - lastSearchTime);
-      setError(`Please wait ${Math.ceil(remainingTime / 1000)} second(s) before searching again`);
+      // Don't show error immediately, just wait a bit longer
+      setTimeout(() => {
+        if (filters.search.trim().length >= 2) {
+          searchSchemes(page, true);
+        }
+      }, SEARCH_COOLDOWN - (now - lastSearchTime));
       return;
     }
 
@@ -100,9 +104,9 @@ const NavSearchPage: React.FC = () => {
         err.stack
       );
       
-      // Handle rate limiting specifically
+      // FIXED: Better error handling for rate limiting
       if (err.message.includes('429') || err.message.includes('rate limit')) {
-        setError('Too many requests. Please wait a moment before searching again.');
+        setError('Please wait a moment before searching again.');
       } else {
         setError('Search failed. Please try again.');
       }
@@ -111,10 +115,10 @@ const NavSearchPage: React.FC = () => {
     }
   }, [filters, lastSearchTime]);
 
-  // Handle search form submission with rate limiting
+  // Handle search form submission
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    searchSchemes(1, false); // Don't skip cooldown for manual searches
+    searchSchemes(1, false);
   };
 
   // Handle input changes
@@ -152,7 +156,7 @@ const NavSearchPage: React.FC = () => {
     }
   };
 
-  // FIXED: Handle bookmark creation with single toast and navigation
+  // FIXED: Use NavService but prevent its automatic toast
   const handleBookmark = async (scheme: SchemeSearchResult) => {
     if (bookmarkingIds.has(scheme.id)) return;
 
@@ -165,17 +169,11 @@ const NavSearchPage: React.FC = () => {
         download_time: '23:00'
       };
 
-      // FIXED: Use navService directly without additional toast
-      const response = await fetch('/api/nav/bookmarks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(bookmarkRequest)
-      });
+      // FIXED: Simpler approach - just use the service and rely on the fixed NavService
+      // which now doesn't show automatic toasts for createBookmark
+      const response = await navService.createBookmark(bookmarkRequest);
 
-      if (response.ok) {
+      if (response.success) {
         // Update local state
         setSchemes(prev => 
           prev.map(s => 
@@ -185,17 +183,16 @@ const NavSearchPage: React.FC = () => {
           )
         );
 
-        // FIXED: Single meaningful toast with scheme name
+        // Show only our meaningful toast with scheme name
         toastService.success(`${scheme.scheme_name} bookmarked successfully`);
         
-        // FIXED: Navigate to dashboard to avoid race conditions
+        // Navigate to dashboard after success
         setTimeout(() => {
           navigate('/nav/dashboard');
-        }, 1500); // Give user time to see the success message
+        }, 1500);
 
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to bookmark scheme');
+        throw new Error(response.error || 'Failed to bookmark scheme');
       }
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -212,19 +209,6 @@ const NavSearchPage: React.FC = () => {
         return newSet;
       });
     }
-  };
-
-  // FIXED: Helper function to get auth headers
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
-    const tenantId = localStorage.getItem('tenant_id');
-    const environment = localStorage.getItem('environment') || 'test';
-    
-    return {
-      'Authorization': `Bearer ${token}`,
-      'X-Tenant-ID': tenantId,
-      'X-Environment': environment
-    };
   };
 
   // Navigate to bookmarks page

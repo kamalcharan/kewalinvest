@@ -343,6 +343,10 @@ export const NAV_URLS = {
   // Search schemes with query parameters
   searchSchemes: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.SEARCH_SCHEMES}${buildQueryParams(params || {}, environment)}`,
+    
+  // Get sequential download progress
+    getSequentialProgress: (parentJobId: number, environment?: 'live' | 'test') =>
+    `${API_BASE}/nav/downloads/${parentJobId}/sequential-progress${buildQueryParams({}, environment)}`,
   
   // Get bookmarks with query parameters
   getBookmarks: (params?: Record<string, any>, environment?: 'live' | 'test') => 

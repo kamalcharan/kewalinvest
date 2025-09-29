@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavBookmarksPage.tsx
-// Complete bookmarks management page with enhanced cards and full functionality - CLEAN VERSION
+// UPDATED: Added sequential download support and launch date display
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,10 +11,8 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
-import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
+import type { SchemeBookmark, DownloadProgress, SequentialJobProgress, SequentialDownloadResponse } from '../../services/nav.service';
 import '../../components/nav/BookmarkCard.css';
-
-
 
 const NavBookmarksPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,7 +24,7 @@ const NavBookmarksPage: React.FC = () => {
   const [amcFilter, setAmcFilter] = useState('');
   const [dailyDownloadFilter, setDailyDownloadFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 10;
 
   // Modal state
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
@@ -34,6 +32,8 @@ const NavBookmarksPage: React.FC = () => {
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
   const [showNavDataModal, setShowNavDataModal] = useState(false);
   const [currentProgress, setCurrentProgress] = useState<DownloadProgress | null>(null);
+  const [currentSequentialProgress, setCurrentSequentialProgress] = useState<SequentialJobProgress | null>(null);
+  const [isSequentialDownload, setIsSequentialDownload] = useState(false);
 
   // Bulk selection state
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<number>>(new Set());
@@ -57,7 +57,7 @@ const NavBookmarksPage: React.FC = () => {
   });
 
   const { triggerHistoricalDownload } = useDownloads();
-  const { progress, startPolling } = useDownloadProgress();
+  const { progress, sequentialProgress, startPolling, startSequentialPolling } = useDownloadProgress();
 
   // Filter bookmarks based on daily download filter
   const filteredBookmarks = bookmarks.filter(bookmark => {
@@ -156,12 +156,51 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // Historical download handlers
-  const handleHistoricalDownloadStarted = (jobId: number) => {
+  // UPDATED: Enhanced historical download handling for sequential downloads
+  const handleHistoricalDownloadStarted = (parentJobId: number) => {
+    console.log('Historical download started with parent job ID:', parentJobId);
+    
+    // Validate job ID before starting progress modal
+    if (!parentJobId || parentJobId <= 0) {
+      toastService.error('Invalid download job ID received');
+      return;
+    }
+
     setShowProgressModal(true);
     setCurrentProgress(null);
-    startPolling(jobId, (progressData) => {
-      setCurrentProgress(progressData);
+    setCurrentSequentialProgress(null);
+    setIsSequentialDownload(true); // Assume sequential for historical downloads
+
+    // Start sequential progress polling
+    startSequentialPolling(parentJobId, (progressData: SequentialJobProgress) => {
+      setCurrentSequentialProgress(progressData);
+      
+      // Log progress updates for debugging
+      FrontendErrorLogger.info(
+        'Sequential progress update',
+        'NavBookmarksPage',
+        {
+          parentJobId,
+          overallStatus: progressData.overall_status,
+          completedChunks: progressData.completed_chunks,
+          totalChunks: progressData.total_chunks,
+          progressPercentage: progressData.progress_percentage
+        }
+      );
+    }).catch((error) => {
+      console.error('Sequential progress polling failed:', error);
+      
+      // Fallback to regular progress polling
+      console.log('Falling back to regular progress polling...');
+      setIsSequentialDownload(false);
+      
+      startPolling(parentJobId, (progressData: DownloadProgress) => {
+        setCurrentProgress(progressData);
+      }).catch((fallbackError) => {
+        console.error('Fallback progress polling also failed:', fallbackError);
+        toastService.error('Failed to track download progress: ' + fallbackError.message);
+        setShowProgressModal(false);
+      });
     });
   };
 
@@ -173,6 +212,13 @@ const NavBookmarksPage: React.FC = () => {
   const handleCloseNavDataModal = () => {
     setShowNavDataModal(false);
     setSelectedBookmark(null);
+  };
+
+  const handleCloseProgressModal = () => {
+    setShowProgressModal(false);
+    setCurrentProgress(null);
+    setCurrentSequentialProgress(null);
+    setIsSequentialDownload(false);
   };
 
   // Bulk selection handlers
@@ -238,10 +284,9 @@ const NavBookmarksPage: React.FC = () => {
     if (selectedBookmarks.length === 0) return;
 
     // For bulk historical download, we'll use the first bookmark as template
-    // TODO: In Phase 3, create a dedicated bulk historical download modal
     setSelectedBookmark(selectedBookmarks[0]);
     setShowHistoricalModal(true);
-    toastService.info('Bulk historical download - Phase 3 feature. Showing single scheme for now.');
+    toastService.info('Bulk historical download - showing single scheme for now. Full bulk support coming in next phase.');
   };
 
   const handleBulkDelete = async () => {
@@ -271,6 +316,16 @@ const NavBookmarksPage: React.FC = () => {
 
   const handleNavigateToSearch = () => {
     navigate('/nav/search');
+  };
+
+  // Helper function to format launch date display
+  const formatLaunchDate = (launchDate?: string): string => {
+    if (!launchDate) return 'Unknown';
+    try {
+      return new Date(launchDate).toLocaleDateString();
+    } catch {
+      return 'Invalid Date';
+    }
   };
 
   if (error) {
@@ -638,7 +693,7 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 margin: 0
               }}>
-                {pagination?.total || 0} schemes found
+                {pagination?.total || 0} schemes found • Showing 10 per page
                 {(searchQuery || amcFilter || dailyDownloadFilter !== 'all') && ' (filtered)'}
               </p>
             </div>
@@ -732,7 +787,7 @@ const NavBookmarksPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Bookmarks List */}
+              {/* Bookmarks List with Enhanced Display */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {filteredBookmarks.map((bookmark) => (
                   <div key={bookmark.id} style={{
@@ -751,15 +806,138 @@ const NavBookmarksPage: React.FC = () => {
                       }}
                     />
                     
-                    {/* Enhanced Bookmark Card */}
-                    <div style={{ flex: 1 }}>
-                      <EnhancedBookmarkCard
-                        bookmark={bookmark}
-                        onToggleDaily={handleToggleDaily}
-                        onViewNavData={handleViewNavData}
-                        onHistoricalDownload={handleHistoricalDownload}
-                        showActions={true}
-                      />
+                    {/* Enhanced Bookmark Card with Launch Date */}
+                    <div style={{ 
+                      flex: 1,
+                      padding: '16px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      border: `1px solid ${colors.utility.primaryText}10`,
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start'
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            color: colors.utility.primaryText,
+                            marginBottom: '6px'
+                          }}>
+                            {bookmark.scheme_name}
+                          </div>
+                          
+                          <div style={{
+                            fontSize: '13px',
+                            color: colors.utility.secondaryText,
+                            marginBottom: '8px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                            gap: '8px'
+                          }}>
+                            <span><strong>Code:</strong> {bookmark.scheme_code}</span>
+                            <span><strong>AMC:</strong> {bookmark.amc_name}</span>
+                            {/* UPDATED: Display launch date */}
+                            <span><strong>Launch:</strong> {formatLaunchDate(bookmark.launch_date)}</span>
+                            {bookmark.daily_download_enabled && (
+                              <span style={{ color: colors.semantic.success }}>
+                                <strong>Daily:</strong> {bookmark.download_time}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* NAV Data Status */}
+                          {bookmark.earliest_nav_date && bookmark.latest_nav_date ? (
+                            <div style={{
+                              fontSize: '12px',
+                              color: colors.brand.primary,
+                              backgroundColor: colors.brand.primary + '10',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              display: 'inline-block'
+                            }}>
+                              Data: {new Date(bookmark.earliest_nav_date).toLocaleDateString()} to {new Date(bookmark.latest_nav_date).toLocaleDateString()} ({bookmark.nav_records_count || 0} records)
+                            </div>
+                          ) : (
+                            <div style={{
+                              fontSize: '12px',
+                              color: colors.semantic.warning,
+                              backgroundColor: colors.semantic.warning + '10',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              display: 'inline-block'
+                            }}>
+                              No NAV data available
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div style={{
+                          display: 'flex',
+                          gap: '8px',
+                          alignItems: 'center'
+                        }}>
+                          <button
+                            onClick={() => handleToggleDaily(bookmark.id, !bookmark.daily_download_enabled)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: bookmark.daily_download_enabled 
+                                ? colors.semantic.success 
+                                : colors.utility.secondaryBackground,
+                              color: bookmark.daily_download_enabled 
+                                ? 'white' 
+                                : colors.utility.primaryText,
+                              border: `1px solid ${bookmark.daily_download_enabled 
+                                ? colors.semantic.success 
+                                : colors.utility.primaryText}20`,
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: '500'
+                            }}
+                            title={bookmark.daily_download_enabled ? 'Disable daily download' : 'Enable daily download'}
+                          >
+                            {bookmark.daily_download_enabled ? '✓ Daily' : 'Enable Daily'}
+                          </button>
+
+                          <button
+                            onClick={() => handleViewNavData(bookmark)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: colors.brand.primary,
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: '500'
+                            }}
+                            title="View NAV data"
+                          >
+                            📊 View Data
+                          </button>
+
+                          <button
+                            onClick={() => handleHistoricalDownload(bookmark)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: colors.brand.secondary,
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: '500'
+                            }}
+                            title="Download historical data"
+                          >
+                            📥 Historical
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     
                     {/* Delete Button */}
@@ -784,7 +962,7 @@ const NavBookmarksPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination - FIXED property names */}
+              {/* Pagination */}
               {pagination && pagination.totalPages > 1 && (
                 <div style={{
                   display: 'flex',
@@ -866,13 +1044,15 @@ const NavBookmarksPage: React.FC = () => {
         onClose={handleCloseNavDataModal}
       />
 
-      {/* Progress Modal */}
+      {/* Progress Modal with Sequential Support */}
       <NavProgressModal
         isOpen={showProgressModal}
         progress={currentProgress}
-        onClose={() => setShowProgressModal(false)}
+        sequentialProgress={currentSequentialProgress}
+        onClose={handleCloseProgressModal}
         title="Downloading Historical NAV Data"
         showCancelButton={true}
+        isSequential={isSequentialDownload}
       />
 
       {/* CSS Animation */}

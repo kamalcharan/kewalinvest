@@ -1,5 +1,6 @@
 // backend/src/services/amfiDataSource.service.ts
 // File 5/14: AMFI API integration with idempotency and race condition handling
+// UPDATED: Fixed historical endpoint with mf=62 parameter and 90-day limit
 
 import { SimpleLogger } from './simpleLogger.service';
 import { ParsedNavRecord } from '../types/nav.types';
@@ -25,7 +26,7 @@ export interface AmfiDownloadOptions {
 
 export class AmfiDataSourceService {
   private readonly DAILY_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt';
-  private readonly HISTORICAL_BASE_URL = 'http://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx?tp=1';
+  private readonly HISTORICAL_BASE_URL = 'http://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx';
   
   private readonly DEFAULT_RETRY_ATTEMPTS = 3;
   private readonly DEFAULT_RETRY_DELAY = 1000;
@@ -95,8 +96,8 @@ export class AmfiDataSourceService {
       }
 
       const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff > 183) { // ~6 months
-        throw new Error('Historical download limited to 6 months per request');
+      if (daysDiff > 90) { // UPDATED: Changed from 183 to 90 days (AMFI restriction)
+        throw new Error('Historical download limited to 90 days per request (AMFI restriction)');
       }
 
       // Check for concurrent requests
@@ -213,7 +214,8 @@ export class AmfiDataSourceService {
     try {
       const startDateStr = this.formatDate(startDate);
       const endDateStr = this.formatDate(endDate);
-      const url = `${this.HISTORICAL_BASE_URL}&frmdt=${startDateStr}&todt=${endDateStr}`;
+      // UPDATED: Added mf=62 parameter to fix 404 error
+      const url = `${this.HISTORICAL_BASE_URL}?mf=62&frmdt=${startDateStr}&todt=${endDateStr}&tp=1`;
 
       SimpleLogger.error('AmfiDataSource', 'Starting historical NAV download', 'executeHistoricalDownload', {
         requestId, startDate, endDate, url
@@ -319,14 +321,16 @@ export class AmfiDataSourceService {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'KewalInvest-NAV-Downloader/1.0',
-            'Accept': 'text/plain, */*',
-            'Cache-Control': 'no-cache'
-          },
-          signal: controller.signal
-        });
+  method: 'GET',
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/plain, text/html, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    'Referer': 'http://portal.amfiindia.com/'
+  },
+  signal: controller.signal
+});
 
         clearTimeout(timeoutId);
 
@@ -552,14 +556,17 @@ export class AmfiDataSourceService {
   }
 
   /**
-   * Format date for AMFI API (DD-MM-YYYY)
+   * Format date for AMFI API (DD-MMM-YYYY)
    */
-  private formatDate(date: Date): string {
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-  }
+ private formatDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = months[date.getMonth()];  // ← FIX: use month name
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;  // Will output: 27-May-2025 (CORRECT)
+}
 
   /**
    * Sleep utility for delays
@@ -582,7 +589,7 @@ export class AmfiDataSourceService {
   public getCacheStats(): { activeRequests: number; cacheKeys: string[] } {
     return {
       activeRequests: this.requestCache.size,
-      cacheKeys: Array.from(this.requestCache.keys())
+      cacheKeys: Array.from(this.requestCache.keys()    )
     };
   }
 }

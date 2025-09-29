@@ -1,5 +1,5 @@
 // frontend/src/services/nav.service.ts
-// COMPLETE WORKING FILE: All methods included with only the getBookmarkDownloadStatus method simplified
+// UPDATED: Added sequential download types and launch_date support
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -38,6 +38,7 @@ export interface SchemeSearchResult {
   is_bookmarked: boolean;
   latest_nav_value?: number;
   latest_nav_date?: string;
+  launch_date?: string;
 }
 
 export interface SchemeSearchParams {
@@ -62,6 +63,7 @@ export interface SchemeBookmark {
   latest_nav_date?: string;
   latest_nav_value?: number;
   earliest_nav_date?: string;
+  launch_date?: string; // ADDED: Launch date support
   created_at: string;
   updated_at: string;
   last_download_status?: 'success' | 'failed' | 'pending' | null;
@@ -155,6 +157,9 @@ export interface DownloadJob {
   scheduled_date: string;
   start_date?: string;
   end_date?: string;
+  parent_job_id?: number; // ADDED: For sequential downloads
+  chunk_number?: number; // ADDED: For sequential downloads
+  total_chunks?: number; // ADDED: For sequential downloads
   result_summary?: {
     total_schemes: number;
     successful_downloads: number;
@@ -176,6 +181,57 @@ export interface DownloadJobParams {
   date_to?: string;
 }
 
+// ADDED: Sequential download types
+export interface DownloadChunk {
+  chunk_number: number;
+  start_date: Date;
+  end_date: Date;
+  day_count: number;
+}
+
+export interface SequentialDownloadRequest {
+  scheme_ids: number[];
+  start_date: Date;
+  end_date: Date;
+}
+
+export interface SequentialDownloadResponse {
+  parent_job_id: number;
+  total_chunks: number;
+  chunks: DownloadChunk[];
+  estimated_time_ms: number;
+  message: string;
+}
+
+export interface SequentialJobProgress {
+  parent_job_id: number;
+  total_chunks: number;
+  completed_chunks: number;
+  overall_status: 'pending' | 'running' | 'completed' | 'failed';
+  progress_percentage: number;
+  start_time: Date;
+  estimated_completion?: Date;
+  current_chunk?: {
+    chunk_number: number;
+    start_date: Date;
+    end_date: Date;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+  };
+  errors: Array<{
+    chunk_number: number;
+    error: string;
+    date_range: string;
+  }>;
+}
+
+export interface DateRangeValidationResult {
+  valid: boolean;
+  error?: string;
+  day_count?: number;
+  chunks_required?: number;
+}
+
+// UPDATED: Historical download request interface
 export interface HistoricalDownloadRequest {
   scheme_ids: number[];
   start_date: string;
@@ -198,6 +254,15 @@ export interface DownloadProgress {
   }>;
   startTime: string;
   lastUpdate: string;
+  // ADDED: Sequential download progress fields
+  parentJobId?: number;
+  totalChunks?: number;
+  completedChunks?: number;
+  currentChunk?: {
+    chunkNumber: number;
+    startDate: Date;
+    endDate: Date;
+  };
 }
 
 export interface NavStatistics {
@@ -249,11 +314,23 @@ export class NavService {
     const tenantId = localStorage.getItem('tenant_id'); 
     const environment = localStorage.getItem('environment') as 'live' | 'test' || 'test';
 
-    return buildHeaders(token || '', tenantId || '', environment);
+    console.log('🔧 NavService getAuthHeaders():');
+    console.log('🔧 - token exists:', !!token);
+    console.log('🔧 - tenantId:', tenantId);
+    console.log('🔧 - environment from localStorage:', localStorage.getItem('environment'));
+    console.log('🔧 - final environment used:', environment);
+
+    const headers = buildHeaders(token || '', tenantId || '', environment);
+    console.log('🔧 - final headers:', headers);
+    return headers;
   }
 
   private getEnvironment(): 'live' | 'test' {
-    return (localStorage.getItem('environment') as 'live' | 'test') || 'test';
+    const env = localStorage.getItem('environment') as 'live' | 'test';
+    console.log('🔍 NavService getEnvironment():', env);
+    console.log('🔍 localStorage.getItem("environment"):', localStorage.getItem('environment'));
+    console.log('🔍 Final returned environment:', env || 'test');
+    return env || 'test';
   }
 
   private async handleRequest<T>(
@@ -261,20 +338,36 @@ export class NavService {
     options: RequestInit = {}
   ): Promise<ApiResponse<T> | PaginatedResponse<T>> {
     try {
+      console.log('🌐 NavService handleRequest:');
+      console.log('🌐 - URL:', url);
+      console.log('🌐 - Environment check:', this.getEnvironment());
+      
+      const headers = this.getAuthHeaders();
+      console.log('🌐 - Headers:', headers);
+      
       const response = await fetch(url, {
-        headers: this.getAuthHeaders(),
+        headers,
         ...options
       });
 
+      console.log('🌐 - Response status:', response.status);
+      console.log('🌐 - Response ok:', response.ok);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        console.error('🌐 - Response not ok, status:', response.status);
+        const errorText = await response.text();
+        console.error('🌐 - Error response text:', errorText);
+        
+        const errorData = errorText ? JSON.parse(errorText) : {};
         throw new Error(getAPIErrorMessage(errorData));
       }
 
       const data = await response.json();
+      console.log('🌐 - Success response data:', data);
       return data;
     } catch (error: any) {
-      console.error('NAV API Error:', error);
+      console.error('🌐 NavService Error:', error);
+      console.error('🌐 URL was:', url);
       return {
         success: false,
         error: error.message || 'An unexpected error occurred'
@@ -317,12 +410,6 @@ export class NavService {
       method: 'POST',
       body: JSON.stringify(request)
     });
-    
-    if (response.success) {
-      toastService.success('Scheme bookmarked successfully');
-    } else {
-      toastService.error(response.error || 'Failed to bookmark scheme');
-    }
     
     return response as ApiResponse<SchemeBookmark>;
   }
@@ -409,7 +496,6 @@ export class NavService {
     return response as ApiResponse<void>;
   }
 
-  // FIXED: This is the ONLY method that was changed to prevent infinite loops
   async getBookmarkDownloadStatus(bookmarkIds: number[]): Promise<ApiResponse<{
     [bookmarkId: number]: {
       status: 'success' | 'failed' | 'pending' | 'no-data';
@@ -418,8 +504,6 @@ export class NavService {
     }
   }>> {
     try {
-      // SIMPLIFIED: Return a simple status map without making additional API calls
-      // This prevents the infinite loop that was happening
       const statusMap: { [bookmarkId: number]: any } = {};
 
       bookmarkIds.forEach(bookmarkId => {
@@ -446,7 +530,7 @@ export class NavService {
     bookmarkIds: number[], 
     startDate: string, 
     endDate: string
-  ): Promise<ApiResponse<{ jobId: number; message: string; estimatedTime: number }>> {
+  ): Promise<ApiResponse<SequentialDownloadResponse>> {
     const bookmarksResponse = await this.getBookmarks({ page: 1, page_size: 1000 });
     
     if (!bookmarksResponse.success || !bookmarksResponse.data) {
@@ -537,10 +621,11 @@ export class NavService {
     return response as ApiResponse<{ jobId: number; message: string; alreadyExists?: boolean }>;
   }
 
-  async triggerHistoricalDownload(request: HistoricalDownloadRequest): Promise<ApiResponse<{ jobId: number; message: string; estimatedTime: number }>> {
+  // UPDATED: Historical download now returns sequential download response
+  async triggerHistoricalDownload(request: HistoricalDownloadRequest): Promise<ApiResponse<SequentialDownloadResponse>> {
     const url = NAV_URLS.triggerHistoricalDownload(this.getEnvironment());
     
-    const response = await this.handleRequest<{ jobId: number; message: string; estimatedTime: number }>(url, {
+    const response = await this.handleRequest<SequentialDownloadResponse>(url, {
       method: 'POST',
       body: JSON.stringify(request)
     });
@@ -551,15 +636,33 @@ export class NavService {
       toastService.error(response.error || 'Failed to trigger historical download');
     }
     
-    return response as ApiResponse<{ jobId: number; message: string; estimatedTime: number }>;
+    return response as ApiResponse<SequentialDownloadResponse>;
   }
 
   async getDownloadProgress(jobId: number): Promise<ApiResponse<DownloadProgress>> {
+    console.log('📊 getDownloadProgress called with jobId:', jobId);
+    console.log('📊 Current environment:', this.getEnvironment());
+    
     const url = NAV_URLS.getDownloadProgress(jobId, this.getEnvironment());
+    console.log('📊 Generated URL:', url);
     
     const response = await this.handleRequest<DownloadProgress>(url);
+    console.log('📊 Response:', response);
     
     return response as ApiResponse<DownloadProgress>;
+  }
+
+  // ADDED: Get sequential download progress
+  async getSequentialProgress(parentJobId: number): Promise<ApiResponse<SequentialJobProgress>> {
+    console.log('📊 getSequentialProgress called with parentJobId:', parentJobId);
+    
+    const url = NAV_URLS.getSequentialProgress(parentJobId, this.getEnvironment());
+    console.log('📊 Generated URL:', url);
+    
+    const response = await this.handleRequest<SequentialJobProgress>(url);
+    console.log('📊 Sequential progress response:', response);
+    
+    return response as ApiResponse<SequentialJobProgress>;
   }
 
   async getDownloadJobs(params?: DownloadJobParams): Promise<PaginatedResponse<{ jobs: DownloadJob[] }>> {
@@ -760,14 +863,10 @@ export class NavService {
     }
   }
 
-  static validateDateRange(startDate: Date, endDate: Date): { valid: boolean; error?: string } {
+  // UPDATED: Validate date range with 90-day limit and chunking info
+  static validateDateRange(startDate: Date, endDate: Date): DateRangeValidationResult {
     if (startDate >= endDate) {
       return { valid: false, error: 'Start date must be before end date' };
-    }
-
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff > 183) {
-      return { valid: false, error: 'Date range cannot exceed 6 months' };
     }
 
     const today = new Date();
@@ -775,7 +874,55 @@ export class NavService {
       return { valid: false, error: 'End date cannot be in the future' };
     }
 
-    return { valid: true };
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const chunksRequired = Math.ceil(dayCount / 90);
+
+    return {
+      valid: true,
+      day_count: dayCount,
+      chunks_required: chunksRequired
+    };
+  }
+
+  // ADDED: Calculate required chunks for a date range
+  static calculateChunks(startDate: Date, endDate: Date): DownloadChunk[] {
+    const chunks: DownloadChunk[] = [];
+    let currentStart = new Date(startDate);
+    let chunkNumber = 1;
+
+    while (currentStart < endDate) {
+      let currentEnd = new Date(currentStart);
+      currentEnd.setDate(currentEnd.getDate() + 89); // 90-day chunk
+
+      if (currentEnd > endDate) {
+        currentEnd = new Date(endDate);
+      }
+
+      const dayCount = Math.ceil((currentEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      chunks.push({
+        chunk_number: chunkNumber,
+        start_date: new Date(currentStart),
+        end_date: new Date(currentEnd),
+        day_count: dayCount
+      });
+
+      // Move to next chunk
+      currentStart = new Date(currentEnd);
+      currentStart.setDate(currentStart.getDate() + 1);
+      chunkNumber++;
+    }
+
+    return chunks;
+  }
+
+  // ADDED: Estimate download time for chunks
+  static estimateDownloadTime(schemeCount: number, totalDays: number): number {
+    // Base time: ~2 seconds per scheme per chunk
+    const baseTimePerScheme = 2000; // 2 seconds
+    const chunksRequired = Math.ceil(totalDays / 90);
+    
+    return schemeCount * baseTimePerScheme * chunksRequired;
   }
 
   static generateCronExpression(scheduleType: string, downloadTime: string): string {

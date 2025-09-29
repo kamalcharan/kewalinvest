@@ -1,5 +1,5 @@
 // frontend/src/hooks/useNavData.ts
-// MINIMAL FIX: Only fix infinite loops, no new dependencies or refactoring
+// UPDATED: Added sequential download support and fixed response types
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -21,7 +21,9 @@ import type {
   BookmarkStats,
   UpdateBookmarkDownloadStatus,
   PaginatedResponse,
-  ApiResponse
+  ApiResponse,
+  SequentialDownloadResponse,
+  SequentialJobProgress
 } from '../services/nav.service';
 
 // ==================== INTERFACES (UNCHANGED) ====================
@@ -80,7 +82,6 @@ export const useSchemeSearch = (): UseSchemeSearchReturn => {
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseSchemeSearchReturn['pagination']>(null);
 
-  // FIXED: Stable function reference
   const searchSchemes = useCallback(async (params: SchemeSearchParams) => {
     if (!params.search || params.search.trim().length < 2) {
       setError('Search query must be at least 2 characters');
@@ -116,7 +117,7 @@ export const useSchemeSearch = (): UseSchemeSearchReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, []); // FIXED: Empty dependency array
+  }, []);
 
   const clearResults = useCallback(() => {
     setSchemes([]);
@@ -158,7 +159,6 @@ export const useBookmarkNavData = (): UseBookmarkNavDataReturn => {
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseBookmarkNavDataReturn['pagination']>(null);
 
-  // FIXED: Stable function
   const fetchNavData = useCallback(async (params: BookmarkNavDataParams) => {
     setIsLoading(true);
     setError(null);
@@ -252,7 +252,6 @@ export const useBookmarkStats = (bookmarkId?: number): UseBookmarkStatsReturn =>
     }
   }, [fetchStats]);
 
-  // FIXED: Only call when bookmarkId actually changes
   const lastBookmarkIdRef = useRef<number | undefined>();
   useEffect(() => {
     if (bookmarkId && bookmarkId !== lastBookmarkIdRef.current) {
@@ -288,11 +287,9 @@ export const useBookmarkDownloadStatus = (initialBookmarkIds: number[] = []): Us
   const [error, setError] = useState<string | null>(null);
   const currentBookmarkIdsRef = useRef<number[]>([]);
 
-  // FIXED: Simplified to prevent recursive calls
   const fetchStatus = useCallback(async (bookmarkIds: number[]) => {
     if (bookmarkIds.length === 0) return;
 
-    // Prevent calling if already loading or same IDs
     if (isLoading || JSON.stringify(bookmarkIds.sort()) === JSON.stringify(currentBookmarkIdsRef.current.sort())) {
       return;
     }
@@ -346,7 +343,6 @@ export const useBookmarkDownloadStatus = (initialBookmarkIds: number[] = []): Us
     }
   }, [fetchStatus]);
 
-  // FIXED: Use string comparison to detect actual changes
   const lastIdsStringRef = useRef<string>('');
   useEffect(() => {
     const currentIdsString = initialBookmarkIds.sort().join(',');
@@ -354,7 +350,7 @@ export const useBookmarkDownloadStatus = (initialBookmarkIds: number[] = []): Us
       lastIdsStringRef.current = currentIdsString;
       fetchStatus(initialBookmarkIds);
     }
-  }, [initialBookmarkIds.join(','), fetchStatus]); // Use join for stable comparison
+  }, [initialBookmarkIds.join(','), fetchStatus]);
 
   return {
     statusMap,
@@ -396,7 +392,6 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
   const lastParamsRef = useRef<BookmarkSearchParams>(initialParams || {});
   const hasInitializedRef = useRef(false);
 
-  // FIXED: Stable function that doesn't cause re-renders
   const fetchBookmarks = useCallback(async (params: BookmarkSearchParams = {}) => {
     setIsLoading(true);
     setError(null);
@@ -516,20 +511,14 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     fetchBookmarks(lastParamsRef.current);
   }, [fetchBookmarks]);
 
-  // FIXED: Get download status but prevent infinite loops by disabling it temporarily
-  const bookmarkIds = bookmarks.map(b => b.id);
-  
-  // SIMPLIFIED: Don't fetch download status automatically to prevent loops
-  // This can be enabled later after fixing the service layer
   const statusMap = {};
 
-  // FIXED: Only fetch on mount, not on every render
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       fetchBookmarks(initialParams || {});
     }
-  }, []); // Empty dependency array for mount only
+  }, []);
 
   return {
     bookmarks,
@@ -541,7 +530,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     deleteBookmark,
     refetch,
     pagination,
-    downloadStatus: statusMap, // Simplified to prevent loops
+    downloadStatus: statusMap,
   };
 };
 
@@ -692,7 +681,6 @@ export const useScheduler = (): UseSchedulerReturn => {
     fetchStatus();
   }, [fetchConfig, fetchStatus]);
 
-  // FIXED: Only fetch on mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -701,7 +689,7 @@ export const useScheduler = (): UseSchedulerReturn => {
       };
       initializeFetch();
     }
-  }, []); // Empty dependency array
+  }, []);
 
   return {
     config,
@@ -718,7 +706,7 @@ export const useScheduler = (): UseSchedulerReturn => {
   };
 };
 
-// ==================== OTHER HOOKS (SIMPLIFIED FIXES) ====================
+// ==================== NAV DATA HOOK (SIMPLIFIED FIXES) ====================
 
 export interface UseNavDataReturn {
   navData: NavData[];
@@ -800,7 +788,7 @@ export const useNavData = (): UseNavDataReturn => {
   };
 };
 
-// ==================== DOWNLOADS HOOK (FIXED) ====================
+// ==================== DOWNLOADS HOOK (UPDATED FOR SEQUENTIAL) ====================
 
 export interface UseDownloadsReturn {
   downloadJobs: DownloadJob[];
@@ -808,7 +796,7 @@ export interface UseDownloadsReturn {
   isLoading: boolean;
   error: string | null;
   triggerDailyDownload: () => Promise<{ jobId: number; message: string; alreadyExists?: boolean }>;
-  triggerHistoricalDownload: (request: HistoricalDownloadRequest) => Promise<{ jobId: number; message: string; estimatedTime: number }>;
+  triggerHistoricalDownload: (request: HistoricalDownloadRequest) => Promise<SequentialDownloadResponse>;
   cancelDownload: (jobId: number) => Promise<void>;
   fetchDownloadJobs: (params?: DownloadJobParams) => Promise<void>;
   fetchActiveDownloads: () => Promise<void>;
@@ -901,7 +889,6 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       const response = await navService.triggerDailyDownload();
       
       if (response.success && response.data) {
-        // Don't automatically refetch to prevent loops
         return response.data;
       } else {
         const errorMsg = response.error || 'Failed to trigger daily download';
@@ -916,7 +903,8 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     }
   }, []);
 
-  const triggerHistoricalDownload = useCallback(async (request: HistoricalDownloadRequest) => {
+  // UPDATED: Now returns SequentialDownloadResponse
+  const triggerHistoricalDownload = useCallback(async (request: HistoricalDownloadRequest): Promise<SequentialDownloadResponse> => {
     const startDate = new Date(request.start_date);
     const endDate = new Date(request.end_date);
     const validation = NavService.validateDateRange(startDate, endDate);
@@ -931,7 +919,6 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       const response = await navService.triggerHistoricalDownload(request);
       
       if (response.success && response.data) {
-        // Don't automatically refetch to prevent loops
         return response.data;
       } else {
         const errorMsg = response.error || 'Failed to trigger historical download';
@@ -975,7 +962,6 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     fetchActiveDownloads();
   }, [fetchDownloadJobs, fetchActiveDownloads]);
 
-  // FIXED: Only fetch on mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -987,7 +973,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       };
       initializeFetch();
     }
-  }, []); // Empty dependency array
+  }, []);
 
   return {
     downloadJobs,
@@ -1004,22 +990,26 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
   };
 };
 
-// ==================== PROGRESS HOOK (FIXED) ====================
+// ==================== PROGRESS HOOK (UPDATED FOR SEQUENTIAL) ====================
 
 export interface UseDownloadProgressReturn {
   progress: DownloadProgress | null;
+  sequentialProgress: SequentialJobProgress | null;
   isPolling: boolean;
   startPolling: (jobId: number, onProgress?: (progress: DownloadProgress) => void) => Promise<DownloadProgress>;
+  startSequentialPolling: (parentJobId: number, onProgress?: (progress: SequentialJobProgress) => void) => Promise<SequentialJobProgress>;
   stopPolling: () => void;
   error: string | null;
 }
 
 export const useDownloadProgress = (): UseDownloadProgressReturn => {
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [sequentialProgress, setSequentialProgress] = useState<SequentialJobProgress | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const onProgressCallbackRef = useRef<((progress: DownloadProgress) => void) | null>(null);
+  const onProgressCallbackRef = useRef<any>(null);
+  const isSequentialRef = useRef<boolean>(false);
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -1028,6 +1018,7 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
     }
     setIsPolling(false);
     onProgressCallbackRef.current = null;
+    isSequentialRef.current = false;
   }, []);
 
   const startPolling = useCallback(async (
@@ -1039,20 +1030,46 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
     setError(null);
     setIsPolling(true);
     onProgressCallbackRef.current = onProgress || null;
+    isSequentialRef.current = false;
 
     return new Promise((resolve, reject) => {
+      let pollAttempts = 0;
+      const maxAttempts = 150;
+
       const poll = async () => {
         try {
+          if (!jobId || jobId <= 0) {
+            throw new Error('Invalid job ID for progress polling');
+          }
+
+          pollAttempts++;
+          if (pollAttempts > maxAttempts) {
+            throw new Error('Polling timeout - maximum attempts exceeded');
+          }
+
           const response = await navService.getDownloadProgress(jobId);
           
-          if (!response.success || !response.data) {
-            throw new Error(response.error || 'Failed to get download progress');
+          if (!response.success) {
+            if (response.error?.includes('not found') || response.error?.includes('404')) {
+              if (pollAttempts < 10) {
+                console.log(`Job ${jobId} not found yet, attempt ${pollAttempts}/10`);
+                return;
+              } else {
+                throw new Error(`Download job ${jobId} not found after multiple attempts`);
+              }
+            } else {
+              throw new Error(response.error || 'Failed to get download progress');
+            }
           }
 
           const currentProgress = response.data;
+          if (!currentProgress) {
+            throw new Error('No progress data received');
+          }
+
           setProgress(currentProgress);
           
-          if (onProgressCallbackRef.current) {
+          if (onProgressCallbackRef.current && !isSequentialRef.current) {
             onProgressCallbackRef.current(currentProgress);
           }
 
@@ -1064,8 +1081,22 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
             return;
           }
 
+          if (currentProgress.status === 'running' || currentProgress.status === 'pending') {
+            if (pollAttempts > 10) {
+              pollAttempts = 10;
+            }
+          }
+
         } catch (err: any) {
           console.error('Download progress polling error:', err);
+          
+          if (err.message.includes('Failed to fetch') || err.message.includes('Network Error')) {
+            if (pollAttempts < 20) {
+              console.log(`Network error polling job ${jobId}, retrying... (attempt ${pollAttempts})`);
+              return;
+            }
+          }
+          
           setError(err.message || 'Failed to get progress');
           stopPolling();
           reject(err);
@@ -1073,8 +1104,94 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
         }
       };
 
-      intervalRef.current = setInterval(poll, interval);
       poll();
+      intervalRef.current = setInterval(poll, interval);
+    });
+  }, [stopPolling]);
+
+  // ADDED: Sequential progress polling
+  const startSequentialPolling = useCallback(async (
+    parentJobId: number,
+    onProgress?: (progress: SequentialJobProgress) => void,
+    interval: number = 3000
+  ): Promise<SequentialJobProgress> => {
+    stopPolling();
+    setError(null);
+    setIsPolling(true);
+    onProgressCallbackRef.current = onProgress || null;
+    isSequentialRef.current = true;
+
+    return new Promise((resolve, reject) => {
+      let pollAttempts = 0;
+      const maxAttempts = 200; // Longer timeout for sequential downloads
+
+      const poll = async () => {
+        try {
+          if (!parentJobId || parentJobId <= 0) {
+            throw new Error('Invalid parent job ID for sequential progress polling');
+          }
+
+          pollAttempts++;
+          if (pollAttempts > maxAttempts) {
+            throw new Error('Sequential polling timeout - maximum attempts exceeded');
+          }
+
+          const response = await navService.getSequentialProgress(parentJobId);
+          
+          if (!response.success) {
+            if (response.error?.includes('not found')) {
+              if (pollAttempts < 15) {
+                console.log(`Sequential job ${parentJobId} not found yet, attempt ${pollAttempts}/15`);
+                return;
+              } else {
+                throw new Error(`Sequential download job ${parentJobId} not found after multiple attempts`);
+              }
+            } else {
+              throw new Error(response.error || 'Failed to get sequential progress');
+            }
+          }
+
+          const currentProgress = response.data;
+          if (!currentProgress) {
+            throw new Error('No sequential progress data received');
+          }
+
+          setSequentialProgress(currentProgress);
+          
+          if (onProgressCallbackRef.current && isSequentialRef.current) {
+            onProgressCallbackRef.current(currentProgress);
+          }
+
+          if (currentProgress.overall_status === 'completed' || 
+              currentProgress.overall_status === 'failed') {
+            stopPolling();
+            resolve(currentProgress);
+            return;
+          }
+
+          if (pollAttempts > 15) {
+            pollAttempts = 15;
+          }
+
+        } catch (err: any) {
+          console.error('Sequential progress polling error:', err);
+          
+          if (err.message.includes('Failed to fetch') || err.message.includes('Network Error')) {
+            if (pollAttempts < 25) {
+              console.log(`Network error polling sequential job ${parentJobId}, retrying... (attempt ${pollAttempts})`);
+              return;
+            }
+          }
+          
+          setError(err.message || 'Failed to get sequential progress');
+          stopPolling();
+          reject(err);
+          return;
+        }
+      };
+
+      poll();
+      intervalRef.current = setInterval(poll, interval);
     });
   }, [stopPolling]);
 
@@ -1086,8 +1203,10 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
 
   return {
     progress,
+    sequentialProgress,
     isPolling,
     startPolling,
+    startSequentialPolling,
     stopPolling,
     error,
   };
@@ -1190,7 +1309,6 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
     checkTodayData();
   }, [fetchStatistics, checkTodayData]);
 
-  // FIXED: Only fetch on mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -1228,7 +1346,6 @@ export interface UseNavDashboardReturn {
 }
 
 export const useNavDashboard = (): UseNavDashboardReturn => {
-  // FIXED: Use specific params and prevent auto-fetching
   const { 
     bookmarks, 
     isLoading: bookmarksLoading, 
@@ -1263,11 +1380,10 @@ export const useNavDashboard = (): UseNavDashboardReturn => {
   const isLoading = bookmarksLoading || statsLoading || downloadsLoading || schedulerLoading;
   const error = bookmarksError || statsError || downloadsError || schedulerError;
 
-  // FIXED: Debounced refetch to prevent excessive calls
   const lastRefetchRef = useRef<number>(0);
   const refetchAll = useCallback(() => {
     const now = Date.now();
-    if (now - lastRefetchRef.current > 5000) { // 5 second cooldown
+    if (now - lastRefetchRef.current > 5000) {
       lastRefetchRef.current = now;
       refetchBookmarks();
       refetchStats();

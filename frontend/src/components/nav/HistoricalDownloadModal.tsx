@@ -1,5 +1,5 @@
 // frontend/src/components/nav/HistoricalDownloadModal.tsx
-// FIXED: Type issues and validation error handling
+// UPDATED: Fixed TypeScript errors and added sequential download support with chunking preview
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,14 +7,33 @@ import { useDownloads } from '../../hooks/useNavData';
 import { toastService } from '../../services/toast.service';
 import { NavService } from '../../services/nav.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
-import type { SchemeBookmark } from '../../services/nav.service';
+import type { SchemeBookmark, SequentialDownloadResponse } from '../../services/nav.service';
 
 interface HistoricalDownloadModalProps {
   isOpen: boolean;
   bookmark: SchemeBookmark | null;
   onClose: () => void;
-  onDownloadStarted?: (jobId: number) => void;
-  onShowProgress?: (jobId: number) => void;
+  onDownloadStarted?: (parentJobId: number) => void;
+  onShowProgress?: (parentJobId: number) => void;
+}
+
+interface DatePreset {
+  label: string;
+  days: number;
+  description: string;
+}
+
+interface ChunkingInfo {
+  totalDays: number;
+  chunksRequired: number;
+  chunkSize: number;
+  estimatedTime: string;
+  chunkDetails: Array<{
+    chunkNumber: number;
+    startDate: string;
+    endDate: string;
+    dayCount: number;
+  }>;
 }
 
 export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = ({
@@ -33,6 +52,16 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   const [endDate, setEndDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+
+  // Date presets with updated descriptions for 90-day limit
+  const datePresets: DatePreset[] = [
+    { label: 'Last 30 Days', days: 30, description: 'Single download' },
+    { label: 'Last 90 Days', days: 90, description: 'Single download' },
+    { label: 'Last 6 Months', days: 180, description: '2 downloads needed' },
+    { label: 'Last 1 Year', days: 365, description: '5 downloads needed' },
+    { label: 'Since Inception', days: -1, description: 'Variable downloads' }
+  ];
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -63,28 +92,70 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     const endDateStr = defaultEndDate.toISOString().split('T')[0];
     setEndDate(endDateStr);
 
-    // Set default start date to 6 months before end date or earliest NAV date
-    let defaultStartDate: Date;
-    
-    if (bookmark.earliest_nav_date) {
-      defaultStartDate = new Date(bookmark.earliest_nav_date);
-    } else {
-      defaultStartDate = new Date(defaultEndDate);
-      defaultStartDate.setMonth(defaultStartDate.getMonth() - 6);
-    }
+    // Set default start date to 90 days before end date (single download)
+    const defaultStartDate = new Date(defaultEndDate);
+    defaultStartDate.setDate(defaultStartDate.getDate() - 89); // 90 days
     
     const startDateStr = defaultStartDate.toISOString().split('T')[0];
     setStartDate(startDateStr);
     setValidationError(null);
+    setSelectedPreset('Last 90 Days');
   };
 
   const clearForm = () => {
     setStartDate('');
     setEndDate('');
     setValidationError(null);
+    setSelectedPreset(null);
   };
 
-  // FIXED: Return type should be string | null, not string | undefined
+  const handlePresetSelection = (preset: DatePreset) => {
+    if (!bookmark) return;
+
+    setSelectedPreset(preset.label);
+    setValidationError(null);
+
+    const today = new Date();
+    let endDate = today;
+    
+    // Use latest NAV date if available and more recent
+    if (bookmark.latest_nav_date) {
+      const latestNavDate = new Date(bookmark.latest_nav_date);
+      if (latestNavDate < today) {
+        endDate = latestNavDate;
+      }
+    }
+
+    const endDateStr = endDate.toISOString().split('T')[0];
+    setEndDate(endDateStr);
+
+    if (preset.days === -1) {
+      // Since inception - use launch date or earliest NAV date
+      let inceptionDate: Date;
+      
+      // FIXED: Check launch_date property (now exists in SchemeBookmark)
+      if (bookmark.launch_date) {
+        inceptionDate = new Date(bookmark.launch_date);
+      } else if (bookmark.earliest_nav_date) {
+        inceptionDate = new Date(bookmark.earliest_nav_date);
+      } else {
+        // Fallback to 1 year ago
+        inceptionDate = new Date(endDate);
+        inceptionDate.setFullYear(inceptionDate.getFullYear() - 1);
+      }
+      
+      const startDateStr = inceptionDate.toISOString().split('T')[0];
+      setStartDate(startDateStr);
+    } else {
+      // Calculate start date based on preset days
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - (preset.days - 1));
+      
+      const startDateStr = startDate.toISOString().split('T')[0];
+      setStartDate(startDateStr);
+    }
+  };
+
   const validateDateRange = (): string | null => {
     if (!startDate || !endDate) {
       return 'Both start and end dates are required';
@@ -105,7 +176,6 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     // Use the validation from NavService
     const validation = NavService.validateDateRange(start, end);
     if (!validation.valid) {
-      // FIXED: Ensure we return string | null, handle undefined case
       return validation.error || 'Invalid date range';
     }
 
@@ -116,23 +186,48 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     if (!startDate || !endDate) return 0;
     const start = new Date(startDate);
     const end = new Date(endDate);
-    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  const calculateEstimatedTime = (): string => {
-    const dayCount = calculateDayCount();
-    if (dayCount === 0) return '';
+  const calculateChunkingInfo = (): ChunkingInfo => {
+    const totalDays = calculateDayCount();
+    const chunksRequired = Math.ceil(totalDays / 90);
+    const chunkSize = Math.min(90, totalDays);
     
-    // Rough estimate: ~2 seconds per day for historical data
-    const estimatedSeconds = dayCount * 2;
-    
-    if (estimatedSeconds < 60) {
-      return `~${estimatedSeconds} seconds`;
-    } else if (estimatedSeconds < 3600) {
-      return `~${Math.round(estimatedSeconds / 60)} minutes`;
-    } else {
-      return `~${Math.round(estimatedSeconds / 3600)} hours`;
+    // Calculate chunk details
+    const chunkDetails: ChunkingInfo['chunkDetails'] = [];
+    if (startDate && endDate) {
+      const chunks = NavService.calculateChunks(new Date(startDate), new Date(endDate));
+      chunks.forEach((chunk, index) => {
+        chunkDetails.push({
+          chunkNumber: index + 1,
+          startDate: chunk.start_date.toISOString().split('T')[0],
+          endDate: chunk.end_date.toISOString().split('T')[0],
+          dayCount: chunk.day_count
+        });
+      });
     }
+    
+    // Estimate time based on chunks
+    const baseTimePerChunk = 45; // 45 seconds per chunk (more realistic)
+    const totalEstimatedSeconds = chunksRequired * baseTimePerChunk;
+    
+    let estimatedTime: string;
+    if (totalEstimatedSeconds < 60) {
+      estimatedTime = `~${totalEstimatedSeconds} seconds`;
+    } else if (totalEstimatedSeconds < 3600) {
+      estimatedTime = `~${Math.round(totalEstimatedSeconds / 60)} minutes`;
+    } else {
+      estimatedTime = `~${Math.round(totalEstimatedSeconds / 3600)} hours`;
+    }
+
+    return {
+      totalDays,
+      chunksRequired,
+      chunkSize,
+      estimatedTime,
+      chunkDetails
+    };
   };
 
   const handleSubmit = async () => {
@@ -148,8 +243,9 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     setValidationError(null);
 
     try {
-      // FIXED: Use proper error logging method (assuming 'error' exists, replace with correct method if different)
-      FrontendErrorLogger.error(
+      const chunkingInfo = calculateChunkingInfo();
+      
+      FrontendErrorLogger.info(
         'Starting historical download',
         'HistoricalDownloadModal',
         {
@@ -157,20 +253,33 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           schemeId: bookmark.scheme_id,
           startDate,
           endDate,
-          dayCount: calculateDayCount()
+          dayCount: chunkingInfo.totalDays,
+          chunksRequired: chunkingInfo.chunksRequired,
+          selectedPreset
         }
       );
 
-      const result = await triggerHistoricalDownload({
+      // FIXED: Use scheme_id array as expected by backend
+      const request = {
         scheme_ids: [bookmark.scheme_id],
         start_date: startDate,
         end_date: endDate
-      });
+      };
 
-      toastService.success(`Historical download started! Estimated time: ${calculateEstimatedTime()}`);
+      const result: SequentialDownloadResponse = await triggerHistoricalDownload(request);
+
+      // FIXED: Use parent_job_id from SequentialDownloadResponse
+      const jobId = result.parent_job_id;
+
+      if (chunkingInfo.chunksRequired > 1) {
+        toastService.success(`Sequential download started! ${chunkingInfo.chunksRequired} downloads will run automatically. Estimated time: ${chunkingInfo.estimatedTime}`);
+      } else {
+        toastService.success(`Historical download started! Estimated time: ${chunkingInfo.estimatedTime}`);
+      }
       
-      onDownloadStarted?.(result.jobId);
-      onShowProgress?.(result.jobId);
+      // FIXED: Pass parent_job_id to callbacks
+      onDownloadStarted?.(jobId);
+      onShowProgress?.(jobId);
       onClose();
 
     } catch (error: any) {
@@ -201,8 +310,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   // Don't render if not open or no bookmark
   if (!isOpen || !bookmark) return null;
 
-  const dayCount = calculateDayCount();
-  const estimatedTime = calculateEstimatedTime();
+  const chunkingInfo = calculateChunkingInfo();
   const isValidRange = validateDateRange() === null;
 
   return (
@@ -223,8 +331,8 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
         backgroundColor: colors.utility.primaryBackground,
         borderRadius: '16px',
         padding: '24px',
-        minWidth: '500px',
-        maxWidth: '600px',
+        minWidth: '600px',
+        maxWidth: '800px',
         maxHeight: '90vh',
         overflowY: 'auto',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
@@ -289,6 +397,10 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             marginBottom: '8px'
           }}>
             <strong>Code:</strong> {bookmark.scheme_code} • <strong>AMC:</strong> {bookmark.amc_name}
+            {/* FIXED: Use launch_date from bookmark */}
+            {bookmark.launch_date && (
+              <> • <strong>Launch Date:</strong> {new Date(bookmark.launch_date).toLocaleDateString()}</>
+            )}
           </div>
           
           {/* Current NAV Data Status */}
@@ -317,8 +429,70 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           )}
         </div>
 
-        {/* Date Range Inputs */}
+        {/* Date Preset Buttons */}
         <div style={{ marginBottom: '20px' }}>
+          <label style={{
+            display: 'block',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: colors.utility.primaryText,
+            marginBottom: '8px'
+          }}>
+            Quick Date Selection
+          </label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '8px',
+            marginBottom: '16px'
+          }}>
+            {datePresets.map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => handlePresetSelection(preset)}
+                disabled={isSubmitting}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: selectedPreset === preset.label 
+                    ? colors.brand.primary 
+                    : colors.utility.secondaryBackground,
+                  color: selectedPreset === preset.label 
+                    ? 'white' 
+                    : colors.utility.primaryText,
+                  border: `1px solid ${selectedPreset === preset.label 
+                    ? colors.brand.primary 
+                    : colors.utility.primaryText + '20'}`,
+                  borderRadius: '6px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  textAlign: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ marginBottom: '2px' }}>{preset.label}</div>
+                <div style={{
+                  fontSize: '10px',
+                  opacity: 0.8
+                }}>
+                  {preset.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Date Range Inputs */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{
+            display: 'block',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: colors.utility.primaryText,
+            marginBottom: '8px'
+          }}>
+            Custom Date Range
+          </label>
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -328,17 +502,20 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             <div>
               <label style={{
                 display: 'block',
-                fontSize: '14px',
+                fontSize: '12px',
                 fontWeight: '500',
-                color: colors.utility.primaryText,
-                marginBottom: '6px'
+                color: colors.utility.secondaryText,
+                marginBottom: '4px'
               }}>
                 Start Date *
               </label>
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setSelectedPreset(null); // Clear preset selection
+                }}
                 disabled={isSubmitting}
                 style={{
                   width: '100%',
@@ -357,17 +534,20 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             <div>
               <label style={{
                 display: 'block',
-                fontSize: '14px',
+                fontSize: '12px',
                 fontWeight: '500',
-                color: colors.utility.primaryText,
-                marginBottom: '6px'
+                color: colors.utility.secondaryText,
+                marginBottom: '4px'
               }}>
                 End Date *
               </label>
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setSelectedPreset(null); // Clear preset selection
+                }}
                 max={new Date().toISOString().split('T')[0]}
                 disabled={isSubmitting}
                 style={{
@@ -385,34 +565,100 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             </div>
           </div>
 
-          {/* Date Range Summary */}
-          {dayCount > 0 && (
+          {/* Enhanced Chunking Preview */}
+          {chunkingInfo.totalDays > 0 && isValidRange && (
             <div style={{
-              padding: '12px',
-              backgroundColor: isValidRange 
-                ? colors.semantic.success + '10' 
-                : colors.semantic.warning + '10',
-              borderRadius: '6px',
-              border: `1px solid ${isValidRange 
-                ? colors.semantic.success + '30' 
-                : colors.semantic.warning + '30'}`,
+              padding: '16px',
+              backgroundColor: chunkingInfo.chunksRequired > 1 
+                ? colors.semantic.warning + '10' 
+                : colors.semantic.success + '10',
+              borderRadius: '8px',
+              border: `1px solid ${chunkingInfo.chunksRequired > 1 
+                ? colors.semantic.warning + '30' 
+                : colors.semantic.success + '30'}`,
               marginBottom: '16px'
             }}>
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.primaryText,
-                marginBottom: '4px'
+                marginBottom: '8px',
+                fontWeight: '600'
               }}>
-                <strong>Download Summary:</strong>
+                Download Preview
               </div>
               <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                lineHeight: '1.5',
+                marginBottom: '12px'
               }}>
-                • Date range: {dayCount} days<br/>
-                • Estimated time: {estimatedTime || 'Calculating...'}<br/>
-                • Historical data will be downloaded for this scheme only
+                • <strong>Date range:</strong> {chunkingInfo.totalDays} days ({new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()})<br/>
+                • <strong>Downloads needed:</strong> {chunkingInfo.chunksRequired} 
+                  {chunkingInfo.chunksRequired > 1 && ' (due to 90-day limit)'}<br/>
+                • <strong>Estimated time:</strong> {chunkingInfo.estimatedTime}<br/>
+                {chunkingInfo.chunksRequired > 1 && (
+                  <>• <strong>Sequential processing:</strong> Downloads will run automatically one after another</>
+                )}
               </div>
+
+              {/* Detailed Chunk Breakdown for Multi-Chunk Downloads */}
+              {chunkingInfo.chunksRequired > 1 && chunkingInfo.chunkDetails.length > 0 && (
+                <div style={{
+                  backgroundColor: colors.utility.primaryBackground,
+                  padding: '12px',
+                  borderRadius: '6px',
+                  border: `1px solid ${colors.utility.primaryText}10`
+                }}>
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    marginBottom: '8px'
+                  }}>
+                    Chunk Breakdown:
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: '8px',
+                    maxHeight: '120px',
+                    overflowY: 'auto'
+                  }}>
+                    {chunkingInfo.chunkDetails.slice(0, 6).map((chunk) => (
+                      <div
+                        key={chunk.chunkNumber}
+                        style={{
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText,
+                          padding: '6px 8px',
+                          backgroundColor: colors.utility.secondaryBackground,
+                          borderRadius: '4px',
+                          border: `1px solid ${colors.utility.primaryText}10`
+                        }}
+                      >
+                        <div style={{ fontWeight: '600', marginBottom: '2px' }}>
+                          Chunk {chunk.chunkNumber}
+                        </div>
+                        <div>{new Date(chunk.startDate).toLocaleDateString()} to {new Date(chunk.endDate).toLocaleDateString()}</div>
+                        <div style={{ opacity: 0.8 }}>({chunk.dayCount} days)</div>
+                      </div>
+                    ))}
+                    {chunkingInfo.chunkDetails.length > 6 && (
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText,
+                        padding: '6px 8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontStyle: 'italic'
+                      }}>
+                        +{chunkingInfo.chunkDetails.length - 6} more chunks...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -459,16 +705,16 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !isValidRange || dayCount === 0}
+            disabled={isSubmitting || !isValidRange || chunkingInfo.totalDays === 0}
             style={{
               padding: '10px 20px',
-              backgroundColor: (isSubmitting || !isValidRange || dayCount === 0)
+              backgroundColor: (isSubmitting || !isValidRange || chunkingInfo.totalDays === 0)
                 ? colors.utility.secondaryText 
                 : colors.brand.primary,
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: (isSubmitting || !isValidRange || dayCount === 0) 
+              cursor: (isSubmitting || !isValidRange || chunkingInfo.totalDays === 0) 
                 ? 'not-allowed' 
                 : 'pointer',
               fontSize: '14px',
@@ -491,12 +737,24 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                 Starting Download...
               </>
             ) : (
-              <>📥 Start Historical Download</>
+              <>
+                📥 Start {chunkingInfo.chunksRequired > 1 ? 'Sequential ' : ''}Download
+                {chunkingInfo.chunksRequired > 1 && (
+                  <span style={{
+                    fontSize: '11px',
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    padding: '2px 6px',
+                    borderRadius: '10px'
+                  }}>
+                    {chunkingInfo.chunksRequired} chunks
+                  </span>
+                )}
+              </>
             )}
           </button>
         </div>
 
-        {/* Help Text */}
+        {/* Enhanced Help Text */}
         <div style={{
           marginTop: '16px',
           padding: '12px',
@@ -505,9 +763,9 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           fontSize: '12px',
           color: colors.utility.secondaryText
         }}>
-          <strong>Note:</strong> Historical downloads are limited to 6 months per request. 
-          The download will run in the background and you'll be notified when complete. 
-          You can track progress in the downloads section.
+          <strong>How it works:</strong> Historical downloads are automatically split into 90-day chunks due to AMFI restrictions. 
+          {chunkingInfo.chunksRequired > 1 && ' Your request will be processed as multiple sequential downloads.'} 
+          All downloads run in the background and you'll be notified when complete. You can track progress in the download monitor.
         </div>
       </div>
 
