@@ -1,112 +1,44 @@
 // frontend/src/components/nav/NavProgressModal.tsx
-// UPDATED: Added sequential download progress display with chunk tracking
+// UPDATED: Simplified for MFAPI.in - removed sequential download complexity
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { NavService } from '../../services/nav.service';
-import type { DownloadProgress, SequentialJobProgress } from '../../services/nav.service';
-
-// ==================== PROGRESS MODAL COMPONENT ====================
+import type { DownloadProgress } from '../../services/nav.service';
 
 interface NavProgressModalProps {
   isOpen: boolean;
   progress: DownloadProgress | null;
-  sequentialProgress?: SequentialJobProgress | null;
   onClose: () => void;
   onCancel?: (jobId: number) => void;
   title?: string;
   showCancelButton?: boolean;
-  isSequential?: boolean;
 }
 
 export const NavProgressModal: React.FC<NavProgressModalProps> = ({
   isOpen,
   progress,
-  sequentialProgress,
   onClose,
   onCancel,
   title = 'Downloading NAV Data',
-  showCancelButton = true,
-  isSequential = false
+  showCancelButton = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  if (!isOpen) return null;
+  if (!isOpen || !progress) return null;
 
-  // Determine which progress to display
-  const displayProgress = isSequential && sequentialProgress ? sequentialProgress : progress;
-  if (!displayProgress) return null;
+  // SIMPLIFIED: Direct access to progress properties
+  const currentStatus = progress.status;
+  const currentPercentage = progress.progressPercentage || 0;
+  const currentStep = progress.currentStep || 'Processing...';
+  const totalSchemes = progress.totalSchemes || 1;
+  const processedSchemes = progress.processedSchemes || 0;
+  const processedRecords = progress.processedRecords || 0;
+  const errors = progress.errors || [];
+  const estimatedTime = progress.estimatedTimeRemaining;
+  const jobId = progress.jobId;
 
-  // Helper functions for sequential vs single progress
-  const getProgressPercentage = (): number => {
-    if (isSequential && sequentialProgress) {
-      return sequentialProgress.progress_percentage || 0;
-    }
-    return progress?.progressPercentage || 0;
-  };
-
-  const getStatus = (): 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' => {
-    if (isSequential && sequentialProgress) {
-      return sequentialProgress.overall_status;
-    }
-    return progress?.status || 'pending';
-  };
-
-  const getCurrentStep = (): string => {
-    if (isSequential && sequentialProgress) {
-      if (sequentialProgress.current_chunk) {
-        const chunk = sequentialProgress.current_chunk;
-        const startDate = new Date(chunk.start_date).toLocaleDateString();
-        const endDate = new Date(chunk.end_date).toLocaleDateString();
-        return `Downloading chunk ${chunk.chunk_number} of ${sequentialProgress.total_chunks}: ${startDate} - ${endDate}`;
-      }
-      return `Processing sequential download...`;
-    }
-    return progress?.currentStep || 'Processing...';
-  };
-
-  const getJobId = (): number => {
-    if (isSequential && sequentialProgress) {
-      return sequentialProgress.parent_job_id;
-    }
-    return progress?.jobId || 0;
-  };
-
-  const getTotalSchemes = (): number => {
-    return progress?.totalSchemes || 1;
-  };
-
-  const getProcessedSchemes = (): number => {
-    return progress?.processedSchemes || 0;
-  };
-
-  const getProcessedRecords = (): number => {
-    return progress?.processedRecords || 0;
-  };
-
-  const getErrors = (): Array<{ scheme_id?: number; scheme_code?: string; error: string; chunk_number?: number }> => {
-    if (isSequential && sequentialProgress && sequentialProgress.errors.length > 0) {
-      return sequentialProgress.errors.map(err => ({
-        error: err.error,
-        chunk_number: err.chunk_number,
-        scheme_code: `Chunk ${err.chunk_number}`
-      }));
-    }
-    return progress?.errors || [];
-  };
-
-  const getEstimatedTime = (): number | undefined => {
-    if (isSequential && sequentialProgress && sequentialProgress.estimated_completion) {
-      const now = new Date().getTime();
-      const estimatedCompletion = new Date(sequentialProgress.estimated_completion).getTime();
-      return Math.max(0, estimatedCompletion - now);
-    }
-    return progress?.estimatedTimeRemaining;
-  };
-
-  const currentStatus = getStatus();
-  const currentPercentage = getProgressPercentage();
   const isCompleted = currentStatus === 'completed';
   const isFailed = currentStatus === 'failed';
   const isCancelled = currentStatus === 'cancelled';
@@ -169,18 +101,6 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
             gap: '8px'
           }}>
             {getStatusIcon()} {title}
-            {isSequential && (
-              <span style={{
-                fontSize: '12px',
-                backgroundColor: colors.brand.primary + '20',
-                color: colors.brand.primary,
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontWeight: '500'
-              }}>
-                Sequential
-              </span>
-            )}
           </h3>
           
           {!isActive && (
@@ -199,84 +119,6 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
             </button>
           )}
         </div>
-
-        {/* Sequential Progress Overview */}
-        {isSequential && sequentialProgress && (
-          <div style={{
-            padding: '16px',
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '8px',
-            marginBottom: '20px',
-            border: `1px solid ${colors.brand.primary}20`
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '8px'
-            }}>
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: colors.utility.primaryText
-              }}>
-                Sequential Download Progress
-              </span>
-              <span style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText
-              }}>
-                {sequentialProgress.completed_chunks} of {sequentialProgress.total_chunks} chunks
-              </span>
-            </div>
-            
-            {/* Chunk Progress Bar */}
-            <div style={{
-              width: '100%',
-              height: '6px',
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '3px',
-              marginBottom: '8px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                width: `${(sequentialProgress.completed_chunks / sequentialProgress.total_chunks) * 100}%`,
-                height: '100%',
-                backgroundColor: colors.semantic.success,
-                borderRadius: '3px',
-                transition: 'width 0.3s ease-in-out'
-              }} />
-            </div>
-
-            {/* Current Chunk Info */}
-            {sequentialProgress.current_chunk && (
-              <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>
-                  Current: Chunk {sequentialProgress.current_chunk.chunk_number}
-                </span>
-                <span style={{
-                  fontSize: '11px',
-                  backgroundColor: sequentialProgress.current_chunk.status === 'running' 
-                    ? colors.semantic.warning + '20' 
-                    : colors.utility.primaryBackground,
-                  color: sequentialProgress.current_chunk.status === 'running' 
-                    ? colors.semantic.warning 
-                    : colors.utility.secondaryText,
-                  padding: '2px 6px',
-                  borderRadius: '4px'
-                }}>
-                  {sequentialProgress.current_chunk.status}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Main Progress Bar */}
         <div style={{
@@ -317,18 +159,17 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
             minHeight: '20px',
             lineHeight: '1.4'
           }}>
-            {getCurrentStep()}
+            {currentStep}
           </div>
 
-          {isActive && (
+          {isActive && estimatedTime !== undefined && (
             <div style={{
               fontSize: '12px',
               color: colors.utility.secondaryText
             }}>
-              {getEstimatedTime() ? 
-                `Estimated time remaining: ${formatTime(getEstimatedTime())}` :
-                'Calculating time remaining...'
-              }
+              {estimatedTime > 0 
+                ? `Estimated time remaining: ${formatTime(estimatedTime)}` 
+                : 'Calculating time remaining...'}
             </div>
           )}
         </div>
@@ -351,10 +192,10 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
           </div>
         )}
 
-        {/* Stats */}
+        {/* SIMPLIFIED: Stats - Always 2 columns */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isSequential ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: '16px',
           marginBottom: '24px'
         }}>
@@ -369,13 +210,13 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
               fontWeight: '600',
               color: colors.utility.primaryText
             }}>
-              {getProcessedSchemes()}
+              {processedSchemes}
             </div>
             <div style={{
               fontSize: '12px',
               color: colors.utility.secondaryText
             }}>
-              of {getTotalSchemes()} schemes
+              of {totalSchemes} schemes
             </div>
           </div>
           
@@ -390,7 +231,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
               fontWeight: '600',
               color: colors.utility.primaryText
             }}>
-              {getProcessedRecords().toLocaleString()}
+              {processedRecords.toLocaleString()}
             </div>
             <div style={{
               fontSize: '12px',
@@ -399,30 +240,6 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
               NAV records
             </div>
           </div>
-
-          {/* Sequential-specific stats */}
-          {isSequential && sequentialProgress && (
-            <div style={{
-              textAlign: 'center',
-              padding: '12px',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '8px'
-            }}>
-              <div style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                color: colors.utility.primaryText
-              }}>
-                {sequentialProgress.completed_chunks}
-              </div>
-              <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText
-              }}>
-                of {sequentialProgress.total_chunks} chunks
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Action Buttons */}
@@ -433,7 +250,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
         }}>
           {isActive && showCancelButton && onCancel && (
             <button
-              onClick={() => onCancel(getJobId())}
+              onClick={() => onCancel(jobId)}
               style={{
                 padding: '10px 20px',
                 backgroundColor: 'transparent',
@@ -469,7 +286,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
         </div>
 
         {/* Errors Display */}
-        {getErrors().length > 0 && (
+        {errors.length > 0 && (
           <div style={{
             marginTop: '16px',
             padding: '12px',
@@ -483,7 +300,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
               color: colors.semantic.error,
               marginBottom: '8px'
             }}>
-              {isSequential ? 'Chunk Errors' : 'Errors'} ({getErrors().length}):
+              Errors ({errors.length}):
             </div>
             <div style={{
               maxHeight: '120px',
@@ -491,19 +308,14 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
               fontSize: '12px',
               color: colors.utility.primaryText
             }}>
-              {getErrors().slice(0, 5).map((error, index) => (
+              {errors.slice(0, 5).map((error, index) => (
                 <div key={index} style={{ marginBottom: '4px' }}>
-                  <strong>
-                    {error.chunk_number 
-                      ? `Chunk ${error.chunk_number}` 
-                      : error.scheme_code || 'Unknown'
-                    }:
-                  </strong> {error.error}
+                  <strong>{error.scheme_code || 'Unknown'}:</strong> {error.error}
                 </div>
               ))}
-              {getErrors().length > 5 && (
+              {errors.length > 5 && (
                 <div style={{ fontStyle: 'italic', color: colors.utility.secondaryText }}>
-                  ...and {getErrors().length - 5} more errors
+                  ...and {errors.length - 5} more errors
                 </div>
               )}
             </div>
@@ -511,22 +323,20 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
         )}
 
         {/* Time Information */}
-        {isSequential && sequentialProgress && (
-          <div style={{
-            marginTop: '12px',
-            padding: '10px',
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '6px',
-            fontSize: '11px',
-            color: colors.utility.secondaryText,
-            textAlign: 'center'
-          }}>
-            Started: {new Date(sequentialProgress.start_time).toLocaleString()}
-            {sequentialProgress.estimated_completion && (
-              <> • Estimated completion: {new Date(sequentialProgress.estimated_completion).toLocaleString()}</>
-            )}
-          </div>
-        )}
+        <div style={{
+          marginTop: '12px',
+          padding: '10px',
+          backgroundColor: colors.utility.secondaryBackground,
+          borderRadius: '6px',
+          fontSize: '11px',
+          color: colors.utility.secondaryText,
+          textAlign: 'center'
+        }}>
+          Started: {new Date(progress.startTime).toLocaleString()}
+          {estimatedTime && estimatedTime > 0 && isActive && (
+            <> • Estimated completion: {new Date(Date.now() + estimatedTime).toLocaleString()}</>
+          )}
+        </div>
       </div>
 
       <style>{`
@@ -540,6 +350,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
 };
 
 // ==================== SCHEME SEARCH COMPONENT ====================
+// Note: Keeping this component as it was not mentioned in the simplification spec
 
 interface SchemeSearchProps {
   onSelectScheme?: (scheme: any) => void;
@@ -559,10 +370,10 @@ export const SchemeSearch: React.FC<SchemeSearchProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [schemes, setSchemes] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [schemes, setSchemes] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const searchSchemes = async (query: string) => {
     if (query.length < 2) {
@@ -601,7 +412,7 @@ export const SchemeSearch: React.FC<SchemeSearchProps> = ({
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchQuery) {
         searchSchemes(searchQuery);
@@ -775,6 +586,7 @@ export const SchemeSearch: React.FC<SchemeSearchProps> = ({
 };
 
 // ==================== BOOKMARK LIST COMPONENT ====================
+// Note: Keeping this component as it was not mentioned in the simplification spec
 
 interface BookmarkListProps {
   onTriggerDownload?: (bookmarks: any[]) => void;
@@ -788,9 +600,9 @@ export const BookmarkList: React.FC<BookmarkListProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
-  const [selectedBookmarks, setSelectedBookmarks] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [bookmarks, setBookmarks] = React.useState<any[]>([]);
+  const [selectedBookmarks, setSelectedBookmarks] = React.useState<number[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const handleSelectAll = (selected: boolean) => {
     if (selected) {

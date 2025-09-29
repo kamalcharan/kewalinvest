@@ -1,5 +1,5 @@
 // frontend/src/components/nav/EnhancedBookmarkCard.tsx
-// QUICK FIX: Handle cases where latest_nav_value might be a string
+// UPDATED: Simplified tooltips and terminology for MFAPI.in approach
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -129,7 +129,8 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           gap: '12px',
           fontSize: '12px',
           color: colors.utility.secondaryText,
-          marginBottom: '6px'
+          marginBottom: '6px',
+          flexWrap: 'wrap'
         }}>
           <span><strong>Code:</strong> {bookmark.scheme_code}</span>
           <span><strong>AMC:</strong> {bookmark.amc_name}</span>
@@ -144,7 +145,8 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           alignItems: 'center',
           gap: '16px',
           fontSize: '11px',
-          color: colors.utility.secondaryText
+          color: colors.utility.secondaryText,
+          flexWrap: 'wrap'
         }}>
           <span><strong>Data Range:</strong> {getDateRangeDisplay()}</span>
           <span><strong>Records:</strong> {bookmark.nav_records_count || 0}</span>
@@ -163,7 +165,8 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           flexDirection: 'column',
           alignItems: 'flex-end',
           gap: '8px',
-          minWidth: '140px'
+          minWidth: '140px',
+          flexShrink: 0
         }}>
           
           {/* DAILY DOWNLOAD TOGGLE */}
@@ -173,20 +176,25 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
             gap: '8px',
             fontSize: '12px',
             cursor: isToggling ? 'not-allowed' : 'pointer',
-            color: colors.utility.primaryText
+            color: colors.utility.primaryText,
+            userSelect: 'none'
           }}>
             <span>Daily Download</span>
-            <div style={{
-              position: 'relative',
-              width: '36px',
-              height: '18px',
-              backgroundColor: bookmark.daily_download_enabled 
-                ? colors.semantic.success 
-                : colors.utility.secondaryText,
-              borderRadius: '9px',
-              transition: 'background-color 0.2s ease',
-              cursor: isToggling ? 'not-allowed' : 'pointer'
-            }}>
+            <div 
+              title={bookmark.daily_download_enabled 
+                ? `Daily downloads enabled at ${bookmark.download_time}` 
+                : 'Enable automatic daily NAV downloads'}
+              style={{
+                position: 'relative',
+                width: '36px',
+                height: '18px',
+                backgroundColor: bookmark.daily_download_enabled 
+                  ? colors.semantic.success 
+                  : colors.utility.secondaryText,
+                borderRadius: '9px',
+                transition: 'background-color 0.2s ease',
+                cursor: isToggling ? 'not-allowed' : 'pointer'
+              }}>
               <input
                 type="checkbox"
                 checked={bookmark.daily_download_enabled}
@@ -197,7 +205,9 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
                   position: 'absolute',
                   width: '100%',
                   height: '100%',
-                  cursor: isToggling ? 'not-allowed' : 'pointer'
+                  cursor: isToggling ? 'not-allowed' : 'pointer',
+                  margin: 0,
+                  padding: 0
                 }}
               />
               <div style={{
@@ -209,7 +219,8 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
                 backgroundColor: 'white',
                 borderRadius: '50%',
                 transition: 'left 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                pointerEvents: 'none'
               }} />
             </div>
           </label>
@@ -223,6 +234,9 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
             <button
               onClick={() => onViewNavData?.(bookmark)}
               disabled={(bookmark.nav_records_count || 0) === 0}
+              title={(bookmark.nav_records_count || 0) === 0 
+                ? 'No NAV data available. Download historical data first.' 
+                : `View ${bookmark.nav_records_count} NAV records`}
               style={{
                 padding: '4px 8px',
                 fontSize: '11px',
@@ -235,16 +249,22 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
                 border: 'none',
                 borderRadius: '4px',
                 cursor: (bookmark.nav_records_count || 0) === 0 ? 'not-allowed' : 'pointer',
-                fontWeight: '500'
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                lineHeight: '1.2'
               }}
             >
               📊 View Data
             </button>
 
-            {/* HISTORICAL DOWNLOAD BUTTON */}
+            {/* UPDATED: Historical Download Button with improved tooltip */}
             <button
               onClick={() => onHistoricalDownload?.(bookmark)}
               disabled={bookmark.historical_download_completed}
+              title={bookmark.historical_download_completed 
+                ? 'Historical data already downloaded' 
+                : 'Download complete historical NAV data using MFAPI.in'}
               style={{
                 padding: '4px 8px',
                 fontSize: '11px',
@@ -255,7 +275,10 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
                 border: 'none',
                 borderRadius: '4px',
                 cursor: bookmark.historical_download_completed ? 'default' : 'pointer',
-                fontWeight: '500'
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                lineHeight: '1.2'
               }}
             >
               {bookmark.historical_download_completed ? '✓ Historical' : '📥 Historical'}
@@ -279,6 +302,13 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
       <style>{`
         .enhanced-bookmark-card:hover {
           border-color: ${colors.brand.primary}30 !important;
+          box-shadow: 0 2px 8px ${colors.brand.primary}10;
+          transform: translateY(-1px);
+        }
+        
+        .enhanced-bookmark-card button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
       `}</style>
     </div>
