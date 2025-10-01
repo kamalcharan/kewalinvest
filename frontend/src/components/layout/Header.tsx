@@ -1,13 +1,11 @@
 // frontend/src/components/layout/Header.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Menu, 
   Bell, 
   Search, 
   ChevronDown, 
-  User, 
-  Settings, 
   LogOut,
   Sun,
   Moon,
@@ -78,13 +76,27 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout, environment, switchEnvironment } = useAuth();
   const { theme, isDarkMode, toggleDarkMode, themes, currentThemeId, setTheme } = useTheme();
+  
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
+
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   // Check if user is admin
   const isAdmin = user?.tenant_id === 1 || user?.email?.includes('admin');
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleEnvironmentSwitch = async () => {
     try {
@@ -106,7 +118,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
     setTheme(themeId);
     const selectedTheme = themes.find(t => t.id === themeId);
     toastService.success(`Theme changed to ${selectedTheme?.name}`);
-    setShowThemeMenu(false);
   };
 
   return (
@@ -239,153 +250,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           />
         </div>
 
-        {/* Dark Mode Toggle */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '6px 10px',
-          borderRadius: '20px',
-          backgroundColor: `${colors.utility.primaryText}10`,
-          border: `1px solid ${colors.utility.primaryText}20`
-        }}>
-          {isDarkMode ? <Moon size={16} style={{ color: colors.utility.primaryText }} /> : <Sun size={16} style={{ color: colors.utility.primaryText }} />}
-          <ToggleSwitch
-            checked={isDarkMode}
-            onChange={handleDarkModeToggle}
-            checkedColor={colors.brand.primary}
-            uncheckedColor={`${colors.utility.primaryText}40`}
-            size="sm"
-          />
-        </div>
-
-        {/* Theme Menu */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowThemeMenu(!showThemeMenu)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '8px',
-              borderRadius: '6px',
-              color: colors.utility.primaryText,
-              backgroundColor: `${colors.utility.primaryText}10`,
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}20`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-            }}
-          >
-            <Palette size={20} />
-          </button>
-
-          {showThemeMenu && (
-            <div style={{
-              position: 'absolute',
-              top: '100%',
-              right: 0,
-              marginTop: '8px',
-              backgroundColor: colors.utility.secondaryBackground,
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              minWidth: '280px',
-              zIndex: 1000,
-              padding: '12px'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '12px',
-                paddingBottom: '8px',
-                borderBottom: `1px solid ${colors.utility.primaryText}20`
-              }}>
-                <Palette size={16} style={{ color: colors.brand.primary }} />
-                <span style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText
-                }}>
-                  Choose Theme
-                </span>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {themes.map((themeOption) => (
-                  <button
-                    key={themeOption.id}
-                    onClick={() => handleThemeChange(themeOption.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '8px 12px',
-                      background: 'none',
-                      border: `1px solid ${currentThemeId === themeOption.id ? colors.brand.primary : 'transparent'}`,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      backgroundColor: currentThemeId === themeOption.id ? `${colors.brand.primary}10` : 'transparent',
-                      transition: 'all 0.2s ease',
-                      width: '100%',
-                      textAlign: 'left'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (currentThemeId !== themeOption.id) {
-                        e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}05`;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (currentThemeId !== themeOption.id) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: '3px' }}>
-                      <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: themeOption.colors.brand.primary,
-                        border: `1px solid ${colors.utility.primaryText}20`
-                      }} />
-                      <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: themeOption.colors.brand.secondary,
-                        border: `1px solid ${colors.utility.primaryText}20`
-                      }} />
-                      <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: themeOption.colors.brand.tertiary,
-                        border: `1px solid ${colors.utility.primaryText}20`
-                      }} />
-                    </div>
-                    <span style={{
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      color: colors.utility.primaryText,
-                      flex: 1
-                    }}>
-                      {themeOption.name}
-                    </span>
-                    {currentThemeId === themeOption.id && (
-                      <Check size={14} style={{ color: colors.brand.primary }} />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Notifications */}
         <button
           style={{
@@ -427,7 +291,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         </button>
 
         {/* User menu */}
-        <div style={{ position: 'relative' }}>
+        <div ref={userMenuRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             style={{
@@ -490,68 +354,150 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '8px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              minWidth: '200px',
-              zIndex: 1000
+              minWidth: '280px',
+              zIndex: 1000,
+              overflow: 'hidden'
             }}>
-              <button
-                onClick={() => {
-                  navigate('/profile');
-                  setShowUserMenu(false);
-                }}
-                style={{
+              {/* User Info Section */}
+              <div style={{
+                padding: '16px',
+                borderBottom: `1px solid ${colors.utility.primaryText}20`
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: colors.utility.primaryText
+                }}>
+                  {user?.email}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: colors.utility.secondaryText,
+                  marginTop: '4px'
+                }}>
+                  Tenant ID: {user?.tenant_id || 'N/A'}
+                </div>
+              </div>
+
+              {/* Dark Mode Toggle Section */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderBottom: `1px solid ${colors.utility.primaryText}20`
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  {isDarkMode ? <Moon size={16} style={{ color: colors.utility.primaryText }} /> : <Sun size={16} style={{ color: colors.utility.primaryText }} />}
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: colors.utility.primaryText
+                  }}>
+                    {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+                  </span>
+                </div>
+                <ToggleSwitch
+                  checked={isDarkMode}
+                  onChange={handleDarkModeToggle}
+                  checkedColor={colors.brand.primary}
+                  uncheckedColor={`${colors.utility.primaryText}40`}
+                  size="sm"
+                />
+              </div>
+
+              {/* Theme Selection Section */}
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
+                <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  width: '100%',
-                  padding: '12px 16px',
-                  background: 'none',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  color: colors.utility.primaryText,
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <User size={16} />
-                Profile
-              </button>
-              <button
-                onClick={() => {
-                  navigate('/settings');
-                  setShowUserMenu(false);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  padding: '12px 16px',
-                  background: 'none',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  color: colors.utility.primaryText,
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <Settings size={16} />
-                Settings
-              </button>
-              <hr style={{ margin: 0, border: 'none', borderTop: `1px solid ${colors.utility.primaryText}20` }} />
+                  marginBottom: '12px'
+                }}>
+                  <Palette size={16} style={{ color: colors.brand.primary }} />
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText
+                  }}>
+                    Choose Theme
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {themes.map((themeOption) => (
+                    <button
+                      key={themeOption.id}
+                      onClick={() => handleThemeChange(themeOption.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        background: 'none',
+                        border: `1px solid ${currentThemeId === themeOption.id ? colors.brand.primary : 'transparent'}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: currentThemeId === themeOption.id ? `${colors.brand.primary}10` : 'transparent',
+                        transition: 'all 0.2s ease',
+                        width: '100%',
+                        textAlign: 'left'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentThemeId !== themeOption.id) {
+                          e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}05`;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (currentThemeId !== themeOption.id) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                      }}
+                    >
+                      <div style={{ display: 'flex', gap: '3px' }}>
+                        <div style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: themeOption.colors.brand.primary,
+                          border: `1px solid ${colors.utility.primaryText}20`
+                        }} />
+                        <div style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: themeOption.colors.brand.secondary,
+                          border: `1px solid ${colors.utility.primaryText}20`
+                        }} />
+                        <div style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: themeOption.colors.brand.tertiary,
+                          border: `1px solid ${colors.utility.primaryText}20`
+                        }} />
+                      </div>
+                      <span style={{
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: colors.utility.primaryText,
+                        flex: 1
+                      }}>
+                        {themeOption.name}
+                      </span>
+                      {currentThemeId === themeOption.id && (
+                        <Check size={14} style={{ color: colors.brand.primary }} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Logout Button */}
               <button
                 onClick={() => {
                   logout();

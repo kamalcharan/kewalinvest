@@ -15,10 +15,11 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
   const { theme, themes, setTheme, currentThemeId, isDarkMode, toggleDarkMode } = useTheme();
   
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [currentEnvironment, setCurrentEnvironment] = useState<'live' | 'test'>('live');
+  
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const themeDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
 
   // Get current theme colors
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -29,8 +30,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowUserDropdown(false);
       }
-      if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target as Node)) {
-        setShowThemeMenu(false);
+      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(event.target as Node)) {
+        setShowSettingsMenu(false);
       }
     };
 
@@ -52,16 +53,19 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
 
   const handleThemeChange = (themeId: string) => {
     setTheme(themeId);
-    setShowThemeMenu(false);
     toastService.success(`Theme changed to ${themes.find(t => t.id === themeId)?.name}`);
   };
 
-  // Icons as simple SVGs or text
-  const SunIcon = () => <span>☀️</span>;
-  const MoonIcon = () => <span>🌙</span>;
+  // Icons
   const BellIcon = () => <span>🔔</span>;
   const UserIcon = () => <span>👤</span>;
-  const ChevronDown = () => <span>▼</span>;
+  const MoreVerticalIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+      <circle cx="12" cy="5" r="1" fill="currentColor" />
+      <circle cx="12" cy="19" r="1" fill="currentColor" />
+    </svg>
+  );
 
   return (
     <nav style={{
@@ -138,99 +142,6 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
       {/* Right Section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         
-        {/* Theme Switcher Dropdown */}
-        <div ref={themeDropdownRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowThemeMenu(!showThemeMenu)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 12px',
-              backgroundColor: colors.utility.primaryBackground,
-              border: `1px solid ${colors.utility.secondaryText}20`,
-              borderRadius: '8px',
-              cursor: 'pointer',
-              color: colors.utility.primaryText,
-              fontSize: '0.875rem'
-            }}
-          >
-            <span>🎨</span>
-            <span>Theme</span>
-            <ChevronDown />
-          </button>
-
-          {showThemeMenu && (
-            <div style={{
-              position: 'absolute',
-              top: '110%',
-              right: 0,
-              width: '200px',
-              backgroundColor: colors.utility.secondaryBackground,
-              border: `1px solid ${colors.utility.secondaryText}20`,
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              zIndex: 1000,
-              padding: '8px'
-            }}>
-              {themes.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => handleThemeChange(t.id)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    textAlign: 'left',
-                    backgroundColor: currentThemeId === t.id ? colors.brand.primary + '10' : 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    color: currentThemeId === t.id ? colors.brand.primary : colors.utility.primaryText,
-                    fontSize: '0.875rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (currentThemeId !== t.id) {
-                      e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (currentThemeId !== t.id) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }
-                  }}
-                >
-                  {t.name}
-                  {currentThemeId === t.id && '✓'}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Dark/Light Mode Toggle */}
-        <button
-          onClick={toggleDarkMode}
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            backgroundColor: colors.utility.primaryBackground,
-            border: `1px solid ${colors.utility.secondaryText}20`,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: colors.utility.primaryText,
-            fontSize: '1.2rem'
-          }}
-          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {isDarkMode ? <SunIcon /> : <MoonIcon />}
-        </button>
-
         {/* Notifications */}
         <button
           style={{
@@ -259,6 +170,168 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
             borderRadius: '50%'
           }} />
         </button>
+
+        {/* Settings Menu (Three Dots) */}
+        <div ref={settingsDropdownRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              backgroundColor: colors.utility.primaryBackground,
+              border: `1px solid ${colors.utility.secondaryText}20`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: colors.utility.primaryText
+            }}
+            title="Settings"
+          >
+            <MoreVerticalIcon />
+          </button>
+
+          {showSettingsMenu && (
+            <div style={{
+              position: 'absolute',
+              top: '110%',
+              right: 0,
+              width: '280px',
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.secondaryText}20`,
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              zIndex: 1000,
+              padding: '8px'
+            }}>
+              {/* Dark Mode Toggle */}
+              <div style={{
+                padding: '12px',
+                borderBottom: `1px solid ${colors.utility.secondaryText}20`
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    color: colors.utility.primaryText
+                  }}>
+                    {isDarkMode ? '🌙 Dark Mode' : '☀️ Light Mode'}
+                  </span>
+                  <button
+                    onClick={toggleDarkMode}
+                    style={{
+                      width: '44px',
+                      height: '24px',
+                      borderRadius: '12px',
+                      backgroundColor: isDarkMode ? colors.brand.primary : colors.utility.secondaryText + '40',
+                      border: 'none',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      transition: 'background-color 0.3s'
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute',
+                      top: '2px',
+                      left: isDarkMode ? '22px' : '2px',
+                      width: '20px',
+                      height: '20px',
+                      backgroundColor: 'white',
+                      borderRadius: '50%',
+                      transition: 'left 0.3s',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Theme Selection */}
+              <div style={{ padding: '8px 0' }}>
+                <div style={{
+                  padding: '8px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  🎨 Choose Theme
+                </div>
+                {themes.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      handleThemeChange(t.id);
+                      setShowSettingsMenu(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      textAlign: 'left',
+                      backgroundColor: currentThemeId === t.id ? colors.brand.primary + '10' : 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      color: currentThemeId === t.id ? colors.brand.primary : colors.utility.primaryText,
+                      fontSize: '0.875rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '2px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentThemeId !== t.id) {
+                        e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (currentThemeId !== t.id) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {/* Theme color indicators */}
+                      <span style={{
+                        display: 'flex',
+                        gap: '3px'
+                      }}>
+                        {t.id === 'techy-simple' && (
+                          <>
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#3B82F6' }} />
+                          </>
+                        )}
+                        {t.id === 'bharathavarsha' && (
+                          <>
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#F97316' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#F97316' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#8B5CF6' }} />
+                          </>
+                        )}
+                        {t.id === 'professional-redefined' && (
+                          <>
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#1E3A8A' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#64748B' }} />
+                          </>
+                        )}
+                      </span>
+                      {t.name}
+                    </span>
+                    {currentThemeId === t.id && '✓'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Dropdown */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -331,80 +404,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
                 </div>
               </div>
 
-              {/* Menu Items */}
+              {/* Logout Button */}
               <div style={{ padding: '8px' }}>
-                <button
-                  onClick={() => navigate('/profile')}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    color: colors.utility.primaryText,
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.utility.primaryBackground}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  👤 My Profile
-                </button>
-
-                <button
-                  onClick={() => navigate('/settings')}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    color: colors.utility.primaryText,
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.utility.primaryBackground}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  ⚙️ Settings
-                </button>
-
-                <button
-                  onClick={() => navigate('/change-password')}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    color: colors.utility.primaryText,
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.utility.primaryBackground}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  🔒 Change Password
-                </button>
-
-                <div style={{ 
-                  height: '1px',
-                  backgroundColor: colors.utility.secondaryText + '20',
-                  margin: '8px 0'
-                }} />
-
                 <button
                   onClick={handleLogout}
                   style={{
