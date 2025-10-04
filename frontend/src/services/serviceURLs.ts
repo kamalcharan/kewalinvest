@@ -14,7 +14,7 @@ export const API_ENDPOINTS = {
     ENVIRONMENT: `${API_BASE}/auth/environment`,
   },
   
-  // Contact management endpoints (includes channel operations)
+  // Contact management endpoints
   CONTACTS: {
     LIST: `${API_BASE}/contacts`,
     CREATE: `${API_BASE}/contacts`,
@@ -26,11 +26,7 @@ export const API_ENDPOINTS = {
     CHECK_EXISTS: `${API_BASE}/contacts/check-exists`,
     EXPORT: `${API_BASE}/contacts/export`,
     BULK_ACTIONS: `${API_BASE}/contacts/bulk`,
-    
-    // Convert contact to customer
     CONVERT_TO_CUSTOMER: (contactId: number) => `${API_BASE}/contacts/${contactId}/convert-to-customer`,
-    
-    // Channel operations (integrated within contact service)
     ADD_CHANNEL: (contactId: number) => `${API_BASE}/contacts/${contactId}/channels`,
     UPDATE_CHANNEL: (contactId: number, channelId: number) => 
       `${API_BASE}/contacts/${contactId}/channels/${channelId}`,
@@ -48,13 +44,45 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `${API_BASE}/customers/${id}`,
     DELETE: (id: number) => `${API_BASE}/customers/${id}`,
     STATS: `${API_BASE}/customers/stats`,
-    
-    // Address operations
     ADD_ADDRESS: (customerId: number) => `${API_BASE}/customers/${customerId}/addresses`,
     UPDATE_ADDRESS: (customerId: number, addressId: number) => 
       `${API_BASE}/customers/${customerId}/addresses/${addressId}`,
     DELETE_ADDRESS: (customerId: number, addressId: number) => 
       `${API_BASE}/customers/${customerId}/addresses/${addressId}`,
+  },
+  
+  // Scheme management endpoints
+  SCHEMES: {
+    LIST: `${API_BASE}/schemes`,
+    CREATE: `${API_BASE}/schemes`,
+    GET: (schemeCode: string) => `${API_BASE}/schemes/${schemeCode}`,
+    UPDATE: (schemeCode: string) => `${API_BASE}/schemes/${schemeCode}`,
+    TYPES: `${API_BASE}/schemes/types`,
+    CATEGORIES: `${API_BASE}/schemes/categories`,
+    MASTERS: `${API_BASE}/schemes/masters`,
+    VALIDATE_ISIN: `${API_BASE}/schemes/validate-isin`,
+  },
+  
+  // Transaction management endpoints
+  TRANSACTIONS: {
+    LIST: `${API_BASE}/transactions`,
+    CREATE: `${API_BASE}/transactions`,
+    GET: (id: number) => `${API_BASE}/transactions/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/transactions/${id}`,
+    DELETE: (id: number) => `${API_BASE}/transactions/${id}`,
+    SUMMARY: `${API_BASE}/transactions/summary`,
+    UPDATE_PORTFOLIO_FLAG: (id: number) => `${API_BASE}/transactions/${id}/portfolio-flag`,
+  },
+  
+  // Portfolio management endpoints
+  PORTFOLIO: {
+    HOLDINGS: `${API_BASE}/portfolio/holdings`,
+    STATISTICS: `${API_BASE}/portfolio/statistics`,
+    REFRESH: `${API_BASE}/portfolio/refresh`,
+    CUSTOMER_PORTFOLIO: (customerId: number) => `${API_BASE}/portfolio/${customerId}`,
+    CUSTOMER_TOTALS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/totals`,
+    SCHEME_DETAILS: (customerId: number, schemeCode: string) => 
+      `${API_BASE}/portfolio/${customerId}/scheme/${schemeCode}`,
   },
   
   // Data Import endpoints
@@ -81,12 +109,9 @@ export const API_ENDPOINTS = {
     BOOKMARKS: `${API_BASE}/nav/bookmarks`,
     UPDATE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
     DELETE_BOOKMARK: (id: number) => `${API_BASE}/nav/bookmarks/${id}`,
-    
-    // ENHANCED: New bookmark-specific endpoints
     BOOKMARK_NAV_DATA: (id: number) => `${API_BASE}/nav/bookmarks/${id}/nav-data`,
     BOOKMARK_STATS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/stats`,
     BOOKMARK_DOWNLOAD_STATUS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/download-status`,
-    
     NAV_DATA: `${API_BASE}/nav/data`,
     LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
     DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
@@ -99,8 +124,6 @@ export const API_ENDPOINTS = {
     CHECK_TODAY: `${API_BASE}/nav/check-today`,
     HEALTH: `${API_BASE}/nav/health`,
     DOCS: `${API_BASE}/nav/docs`,
-    
-    // Scheduler endpoints
     SCHEDULER_CONFIG: `${API_BASE}/nav/scheduler/config`,
     SCHEDULER_CONFIG_UPDATE: (id: number) => `${API_BASE}/nav/scheduler/config/${id}`,
     SCHEDULER_STATUS: `${API_BASE}/nav/scheduler/status`,
@@ -115,8 +138,6 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `${API_BASE}/files/${id}`,
     DELETE: (id: number) => `${API_BASE}/files/${id}`,
     DOWNLOAD: (id: number) => `${API_BASE}/files/${id}/download`,
-    
-    // Import endpoints (legacy - use IMPORT instead)
     IMPORT: {
       CONTACTS: `${API_BASE}/files/import/contacts`,
       CUSTOMERS: `${API_BASE}/files/import/customers`,
@@ -152,6 +173,9 @@ export const API_ENDPOINTS = {
 export type AuthEndpoints = typeof API_ENDPOINTS.AUTH;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CustomerEndpoints = typeof API_ENDPOINTS.CUSTOMERS;
+export type SchemeEndpoints = typeof API_ENDPOINTS.SCHEMES;
+export type TransactionEndpoints = typeof API_ENDPOINTS.TRANSACTIONS;
+export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
@@ -159,7 +183,7 @@ export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
 export type SystemEndpoints = typeof API_ENDPOINTS.SYSTEM;
 
-// Helper function to build headers with environment and tenant context
+// Helper function to build headers
 export const buildHeaders = (
   token?: string,
   tenantId?: string | number,
@@ -186,14 +210,13 @@ export const buildHeaders = (
   return headers;
 };
 
-// Helper to build query parameters with environment context
+// Helper to build query parameters
 export const buildQueryParams = (
   params: Record<string, any>,
   environment?: 'live' | 'test'
 ): string => {
   const queryParams = new URLSearchParams();
 
-  // Add environment parameter automatically if provided
   if (environment) {
     queryParams.append('is_live', environment === 'live' ? 'true' : 'false');
   }
@@ -218,7 +241,6 @@ export const isAPIError = (error: any): boolean => {
 };
 
 export const getAPIErrorMessage = (error: any): string => {
-  // Match backend error format
   if (error?.response?.data?.error) {
     return error.response.data.error;
   }
@@ -236,204 +258,183 @@ export const getAPIErrorMessage = (error: any): string => {
 
 // Request configuration
 export const API_CONFIG = {
-  timeout: 30000, // 30 seconds
+  timeout: 30000,
   retryAttempts: 3,
-  retryDelay: 1000, // 1 second
+  retryDelay: 1000,
+} as const;
+
+// Transaction-specific URL helpers
+export const TRANSACTION_URLS = {
+  // Get transaction list with query parameters
+  getTransactionList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.TRANSACTIONS.LIST}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get transaction summary
+  getTransactionSummary: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.SUMMARY}${buildQueryParams({}, environment)}`,
+  
+  // Get transaction by ID
+  getTransaction: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.GET(id)}${buildQueryParams({}, environment)}`,
+  
+  // Create transaction
+  createTransaction: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.CREATE}${buildQueryParams({}, environment)}`,
+  
+  // Update transaction
+  updateTransaction: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.UPDATE(id)}${buildQueryParams({}, environment)}`,
+  
+  // Update portfolio flag
+  updatePortfolioFlag: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.UPDATE_PORTFOLIO_FLAG(id)}${buildQueryParams({}, environment)}`,
+  
+  // Delete transaction
+  deleteTransaction: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.TRANSACTIONS.DELETE(id)}${buildQueryParams({}, environment)}`,
+} as const;
+
+// Portfolio-specific URL helpers
+export const PORTFOLIO_URLS = {
+  // Get portfolio holdings
+  getHoldings: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.PORTFOLIO.HOLDINGS}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get portfolio statistics
+  getStatistics: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.PORTFOLIO.STATISTICS}${buildQueryParams({}, environment)}`,
+  
+  // Refresh portfolio totals
+  refreshPortfolio: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.PORTFOLIO.REFRESH}${buildQueryParams({}, environment)}`,
+  
+  // Get customer portfolio
+  getCustomerPortfolio: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.PORTFOLIO.CUSTOMER_PORTFOLIO(customerId)}${buildQueryParams({}, environment)}`,
+  
+  // Get customer portfolio totals
+  getCustomerTotals: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.PORTFOLIO.CUSTOMER_TOTALS(customerId)}${buildQueryParams({}, environment)}`,
+  
+  // Get scheme portfolio details
+  getSchemeDetails: (customerId: number, schemeCode: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.PORTFOLIO.SCHEME_DETAILS(customerId, schemeCode)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Contact-specific URL helpers
 export const CONTACT_URLS = {
-  // Get contact list with query parameters
   getContactList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.CONTACTS.LIST}${buildQueryParams(params || {}, environment)}`,
-  
-  // Search contacts - Note: backend expects query in path, not as query param
   searchContacts: (query: string, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CONTACTS.SEARCH(query)}${buildQueryParams(params || {}, environment)}`,
-  
-  // Export contacts
   exportContacts: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CONTACTS.EXPORT}${buildQueryParams(params || {}, environment)}`,
-  
-  // Check contact existence
   checkContactExists: (email?: string, mobile?: string, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CONTACTS.CHECK_EXISTS}${buildQueryParams({ email, mobile }, environment)}`,
-  
-  // Get contact stats
   getContactStats: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CONTACTS.STATS}${buildQueryParams({}, environment)}`,
-  
-  // Convert contact to customer
   convertContactToCustomer: (contactId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CONTACTS.CONVERT_TO_CUSTOMER(contactId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Customer-specific URL helpers
 export const CUSTOMER_URLS = {
-  // Get customer list with query parameters
   getCustomerList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.CUSTOMERS.LIST}${buildQueryParams(params || {}, environment)}`,
-  
-  // Get customer stats
   getCustomerStats: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.STATS}${buildQueryParams({}, environment)}`,
-  
-  // Customer with addresses
   getCustomerWithAddresses: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.GET(customerId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Import-specific URL helpers
 export const IMPORT_URLS = {
-  // File upload
   uploadFile: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.UPLOAD}${buildQueryParams({}, environment)}`,
-  
-  // Get file headers
   getHeaders: (fileId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.HEADERS(fileId)}${buildQueryParams({}, environment)}`,
-  
-  // Validate mapping
   validateMapping: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.VALIDATE_MAPPING}${buildQueryParams({}, environment)}`,
-  
-  // Start processing
   startProcessing: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.PROCESS}${buildQueryParams({}, environment)}`,
-  
-  // Get processing status
   getStatus: (sessionId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.STATUS(sessionId)}${buildQueryParams({}, environment)}`,
-  
-  // Get import results
   getResults: (sessionId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.RESULTS(sessionId)}${buildQueryParams(params || {}, environment)}`,
-  
-  // Cancel processing
   cancelProcessing: (sessionId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.CANCEL(sessionId)}${buildQueryParams({}, environment)}`,
-  
-  // Templates
   getTemplates: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.TEMPLATES}${buildQueryParams(params || {}, environment)}`,
-  
   saveTemplate: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.TEMPLATES}${buildQueryParams({}, environment)}`,
-  
   updateTemplate: (templateId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.TEMPLATE(templateId)}${buildQueryParams({}, environment)}`,
-  
   deleteTemplate: (templateId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.TEMPLATE(templateId)}${buildQueryParams({}, environment)}`,
-  
-  // Export errors
   exportErrors: (sessionId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.EXPORT_ERRORS(sessionId)}${buildQueryParams({}, environment)}`,
-  
-  // File operations
   getFileInfo: (fileId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.FILE_INFO(fileId)}${buildQueryParams({}, environment)}`,
-  
   deleteFile: (fileId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.DELETE_FILE(fileId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // NAV-specific URL helpers
 export const NAV_URLS = {
-  // Search schemes with query parameters
   searchSchemes: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.SEARCH_SCHEMES}${buildQueryParams(params || {}, environment)}`,
-    
-  // Get sequential download progress
-    getSequentialProgress: (parentJobId: number, environment?: 'live' | 'test') =>
+  getSequentialProgress: (parentJobId: number, environment?: 'live' | 'test') =>
     `${API_BASE}/nav/downloads/${parentJobId}/sequential-progress${buildQueryParams({}, environment)}`,
-  
-  // Get bookmarks with query parameters
   getBookmarks: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.BOOKMARKS}${buildQueryParams(params || {}, environment)}`,
-  
-  // Create bookmark
   createBookmark: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARKS}${buildQueryParams({}, environment)}`,
-  
-  // Update bookmark
   updateBookmark: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.UPDATE_BOOKMARK(id)}${buildQueryParams({}, environment)}`,
-  
-  // Delete bookmark
   deleteBookmark: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DELETE_BOOKMARK(id)}${buildQueryParams({}, environment)}`,
-  
-  // ENHANCED: New bookmark-specific endpoints
   getBookmarkNavData: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_NAV_DATA(id)}${buildQueryParams(params || {}, environment)}`,
-  
   getBookmarkStats: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_STATS(id)}${buildQueryParams({}, environment)}`,
-  
   updateBookmarkDownloadStatus: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_DOWNLOAD_STATUS(id)}${buildQueryParams({}, environment)}`,
-  
-  // Get NAV data with query parameters
   getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
-  
-  // Get latest NAV for scheme
   getLatestNav: (schemeId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.LATEST_NAV(schemeId)}${buildQueryParams({}, environment)}`,
-  
-  // Download operations
   triggerDailyDownload: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOWNLOAD_DAILY}${buildQueryParams({}, environment)}`,
-  
   triggerHistoricalDownload: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOWNLOAD_HISTORICAL}${buildQueryParams({}, environment)}`,
-  
   getDownloadProgress: (jobId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOWNLOAD_PROGRESS(jobId)}${buildQueryParams({}, environment)}`,
-  
   getDownloadJobs: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.DOWNLOAD_JOBS}${buildQueryParams(params || {}, environment)}`,
-  
   cancelDownload: (jobId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.CANCEL_DOWNLOAD(jobId)}${buildQueryParams({}, environment)}`,
-  
   getActiveDownloads: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.ACTIVE_DOWNLOADS}${buildQueryParams({}, environment)}`,
-  
-  // Statistics and monitoring
   getStatistics: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.STATISTICS}${buildQueryParams({}, environment)}`,
-  
   checkTodayData: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.CHECK_TODAY}${buildQueryParams({}, environment)}`,
-  
-  // System endpoints
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.HEALTH}${buildQueryParams({}, environment)}`,
-  
   getDocs: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOCS}${buildQueryParams({}, environment)}`,
-  
-  // Scheduler endpoints
   getSchedulerConfig: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
-  
   saveSchedulerConfig: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
-  
   updateSchedulerConfig: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG_UPDATE(id)}${buildQueryParams({}, environment)}`,
-  
   deleteSchedulerConfig: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_CONFIG}${buildQueryParams({}, environment)}`,
-  
   getSchedulerStatus: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_STATUS}${buildQueryParams({}, environment)}`,
-  
   triggerScheduledDownload: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_TRIGGER}${buildQueryParams({}, environment)}`,
-  
   getAllActiveSchedulers: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE}${buildQueryParams({}, environment)}`,
 } as const;
@@ -445,6 +446,9 @@ if (process.env.NODE_ENV === 'development') {
     Auth: Object.keys(API_ENDPOINTS.AUTH).length,
     Contacts: Object.keys(API_ENDPOINTS.CONTACTS).length,
     Customers: Object.keys(API_ENDPOINTS.CUSTOMERS).length,
+    Schemes: Object.keys(API_ENDPOINTS.SCHEMES).length,
+    Transactions: Object.keys(API_ENDPOINTS.TRANSACTIONS).length,
+    Portfolio: Object.keys(API_ENDPOINTS.PORTFOLIO).length,
     Import: Object.keys(API_ENDPOINTS.IMPORT).length,
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
@@ -452,19 +456,14 @@ if (process.env.NODE_ENV === 'development') {
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
   });
   
-  // Log scheduler endpoints
-  console.log('📅 NAV Scheduler Endpoints:', {
-    SCHEDULER_CONFIG: API_ENDPOINTS.NAV.SCHEDULER_CONFIG,
-    SCHEDULER_STATUS: API_ENDPOINTS.NAV.SCHEDULER_STATUS,
-    SCHEDULER_TRIGGER: API_ENDPOINTS.NAV.SCHEDULER_TRIGGER,
-    SCHEDULER_ALL_ACTIVE: API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE,
+  console.log('💰 Transaction Endpoints:', {
+    LIST: API_ENDPOINTS.TRANSACTIONS.LIST,
+    SUMMARY: API_ENDPOINTS.TRANSACTIONS.SUMMARY,
   });
   
-  // Log enhanced bookmark endpoints
-  console.log('📋 Enhanced Bookmark Endpoints:', {
-    BOOKMARK_NAV_DATA: 'GET /nav/bookmarks/:id/nav-data',
-    BOOKMARK_STATS: 'GET /nav/bookmarks/:id/stats', 
-    BOOKMARK_DOWNLOAD_STATUS: 'PUT /nav/bookmarks/:id/download-status',
+  console.log('📊 Portfolio Endpoints:', {
+    HOLDINGS: API_ENDPOINTS.PORTFOLIO.HOLDINGS,
+    STATISTICS: API_ENDPOINTS.PORTFOLIO.STATISTICS,
   });
 }
 

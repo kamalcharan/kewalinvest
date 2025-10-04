@@ -1,12 +1,12 @@
 // frontend/src/pages/customers/CustomersPage.tsx
-// Updated version with Dashboard navigation and error logging
+// Updated version using real portfolio API
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomers, useCustomerStats } from '../../hooks/useCustomers';
+import { usePortfolioMetrics } from '../../hooks/usePortfolioData';
 import { CustomerSearchParams, CustomerWithContact } from '../../types/customer.types';
-import { mockPortfolioData } from '../../data/mock/mockPortfolioData';
 import { mockJTBDData } from '../../data/mock/mockJTBDData';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import CustomerCard from '../../components/customers/CustomerCard';
@@ -29,6 +29,7 @@ const CustomersPage: React.FC = () => {
   // Hooks
   const { data: customerData, isLoading, error, refetch } = useCustomers(searchParams);
   const { data: stats } = useCustomerStats();
+  const { metrics: portfolioMetrics, isLoading: metricsLoading } = usePortfolioMetrics();
 
   // Derived data
   const customers = customerData?.customers || [];
@@ -36,22 +37,6 @@ const CustomersPage: React.FC = () => {
   const hasNextPage = customerData?.has_next || false;
   const hasPrevPage = customerData?.has_prev || false;
   const totalPages = customerData?.total_pages || 1;
-
-  // Calculate portfolio metrics
-  const portfolioMetrics = React.useMemo(() => {
-    let totalAUM = 0;
-    let customersWithPortfolio = 0;
-    
-    customers.forEach(customer => {
-      const portfolio = mockPortfolioData[customer.id];
-      if (portfolio) {
-        totalAUM += portfolio.summary.totalValue;
-        customersWithPortfolio++;
-      }
-    });
-    
-    return { totalAUM, customersWithPortfolio };
-  }, [customers]);
 
   // Event handlers with error logging
   const handleCreateCustomer = () => {
@@ -176,23 +161,6 @@ const CustomersPage: React.FC = () => {
     }
   };
 
-  const handleSelectAll = (selected: boolean) => {
-    try {
-      if (selected) {
-        setSelectedCustomers(new Set(customers.map(c => c.id)));
-      } else {
-        setSelectedCustomers(new Set());
-      }
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Select all customers failed',
-        'CustomersPage',
-        { selected, customerCount: customers.length, error: error.message },
-        error.stack
-      );
-    }
-  };
-
   // Format currency
   const formatCurrency = (value: number): string => {
     try {
@@ -281,7 +249,6 @@ const CustomersPage: React.FC = () => {
 
   // Error handling with logging
   if (error) {
-    // Log the error for debugging
     FrontendErrorLogger.error(
       'Failed to load customers data',
       'CustomersPage',
@@ -304,7 +271,6 @@ const CustomersPage: React.FC = () => {
           <p style={{ marginBottom: '16px' }}>Failed to load customers</p>
           <button
             onClick={() => {
-              // Log retry attempt
               FrontendErrorLogger.error(
                 'User initiated retry after customers load failure',
                 'CustomersPage',
@@ -420,7 +386,7 @@ const CustomersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Enhanced Stats Cards with Portfolio Metrics */}
+        {/* Stats Cards - Using Real Portfolio API */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -480,7 +446,7 @@ const CustomersPage: React.FC = () => {
               color: colors.brand.primary,
               marginBottom: '4px'
             }}>
-              {formatCurrency(portfolioMetrics.totalAUM)}
+              {metricsLoading ? '...' : formatCurrency(portfolioMetrics.totalAUM)}
             </div>
             <div style={{
               fontSize: '14px',
@@ -501,13 +467,34 @@ const CustomersPage: React.FC = () => {
               color: colors.brand.secondary,
               marginBottom: '4px'
             }}>
-              {portfolioMetrics.customersWithPortfolio}
+              {metricsLoading ? '...' : portfolioMetrics.totalCustomers}
             </div>
             <div style={{
               fontSize: '14px',
               color: colors.utility.secondaryText
             }}>
               With Portfolio
+            </div>
+          </div>
+
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '8px',
+            padding: '20px'
+          }}>
+            <div style={{
+              fontSize: '28px',
+              fontWeight: '700',
+              color: portfolioMetrics.avgReturns >= 0 ? '#10B981' : '#EF4444',
+              marginBottom: '4px'
+            }}>
+              {metricsLoading ? '...' : `${portfolioMetrics.avgReturns >= 0 ? '+' : ''}${portfolioMetrics.avgReturns.toFixed(1)}%`}
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText
+            }}>
+              Avg Returns
             </div>
           </div>
         </div>
@@ -611,7 +598,7 @@ const CustomersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Customer List with Enhanced Cards */}
+        {/* Customer List */}
         <div style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
@@ -708,7 +695,7 @@ const CustomersPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            // Customer cards with portfolio data
+            // Customer cards - Portfolio data will be fetched individually by CustomerCard component
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
@@ -718,7 +705,7 @@ const CustomersPage: React.FC = () => {
                 <CustomerCard
                   key={customer.id}
                   customer={customer}
-                  portfolio={mockPortfolioData[customer.id]}
+                  portfolio={undefined}  // CustomerCard will fetch individually if needed
                   jtbd={mockJTBDData[customer.id]}
                   onView={() => handleViewCustomer(customer.id)}
                   onEdit={() => handleEditCustomer(customer.id)}
@@ -796,6 +783,13 @@ const CustomersPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.6; }
+        }
+      `}</style>
     </div>
   );
 };

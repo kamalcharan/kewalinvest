@@ -1,7 +1,7 @@
 // src/types/extended.types.ts
 // Extended type definitions for enhanced dashboard features
 
-import { PortfolioData as BasePortfolioData } from './portfolio.types';
+import { CustomerPortfolioResponse } from './portfolio.types';
 import { JTBDData as BaseJTBDData } from './jtbd.types';
 
 // Extended Portfolio interfaces
@@ -30,7 +30,8 @@ export interface ExtendedTransaction {
   status?: 'completed' | 'pending' | 'failed';
 }
 
-export interface ExtendedPortfolioData extends BasePortfolioData {
+// Use CustomerPortfolioResponse as base instead of non-existent PortfolioData
+export interface ExtendedPortfolioData extends CustomerPortfolioResponse {
   monthlyPerformance?: MonthlyPerformance[];
   recentTransactions?: ExtendedTransaction[];
   sipDetails?: SIPDetail[];
@@ -73,9 +74,9 @@ export interface ExtendedJTBDData extends BaseJTBDData {
 
 // Type guards
 export function isExtendedPortfolio(data: any): data is ExtendedPortfolioData {
-  return data && typeof data === 'object' && 'customerId' in data && 'summary' in data;
+  return data && typeof data === 'object' && 'summary' in data;
 }
 
 export function isExtendedJTBD(data: any): data is ExtendedJTBDData {
-  return data && typeof data === 'object' && 'customerId' in data && 'primaryGoal' in data;
+  return data && typeof data === 'object' && 'primaryGoal' in data;
 }

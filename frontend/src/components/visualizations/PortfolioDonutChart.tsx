@@ -5,7 +5,7 @@ import { AssetAllocation } from '../../types/portfolio.types';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface PortfolioDonutChartProps {
-  allocation: AssetAllocation;
+  allocation: AssetAllocation[]; // CHANGED: Now accepts array instead of nested object
   size?: number;
   strokeWidth?: number;
   showLabels?: boolean;
@@ -26,22 +26,33 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
   
   const [hoveredSegment, setHoveredSegment] = React.useState<string | null>(null);
 
-  // Asset type colors
-  const assetColors = {
-    equity: '#3B82F6',
-    debt: '#F59E0B',
-    hybrid: '#8B5CF6',
-    liquid: '#10B981'
+  // Asset type colors - now mapped by category name
+  const assetColors: Record<string, string> = {
+    'Equity': '#3B82F6',
+    'Debt': '#F59E0B',
+    'Hybrid': '#8B5CF6',
+    'Liquid': '#10B981',
+    'Money Market': '#10B981', // Same as Liquid
+    'Gold': '#EAB308',
+    'Other': '#6B7280'
   };
 
-  // Calculate segments
+  // Get color for category
+  const getCategoryColor = (category: string): string => {
+    return assetColors[category] || assetColors['Other'];
+  };
+
+  // Calculate segments from API data
   const segments = useMemo(() => {
-    const data = [
-      { name: 'Equity', value: allocation.equity.percentage, amount: allocation.equity.value, color: assetColors.equity },
-      { name: 'Debt', value: allocation.debt.percentage, amount: allocation.debt.value, color: assetColors.debt },
-      { name: 'Hybrid', value: allocation.hybrid.percentage, amount: allocation.hybrid.value, color: assetColors.hybrid },
-      { name: 'Liquid', value: allocation.liquid.percentage, amount: allocation.liquid.value, color: assetColors.liquid }
-    ].filter(item => item.value > 0);
+    // Convert API AssetAllocation[] to segments
+    const data = allocation
+      .filter(item => item.percentage > 0)
+      .map(item => ({
+        name: item.category,
+        value: item.percentage,
+        amount: item.current_value,
+        color: getCategoryColor(item.category)
+      }));
 
     let cumulativePercentage = 0;
     return data.map(item => {
@@ -52,7 +63,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
     });
   }, [allocation]);
 
-  // Calculate path for each segment
+  // Calculate path for each segment (kept for reference, using circle method below)
   const createPath = (startAngle: number, endAngle: number, isHovered: boolean = false) => {
     const radius = (size - strokeWidth) / 2;
     const centerX = size / 2;
@@ -83,9 +94,8 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
     return `₹${value.toLocaleString('en-IN')}`;
   };
 
-  // Calculate total value
-  const totalValue = allocation.equity.value + allocation.debt.value + 
-                     allocation.hybrid.value + allocation.liquid.value;
+  // Calculate total value from API data
+  const totalValue = allocation.reduce((sum, item) => sum + item.current_value, 0);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -158,7 +168,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
                 fontWeight: '700',
                 color: colors.utility.primaryText
               }}>
-                {segments.find(s => s.name === hoveredSegment)?.value}%
+                {segments.find(s => s.name === hoveredSegment)?.value.toFixed(1)}%
               </div>
               <div style={{
                 fontSize: '12px',
@@ -232,7 +242,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
                 fontWeight: '600',
                 color: colors.utility.primaryText
               }}>
-                {segment.value}%
+                {segment.value.toFixed(1)}%
               </div>
             </div>
           ))}

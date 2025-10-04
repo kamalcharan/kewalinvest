@@ -1,11 +1,12 @@
 // src/components/portfolio/PortfolioSummaryWidget.tsx
+// Updated to use real backend API types
 
 import React from 'react';
-import { PortfolioData } from '../../types/portfolio.types';
+import { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface PortfolioSummaryWidgetProps {
-  portfolio: PortfolioData;
+  portfolio: CustomerPortfolioResponse;
   compact?: boolean;
   showSparkline?: boolean;
   onClick?: () => void;
@@ -43,13 +44,6 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
     return colors.utility.secondaryText;
   };
 
-  // Risk color scale
-  const getRiskColor = (score: number): string => {
-    if (score <= 3) return '#10B981'; // Low risk - Green
-    if (score <= 6) return '#F59E0B'; // Medium risk - Amber
-    return '#EF4444'; // High risk - Red
-  };
-
   // Create sparkline SVG path
   const createSparklinePath = (data: number[]): string => {
     if (!data || data.length < 2) return '';
@@ -71,7 +65,7 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
     return `M ${points.join(' L ')}`;
   };
 
-  const isPositive = portfolio.summary.overallReturns.amount >= 0;
+  const isPositive = portfolio.summary.total_returns >= 0;
   const sparklineColor = isPositive ? '#10B981' : '#EF4444';
 
   // Icons
@@ -117,24 +111,24 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             color: colors.utility.primaryText,
             marginBottom: '2px'
           }}>
-            {formatCurrency(portfolio.summary.totalValue)}
+            {formatCurrency(portfolio.summary.current_value)}
           </div>
           <div style={{
             fontSize: '12px',
-            color: getValueColor(portfolio.summary.overallReturns.percentage),
+            color: getValueColor(portfolio.summary.return_percentage),
             display: 'flex',
             alignItems: 'center',
             gap: '4px'
           }}>
             {isPositive ? <TrendUpIcon /> : <TrendDownIcon />}
-            {formatPercentage(portfolio.summary.overallReturns.percentage)}
+            {formatPercentage(portfolio.summary.return_percentage)}
           </div>
         </div>
 
-        {showSparkline && portfolio.performanceHistory && (
+        {showSparkline && portfolio.performance && portfolio.performance.length > 0 && (
           <svg width="80" height="30" style={{ display: 'block' }}>
             <path
-              d={createSparklinePath(portfolio.performanceHistory)}
+              d={createSparklinePath(portfolio.performance.map(p => p.current_value))}
               fill="none"
               stroke={sparklineColor}
               strokeWidth="1.5"
@@ -149,13 +143,13 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
           alignItems: 'center',
           gap: '4px',
           padding: '4px 8px',
-          backgroundColor: getRiskColor(portfolio.riskScore) + '20',
+          backgroundColor: colors.brand.primary + '20',
           borderRadius: '12px',
           fontSize: '11px',
           fontWeight: '500',
-          color: getRiskColor(portfolio.riskScore)
+          color: colors.brand.primary
         }}>
-          {portfolio.riskProfile}
+          {portfolio.summary.total_schemes} Schemes
         </div>
       </div>
     );
@@ -195,13 +189,13 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
           alignItems: 'center',
           gap: '4px',
           padding: '2px 6px',
-          backgroundColor: getRiskColor(portfolio.riskScore) + '20',
+          backgroundColor: colors.brand.primary + '20',
           borderRadius: '8px',
           fontSize: '10px',
           fontWeight: '500',
-          color: getRiskColor(portfolio.riskScore)
+          color: colors.brand.primary
         }}>
-          {portfolio.riskProfile} • {portfolio.riskScore}/10
+          {portfolio.summary.total_schemes} Schemes
         </div>
       </div>
 
@@ -213,7 +207,7 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
           color: colors.utility.primaryText,
           marginBottom: '4px'
         }}>
-          {formatCurrency(portfolio.summary.totalValue)}
+          {formatCurrency(portfolio.summary.current_value)}
         </div>
         
         <div style={{
@@ -222,33 +216,37 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
           gap: '12px',
           fontSize: '13px'
         }}>
+          {portfolio.summary.day_change !== undefined && (
+            <>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: getValueColor(portfolio.summary.day_change_percentage || 0)
+              }}>
+                {(portfolio.summary.day_change_percentage || 0) >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                <span style={{ fontWeight: '500' }}>
+                  {formatPercentage(portfolio.summary.day_change_percentage || 0)}
+                </span>
+                <span style={{ color: colors.utility.secondaryText }}>Today</span>
+              </div>
+
+              <div style={{
+                width: '1px',
+                height: '12px',
+                backgroundColor: colors.utility.primaryText + '20'
+              }} />
+            </>
+          )}
+
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            color: getValueColor(portfolio.summary.dayChange.percentage)
-          }}>
-            {portfolio.summary.dayChange.percentage >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-            <span style={{ fontWeight: '500' }}>
-              {formatPercentage(portfolio.summary.dayChange.percentage)}
-            </span>
-            <span style={{ color: colors.utility.secondaryText }}>Today</span>
-          </div>
-
-          <div style={{
-            width: '1px',
-            height: '12px',
-            backgroundColor: colors.utility.primaryText + '20'
-          }} />
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            color: getValueColor(portfolio.summary.overallReturns.percentage)
+            color: getValueColor(portfolio.summary.return_percentage)
           }}>
             <span style={{ fontWeight: '600' }}>
-              {formatPercentage(portfolio.summary.overallReturns.percentage)}
+              {formatPercentage(portfolio.summary.return_percentage)}
             </span>
             <span style={{ color: colors.utility.secondaryText }}>Overall</span>
           </div>
@@ -256,7 +254,7 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
       </div>
 
       {/* Sparkline */}
-      {showSparkline && portfolio.performanceHistory && (
+      {showSparkline && portfolio.performance && portfolio.performance.length > 0 && (
         <div style={{
           width: '100%',
           height: '40px',
@@ -270,7 +268,7 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
         }}>
           <svg width="100%" height="32" preserveAspectRatio="none" viewBox="0 0 100 32">
             <path
-              d={createSparklinePath(portfolio.performanceHistory)}
+              d={createSparklinePath(portfolio.performance.map(p => p.current_value))}
               fill="none"
               stroke={sparklineColor}
               strokeWidth="1.5"
@@ -304,7 +302,7 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             fontWeight: '600',
             color: colors.utility.primaryText
           }}>
-            {formatCurrency(portfolio.summary.totalInvested)}
+            {formatCurrency(portfolio.summary.total_invested)}
           </div>
         </div>
         
@@ -318,21 +316,21 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             alignItems: 'center',
             gap: '4px'
           }}>
-            XIRR
+            Returns
             <InfoIcon />
           </div>
           <div style={{
             fontSize: '14px',
             fontWeight: '600',
-            color: getValueColor(portfolio.summary.overallReturns.xirr)
+            color: getValueColor(portfolio.summary.total_returns)
           }}>
-            {formatPercentage(portfolio.summary.overallReturns.xirr)}
+            {formatCurrency(portfolio.summary.total_returns)}
           </div>
         </div>
       </div>
 
       {/* Top Holding Preview */}
-      {portfolio.topHoldings && portfolio.topHoldings.length > 0 && (
+      {portfolio.holdings && portfolio.holdings.length > 0 && (
         <div style={{
           marginTop: '12px',
           paddingTop: '12px',
@@ -360,14 +358,14 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
             }}>
-              {portfolio.topHoldings[0].fundName}
+              {portfolio.holdings[0].fund_name || portfolio.holdings[0].scheme_name}
             </div>
             <div style={{
               fontSize: '12px',
-              color: getValueColor(portfolio.topHoldings[0].returns),
+              color: getValueColor(portfolio.holdings[0].return_percentage),
               fontWeight: '600'
             }}>
-              {formatPercentage(portfolio.topHoldings[0].returns)}
+              {formatPercentage(portfolio.holdings[0].return_percentage)}
             </div>
           </div>
         </div>

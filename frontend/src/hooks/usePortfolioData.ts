@@ -1,160 +1,102 @@
 // src/hooks/usePortfolioData.ts
 
-import { useState, useEffect, useMemo } from 'react';
-import { PortfolioData, PortfolioFilters, PortfolioAnalytics } from '../types/portfolio.types';
-import { mockPortfolioData } from '../data/mock/mockPortfolioData';
+import { useState, useEffect, useCallback } from 'react';
+import { PortfolioService } from '../services/portfolio.service';
+import { 
+  CustomerPortfolioResponse, 
+  PortfolioHolding,
+  PortfolioFilters,
+  PortfolioStatistics 
+} from '../types/portfolio.types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UsePortfolioDataOptions {
   customerId?: number;
   filters?: PortfolioFilters;
   includeAnalytics?: boolean;
+  autoFetch?: boolean;
 }
 
 interface UsePortfolioDataReturn {
-  portfolio: PortfolioData | null;
-  portfolios: PortfolioData[];
-  analytics: PortfolioAnalytics | null;
+  portfolio: CustomerPortfolioResponse | null;
+  portfolios: PortfolioHolding[];
+  analytics: PortfolioStatistics | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
 }
 
 export const usePortfolioData = (options: UsePortfolioDataOptions = {}): UsePortfolioDataReturn => {
-  const { customerId, filters, includeAnalytics = false } = options;
+  const { customerId, filters, includeAnalytics = false, autoFetch = true } = options;
+  const { user, tenantId } = useAuth();
   
+  const [portfolio, setPortfolio] = useState<CustomerPortfolioResponse | null>(null);
+  const [portfolios, setPortfolios] = useState<PortfolioHolding[]>([]);
+  const [analytics, setAnalytics] = useState<PortfolioStatistics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [lastFetch, setLastFetch] = useState(Date.now());
 
-  // Simulate API call delay
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, [customerId, lastFetch]);
+  const fetchPortfolioData = useCallback(async () => {
+    if (!user || !tenantId) {
+      setError(new Error('Authentication required'));
+      return;
+    }
 
-  // Get single portfolio
-  const portfolio = useMemo(() => {
-    if (!customerId) return null;
-    return mockPortfolioData[customerId] || null;
-  }, [customerId]);
+    try {
+      setIsLoading(true);
+      setError(null);
 
-  // Get filtered portfolios
-  const portfolios = useMemo(() => {
-    let result = Object.values(mockPortfolioData);
-    
-    if (!filters) return result;
-    
-    // Apply filters
-    if (filters.minValue !== undefined) {
-      result = result.filter(p => p.summary.totalValue >= filters.minValue!);
-    }
-    
-    if (filters.maxValue !== undefined) {
-      result = result.filter(p => p.summary.totalValue <= filters.maxValue!);
-    }
-    
-    if (filters.riskProfile && filters.riskProfile.length > 0) {
-      result = result.filter(p => filters.riskProfile!.includes(p.riskProfile));
-    }
-    
-    if (filters.returnsRange) {
-      result = result.filter(p => 
-        p.summary.overallReturns.percentage >= filters.returnsRange!.min &&
-        p.summary.overallReturns.percentage <= filters.returnsRange!.max
-      );
-    }
-    
-    if (filters.hasNegativeReturns !== undefined) {
-      result = result.filter(p => 
-        filters.hasNegativeReturns 
-          ? p.summary.overallReturns.percentage < 0
-          : p.summary.overallReturns.percentage >= 0
-      );
-    }
-    
-    // Apply sorting
-    if (filters.sortBy) {
-      result.sort((a, b) => {
-        let aVal: number, bVal: number;
+      // Fetch single customer portfolio
+      if (customerId) {
+        const response = await PortfolioService.getCustomerPortfolio(customerId);
         
-        switch (filters.sortBy) {
-          case 'value':
-            aVal = a.summary.totalValue;
-            bVal = b.summary.totalValue;
-            break;
-          case 'returns':
-            aVal = a.summary.overallReturns.percentage;
-            bVal = b.summary.overallReturns.percentage;
-            break;
-          case 'risk':
-            aVal = a.riskScore;
-            bVal = b.riskScore;
-            break;
-          default:
-            aVal = a.customerId;
-            bVal = b.customerId;
+        if (response.success && response.data) {
+          setPortfolio(response.data);
+        } else {
+          throw new Error(response.error || 'Failed to fetch portfolio');
         }
+      }
+
+      // Fetch filtered portfolio holdings
+      if (filters) {
+        const response = await PortfolioService.getPortfolioHoldings(filters);
         
-        return filters.sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-      });
+        if (response.success && response.data) {
+          setPortfolios(response.data);
+        } else {
+          throw new Error(response.error || 'Failed to fetch portfolio holdings');
+        }
+      }
+
+      // Fetch analytics/statistics
+      if (includeAnalytics) {
+        const response = await PortfolioService.getPortfolioStatistics();
+        
+        if (response.success && response.data) {
+          setAnalytics(response.data);
+        } else {
+          throw new Error(response.error || 'Failed to fetch portfolio statistics');
+        }
+      }
+
+    } catch (err: any) {
+      console.error('Error fetching portfolio data:', err);
+      setError(err);
+    } finally {
+      setIsLoading(false);
     }
-    
-    return result;
-  }, [filters]);
+  }, [customerId, filters, includeAnalytics, user, tenantId]);
 
-  // Calculate analytics
-  const analytics = useMemo(() => {
-    if (!includeAnalytics) return null;
-    
-    const allPortfolios = Object.values(mockPortfolioData);
-    
-    const totalAUM = allPortfolios.reduce((sum, p) => sum + p.summary.totalValue, 0);
-    const avgPortfolioValue = totalAUM / allPortfolios.length;
-    const avgReturns = allPortfolios.reduce((sum, p) => sum + p.summary.overallReturns.percentage, 0) / allPortfolios.length;
-    
-    const riskDistribution = {
-      conservative: allPortfolios.filter(p => p.riskProfile === 'Conservative').length,
-      moderate: allPortfolios.filter(p => p.riskProfile === 'Moderate').length,
-      aggressive: allPortfolios.filter(p => p.riskProfile === 'Aggressive').length
-    };
-    
-    const topPerformers = allPortfolios
-      .sort((a, b) => b.summary.overallReturns.percentage - a.summary.overallReturns.percentage)
-      .slice(0, 5)
-      .map(p => ({
-        customerId: p.customerId,
-        customerName: `Customer ${p.customerId}`, // In real app, would fetch from customer data
-        returns: p.summary.overallReturns.percentage
-      }));
-    
-    const needsAttention = allPortfolios
-      .filter(p => p.summary.overallReturns.percentage < -5 || p.riskScore > 8)
-      .map(p => ({
-        customerId: p.customerId,
-        customerName: `Customer ${p.customerId}`,
-        reason: p.summary.overallReturns.percentage < -5 
-          ? `Negative returns: ${p.summary.overallReturns.percentage.toFixed(1)}%`
-          : `High risk: ${p.riskScore}/10`
-      }));
-    
-    return {
-      totalAUM,
-      totalCustomers: allPortfolios.length,
-      averagePortfolioValue: avgPortfolioValue,
-      averageReturns: avgReturns,
-      riskDistribution,
-      topPerformers,
-      needsAttention
-    };
-  }, [includeAnalytics]);
+  // Auto-fetch on mount and when dependencies change
+  useEffect(() => {
+    if (autoFetch) {
+      fetchPortfolioData();
+    }
+  }, [fetchPortfolioData, autoFetch]);
 
-  const refetch = () => {
-    setLastFetch(Date.now());
-  };
+  const refetch = useCallback(() => {
+    fetchPortfolioData();
+  }, [fetchPortfolioData]);
 
   return {
     portfolio,
@@ -168,31 +110,22 @@ export const usePortfolioData = (options: UsePortfolioDataOptions = {}): UsePort
 
 // Hook for aggregated portfolio metrics
 export const usePortfolioMetrics = () => {
-  const { analytics, isLoading, error } = usePortfolioData({ includeAnalytics: true });
+  const { analytics, isLoading, error } = usePortfolioData({ 
+    includeAnalytics: true,
+    autoFetch: true 
+  });
   
-  const metrics = useMemo(() => {
-    if (!analytics) {
-      return {
-        totalAUM: 0,
-        totalCustomers: 0,
-        positiveReturnsCount: 0,
-        negativeReturnsCount: 0,
-        avgReturns: 0,
-        highRiskCount: 0
-      };
-    }
-    
-    const allPortfolios = Object.values(mockPortfolioData);
-    
-    return {
-      totalAUM: analytics.totalAUM,
-      totalCustomers: analytics.totalCustomers,
-      positiveReturnsCount: allPortfolios.filter(p => p.summary.overallReturns.percentage >= 0).length,
-      negativeReturnsCount: allPortfolios.filter(p => p.summary.overallReturns.percentage < 0).length,
-      avgReturns: analytics.averageReturns,
-      highRiskCount: allPortfolios.filter(p => p.riskScore > 7).length
-    };
-  }, [analytics]);
+  const metrics = {
+    totalAUM: analytics?.total_current_value || 0,
+    totalCustomers: analytics?.total_customers_with_portfolio || 0,
+    totalInvested: analytics?.total_invested || 0,
+    totalReturns: analytics?.total_returns || 0,
+    avgReturns: analytics?.average_return_percentage || 0,
+    totalSchemes: analytics?.total_schemes_held || 0,
+    positiveReturnsCount: 0,
+    negativeReturnsCount: 0,
+    highRiskCount: 0
+  };
   
   return {
     metrics,
@@ -203,26 +136,97 @@ export const usePortfolioMetrics = () => {
 
 // Hook for portfolio comparison
 export const usePortfolioComparison = (customerIds: number[]) => {
-  const portfolios = useMemo(() => {
-    return customerIds.map(id => mockPortfolioData[id]).filter(Boolean);
-  }, [customerIds]);
-  
-  const comparison = useMemo(() => {
-    if (portfolios.length === 0) return null;
-    
-    return {
-      portfolios,
-      avgValue: portfolios.reduce((sum, p) => sum + p.summary.totalValue, 0) / portfolios.length,
-      avgReturns: portfolios.reduce((sum, p) => sum + p.summary.overallReturns.percentage, 0) / portfolios.length,
-      avgRisk: portfolios.reduce((sum, p) => sum + p.riskScore, 0) / portfolios.length,
-      bestPerformer: portfolios.reduce((best, p) => 
-        p.summary.overallReturns.percentage > best.summary.overallReturns.percentage ? p : best
-      ),
-      worstPerformer: portfolios.reduce((worst, p) => 
-        p.summary.overallReturns.percentage < worst.summary.overallReturns.percentage ? p : worst
-      )
+  const { user, tenantId } = useAuth();
+  const [portfolios, setPortfolios] = useState<CustomerPortfolioResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!user || !tenantId || customerIds.length === 0) return;
+
+    const fetchPortfolios = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const promises = customerIds.map(id =>
+          PortfolioService.getCustomerPortfolio(id)
+        );
+
+        const responses = await Promise.all(promises);
+        const validPortfolios = responses
+          .filter(r => r.success && r.data)
+          .map(r => r.data!);
+
+        setPortfolios(validPortfolios);
+      } catch (err: any) {
+        console.error('Error fetching portfolios for comparison:', err);
+        setError(err);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [portfolios]);
+
+    fetchPortfolios();
+  }, [customerIds, user, tenantId]);
+
+  const comparison = portfolios.length > 0 ? {
+    portfolios,
+    avgValue: portfolios.reduce((sum, p) => sum + p.summary.current_value, 0) / portfolios.length,
+    avgReturns: portfolios.reduce((sum, p) => sum + p.summary.return_percentage, 0) / portfolios.length,
+    avgRisk: 0,
+    bestPerformer: portfolios.reduce((best, p) => 
+      p.summary.return_percentage > best.summary.return_percentage ? p : best
+    ),
+    worstPerformer: portfolios.reduce((worst, p) => 
+      p.summary.return_percentage < worst.summary.return_percentage ? p : worst
+    )
+  } : null;
   
-  return comparison;
+  return { 
+    comparison, 
+    isLoading, 
+    error 
+  };
+};
+
+// Hook for customer portfolio totals only (faster query)
+export const usePortfolioTotals = (customerId: number) => {
+  const { user, tenantId } = useAuth();
+  const [totals, setTotals] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchTotals = useCallback(async () => {
+    if (!user || !tenantId || !customerId) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await PortfolioService.getPortfolioTotals(customerId);
+
+      if (response.success && response.data) {
+        setTotals(response.data);
+      } else {
+        throw new Error(response.error || 'Failed to fetch portfolio totals');
+      }
+    } catch (err: any) {
+      console.error('Error fetching portfolio totals:', err);
+      setError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [customerId, user, tenantId]);
+
+  useEffect(() => {
+    fetchTotals();
+  }, [fetchTotals]);
+
+  return {
+    totals,
+    isLoading,
+    error,
+    refetch: fetchTotals
+  };
 };

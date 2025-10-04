@@ -70,401 +70,389 @@ export interface JTBDData {
   }>;
 }
 
-export const mockJTBDData: Record<number, JTBDData> = {
-  1: {
-    customerId: 1,
-    primaryGoal: {
-      type: 'retirement',
-      name: 'Retirement Planning',
-      targetAmount: 50000000,
-      currentProgress: 42,
-      targetDate: '2045-12-31',
-      monthlyRequired: 85000,
-      onTrack: true
-    },
-    riskAssessment: {
-      currentRisk: 6.5,
-      recommendedRisk: 6.0,
-      deviation: 8.3,
-      action: 'decrease'
-    },
-    actions: [
-      {
-        id: 'jtbd-1-1',
-        priority: 'high',
-        type: 'rebalancing',
-        title: 'Portfolio Rebalancing Required',
-        description: 'Equity allocation is 8% above target. Consider booking profits.',
-        impact: 'Reduce risk by 12% while maintaining returns',
-        estimatedValue: 185000,
-        actionButton: {
-          label: 'Rebalance Now',
-          action: 'rebalance'
-        }
-      },
-      {
-        id: 'jtbd-1-2',
-        priority: 'medium',
-        type: 'tax-saving',
-        title: 'Tax Saving Opportunity',
-        description: 'Invest ₹50,000 in ELSS to maximize 80C benefits',
-        impact: 'Save ₹15,600 in taxes',
-        deadline: '2025-03-31',
-        estimatedValue: 15600,
-        actionButton: {
-          label: 'Invest in ELSS',
-          action: 'invest-elss'
-        }
-      },
-      {
-        id: 'jtbd-1-3',
-        priority: 'low',
-        type: 'goal-based',
-        title: 'SIP Top-up Recommendation',
-        description: 'Increase SIP by ₹5,000 to stay on track for retirement goal',
-        impact: 'Reach goal 2 years earlier',
-        estimatedValue: 2400000,
-        actionButton: {
-          label: 'Increase SIP',
-          action: 'modify-sip'
-        }
-      }
-    ],
-    insights: [
-      'Portfolio has outperformed benchmark by 3.2% this year',
-      'Current trajectory will achieve retirement goal 6 months ahead',
-      'Consider adding gold allocation for better diversification'
-    ],
-    nextReview: '2025-01-15',
-    detailedAnalysis: {
-      strengthAreas: [
-        'Consistent SIP discipline maintained for 4+ years',
-        'Well-diversified across market caps',
-        'Emergency fund fully funded (6 months expenses)'
-      ],
-      improvementAreas: [
-        'Over-concentrated in equity (65% vs 60% target)',
-        'No international diversification',
-        'Tax harvesting opportunities not utilized'
-      ],
-      peerComparison: {
-        percentile: 78,
-        message: 'Portfolio performing better than 78% of similar investors',
-        avgPeerReturns: 10.2,
-        yourReturns: 13.9
-      }
-    },
-    recommendations: [
-      {
-        title: 'Tax Loss Harvesting',
-        description: 'Book losses in underperforming debt funds to offset gains',
-        potentialSaving: 18500,
-        priority: 'high',
-        complexity: 'easy'
-      },
-      {
-        title: 'Add Gold ETF',
-        description: '5-10% allocation to Gold ETFs for portfolio stability',
-        expectedImpact: 'Reduce portfolio volatility by 15%',
-        priority: 'medium',
-        complexity: 'easy'
-      },
-      {
-        title: 'Review Insurance Coverage',
-        description: 'Life insurance coverage is 5x annual income, should be 10x',
-        urgency: 'Consider term insurance of ₹1.5 Cr additional',
-        priority: 'high',
-        complexity: 'medium'
-      }
-    ],
-    upcomingEvents: [
-      { date: '2025-01-15', event: 'Quarterly Portfolio Review', action: 'Schedule call with advisor' },
-      { date: '2025-02-10', event: 'SIP Due - HDFC Top 100', amount: 25000 },
-      { date: '2025-02-15', event: 'SIP Due - SBI Balanced', amount: 15000 },
-      { date: '2025-03-31', event: 'Tax Planning Deadline', action: 'Invest ₹50,000 for 80C' }
-    ]
-  },
-  2: {
-    customerId: 2,
-    primaryGoal: {
-      type: 'wealth-creation',
-      name: 'Wealth Accumulation',
-      targetAmount: 10000000,
-      currentProgress: 18,
-      targetDate: '2035-12-31',
-      monthlyRequired: 45000,
-      onTrack: false
-    },
-    riskAssessment: {
-      currentRisk: 8.2,
-      recommendedRisk: 7.0,
-      deviation: 17.1,
-      action: 'decrease'
-    },
-    actions: [
-      {
-        id: 'jtbd-2-1',
-        priority: 'critical',
-        type: 'risk-management',
-        title: 'High Risk Alert',
-        description: 'Portfolio concentrated in small-cap funds. Immediate diversification needed.',
-        impact: 'Reduce potential loss by 35%',
-        actionButton: {
-          label: 'Diversify Portfolio',
-          action: 'diversify'
-        }
-      },
-      {
-        id: 'jtbd-2-2',
-        priority: 'high',
-        type: 'rebalancing',
-        title: 'Switch from Underperformers',
-        description: 'Two funds consistently underperforming. Consider switching.',
-        impact: 'Improve returns by 4-6% annually',
-        estimatedValue: 95000,
-        actionButton: {
-          label: 'Review Funds',
-          action: 'switch-funds'
-        }
-      },
-      {
-        id: 'jtbd-2-3',
-        priority: 'medium',
-        type: 'goal-based',
-        title: 'Goal Realignment Needed',
-        description: 'Current investments not aligned with wealth creation timeline',
-        impact: 'Get back on track for 2035 target',
-        actionButton: {
-          label: 'Realign Strategy',
-          action: 'realign-goal'
-        }
-      }
-    ],
-    insights: [
-      'Portfolio volatility 40% higher than market average',
-      'Need additional ₹15,000 monthly SIP to meet goal',
-      'Recent market correction impacted small-cap holdings severely'
-    ],
-    nextReview: '2024-12-20'
-  },
-  3: {
-    customerId: 3,
-    primaryGoal: {
-      type: 'education',
-      name: 'Children Education Fund',
-      targetAmount: 25000000,
-      currentProgress: 68,
-      targetDate: '2032-06-01',
-      monthlyRequired: 55000,
-      onTrack: true
-    },
-    riskAssessment: {
-      currentRisk: 4.5,
-      recommendedRisk: 5.5,
-      deviation: -18.2,
-      action: 'increase'
-    },
-    actions: [
-      {
-        id: 'jtbd-3-1',
-        priority: 'medium',
-        type: 'opportunity',
-        title: 'Increase Equity Exposure',
-        description: 'Conservative allocation may impact long-term goals. Consider adding equity.',
-        impact: 'Potentially increase returns by 3-4% annually',
-        estimatedValue: 210000,
-        actionButton: {
-          label: 'Add Equity Funds',
-          action: 'add-equity'
-        }
-      },
-      {
-        id: 'jtbd-3-2',
-        priority: 'low',
-        type: 'tax-saving',
-        title: 'HUF Tax Benefits Available',
-        description: 'Create HUF to save additional ₹25,000 in taxes',
-        impact: 'Annual tax saving of ₹25,000',
-        deadline: '2025-03-31',
-        estimatedValue: 25000,
-        actionButton: {
-          label: 'Learn More',
-          action: 'huf-info'
-        }
-      }
-    ],
-    insights: [
-      'Education inflation considered at 10% - on track',
-      'Conservative approach ensuring capital protection',
-      'Consider Sukanya Samriddhi for additional tax benefits'
-    ],
-    nextReview: '2025-02-01'
-  },
-  4: {
-    customerId: 4,
-    primaryGoal: {
-      type: 'emergency-fund',
-      name: 'Emergency Corpus',
-      targetAmount: 600000,
-      currentProgress: 145,
-      targetDate: '2024-12-31',
-      monthlyRequired: 0,
-      onTrack: true
-    },
-    riskAssessment: {
-      currentRisk: 7.8,
-      recommendedRisk: 7.5,
-      deviation: 4.0,
-      action: 'maintain'
-    },
-    actions: [
-      {
-        id: 'jtbd-4-1',
-        priority: 'high',
-        type: 'goal-based',
-        title: 'Emergency Fund Exceeded',
-        description: 'Emergency fund goal achieved. Consider new investment goals.',
-        impact: 'Optimize surplus funds for better returns',
-        estimatedValue: 270000,
-        actionButton: {
-          label: 'Set New Goal',
-          action: 'new-goal'
-        }
-      },
-      {
-        id: 'jtbd-4-2',
-        priority: 'medium',
-        type: 'opportunity',
-        title: 'Start Retirement Planning',
-        description: 'Age 28 - Perfect time to start retirement corpus',
-        impact: 'Accumulate ₹5Cr by age 60',
-        actionButton: {
-          label: 'Plan Retirement',
-          action: 'retirement-planning'
-        }
-      }
-    ],
-    insights: [
-      'Excellent savings discipline - 145% of emergency goal achieved',
-      'Ready for aggressive wealth creation strategies',
-      'Consider international diversification'
-    ],
-    nextReview: '2025-01-10'
-  },
-  5: {
-    customerId: 5,
-    primaryGoal: {
-      type: 'tax-planning',
-      name: 'Tax Optimization',
-      targetAmount: 500000,
-      currentProgress: 72,
-      targetDate: '2025-03-31',
-      monthlyRequired: 35000,
-      onTrack: true
-    },
-    riskAssessment: {
-      currentRisk: 6.0,
-      recommendedRisk: 6.0,
-      deviation: 0,
-      action: 'maintain'
-    },
-    actions: [
-      {
-        id: 'jtbd-5-1',
-        priority: 'high',
-        type: 'tax-saving',
-        title: 'Complete 80C Investment',
-        description: 'Invest remaining ₹40,000 for full 80C benefit',
-        impact: 'Save ₹12,480 in taxes',
-        deadline: '2025-03-31',
-        estimatedValue: 12480,
-        actionButton: {
-          label: 'Invest Now',
-          action: 'invest-80c'
-        }
-      },
-      {
-        id: 'jtbd-5-2',
-        priority: 'medium',
-        type: 'tax-saving',
-        title: 'NPS Tier-1 for 80CCD(1B)',
-        description: 'Additional ₹50,000 deduction available under 80CCD(1B)',
-        impact: 'Save ₹15,600 extra in taxes',
-        deadline: '2025-03-31',
-        estimatedValue: 15600,
-        actionButton: {
-          label: 'Open NPS Account',
-          action: 'open-nps'
-        }
-      }
-    ],
-    insights: [
-      'Optimal asset allocation achieved',
-      'Tax-efficient portfolio structure in place',
-      'Consider tax harvesting for LTCG optimization'
-    ],
-    nextReview: '2025-01-05'
-  }
-};
+export const mockJTBDData: Record<number, JTBDData> = {};
 
-// Generate simplified JTBD data for remaining customers
-for (let i = 6; i <= 20; i++) {
+// Helper function to generate random JTBD data
+const generateJTBDData = (customerId: number): JTBDData => {
   const goalTypes: JTBDGoalType[] = ['retirement', 'education', 'wealth-creation', 'tax-planning', 'emergency-fund'];
   const selectedGoal = goalTypes[Math.floor(Math.random() * goalTypes.length)];
   const progress = Math.floor(Math.random() * 100);
   const onTrack = progress > 40;
+  const hasHighPriority = Math.random() > 0.5;
+  const returns = Number((Math.random() * 20 + 5).toFixed(1));
+  const avgPeerReturns = Number((Math.random() * 15 + 7).toFixed(1));
   
-  mockJTBDData[i] = {
-    customerId: i,
+  const priorities: JTBDPriority[] = ['critical', 'high', 'medium', 'low'];
+  const actionTypes: JTBDActionType[] = ['rebalancing', 'tax-saving', 'goal-based', 'risk-management', 'opportunity'];
+  
+  const numActions = Math.floor(Math.random() * 4) + 2; // 2-5 actions
+  const actions: JTBDAction[] = [];
+  
+  for (let i = 0; i < numActions; i++) {
+    const priority = priorities[Math.floor(Math.random() * priorities.length)];
+    const actionType = actionTypes[Math.floor(Math.random() * actionTypes.length)];
+    
+    let title = '';
+    let description = '';
+    let impact = '';
+    
+    switch (actionType) {
+      case 'rebalancing':
+        title = progress > 70 ? 'Portfolio Review Due' : 'Urgent Rebalancing Required';
+        description = 'Portfolio allocation has drifted from target. Rebalancing recommended.';
+        impact = `Optimize returns by ${Math.floor(Math.random() * 5 + 2)}%`;
+        break;
+      case 'tax-saving':
+        title = 'Tax Planning Opportunity';
+        description = `Invest ₹${Math.floor(Math.random() * 100000 + 50000)} to maximize tax benefits`;
+        impact = `Save ₹${Math.floor(Math.random() * 30000 + 10000)} in taxes`;
+        break;
+      case 'goal-based':
+        title = onTrack ? 'Goal on Track' : 'Goal Adjustment Needed';
+        description = onTrack 
+          ? 'Continue current SIP to maintain trajectory'
+          : `Increase SIP by ₹${Math.floor(Math.random() * 10000 + 5000)} to stay on track`;
+        impact = onTrack ? 'Maintain goal timeline' : 'Get back on track';
+        break;
+      case 'risk-management':
+        title = 'Risk Alignment Check';
+        description = 'Portfolio risk level needs adjustment based on market conditions';
+        impact = 'Reduce portfolio volatility';
+        break;
+      case 'opportunity':
+        title = 'Investment Opportunity';
+        description = 'Market conditions favorable for additional investment';
+        impact = `Potential upside of ${Math.floor(Math.random() * 10 + 5)}%`;
+        break;
+    }
+    
+    actions.push({
+      id: `jtbd-${customerId}-${i + 1}`,
+      priority,
+      type: actionType,
+      title,
+      description,
+      impact,
+      deadline: Math.random() > 0.5 ? `2025-0${Math.floor(Math.random() * 3) + 1}-${Math.floor(Math.random() * 28) + 1}` : undefined,
+      estimatedValue: Math.random() > 0.3 ? Math.floor(Math.random() * 200000 + 20000) : undefined,
+      actionButton: {
+        label: actionType === 'tax-saving' ? 'Invest Now' : 'Review Details',
+        action: `action-${actionType}`
+      }
+    });
+  }
+  
+  // Sort actions by priority
+  const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+  actions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  
+  const targetYear = 2030 + Math.floor(Math.random() * 20);
+  const monthlyRequired = Math.floor(Math.random() * 100000 + 15000);
+  const targetAmount = monthlyRequired * 12 * (targetYear - 2025) * 1.5;
+  
+  return {
+    customerId,
     primaryGoal: {
       type: selectedGoal,
-      name: selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1).replace('-', ' '),
-      targetAmount: Math.floor(Math.random() * 50000000) + 1000000,
+      name: selectedGoal
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '),
+      targetAmount,
       currentProgress: progress,
-      targetDate: `20${35 + Math.floor(Math.random() * 15)}-12-31`,
-      monthlyRequired: Math.floor(Math.random() * 100000) + 10000,
-      onTrack: onTrack
+      targetDate: `${targetYear}-12-31`,
+      monthlyRequired,
+      onTrack
     },
     riskAssessment: {
-      currentRisk: Number((Math.random() * 9 + 1).toFixed(1)),
-      recommendedRisk: Number((Math.random() * 9 + 1).toFixed(1)),
+      currentRisk: Number((Math.random() * 4 + 4).toFixed(1)),
+      recommendedRisk: Number((Math.random() * 4 + 4).toFixed(1)),
       deviation: Number((Math.random() * 30 - 15).toFixed(1)),
       action: ['increase', 'decrease', 'maintain'][Math.floor(Math.random() * 3)] as any
     },
-    actions: [
+    actions,
+    insights: [
+      onTrack 
+        ? 'Portfolio performance is meeting expectations'
+        : 'Portfolio needs attention to meet goals',
+      `Current returns: ${returns}% vs peer average: ${avgPeerReturns}%`,
+      hasHighPriority 
+        ? 'Multiple high-priority actions pending'
+        : 'Regular monitoring recommended'
+    ],
+    nextReview: `2025-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+    detailedAnalysis: Math.random() > 0.3 ? {
+      strengthAreas: [
+        'Consistent investment discipline maintained',
+        onTrack ? 'Portfolio aligned with goals' : 'Diversification strategy in place',
+        'Good risk-adjusted returns'
+      ],
+      improvementAreas: [
+        !onTrack ? 'Goal tracking needs improvement' : 'Consider international diversification',
+        'Tax optimization opportunities available',
+        'Regular rebalancing recommended'
+      ],
+      peerComparison: {
+        percentile: Math.floor(Math.random() * 40 + 40),
+        message: returns > avgPeerReturns 
+          ? 'Outperforming peer group'
+          : 'Performing in line with peers',
+        avgPeerReturns,
+        yourReturns: returns
+      }
+    } : undefined,
+    recommendations: Math.random() > 0.5 ? [
       {
-        id: `jtbd-${i}-1`,
-        priority: onTrack ? 'medium' : 'high',
-        type: 'rebalancing',
-        title: onTrack ? 'Regular Review Due' : 'Urgent Action Required',
-        description: onTrack 
-          ? 'Quarterly portfolio review recommended' 
-          : 'Portfolio needs immediate attention',
-        impact: `Improve returns by ${Math.floor(Math.random() * 5 + 1)}%`,
-        actionButton: {
-          label: 'Review Now',
-          action: 'review'
-        }
+        title: 'Portfolio Rebalancing',
+        description: 'Realign portfolio to target allocation',
+        expectedImpact: 'Optimize risk-return profile',
+        priority: hasHighPriority ? 'high' : 'medium',
+        complexity: 'easy'
       },
       {
-        id: `jtbd-${i}-2`,
+        title: 'Tax Harvesting',
+        description: 'Book losses to offset capital gains',
+        potentialSaving: Math.floor(Math.random() * 50000 + 10000),
         priority: 'medium',
-        type: 'tax-saving',
-        title: 'Tax Planning Opportunity',
-        description: `Save up to ₹${Math.floor(Math.random() * 50000 + 10000)} in taxes`,
-        deadline: '2025-03-31',
-        estimatedValue: Math.floor(Math.random() * 50000 + 10000),
-        actionButton: {
-          label: 'Explore Options',
-          action: 'tax-options'
-        }
+        complexity: 'medium'
       }
-    ],
-    insights: [
-      `Portfolio ${onTrack ? 'performing well' : 'needs attention'}`,
-      `${onTrack ? 'On track' : 'Behind'} for primary goal`,
-      'Regular monitoring recommended'
-    ],
-    nextReview: `2025-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-15`
+    ] : undefined,
+    upcomingEvents: Math.random() > 0.4 ? [
+      {
+        date: `2025-${String(Math.floor(Math.random() * 3) + 1).padStart(2, '0')}-15`,
+        event: 'Quarterly Portfolio Review',
+        action: 'Schedule call with advisor'
+      },
+      {
+        date: `2025-02-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        event: 'SIP Due',
+        amount: monthlyRequired
+      },
+      {
+        date: '2025-03-31',
+        event: 'Tax Planning Deadline',
+        action: 'Complete 80C investments'
+      }
+    ] : undefined
   };
+};
+
+// Generate data for customers 269-298 (30 customers)
+for (let i = 269; i <= 298; i++) {
+  mockJTBDData[i] = generateJTBDData(i);
 }
+
+// Add a few detailed examples for customers 269-273
+mockJTBDData[269] = {
+  customerId: 269,
+  primaryGoal: {
+    type: 'retirement',
+    name: 'Retirement Planning',
+    targetAmount: 50000000,
+    currentProgress: 42,
+    targetDate: '2045-12-31',
+    monthlyRequired: 85000,
+    onTrack: true
+  },
+  riskAssessment: {
+    currentRisk: 6.5,
+    recommendedRisk: 6.0,
+    deviation: 8.3,
+    action: 'decrease'
+  },
+  actions: [
+    {
+      id: 'jtbd-269-1',
+      priority: 'high',
+      type: 'rebalancing',
+      title: 'Portfolio Rebalancing Required',
+      description: 'Equity allocation is 8% above target. Consider booking profits.',
+      impact: 'Reduce risk by 12% while maintaining returns',
+      estimatedValue: 185000,
+      actionButton: {
+        label: 'Rebalance Now',
+        action: 'rebalance'
+      }
+    },
+    {
+      id: 'jtbd-269-2',
+      priority: 'medium',
+      type: 'tax-saving',
+      title: 'Tax Saving Opportunity',
+      description: 'Invest ₹50,000 in ELSS to maximize 80C benefits',
+      impact: 'Save ₹15,600 in taxes',
+      deadline: '2025-03-31',
+      estimatedValue: 15600,
+      actionButton: {
+        label: 'Invest in ELSS',
+        action: 'invest-elss'
+      }
+    },
+    {
+      id: 'jtbd-269-3',
+      priority: 'low',
+      type: 'goal-based',
+      title: 'SIP Top-up Recommendation',
+      description: 'Increase SIP by ₹5,000 to stay on track for retirement goal',
+      impact: 'Reach goal 2 years earlier',
+      estimatedValue: 2400000,
+      actionButton: {
+        label: 'Increase SIP',
+        action: 'modify-sip'
+      }
+    }
+  ],
+  insights: [
+    'Portfolio has outperformed benchmark by 3.2% this year',
+    'Current trajectory will achieve retirement goal 6 months ahead',
+    'Consider adding gold allocation for better diversification'
+  ],
+  nextReview: '2025-01-15',
+  detailedAnalysis: {
+    strengthAreas: [
+      'Consistent SIP discipline maintained for 4+ years',
+      'Well-diversified across market caps',
+      'Emergency fund fully funded (6 months expenses)'
+    ],
+    improvementAreas: [
+      'Over-concentrated in equity (65% vs 60% target)',
+      'No international diversification',
+      'Tax harvesting opportunities not utilized'
+    ],
+    peerComparison: {
+      percentile: 78,
+      message: 'Portfolio performing better than 78% of similar investors',
+      avgPeerReturns: 10.2,
+      yourReturns: 13.9
+    }
+  },
+  recommendations: [
+    {
+      title: 'Tax Loss Harvesting',
+      description: 'Book losses in underperforming debt funds to offset gains',
+      potentialSaving: 18500,
+      priority: 'high',
+      complexity: 'easy'
+    },
+    {
+      title: 'Add Gold ETF',
+      description: '5-10% allocation to Gold ETFs for portfolio stability',
+      expectedImpact: 'Reduce portfolio volatility by 15%',
+      priority: 'medium',
+      complexity: 'easy'
+    }
+  ],
+  upcomingEvents: [
+    { date: '2025-01-15', event: 'Quarterly Portfolio Review', action: 'Schedule call with advisor' },
+    { date: '2025-02-10', event: 'SIP Due - HDFC Top 100', amount: 25000 },
+    { date: '2025-03-31', event: 'Tax Planning Deadline', action: 'Invest ₹50,000 for 80C' }
+  ]
+};
+
+mockJTBDData[270] = {
+  customerId: 270,
+  primaryGoal: {
+    type: 'wealth-creation',
+    name: 'Wealth Accumulation',
+    targetAmount: 10000000,
+    currentProgress: 58,
+    targetDate: '2035-12-31',
+    monthlyRequired: 45000,
+    onTrack: true
+  },
+  riskAssessment: {
+    currentRisk: 7.2,
+    recommendedRisk: 7.0,
+    deviation: 2.8,
+    action: 'maintain'
+  },
+  actions: [
+    {
+      id: 'jtbd-270-1',
+      priority: 'medium',
+      type: 'opportunity',
+      title: 'Market Opportunity',
+      description: 'Market correction presents buying opportunity in quality funds',
+      impact: 'Potential upside of 15-20%',
+      estimatedValue: 150000,
+      actionButton: {
+        label: 'Explore Options',
+        action: 'opportunities'
+      }
+    },
+    {
+      id: 'jtbd-270-2',
+      priority: 'low',
+      type: 'tax-saving',
+      title: 'Year-end Tax Planning',
+      description: 'Additional ₹50,000 investment can save taxes',
+      impact: 'Save ₹15,600 in taxes',
+      deadline: '2025-03-31',
+      estimatedValue: 15600,
+      actionButton: {
+        label: 'Plan Taxes',
+        action: 'tax-planning'
+      }
+    }
+  ],
+  insights: [
+    'Wealth creation goal on track - excellent progress',
+    'Portfolio well-diversified across asset classes',
+    'Continue current investment strategy'
+  ],
+  nextReview: '2025-02-01'
+};
+
+mockJTBDData[271] = {
+  customerId: 271,
+  primaryGoal: {
+    type: 'education',
+    name: 'Children Education Fund',
+    targetAmount: 25000000,
+    currentProgress: 35,
+    targetDate: '2032-06-01',
+    monthlyRequired: 75000,
+    onTrack: false
+  },
+  riskAssessment: {
+    currentRisk: 5.5,
+    recommendedRisk: 6.5,
+    deviation: -15.4,
+    action: 'increase'
+  },
+  actions: [
+    {
+      id: 'jtbd-271-1',
+      priority: 'critical',
+      type: 'goal-based',
+      title: 'Goal Gap Alert',
+      description: 'Current investments insufficient to meet education goal',
+      impact: 'Need ₹25,000 additional monthly SIP',
+      actionButton: {
+        label: 'Adjust Strategy',
+        action: 'adjust-goal'
+      }
+    },
+    {
+      id: 'jtbd-271-2',
+      priority: 'high',
+      type: 'risk-management',
+      title: 'Increase Equity Exposure',
+      description: 'Conservative allocation limiting growth potential',
+      impact: 'Improve returns by 3-4% annually',
+      estimatedValue: 500000,
+      actionButton: {
+        label: 'Rebalance Portfolio',
+        action: 'rebalance'
+      }
+    }
+  ],
+  insights: [
+    'Education goal requires immediate attention',
+    'Consider increasing SIP or adjusting timeline',
+    'Education inflation at 10% - factor in rising costs'
+  ],
+  nextReview: '2025-01-05'
+};
+
+console.log(`Mock JTBD data generated for customers 269-298 (${Object.keys(mockJTBDData).length} total)`);

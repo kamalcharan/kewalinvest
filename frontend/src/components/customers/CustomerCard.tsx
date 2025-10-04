@@ -1,18 +1,16 @@
 // src/components/customers/CustomerCard.tsx
-// Enhanced version with Portfolio and JTBD integration
+// Updated to use real backend API types
 
 import React from 'react';
 import { CustomerWithContact } from '../../types/customer.types';
-import { PortfolioData } from '../../types/portfolio.types';
+import { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import { JTBDData } from '../../types/jtbd.types';
 import { useTheme } from '../../contexts/ThemeContext';
-import PortfolioSummaryWidget from '../portfolio/PortfolioSummaryWidget';
-import JTBDActionCard from '../jtbd/JTBDActionCard';
 import PerformanceSparkline from '../visualizations/PerformanceSparkline';
 
 interface CustomerCardProps {
   customer: CustomerWithContact;
-  portfolio?: PortfolioData;
+  portfolio?: CustomerPortfolioResponse;
   jtbd?: JTBDData;
   onView: () => void;
   onEdit: () => void;
@@ -268,7 +266,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
               )}
             </div>
 
-            {/* Portfolio Summary (if available) */}
+            {/* Portfolio Summary (if available) - UPDATED FOR API */}
             {showFinancials && portfolio && (
               <div style={{
                 marginTop: '12px',
@@ -282,7 +280,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                     fontWeight: '600',
                     color: colors.utility.primaryText
                   }}>
-                    {formatCurrency(portfolio.summary.totalValue)}
+                    {formatCurrency(portfolio.summary.current_value)}
                   </div>
                   <div style={{
                     fontSize: '12px',
@@ -296,13 +294,13 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   <div style={{
                     fontSize: '16px',
                     fontWeight: '600',
-                    color: getValueColor(portfolio.summary.overallReturns.percentage),
+                    color: getValueColor(portfolio.summary.return_percentage),
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px'
                   }}>
-                    {portfolio.summary.overallReturns.percentage >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-                    {portfolio.summary.overallReturns.percentage >= 0 ? '+' : ''}{portfolio.summary.overallReturns.percentage.toFixed(1)}%
+                    {portfolio.summary.return_percentage >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                    {portfolio.summary.return_percentage >= 0 ? '+' : ''}{portfolio.summary.return_percentage.toFixed(1)}%
                   </div>
                   <div style={{
                     fontSize: '12px',
@@ -312,10 +310,11 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   </div>
                 </div>
 
-                {portfolio.performanceHistory && (
+                {/* Performance history removed - not available in API response by default */}
+                {portfolio.performance && portfolio.performance.length > 0 && (
                   <div style={{ marginLeft: 'auto', marginRight: '20px' }}>
                     <PerformanceSparkline
-                      data={portfolio.performanceHistory}
+                      data={portfolio.performance.map(p => p.current_value)}
                       width={100}
                       height={32}
                       showArea={true}

@@ -1,11 +1,12 @@
 // src/pages/dashboard/CustomerDashboardPage.tsx
+// Updated to use real portfolio API
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomers } from '../../hooks/useCustomers';
+import { usePortfolioData, usePortfolioMetrics } from '../../hooks/usePortfolioData';
 import { CustomerSearchParams, CustomerWithContact } from '../../types/customer.types';
-import { mockPortfolioData } from '../../data/mock/mockPortfolioData';
 import { mockJTBDData } from '../../data/mock/mockJTBDData';
 import CustomerCard from '../../components/customers/CustomerCard';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
@@ -22,12 +23,11 @@ const CustomerDashboardPage: React.FC = () => {
   // State management
   const [searchParams, setSearchParams] = useState<CustomerSearchParams>({
     page: 1,
-    page_size: 20,
+    page_size: 50, // Increased for dashboard view
     sort_by: 'name',
     sort_order: 'asc'
   });
   
-  // Initialize selectedCustomerId from navigation state
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     location.state?.selectedCustomerId || null
   );
@@ -36,39 +36,28 @@ const CustomerDashboardPage: React.FC = () => {
   // Clear navigation state after using it
   useEffect(() => {
     if (location.state?.selectedCustomerId) {
-      // Clear the state to prevent it from persisting
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
-  // Fetch customers
+  // Fetch customers and portfolio metrics
   const { data: customerData, isLoading, error, refetch } = useCustomers(searchParams);
   const customers = customerData?.customers || [];
+  
+  const { metrics: portfolioMetrics, isLoading: metricsLoading } = usePortfolioMetrics();
+  
+  // Fetch selected customer portfolio
+  const { portfolio: selectedPortfolio, isLoading: portfolioLoading } = usePortfolioData({
+    customerId: selectedCustomerId || undefined,
+    autoFetch: !!selectedCustomerId
+  });
 
-  // Calculate dashboard metrics
+  // Calculate dashboard metrics from real API
   const dashboardMetrics = useMemo(() => {
-    let totalAUM = 0;
-    let positiveReturnsCount = 0;
-    let negativeReturnsCount = 0;
+    // Count critical actions from JTBD data
     let criticalActionsCount = 0;
-    let highRiskCount = 0;
-
     customers.forEach(customer => {
-      const portfolio = mockPortfolioData[customer.id];
       const jtbd = mockJTBDData[customer.id];
-      
-      if (portfolio) {
-        totalAUM += portfolio.summary.totalValue;
-        if (portfolio.summary.overallReturns.percentage >= 0) {
-          positiveReturnsCount++;
-        } else {
-          negativeReturnsCount++;
-        }
-        if (portfolio.riskScore > 7) {
-          highRiskCount++;
-        }
-      }
-      
       if (jtbd) {
         criticalActionsCount += jtbd.actions.filter(a => 
           a.priority === 'critical' || a.priority === 'high'
@@ -77,29 +66,28 @@ const CustomerDashboardPage: React.FC = () => {
     });
 
     return {
-      totalAUM,
+      totalAUM: portfolioMetrics.totalAUM,
       totalCustomers: customers.length,
-      positiveReturnsCount,
-      negativeReturnsCount,
+      customersWithPortfolio: portfolioMetrics.totalCustomers,
+      positiveReturnsCount: portfolioMetrics.positiveReturnsCount,
+      negativeReturnsCount: portfolioMetrics.negativeReturnsCount,
       criticalActionsCount,
-      highRiskCount,
-      avgReturns: customers.length > 0 
-        ? customers.reduce((sum, c) => sum + (mockPortfolioData[c.id]?.summary.overallReturns.percentage || 0), 0) / customers.length
-        : 0
+      avgReturns: portfolioMetrics.avgReturns
     };
-  }, [customers]);
+  }, [customers, portfolioMetrics]);
 
   // Filter customers based on view
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
-      const portfolio = mockPortfolioData[customer.id];
       const jtbd = mockJTBDData[customer.id];
       
       if (filterView === 'attention') {
-        return portfolio?.summary.overallReturns.percentage < 0 || 
-               jtbd?.actions.some(a => a.priority === 'critical' || a.priority === 'high');
+        // Show customers with critical actions (since we don't have individual portfolio data loaded)
+        return jtbd?.actions.some(a => a.priority === 'critical' || a.priority === 'high');
       } else if (filterView === 'positive') {
-        return portfolio?.summary.overallReturns.percentage >= 10;
+        // For now, we can't filter by returns without loading each portfolio
+        // Could be enhanced later with a separate API endpoint
+        return true;
       }
       return true;
     });
@@ -111,7 +99,6 @@ const CustomerDashboardPage: React.FC = () => {
     return customers.find(c => c.id === selectedCustomerId);
   }, [customers, selectedCustomerId]);
 
-  const selectedPortfolio = selectedCustomerId ? mockPortfolioData[selectedCustomerId] : null;
   const selectedJTBD = selectedCustomerId ? mockJTBDData[selectedCustomerId] : null;
 
   // Format currency
@@ -249,7 +236,7 @@ const CustomerDashboardPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Header Metrics Bar */}
+      {/* Header Metrics Bar - Using Real API Data */}
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '12px',
@@ -269,7 +256,7 @@ const CustomerDashboardPage: React.FC = () => {
               color: colors.brand.primary,
               marginBottom: '4px'
             }}>
-              {formatCurrency(dashboardMetrics.totalAUM)}
+              {metricsLoading ? '...' : formatCurrency(dashboardMetrics.totalAUM)}
             </div>
             <div style={{
               fontSize: '12px',
@@ -310,9 +297,9 @@ const CustomerDashboardPage: React.FC = () => {
               alignItems: 'center',
               gap: '8px'
             }}>
-              {dashboardMetrics.positiveReturnsCount}
+              {metricsLoading ? '...' : dashboardMetrics.positiveReturnsCount}
               <span style={{ fontSize: '16px', color: colors.utility.secondaryText }}>
-                / {dashboardMetrics.negativeReturnsCount}
+                / {metricsLoading ? '...' : dashboardMetrics.negativeReturnsCount}
               </span>
             </div>
             <div style={{
@@ -354,7 +341,7 @@ const CustomerDashboardPage: React.FC = () => {
               alignItems: 'center',
               gap: '8px'
             }}>
-              {dashboardMetrics.avgReturns >= 0 ? '+' : ''}{dashboardMetrics.avgReturns.toFixed(1)}%
+              {metricsLoading ? '...' : `${dashboardMetrics.avgReturns >= 0 ? '+' : ''}${dashboardMetrics.avgReturns.toFixed(1)}%`}
               {dashboardMetrics.avgReturns >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
             </div>
             <div style={{
@@ -394,7 +381,7 @@ const CustomerDashboardPage: React.FC = () => {
             }}>
               {[
                 { value: 'all', label: 'All Customers', count: customers.length },
-                { value: 'attention', label: 'Needs Attention', count: dashboardMetrics.negativeReturnsCount + dashboardMetrics.criticalActionsCount },
+                { value: 'attention', label: 'Needs Attention', count: dashboardMetrics.criticalActionsCount },
                 { value: 'positive', label: 'Top Performers', count: dashboardMetrics.positiveReturnsCount }
               ].map(tab => (
                 <button
@@ -494,7 +481,7 @@ const CustomerDashboardPage: React.FC = () => {
                 <CustomerCard
                   key={customer.id}
                   customer={customer}
-                  portfolio={mockPortfolioData[customer.id]}
+                  portfolio={undefined}  // Will fetch individually if needed
                   jtbd={mockJTBDData[customer.id]}
                   onView={() => setSelectedCustomerId(customer.id)}
                   onEdit={() => navigate(`/customers/${customer.id}/edit`)}
@@ -557,35 +544,48 @@ const CustomerDashboardPage: React.FC = () => {
             </div>
 
             {/* Portfolio Summary */}
-            <PortfolioSummaryWidget
-              portfolio={selectedPortfolio}
-              compact={false}
-              showSparkline={true}
-            />
+            {portfolioLoading ? (
+              <div style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '40px',
+                textAlign: 'center'
+              }}>
+                Loading portfolio...
+              </div>
+            ) : (
+              <PortfolioSummaryWidget
+                portfolio={selectedPortfolio}
+                compact={false}
+                showSparkline={true}
+              />
+            )}
 
             {/* Asset Allocation */}
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '16px'
-            }}>
-              <h4 style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '16px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
+            {selectedPortfolio && selectedPortfolio.allocation && selectedPortfolio.allocation.length > 0 && (
+              <div style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '16px'
               }}>
-                Asset Allocation
-              </h4>
-              <PortfolioDonutChart
-                allocation={selectedPortfolio.allocation}
-                size={160}
-                strokeWidth={24}
-                showLegend={true}
-              />
-            </div>
+                <h4 style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  marginBottom: '16px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Asset Allocation
+                </h4>
+                <PortfolioDonutChart
+                  allocation={selectedPortfolio.allocation}
+                  size={160}
+                  strokeWidth={24}
+                  showLegend={true}
+                />
+              </div>
+            )}
 
             {/* JTBD Actions */}
             <JTBDActionCard

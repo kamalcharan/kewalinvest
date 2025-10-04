@@ -14,6 +14,8 @@ import customerRoutes from './routes/customer.routes';
 import importRoutes from './routes/import.routes';
 import schemeRoutes from './routes/scheme.routes';
 import navRoutes from './routes/nav.routes';
+import transactionRoutes from './routes/transaction.routes';
+import portfolioRoutes from './routes/portfolio.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -85,6 +87,8 @@ app.get('/health', (_req: Request, res: Response) => {
       contacts: true,
       customers: true,
       schemes: true,
+      transactions: true,
+      portfolio: true,
       import: true,
       staging: true,
       logs: true,
@@ -117,6 +121,8 @@ app.get('/api', (_req: Request, res: Response) => {
       contacts: '/api/contacts',
       customers: '/api/customers',
       schemes: '/api/schemes',
+      transactions: '/api/transactions',
+      portfolio: '/api/portfolio',
       import: '/api/import',
       logs: '/api/logs',
       nav: '/api/nav'
@@ -129,6 +135,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/schemes', schemeRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
 
@@ -191,6 +199,23 @@ app.use((_req: Request, res: Response) => {
       'POST /api/schemes',
       'PUT /api/schemes/:schemeCode',
       'POST /api/schemes/validate-isin',
+      
+      // Transaction endpoints
+      'GET /api/transactions',
+      'GET /api/transactions/summary',
+      'GET /api/transactions/:id',
+      'POST /api/transactions',
+      'PUT /api/transactions/:id',
+      'PATCH /api/transactions/:id/portfolio-flag',
+      'DELETE /api/transactions/:id',
+      
+      // Portfolio endpoints
+      'GET /api/portfolio/holdings',
+      'GET /api/portfolio/statistics',
+      'POST /api/portfolio/refresh',
+      'GET /api/portfolio/:customerId',
+      'GET /api/portfolio/:customerId/totals',
+      'GET /api/portfolio/:customerId/scheme/:schemeCode',
       
       // Import endpoints
       'POST /api/import/upload',
@@ -395,6 +420,23 @@ app.listen(PORT, async () => {
 ║  • POST /api/schemes                   ║
 ║  • PUT  /api/schemes/:schemeCode       ║
 ║                                        ║
+║  Transactions (NEW):                   ║
+║  • GET  /api/transactions              ║
+║  • GET  /api/transactions/summary      ║
+║  • GET  /api/transactions/:id          ║
+║  • POST /api/transactions              ║
+║  • PUT  /api/transactions/:id          ║
+║  • PATCH /api/transactions/:id/...     ║
+║  • DELETE /api/transactions/:id        ║
+║                                        ║
+║  Portfolio (NEW):                      ║
+║  • GET  /api/portfolio/holdings        ║
+║  • GET  /api/portfolio/statistics      ║
+║  • POST /api/portfolio/refresh         ║
+║  • GET  /api/portfolio/:customerId     ║
+║  • GET  /api/portfolio/:id/totals      ║
+║  • GET  /api/portfolio/:id/scheme/:sc  ║
+║                                        ║
 ║  NAV Tracking:                         ║
 ║  • GET  /api/nav/schemes/search        ║
 ║  • GET  /api/nav/bookmarks             ║
@@ -450,6 +492,8 @@ app.listen(PORT, async () => {
     console.log('✅ Contact management endpoints ready');
     console.log('✅ Customer management endpoints ready');
     console.log('✅ Scheme management endpoints ready');
+    console.log('✅ Transaction management endpoints ready');
+    console.log('✅ Portfolio tracking endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
     console.log('✅ Enhanced bookmark endpoints ready'); // NEW
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
@@ -517,6 +561,8 @@ app.listen(PORT, async () => {
 ║          🎉 STARTUP COMPLETE 🎉        ║
 ╠════════════════════════════════════════╣
 ║  Database: ✅ Connected                ║
+║  Transactions: ✅ Ready                ║
+║  Portfolio: ✅ Ready                   ║
 ║  NAV Routes: ✅ Ready                  ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║

@@ -1,3 +1,5 @@
+// frontend/src/components/ETL/ImportResults.tsx
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +14,7 @@ interface ImportResultsProps {
 interface ImportSession {
   id: number;
   session_name: string;
+  import_type: string;
   status: string;
   total_records: number;
   successful_records: number;
@@ -26,11 +29,12 @@ interface ImportRecord {
   id: number;
   row_number: number;
   raw_data: any;
-  status: 'success' | 'failed' | 'duplicate' | 'skipped';
+  mapped_data: any;
+  processing_status: string;
   error_messages: string[];
   warnings: string[];
-  created_contact_id?: number;
-  created_customer_id?: number;
+  created_record_id?: number;
+  created_record_type?: string;
   processed_at: string;
 }
 
@@ -68,6 +72,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [portfolioFlagToggles, setPortfolioFlagToggles] = useState<Record<number, boolean>>({});
+  const [isTogglingFlag, setIsTogglingFlag] = useState<number | null>(null);
 
   // Fetch results on component mount and when filters change
   useEffect(() => {
@@ -120,13 +126,12 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         setResultsData(result.data);
       } else {
         console.error('Failed to fetch results:', result);
-        // Don't set null, keep any existing data
         if (!resultsData) {
-          // Only set empty structure if we have no data at all
           setResultsData({
             session: {
               id: sessionId,
               session_name: 'Unknown Session',
+              import_type: 'Unknown',
               status: 'unknown',
               total_records: 0,
               successful_records: 0,
@@ -204,6 +209,54 @@ const ImportResults: React.FC<ImportResultsProps> = ({
     }
   };
 
+  const togglePortfolioFlag = async (recordId: number, currentFlag: boolean) => {
+    try {
+      setIsTogglingFlag(recordId);
+      
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        onError('Authentication token not found');
+        setIsTogglingFlag(null);
+        return;
+      }
+
+      const response = await fetch(API_ENDPOINTS.TRANSACTIONS.UPDATE_PORTFOLIO_FLAG(recordId), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(tenantId && { 'X-Tenant-ID': String(tenantId) }),
+          ...(environment && { 'X-Environment': environment })
+        },
+        body: JSON.stringify({
+          portfolio_flag: !currentFlag
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local state
+        setPortfolioFlagToggles(prev => ({
+          ...prev,
+          [recordId]: !currentFlag
+        }));
+        
+        // Optionally refresh results to get updated counts
+        // fetchResults();
+      } else {
+        onError(result.error || 'Failed to update portfolio flag');
+      }
+
+    } catch (error: any) {
+      console.error('Error toggling portfolio flag:', error);
+      onError('Network error while updating portfolio flag');
+    } finally {
+      setIsTogglingFlag(null);
+    }
+  };
+
   const formatProcessingTime = (milliseconds: number): string => {
     if (!milliseconds || milliseconds < 0) return '0ms';
     if (milliseconds < 1000) return `${milliseconds}ms`;
@@ -255,6 +308,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         return null;
     }
   };
+
+  const isTransactionImport = resultsData?.session?.import_type === 'TransactionData';
 
   if (isLoading && !resultsData) {
     return (
@@ -329,6 +384,53 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           }
         </p>
       </div>
+
+      {/* Transaction Import Notice */}
+      {isTransactionImport && resultsData && resultsData.summary.duplicateRows > 0 && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          backgroundColor: colors.semantic.info + '10',
+          border: `1px solid ${colors.semantic.info}30`,
+          borderRadius: '8px'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px'
+          }}>
+            <div style={{ color: colors.semantic.info, flexShrink: 0, marginTop: '2px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </div>
+            <div>
+              <h4 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '8px',
+                margin: 0
+              }}>
+                Duplicate Transactions Detected
+              </h4>
+              <p style={{
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                margin: 0,
+                lineHeight: '1.5',
+                marginBottom: '8px'
+              }}>
+                {resultsData.summary.duplicateRows} potential duplicate transaction(s) have been flagged. 
+                These are currently <strong>included</strong> in portfolio totals. You can exclude duplicates 
+                from calculations by toggling the "Include in Portfolio" switch below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div style={{
@@ -469,7 +571,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
             fontSize: '12px',
             color: colors.utility.secondaryText
           }}>
-            Skipped existing records
+            {isTransactionImport ? 'Review & toggle below' : 'Skipped existing records'}
           </div>
         </div>
       </div>
@@ -546,7 +648,9 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         {/* Table Header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '60px 80px 1fr 200px 120px',
+          gridTemplateColumns: isTransactionImport 
+            ? '60px 80px 1fr 200px 120px 140px'
+            : '60px 80px 1fr 200px 120px',
           gap: '16px',
           padding: '16px 20px',
           backgroundColor: colors.utility.secondaryBackground,
@@ -560,6 +664,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           <div>DATA PREVIEW</div>
           <div>ISSUES</div>
           <div>PROCESSED</div>
+          {isTransactionImport && <div style={{ textAlign: 'center' as const }}>PORTFOLIO</div>}
         </div>
 
         {/* Table Body */}
@@ -573,101 +678,185 @@ const ImportResults: React.FC<ImportResultsProps> = ({
               <p>No records to display</p>
             </div>
           ) : (
-            resultsData.records.map((record, index) => (
-              <div
-                key={record.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '60px 80px 1fr 200px 120px',
-                  gap: '16px',
-                  padding: '16px 20px',
-                  borderBottom: index < resultsData.records.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none',
-                  fontSize: '13px'
-                }}
-              >
-                {/* Row Number */}
-                <div style={{
-                  textAlign: 'center' as const,
-                  fontWeight: '600',
-                  color: colors.utility.secondaryText
-                }}>
-                  {record.row_number}
-                </div>
-
-                {/* Status */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: getStatusColor(record.status)
-                }}>
-                  {getStatusIcon(record.status)}
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    textTransform: 'uppercase' as const
-                  }}>
-                    {record.status}
-                  </span>
-                </div>
-
-                {/* Data Preview */}
-                <div style={{
-                  fontSize: '12px',
-                  fontFamily: 'monospace',
-                  color: colors.utility.primaryText,
-                  overflow: 'hidden'
-                }}>
+            resultsData.records.map((record, index) => {
+              const recordId = record.created_record_id || 0;
+              const currentPortfolioFlag = portfolioFlagToggles[recordId] !== undefined 
+                ? portfolioFlagToggles[recordId] 
+                : true;
+              const isDuplicate = record.processing_status === 'duplicate';
+              
+              return (
+                <div
+                  key={record.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isTransactionImport 
+                      ? '60px 80px 1fr 200px 120px 140px'
+                      : '60px 80px 1fr 200px 120px',
+                    gap: '16px',
+                    padding: '16px 20px',
+                    borderBottom: index < resultsData.records.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none',
+                    fontSize: '13px',
+                    backgroundColor: isDuplicate && !currentPortfolioFlag 
+                      ? colors.semantic.warning + '08' 
+                      : 'transparent'
+                  }}
+                >
+                  {/* Row Number */}
                   <div style={{
-                    whiteSpace: 'nowrap' as const,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    textAlign: 'center' as const,
+                    fontWeight: '600',
+                    color: colors.utility.secondaryText
                   }}>
-                    {record.raw_data && typeof record.raw_data === 'object' ? 
-                      Object.entries(record.raw_data).slice(0, 3).map(([key, value]) => 
-                        `${key}: ${value}`
-                      ).join(' • ') : 
-                      'No data'}
-                    {record.raw_data && typeof record.raw_data === 'object' && 
-                     Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
+                    {record.row_number}
                   </div>
-                </div>
 
-                {/* Issues */}
-                <div style={{
-                  fontSize: '11px',
-                  color: colors.semantic.error
-                }}>
-                  {record.error_messages && Array.isArray(record.error_messages) && record.error_messages.length > 0 ? (
-                    <div>
-                      {record.error_messages.slice(0, 2).map((error, i) => (
-                        <div key={i} style={{ marginBottom: '2px' }}>
-                          • {error}
-                        </div>
-                      ))}
-                      {record.error_messages.length > 2 && (
-                        <div>+ {record.error_messages.length - 2} more</div>
+                  {/* Status */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: getStatusColor(record.processing_status)
+                  }}>
+                    {getStatusIcon(record.processing_status)}
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      textTransform: 'uppercase' as const
+                    }}>
+                      {record.processing_status}
+                    </span>
+                  </div>
+
+                  {/* Data Preview */}
+                  <div style={{
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                    color: colors.utility.primaryText,
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      whiteSpace: 'nowrap' as const,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {record.raw_data && typeof record.raw_data === 'object' ? 
+                        Object.entries(record.raw_data).slice(0, 3).map(([key, value]) => 
+                          `${key}: ${value}`
+                        ).join(' • ') : 
+                        'No data'}
+                      {record.raw_data && typeof record.raw_data === 'object' && 
+                       Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
+                    </div>
+                  </div>
+
+                  {/* Issues */}
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.semantic.error
+                  }}>
+                    {record.error_messages && Array.isArray(record.error_messages) && record.error_messages.length > 0 ? (
+                      <div>
+                        {record.error_messages.slice(0, 2).map((error, i) => (
+                          <div key={i} style={{ marginBottom: '2px' }}>
+                            • {error}
+                          </div>
+                        ))}
+                        {record.error_messages.length > 2 && (
+                          <div>+ {record.error_messages.length - 2} more</div>
+                        )}
+                      </div>
+                    ) : null}
+                    {record.warnings && Array.isArray(record.warnings) && record.warnings.length > 0 ? (
+                      <div style={{ color: colors.semantic.warning, marginTop: '4px' }}>
+                        {record.warnings.slice(0, 1).map((warning, i) => (
+                          <div key={i}>⚠ {warning}</div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Processed Time */}
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText
+                  }}>
+                    {record.processed_at ? new Date(record.processed_at).toLocaleString() : 'Not processed'}
+                  </div>
+
+                  {/* Portfolio Flag Toggle (Transaction imports only) */}
+                  {isTransactionImport && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}>
+                      {isDuplicate && recordId > 0 ? (
+                        <>
+                          <label style={{
+                            position: 'relative' as const,
+                            display: 'inline-block',
+                            width: '44px',
+                            height: '24px'
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={currentPortfolioFlag}
+                              onChange={() => togglePortfolioFlag(recordId, currentPortfolioFlag)}
+                              disabled={isTogglingFlag === recordId}
+                              style={{
+                                opacity: 0,
+                                width: 0,
+                                height: 0
+                              }}
+                            />
+                            <span style={{
+                              position: 'absolute' as const,
+                              cursor: isTogglingFlag === recordId ? 'not-allowed' : 'pointer',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              backgroundColor: currentPortfolioFlag ? colors.semantic.success : colors.utility.secondaryText + '40',
+                              transition: '0.3s',
+                              borderRadius: '24px',
+                              opacity: isTogglingFlag === recordId ? 0.5 : 1
+                            }}>
+                              <span style={{
+                                position: 'absolute' as const,
+                                content: '""',
+                                height: '18px',
+                                width: '18px',
+                                left: currentPortfolioFlag ? '23px' : '3px',
+                                bottom: '3px',
+                                backgroundColor: 'white',
+                                transition: '0.3s',
+                                borderRadius: '50%'
+                              }} />
+                            </span>
+                          </label>
+                          <span style={{
+                            fontSize: '10px',
+                            color: colors.utility.secondaryText,
+                            whiteSpace: 'nowrap' as const
+                          }}>
+                            {isTogglingFlag === recordId ? 'Updating...' : (currentPortfolioFlag ? 'Included' : 'Excluded')}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{
+                          fontSize: '10px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          {isDuplicate ? 'N/A' : '—'}
+                        </span>
                       )}
                     </div>
-                  ) : null}
-                  {record.warnings && Array.isArray(record.warnings) && record.warnings.length > 0 ? (
-                    <div style={{ color: colors.semantic.warning, marginTop: '4px' }}>
-                      {record.warnings.slice(0, 1).map((warning, i) => (
-                        <div key={i}>⚠ {warning}</div>
-                      ))}
-                    </div>
-                  ) : null}
+                  )}
                 </div>
-
-                {/* Processed Time */}
-                <div style={{
-                  fontSize: '11px',
-                  color: colors.utility.secondaryText
-                }}>
-                  {record.processed_at ? new Date(record.processed_at).toLocaleString() : 'Not processed'}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

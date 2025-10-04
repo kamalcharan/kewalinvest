@@ -147,15 +147,60 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       ];
     }
     
-    // Transaction data fields (default)
-    return [
-      { field: 'transaction_id', label: 'Transaction ID', type: 'text', required: true, description: 'Unique transaction identifier', group: 'Transaction' },
-      { field: 'amount', label: 'Amount', type: 'number', required: true, description: 'Transaction amount', group: 'Transaction' },
-      { field: 'date', label: 'Transaction Date', type: 'date', required: true, description: 'When transaction occurred', group: 'Transaction' },
-      { field: 'customer_id', label: 'Customer ID', type: 'text', required: false, description: 'Associated customer', group: 'Reference' },
-      { field: 'description', label: 'Description', type: 'text', required: false, description: 'Transaction description', group: 'Details' },
-      { field: 'category', label: 'Category', type: 'text', required: false, description: 'Transaction category', group: 'Details' }
-    ];
+    // TransactionData fields (25+ fields)
+    if (type === 'TransactionData') {
+      return [
+        // Core Transaction Fields
+        { field: 'iwell_code', label: 'IWell Code', type: 'text', required: true, description: 'Customer IWell code for lookup', group: 'Customer Identification' },
+        { field: 'txn_date', label: 'Transaction Date', type: 'date', required: true, description: 'Date of transaction', group: 'Transaction Core' },
+        { field: 'txn_code', label: 'Transaction Type Code', type: 'text', required: true, description: 'SIP, PURCHASE, REDEMPTION, etc.', group: 'Transaction Core' },
+        { field: 'total_amount', label: 'Total Amount', type: 'number', required: true, description: 'Total transaction amount', group: 'Transaction Core' },
+        { field: 'units', label: 'Units', type: 'number', required: true, description: 'Number of units', group: 'Transaction Core' },
+        { field: 'nav', label: 'NAV', type: 'number', required: true, description: 'Net Asset Value', group: 'Transaction Core' },
+        
+        // Scheme Identification
+        { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier', group: 'Scheme Info' },
+        { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full scheme name', group: 'Scheme Info' },
+        { field: 'folio_no', label: 'Folio Number', type: 'text', required: false, description: 'Fund folio number', group: 'Scheme Info' },
+        { field: 'fund_name', label: 'Fund Name', type: 'text', required: false, description: 'AMC/Fund house name', group: 'Scheme Info' },
+        
+        // Scheme Classification
+        { field: 'category', label: 'Category', type: 'text', required: false, description: 'Equity, Debt, Hybrid, etc.', group: 'Classification' },
+        { field: 'sub_category', label: 'Sub Category', type: 'text', required: false, description: 'Large Cap, Small Cap, etc.', group: 'Classification' },
+        
+        // Transaction Charges
+        { field: 'stamp_duty', label: 'Stamp Duty', type: 'number', required: false, description: 'Stamp duty charges', group: 'Charges' },
+        { field: 'stt', label: 'STT', type: 'number', required: false, description: 'Securities Transaction Tax', group: 'Charges' },
+        { field: 'tds', label: 'TDS', type: 'number', required: false, description: 'Tax Deducted at Source', group: 'Charges' },
+        
+        // Distributor Information
+        { field: 'euin', label: 'EUIN', type: 'text', required: false, description: 'Employee Unique Identification Number', group: 'Distributor' },
+        { field: 'arn_no', label: 'ARN Number', type: 'text', required: false, description: 'AMFI Registration Number', group: 'Distributor' },
+        
+        // Transaction Details
+        { field: 'txn_description', label: 'Transaction Description', type: 'text', required: false, description: 'Description of transaction', group: 'Details' },
+        { field: 'txn_source', label: 'Transaction Source', type: 'text', required: false, description: 'BSE, NSE, Direct, etc.', group: 'Details' },
+        { field: 'sip_regd_date', label: 'SIP Registration Date', type: 'date', required: false, description: 'For SIP transactions', group: 'Details' },
+        { field: 'remarks', label: 'Remarks', type: 'text', required: false, description: 'Additional remarks', group: 'Details' },
+        
+        // Switch Transaction Fields
+        { field: 'source_scheme_name', label: 'Source Scheme Name', type: 'text', required: false, description: 'For switch transactions', group: 'Switch Info' },
+        { field: 'target_scheme_name', label: 'Target Scheme Name', type: 'text', required: false, description: 'For switch transactions', group: 'Switch Info' },
+        
+        // Additional Codes
+        { field: 'equity_code', label: 'Equity Code', type: 'text', required: false, description: 'Equity identification code', group: 'Additional Codes' },
+        { field: 'app_code', label: 'Application Code', type: 'text', required: false, description: 'Application reference code', group: 'Additional Codes' },
+        { field: 'sb_code', label: 'Sub Broker Code', type: 'text', required: false, description: 'Sub broker code', group: 'Additional Codes' },
+        
+        // Reference Fields (not stored in transaction table, used for lookup only)
+        { field: 'applicant', label: 'Applicant Name', type: 'text', required: false, description: 'Customer name (for reference)', group: 'Reference' },
+        { field: 'family_head', label: 'Family Head', type: 'text', required: false, description: 'Family head name (for reference)', group: 'Reference' },
+        { field: 'pan', label: 'PAN', type: 'text', required: false, description: 'Customer PAN (for reference)', group: 'Reference' }
+      ];
+    }
+    
+    // Default fallback (should not reach here)
+    return [];
   };
 
   // Suggest target field based on source header (with duplicate prevention)
@@ -190,10 +235,10 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       
       // Scheme patterns
       { patterns: ['amc', 'amc_name', 'fund_house'], field: 'amc_name' },
-      { patterns: ['code', 'scheme_code', 'fund_code'], field: 'scheme_code' },
-      { patterns: ['scheme_name', 'fund_name'], field: 'scheme_name' },
+      { patterns: ['code', 'scheme_code', 'fund_code', 'schemecode'], field: 'scheme_code' },
+      { patterns: ['scheme_name', 'fund_name', 'scheme name'], field: 'scheme_name' },
       { patterns: ['scheme_type', 'fund_type', 'type'], field: 'scheme_type' },
-      { patterns: ['category', 'scheme_category', 'fund_category'], field: 'scheme_category' },
+      { patterns: ['category', 'scheme_category', 'fund_category'], field: 'category' },
       { patterns: ['nav', 'nav_name', 'scheme_nav'], field: 'scheme_nav_name' },
       { patterns: ['minimum', 'min_amount', 'minimum_amount'], field: 'scheme_minimum_amount' },
       { patterns: ['launch', 'launch_date', 'inception'], field: 'launch_date' },
@@ -203,9 +248,31 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       { patterns: ['isin_reinvest', 'isin_div_reinvestment', 'dividend_reinvest'], field: 'isin_div_reinvestment' },
       
       // Transaction patterns
-      { patterns: ['transaction_id', 'txn_id', 'trans_id'], field: 'transaction_id' },
-      { patterns: ['amount', 'value', 'sum', 'total'], field: 'amount' },
-      { patterns: ['date', 'transaction_date', 'txn_date'], field: 'date' }
+      { patterns: ['iwell', 'iwell_code', 'iwellcode'], field: 'iwell_code' },
+      { patterns: ['transaction date', 'txn_date', 'txndate', 'trans_date', 'date'], field: 'txn_date' },
+      { patterns: ['txntype', 'txn_type', 'transaction_type', 'trans_type', 'type'], field: 'txn_code' },
+      { patterns: ['total amount', 'total_amount', 'amount', 'totalamount'], field: 'total_amount' },
+      { patterns: ['units', 'unit', 'no_of_units'], field: 'units' },
+      { patterns: ['nav', 'net_asset_value'], field: 'nav' },
+      { patterns: ['folio', 'folio_no', 'folio no', 'foliono'], field: 'folio_no' },
+      { patterns: ['fund name', 'fund_name', 'fundname', 'amc'], field: 'fund_name' },
+      { patterns: ['sub-category', 'sub_category', 'subcategory'], field: 'sub_category' },
+      { patterns: ['stamp duty', 'stamp_duty', 'stampduty'], field: 'stamp_duty' },
+      { patterns: ['stt'], field: 'stt' },
+      { patterns: ['tds'], field: 'tds' },
+      { patterns: ['euin'], field: 'euin' },
+      { patterns: ['arn', 'arn_no', 'arn no', 'arnno'], field: 'arn_no' },
+      { patterns: ['txn description', 'txn_description', 'description'], field: 'txn_description' },
+      { patterns: ['txn source', 'txn_source', 'source'], field: 'txn_source' },
+      { patterns: ['sip regd', 'sip_regd_date', 'sip_date'], field: 'sip_regd_date' },
+      { patterns: ['remarks', 'remark', 'comments'], field: 'remarks' },
+      { patterns: ['source scheme', 'source_scheme_name'], field: 'source_scheme_name' },
+      { patterns: ['target scheme', 'target_scheme_name'], field: 'target_scheme_name' },
+      { patterns: ['equity code', 'equity_code'], field: 'equity_code' },
+      { patterns: ['app code', 'app_code', 'application_code'], field: 'app_code' },
+      { patterns: ['sb code', 'sb_code', 'subbroker'], field: 'sb_code' },
+      { patterns: ['applicant'], field: 'applicant' },
+      { patterns: ['family head', 'family_head'], field: 'family_head' }
     ];
     
     for (const match of fuzzyMatches) {
@@ -225,7 +292,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
     const headerLower = sourceHeader.toLowerCase();
     
     // Text fields that should be uppercase
-    if (['pan', 'iwell_code', 'scheme_code', 'isin_div_payout', 'isin_growth', 'isin_div_reinvestment'].includes(targetField.field)) {
+    if (['pan', 'iwell_code', 'scheme_code', 'isin_div_payout', 'isin_growth', 'isin_div_reinvestment', 'txn_code', 'euin', 'arn_no'].includes(targetField.field)) {
       return TRANSFORMATION_RULES.UPPERCASE;
     }
     

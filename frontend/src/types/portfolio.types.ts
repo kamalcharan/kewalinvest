@@ -1,150 +1,237 @@
-// src/types/portfolio.types.ts
+// frontend/src/types/portfolio.types.ts
+// Backend API Types - All types match actual database/API responses
 
-export interface PortfolioSummary {
-  totalValue: number;
-  totalInvested: number;
-  dayChange: {
-    amount: number;
-    percentage: number;
-  };
-  overallReturns: {
-    amount: number;
-    percentage: number;
-    xirr: number;
-  };
+// ============================================================================
+// CORE PORTFOLIO TYPES
+// ============================================================================
+
+export interface CustomerPortfolioRecord {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  is_active: boolean;
+  customer_id: number;
+  scheme_code: string;
+  scheme_name: string;
+  folio_no?: string;
+  category?: string;
+  sub_category?: string;
+  fund_name?: string;
+  start_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PortfolioTotals {
+  portfolio_id: number;
+  tenant_id: number;
+  is_live: boolean;
+  customer_id: number;
+  scheme_code: string;
+  scheme_name: string;
+  fund_name?: string;
+  category?: string;
+  sub_category?: string;
+  folio_no?: string;
+  total_units: number;
+  total_invested: number;
+  latest_nav: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  transaction_count: number;
+  last_transaction_date?: string;
+  last_refreshed_at: string;
+}
+
+export interface CustomerPortfolioSummary {
+  customer_id: number;
+  customer_name?: string;
+  total_invested: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  total_schemes: number;
+  day_change?: number;
+  day_change_percentage?: number;
+}
+
+export interface PortfolioHolding {
+  portfolio_id: number;
+  scheme_code: string;
+  scheme_name: string;
+  fund_name?: string;
+  category?: string;
+  sub_category?: string;
+  folio_no?: string;
+  total_units: number;
+  total_invested: number;
+  latest_nav: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  allocation_percentage: number;
+  transaction_count: number;
+  last_transaction_date?: string;
 }
 
 export interface AssetAllocation {
-  equity: {
-    value: number;
-    percentage: number;
-  };
-  debt: {
-    value: number;
-    percentage: number;
-  };
-  hybrid: {
-    value: number;
-    percentage: number;
-  };
-  liquid: {
-    value: number;
-    percentage: number;
-  };
-}
-
-export interface FundHolding {
-  fundName: string;
-  value: number;
+  category: string;
+  total_invested: number;
+  current_value: number;
+  percentage: number;
+  scheme_count: number;
   returns: number;
-  allocation: number;
-  units?: number;
-  nav?: number;
-  purchaseNav?: number;
+  return_percentage: number;
 }
 
-export interface Transaction {
-  id?: string;
+export interface PortfolioPerformanceMetric {
   date: string;
-  type: 'BUY' | 'SELL' | 'SIP' | 'SWP' | 'SWITCH';
-  amount: number;
-  fundName: string;
-  units?: number;
-  nav?: number;
-  status?: 'completed' | 'pending' | 'failed';
+  invested: number;
+  current_value: number;
+  returns: number;
+  return_percentage: number;
 }
 
-export type RiskProfile = 'Conservative' | 'Moderate' | 'Aggressive';
-
-export interface PortfolioData {
-  customerId: number;
-  summary: PortfolioSummary;
-  allocation: AssetAllocation;
-  riskProfile: RiskProfile;
-  riskScore: number; // 1-10 scale
-  topHoldings: FundHolding[];
-  performanceHistory: number[]; // Monthly values for sparkline
-  lastTransaction: Transaction;
-  monthlyPerformance?: Array<{
-    month: string;
-    value: number;
-    returns: number;
-  }>;
-  recentTransactions?: Transaction[];
-  sipDetails?: Array<{
-    fundName: string;
-    amount: number;
-    date: number;
-    active: boolean;
-    startDate: string;
-    totalInvested: number;
-  }>;
-  metadata?: {
-    lastUpdated?: string;
-    dataSource?: string;
-    currency?: string;
-  };
+export interface CustomerPortfolioResponse {
+  customer_id: number;
+  customer_name?: string;
+  summary: CustomerPortfolioSummary;
+  holdings: PortfolioHolding[];
+  allocation: AssetAllocation[];
+  performance?: PortfolioPerformanceMetric[];
 }
 
-export interface PortfolioMetrics {
-  sharpeRatio?: number;
-  beta?: number;
-  alpha?: number;
-  standardDeviation?: number;
-  maxDrawdown?: number;
-  volatility?: number;
-}
+// ============================================================================
+// FILTERS & REQUESTS
+// ============================================================================
 
-export interface PortfolioComparison {
-  benchmark: string;
-  benchmarkReturns: number;
-  excessReturns: number;
-  trackingError?: number;
-  informationRatio?: number;
-}
-
-// Enhanced portfolio with customer data integration
-export interface CustomerPortfolio extends PortfolioData {
-  customerName: string;
-  customerPrefix: string;
-  isActive: boolean;
-  lastReviewDate?: string;
-  nextReviewDate?: string;
-}
-
-// Portfolio filters for dashboard
 export interface PortfolioFilters {
-  minValue?: number;
-  maxValue?: number;
-  riskProfile?: RiskProfile[];
-  returnsRange?: {
-    min: number;
-    max: number;
-  };
-  hasNegativeReturns?: boolean;
-  sortBy?: 'value' | 'returns' | 'risk' | 'name';
-  sortOrder?: 'asc' | 'desc';
+  customer_id?: number;
+  scheme_code?: string;
+  category?: string;
+  sub_category?: string;
+  min_value?: number;
+  max_value?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
-// Portfolio analytics for aggregated views
-export interface PortfolioAnalytics {
-  totalAUM: number;
-  totalCustomers: number;
-  averagePortfolioValue: number;
-  averageReturns: number;
-  riskDistribution: {
-    conservative: number;
-    moderate: number;
-    aggressive: number;
-  };
-  topPerformers: Array<{
-    customerId: number;
-    customerName: string;
-    returns: number;
+export interface RefreshPortfolioRequest {
+  customer_id?: number;
+  scheme_code?: string;
+  force?: boolean;
+}
+
+export interface RefreshPortfolioResponse {
+  success: boolean;
+  refreshed_at: string;
+  affected_records: number;
+  duration_ms: number;
+}
+
+// ============================================================================
+// STATISTICS & ANALYTICS
+// ============================================================================
+
+export interface PortfolioStatistics {
+  total_customers_with_portfolio: number;
+  total_schemes_held: number;
+  total_invested: number;
+  total_current_value: number;
+  total_returns: number;
+  average_return_percentage: number;
+  top_performing_schemes: Array<{
+    scheme_code: string;
+    scheme_name: string;
+    return_percentage: number;
+    customer_count: number;
   }>;
-  needsAttention: Array<{
-    customerId: number;
-    customerName: string;
-    reason: string;
+  category_breakdown: AssetAllocation[];
+}
+
+// ============================================================================
+// TRANSACTIONS
+// ============================================================================
+
+export interface PortfolioTransaction {
+  id: number;
+  txn_date: string;
+  txn_type_code: string;
+  txn_type_name: string;
+  txn_type: 'Addition' | 'Deduction';
+  total_amount: number;
+  units: number;
+  nav: number;
+  is_potential_duplicate: boolean;
+  portfolio_flag: boolean;
+}
+
+export interface SchemePortfolioDetails extends PortfolioHolding {
+  recent_transactions: PortfolioTransaction[];
+  first_purchase_date?: string;
+  last_purchase_date?: string;
+  last_redemption_date?: string;
+  average_purchase_nav: number;
+  total_purchases: number;
+  total_redemptions: number;
+  purchase_amount: number;
+  redemption_amount: number;
+}
+
+// ============================================================================
+// XIRR CALCULATION
+// ============================================================================
+
+export interface PortfolioXIRR {
+  customer_id: number;
+  scheme_code?: string;
+  xirr_percentage: number;
+  calculation_date: string;
+  cash_flows: Array<{
+    date: string;
+    amount: number;
+    type: 'Addition' | 'Deduction';
   }>;
+}
+
+// ============================================================================
+// API RESPONSE WRAPPERS
+// ============================================================================
+
+export interface CustomerPortfolioApiResponse {
+  success: boolean;
+  data?: CustomerPortfolioResponse;
+  error?: string;
+}
+
+export interface PortfolioTotalsApiResponse {
+  success: boolean;
+  data?: CustomerPortfolioSummary;
+  error?: string;
+}
+
+export interface PortfolioHoldingsApiResponse {
+  success: boolean;
+  data?: PortfolioHolding[];
+  error?: string;
+}
+
+export interface SchemePortfolioDetailsApiResponse {
+  success: boolean;
+  data?: SchemePortfolioDetails;
+  error?: string;
+}
+
+export interface PortfolioStatisticsApiResponse {
+  success: boolean;
+  data?: PortfolioStatistics;
+  error?: string;
+}
+
+export interface RefreshPortfolioApiResponse {
+  success: boolean;
+  data?: RefreshPortfolioResponse;
+  error?: string;
+  message?: string;
 }

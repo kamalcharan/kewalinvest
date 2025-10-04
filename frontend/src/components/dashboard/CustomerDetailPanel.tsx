@@ -1,17 +1,16 @@
 // src/components/dashboard/CustomerDetailPanel.tsx
+// Updated to use real backend API types
 
 import React, { useState } from 'react';
 import { CustomerWithContact } from '../../types/customer.types';
-import { PortfolioData } from '../../types/portfolio.types';
+import { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import { JTBDData } from '../../types/jtbd.types';
 import { useTheme } from '../../contexts/ThemeContext';
-import PortfolioSummaryWidget from '../portfolio/PortfolioSummaryWidget';
-import JTBDActionCard from '../jtbd/JTBDActionCard';
 import PortfolioDonutChart from '../visualizations/PortfolioDonutChart';
 
 interface CustomerDetailPanelProps {
   customer: CustomerWithContact;
-  portfolio: PortfolioData;
+  portfolio: CustomerPortfolioResponse;
   jtbd: JTBDData;
   onClose: () => void;
   onEdit?: () => void;
@@ -133,6 +132,7 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
               fontSize: '20px',
               fontWeight: '600',
               color: colors.utility.primaryText,
+              margin: 0,
               marginBottom: '8px'
             }}>
               {customer.prefix} {customer.name}
@@ -232,7 +232,7 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
               fontWeight: '600',
               color: colors.utility.primaryText
             }}>
-              {formatCurrency(portfolio.summary.totalValue)}
+              {formatCurrency(portfolio.summary.current_value)}
             </div>
             <div style={{
               fontSize: '10px',
@@ -251,9 +251,9 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
             <div style={{
               fontSize: '16px',
               fontWeight: '600',
-              color: getValueColor(portfolio.summary.overallReturns.percentage)
+              color: getValueColor(portfolio.summary.return_percentage)
             }}>
-              {formatPercentage(portfolio.summary.overallReturns.percentage)}
+              {formatPercentage(portfolio.summary.return_percentage)}
             </div>
             <div style={{
               fontSize: '10px',
@@ -324,12 +324,58 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
       }}>
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Portfolio Summary */}
-            <PortfolioSummaryWidget
-              portfolio={portfolio}
-              compact={false}
-              showSparkline={true}
-            />
+            {/* Summary Card */}
+            <div style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '12px',
+              padding: '16px'
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: 0,
+                marginBottom: '12px'
+              }}>
+                Portfolio Summary
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Total Invested</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                    {formatCurrency(portfolio.summary.total_invested)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Current Value</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                    {formatCurrency(portfolio.summary.current_value)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Total Returns</span>
+                  <span style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: getValueColor(portfolio.summary.total_returns) 
+                  }}>
+                    {formatCurrency(portfolio.summary.total_returns)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Total Schemes</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                    {portfolio.summary.total_schemes}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* Goal Progress */}
             <div style={{
@@ -341,9 +387,10 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
                 fontSize: '14px',
                 fontWeight: '600',
                 color: colors.utility.primaryText,
-                marginBottom: '12px',
                 textTransform: 'uppercase',
-                letterSpacing: '0.5px'
+                letterSpacing: '0.5px',
+                margin: 0,
+                marginBottom: '12px'
               }}>
                 Primary Goal
               </h3>
@@ -432,142 +479,159 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
         {activeTab === 'portfolio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Asset Allocation */}
-            <div style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '12px',
-              padding: '16px'
-            }}>
-              <h3 style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '16px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Asset Allocation
-              </h3>
-              <PortfolioDonutChart
-                allocation={portfolio.allocation}
-                size={180}
-                strokeWidth={28}
-                showLegend={true}
-              />
-            </div>
-
-            {/* Top Holdings */}
-            <div style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '12px',
-              padding: '16px'
-            }}>
-              <h3 style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Top Holdings
-              </h3>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {portfolio.topHoldings.map((holding, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px',
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '6px'
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: colors.utility.primaryText,
-                        marginBottom: '2px'
-                      }}>
-                        {holding.fundName}
-                      </div>
-                      <div style={{
-                        fontSize: '11px',
-                        color: colors.utility.secondaryText
-                      }}>
-                        {holding.allocation}% • {formatCurrency(holding.value)}
-                      </div>
-                    </div>
-                    <div style={{
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: getValueColor(holding.returns)
-                    }}>
-                      {formatPercentage(holding.returns)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Last Transaction */}
-            <div style={{
-              padding: '12px',
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '8px'
-            }}>
+            {portfolio.allocation && portfolio.allocation.length > 0 && (
               <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText,
-                marginBottom: '4px'
+                backgroundColor: colors.utility.primaryBackground,
+                borderRadius: '12px',
+                padding: '16px'
               }}>
-                Last Transaction
-              </div>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <div>
-                  <div style={{
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText
-                  }}>
-                    {portfolio.lastTransaction.type} - {portfolio.lastTransaction.fundName}
-                  </div>
-                  <div style={{
-                    fontSize: '11px',
-                    color: colors.utility.secondaryText
-                  }}>
-                    {new Date(portfolio.lastTransaction.date).toLocaleDateString('en-IN')}
-                  </div>
-                </div>
-                <div style={{
+                <h3 style={{
                   fontSize: '14px',
                   fontWeight: '600',
-                  color: colors.utility.primaryText
+                  color: colors.utility.primaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  margin: 0,
+                  marginBottom: '16px'
                 }}>
-                  {formatCurrency(portfolio.lastTransaction.amount)}
+                  Asset Allocation
+                </h3>
+                <PortfolioDonutChart
+                  allocation={portfolio.allocation}
+                  size={180}
+                  strokeWidth={28}
+                  showLegend={true}
+                />
+              </div>
+            )}
+
+            {/* Top Holdings */}
+            {portfolio.holdings && portfolio.holdings.length > 0 && (
+              <div style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderRadius: '12px',
+                padding: '16px'
+              }}>
+                <h3 style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  margin: 0,
+                  marginBottom: '12px'
+                }}>
+                  Top Holdings
+                </h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {portfolio.holdings.slice(0, 5).map((holding, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderRadius: '6px'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: '13px',
+                          fontWeight: '500',
+                          color: colors.utility.primaryText,
+                          marginBottom: '2px'
+                        }}>
+                          {holding.fund_name || holding.scheme_name}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          {holding.allocation_percentage.toFixed(1)}% • {formatCurrency(holding.current_value)}
+                        </div>
+                      </div>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        color: getValueColor(holding.return_percentage)
+                      }}>
+                        {formatPercentage(holding.return_percentage)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
         {activeTab === 'actions' && (
           <div>
-            <JTBDActionCard
-              actions={jtbd.actions}
-              primaryGoal={jtbd.primaryGoal}
-              riskAssessment={jtbd.riskAssessment}
-              compact={false}
-              maxActions={10}
-              onActionClick={onActionClick}
-            />
+            {/* Actions List */}
+            <div style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '12px',
+              padding: '16px'
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: 0,
+                marginBottom: '12px'
+              }}>
+                Recommended Actions
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {jtbd.actions.slice(0, 10).map((action, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '8px',
+                      borderLeft: `3px solid ${
+                        action.priority === 'critical' ? '#DC2626' :
+                        action.priority === 'high' ? '#F97316' :
+                        action.priority === 'medium' ? '#F59E0B' : '#10B981'
+                      }`,
+                      cursor: onActionClick ? 'pointer' : 'default'
+                    }}
+                    onClick={() => onActionClick?.(action)}
+                  >
+                    <div style={{
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: colors.utility.primaryText,
+                      marginBottom: '4px'
+                    }}>
+                      {action.title}
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.utility.secondaryText,
+                      marginBottom: '6px'
+                    }}>
+                      {action.description}
+                    </div>
+                    <div style={{
+                      fontSize: '10px',
+                      color: colors.utility.secondaryText,
+                      textTransform: 'uppercase',
+                      fontWeight: '600'
+                    }}>
+                      Priority: {action.priority}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             
             {/* Insights */}
             {jtbd.insights.length > 0 && (
@@ -581,12 +645,13 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
                   fontSize: '14px',
                   fontWeight: '600',
                   color: colors.utility.primaryText,
-                  marginBottom: '12px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '6px',
+                  margin: 0,
+                  marginBottom: '12px'
                 }}>
                   <InfoIcon />
                   Insights
