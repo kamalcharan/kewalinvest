@@ -22,6 +22,8 @@ export class ContactController {
       const {
         search,
         prefix,
+        channel_type,
+        has_customer,
         is_active,
         page = 1,
         page_size = 20,
@@ -37,7 +39,16 @@ export class ContactController {
       let paramIndex = 3;
 
       if (search && typeof search === 'string' && search.trim()) {
-        whereConditions.push(`LOWER(c.name) LIKE LOWER($${paramIndex})`);
+        whereConditions.push(`(
+          LOWER(c.name) LIKE LOWER($${paramIndex}) OR 
+          EXISTS (
+            SELECT 1 FROM t_contact_channels ch 
+            WHERE ch.contact_id = c.id 
+            AND ch.is_live = $2 
+            AND ch.is_active = true
+            AND LOWER(ch.channel_value) LIKE LOWER($${paramIndex})
+          )
+        )`);
         queryParams.push(`%${search.trim()}%`);
         paramIndex++;
       }
@@ -46,6 +57,34 @@ export class ContactController {
         whereConditions.push(`c.prefix = $${paramIndex}`);
         queryParams.push(prefix);
         paramIndex++;
+      }
+
+      if (channel_type && typeof channel_type === 'string') {
+        whereConditions.push(`EXISTS (
+          SELECT 1 FROM t_contact_channels ch 
+          WHERE ch.contact_id = c.id 
+          AND ch.is_live = $2 
+          AND ch.is_active = true
+          AND ch.channel_type = $${paramIndex}
+        )`);
+        queryParams.push(channel_type);
+        paramIndex++;
+      }
+
+      if (has_customer === 'true') {
+        whereConditions.push(`EXISTS (
+          SELECT 1 FROM t_customers cust 
+          WHERE cust.contact_id = c.id 
+          AND cust.is_live = $2 
+          AND cust.is_active = true
+        )`);
+      } else if (has_customer === 'false') {
+        whereConditions.push(`NOT EXISTS (
+          SELECT 1 FROM t_customers cust 
+          WHERE cust.contact_id = c.id 
+          AND cust.is_live = $2 
+          AND cust.is_active = true
+        )`);
       }
 
       if (is_active === 'true' || is_active === 'false') {
@@ -64,7 +103,19 @@ export class ContactController {
         SELECT 
           c.*,
           COUNT(*) OVER() as total_count,
-          COALESCE(c.is_customer, false) as is_customer,
+          EXISTS (
+            SELECT 1 FROM t_customers cust 
+            WHERE cust.contact_id = c.id 
+            AND cust.is_live = $2 
+            AND cust.is_active = true
+          ) as is_customer,
+          (
+            SELECT cust.id FROM t_customers cust 
+            WHERE cust.contact_id = c.id 
+            AND cust.is_live = $2 
+            AND cust.is_active = true
+            LIMIT 1
+          ) as customer_id,
           (
             SELECT COUNT(*) FROM t_contact_channels ch 
             WHERE ch.contact_id = c.id 
@@ -81,7 +132,6 @@ export class ContactController {
       const result = await pool.query(contactsQuery, queryParams);
       const contacts = result.rows;
 
-      // Fetch channels for all contacts
       if (contacts.length > 0) {
         const contactIds = contacts.map((c: any) => c.id);
         const channelsQuery = `
@@ -92,7 +142,6 @@ export class ContactController {
         const channelsResult = await pool.query(channelsQuery, [contactIds, isLive]);
         const channels = channelsResult.rows;
 
-        // Group channels by contact
         const channelsByContact = new Map();
         channels.forEach((channel: any) => {
           if (!channelsByContact.has(channel.contact_id)) {
@@ -101,7 +150,6 @@ export class ContactController {
           channelsByContact.get(channel.contact_id).push(channel);
         });
 
-        // Attach channels to contacts
         contacts.forEach((contact: any) => {
           contact.channels = channelsByContact.get(contact.id) || [];
         });
@@ -147,7 +195,12 @@ export class ContactController {
           COUNT(*) as total,
           COUNT(*) FILTER (WHERE is_active = true) as active,
           COUNT(*) FILTER (WHERE is_active = false) as inactive,
-          COUNT(*) FILTER (WHERE is_customer = true) as customers,
+          COUNT(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM t_customers cust 
+            WHERE cust.contact_id = c.id 
+            AND cust.is_live = $2 
+            AND cust.is_active = true
+          )) as customers,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as recent
         FROM t_contacts c
         WHERE c.tenant_id = $1 AND c.is_live = $2
@@ -190,7 +243,6 @@ export class ContactController {
       const isLive = environment === 'live';
       const { prefix, name, channels, is_customer = false } = req.body;
 
-      // Validate input
       if (!name || !prefix) {
         res.status(400).json({
           success: false,
@@ -207,7 +259,6 @@ export class ContactController {
         return;
       }
 
-      // Insert contact
       const contactQuery = `
         INSERT INTO t_contacts (tenant_id, is_live, prefix, name, is_customer, created_by)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -225,7 +276,6 @@ export class ContactController {
 
       const contact = contactResult.rows[0];
 
-      // Insert channels
       const insertedChannels = [];
       for (const channelData of channels) {
         const isPrimary = channelData.is_primary || false;
@@ -252,7 +302,6 @@ export class ContactController {
 
       await client.query('COMMIT');
 
-      // Return contact with channels
       contact.channels = insertedChannels;
       contact.channel_count = insertedChannels.length;
 
@@ -295,7 +344,19 @@ export class ContactController {
 
       const query = `
         SELECT c.*, 
-          COALESCE(c.is_customer, false) as is_customer,
+          EXISTS (
+            SELECT 1 FROM t_customers cust 
+            WHERE cust.contact_id = c.id 
+            AND cust.is_live = $2 
+            AND cust.is_active = true
+          ) as is_customer,
+          (
+            SELECT cust.id FROM t_customers cust 
+            WHERE cust.contact_id = c.id 
+            AND cust.is_live = $2 
+            AND cust.is_active = true
+            LIMIT 1
+          ) as customer_id,
           (
             SELECT COUNT(*) FROM t_contact_channels ch 
             WHERE ch.contact_id = c.id 
@@ -318,7 +379,6 @@ export class ContactController {
 
       const contact = result.rows[0];
 
-      // Fetch channels
       const channelsQuery = `
         SELECT * FROM t_contact_channels 
         WHERE contact_id = $1 AND is_live = $2 AND is_active = true
@@ -364,7 +424,6 @@ export class ContactController {
         return;
       }
 
-      // Update contact basic info
       const updateFields: string[] = [];
       const queryParams: any[] = [user!.tenant_id, isLive, contactId];
       let paramIndex = 4;
@@ -415,20 +474,26 @@ export class ContactController {
 
       const contact = result.rows[0];
 
-      // Handle channel updates if provided
+      // CASCADE: If is_active changed, update linked customer
+      if (is_active !== undefined) {
+        await client.query(
+          `UPDATE t_customers
+           SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE contact_id = $2 AND tenant_id = $3 AND is_live = $4`,
+          [is_active, contactId, user!.tenant_id, isLive]
+        );
+      }
+
       if (channels && Array.isArray(channels)) {
-        // Get existing channels
         const existingChannelsResult = await client.query(
           'SELECT id FROM t_contact_channels WHERE contact_id = $1 AND is_live = $2 AND is_active = true',
           [contactId, isLive]
         );
         const existingChannelIds = existingChannelsResult.rows.map((row: any) => row.id);
 
-        // Process each channel
         const updatedChannels = [];
         for (const channelData of channels) {
           if (channelData.id && existingChannelIds.includes(channelData.id)) {
-            // Update existing channel
             const updateChannelQuery = `
               UPDATE t_contact_channels 
               SET channel_type = $1, channel_value = $2, channel_subtype = $3, is_primary = $4
@@ -448,7 +513,6 @@ export class ContactController {
               updatedChannels.push(updateResult.rows[0]);
             }
           } else if (!channelData.id) {
-            // Insert new channel
             const insertChannelQuery = `
               INSERT INTO t_contact_channels 
               (contact_id, tenant_id, is_live, channel_type, channel_value, channel_subtype, is_primary)
@@ -470,7 +534,6 @@ export class ContactController {
 
         contact.channels = updatedChannels;
       } else {
-        // Fetch existing channels if not updating
         const channelsResult = await client.query(
           'SELECT * FROM t_contact_channels WHERE contact_id = $1 AND is_live = $2 AND is_active = true ORDER BY is_primary DESC, created_at',
           [contactId, isLive]
@@ -505,8 +568,13 @@ export class ContactController {
     }
   };
 
+  // ISSUE 4 FIX: Deactivate contact AND cascade to customer
   deleteContact = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    
     try {
+      await client.query('BEGIN');
+      
       const { user, environment } = req;
       const isLive = environment === 'live';
       const contactId = parseInt(req.params.id);
@@ -519,15 +587,16 @@ export class ContactController {
         return;
       }
 
-      const query = `
+      // Deactivate the contact
+      const contactQuery = `
         UPDATE t_contacts 
         SET is_active = false, updated_at = CURRENT_TIMESTAMP
         WHERE tenant_id = $1 AND is_live = $2 AND id = $3
       `;
+      const contactResult = await client.query(contactQuery, [user!.tenant_id, isLive, contactId]);
 
-      const result = await pool.query(query, [user!.tenant_id, isLive, contactId]);
-
-      if (result.rowCount === 0) {
+      if (contactResult.rowCount === 0) {
+        await client.query('ROLLBACK');
         res.status(404).json({
           success: false,
           error: 'Contact not found'
@@ -535,11 +604,22 @@ export class ContactController {
         return;
       }
 
+      // CASCADE: Also deactivate linked customer
+      const customerQuery = `
+        UPDATE t_customers
+        SET is_active = false, updated_at = CURRENT_TIMESTAMP
+        WHERE contact_id = $1 AND tenant_id = $2 AND is_live = $3
+      `;
+      await client.query(customerQuery, [contactId, user!.tenant_id, isLive]);
+
+      await client.query('COMMIT');
+
       res.json({
         success: true,
-        message: 'Contact deleted successfully'
+        message: 'Contact deactivated successfully'
       });
     } catch (error: any) {
+      await client.query('ROLLBACK');
       console.error('Error deleting contact:', error);
       SimpleLogger.error('ContactController', 'Failed to delete contact', 'deleteContact', { 
         contactId: req.params.id, 
@@ -550,10 +630,78 @@ export class ContactController {
         success: false,
         error: error.message || 'Failed to delete contact'
       });
+    } finally {
+      client.release();
     }
   };
 
-  // Channel-specific operations
+  // ISSUE 1 FIX: New endpoint to activate contact
+  activateContact = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const contactId = parseInt(req.params.id);
+
+      if (isNaN(contactId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid contact ID'
+        });
+        return;
+      }
+
+      // Activate the contact
+      const contactQuery = `
+        UPDATE t_contacts 
+        SET is_active = true, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = $1 AND is_live = $2 AND id = $3
+      `;
+      const contactResult = await client.query(contactQuery, [user!.tenant_id, isLive, contactId]);
+
+      if (contactResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: 'Contact not found'
+        });
+        return;
+      }
+
+      // CASCADE: Also activate linked customer
+      const customerQuery = `
+        UPDATE t_customers
+        SET is_active = true, updated_at = CURRENT_TIMESTAMP
+        WHERE contact_id = $1 AND tenant_id = $2 AND is_live = $3
+      `;
+      await client.query(customerQuery, [contactId, user!.tenant_id, isLive]);
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: 'Contact activated successfully'
+      });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('Error activating contact:', error);
+      SimpleLogger.error('ContactController', 'Failed to activate contact', 'activateContact', { 
+        contactId: req.params.id, 
+        tenantId: req.user?.tenant_id, 
+        error: error.message 
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to activate contact'
+      });
+    } finally {
+      client.release();
+    }
+  };
+
   addChannel = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const client = await pool.connect();
     
@@ -573,7 +721,6 @@ export class ContactController {
         return;
       }
 
-      // Verify contact exists
       const contactCheck = await client.query(
         'SELECT id FROM t_contacts WHERE id = $1 AND tenant_id = $2 AND is_live = $3 AND is_active = true',
         [contactId, user!.tenant_id, isLive]
@@ -588,7 +735,6 @@ export class ContactController {
         return;
       }
 
-      // Insert channel
       const channelQuery = `
         INSERT INTO t_contact_channels 
         (contact_id, tenant_id, is_live, channel_type, channel_value, channel_subtype, is_primary)
@@ -748,7 +894,6 @@ export class ContactController {
     }
   };
 
-  // Simple placeholder methods - keep as is
   searchContacts = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
     res.json({ success: true, data: [], message: 'Search not implemented yet' });
   };
@@ -765,9 +910,6 @@ export class ContactController {
     res.json({ success: true, data: { affected_count: 0 }, message: 'Bulk actions not implemented yet' });
   };
 
-  /**
-   * Convert contact to customer
-   */
   convertToCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;

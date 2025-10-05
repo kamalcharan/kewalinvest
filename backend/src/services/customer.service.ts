@@ -36,6 +36,7 @@ export class CustomerService {
         survival_status,
         onboarding_status,
         has_address,
+        is_active,
         page = 1,
         page_size = 20,
         sort_by = 'c.name',
@@ -44,16 +45,22 @@ export class CustomerService {
 
       const whereConditions: string[] = [
         'cust.tenant_id = $1',
-        'cust.is_live = $2',
-        'cust.is_active = true'
+        'cust.is_live = $2'
       ];
       const queryParams: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
+      // Active/Inactive filter
+      if (is_active !== undefined) {
+        whereConditions.push(`cust.is_active = $${paramIndex}`);
+        queryParams.push(is_active);
+        paramIndex++;
+      }
+
       if (search && search.trim()) {
         whereConditions.push(`(
           LOWER(c.name) LIKE LOWER($${paramIndex}) OR
-          cust.family_head_name LIKE LOWER($${paramIndex})
+          LOWER(cust.family_head_name) LIKE LOWER($${paramIndex})
         )`);
         queryParams.push(`%${search.trim()}%`);
         paramIndex++;
@@ -277,9 +284,8 @@ export class CustomerService {
 
       const customerId = customerResult.rows[0].id;
 
-      // Add address if provided - support both single address and multiple addresses
+      // Add address if provided
       if (data.address) {
-        // Handle single address (backward compatibility)
         await this.addAddressInternal(
           client,
           customerId,
@@ -501,28 +507,104 @@ export class CustomerService {
   }
 
   /**
-   * Delete customer (soft delete)
+   * Delete customer (soft delete) - cascades to contact
    */
   async deleteCustomer(
     tenantId: number,
     isLive: boolean,
     customerId: number
   ): Promise<void> {
+    const client = await this.db.connect();
+    
     try {
-      const query = `
-        UPDATE t_customers 
-        SET is_active = false, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1 AND tenant_id = $2 AND is_live = $3
-      `;
+      await client.query('BEGIN');
 
-      const result = await this.db.query(query, [customerId, tenantId, isLive]);
-      
-      if (result.rowCount === 0) {
+      // Get contact_id before deactivating
+      const customerResult = await client.query(
+        'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, tenantId, isLive]
+      );
+
+      if (customerResult.rows.length === 0) {
         throw new Error('Customer not found');
       }
+
+      const contactId = customerResult.rows[0].contact_id;
+
+      // Deactivate customer
+      await client.query(
+        `UPDATE t_customers 
+         SET is_active = false, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [customerId, tenantId, isLive]
+      );
+
+      // Cascade: Deactivate associated contact
+      await client.query(
+        `UPDATE t_contacts 
+         SET is_active = false, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [contactId, tenantId, isLive]
+      );
+
+      await client.query('COMMIT');
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('Error deleting customer:', error);
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Activate customer - cascades to contact
+   */
+  async activateCustomer(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<void> {
+    const client = await this.db.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Get contact_id before activating
+      const customerResult = await client.query(
+        'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, tenantId, isLive]
+      );
+
+      if (customerResult.rows.length === 0) {
+        throw new Error('Customer not found');
+      }
+
+      const contactId = customerResult.rows[0].contact_id;
+
+      // Activate customer
+      await client.query(
+        `UPDATE t_customers 
+         SET is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [customerId, tenantId, isLive]
+      );
+
+      // Cascade: Activate associated contact
+      await client.query(
+        `UPDATE t_contacts 
+         SET is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [contactId, tenantId, isLive]
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error activating customer:', error);
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -609,85 +691,85 @@ export class CustomerService {
   // ==================== PRIVATE HELPERS ====================
 
   private async processCustomerRows(rows: any[], isLive: boolean, maskSensitiveData: boolean = false): Promise<CustomerWithContact[]> {
-  const customerIds = rows.map(r => r.id);
-  
-  if (customerIds.length === 0) return [];
-
-  // Fetch addresses
-  const addressesQuery = `
-    SELECT * FROM t_customer_addresses
-    WHERE customer_id = ANY($1) AND is_live = $2 AND is_active = true
-    ORDER BY customer_id, is_primary DESC
-  `;
-  const addressesResult = await this.db.query(addressesQuery, [customerIds, isLive]);
-  
-  // Fetch channels
-  const contactIds = rows.map(r => r.contact_id);
-  const channelsQuery = `
-    SELECT * FROM t_contact_channels
-    WHERE contact_id = ANY($1) AND is_live = $2 AND is_active = true
-    ORDER BY contact_id, is_primary DESC
-  `;
-  const channelsResult = await this.db.query(channelsQuery, [contactIds, isLive]);
-
-  // Group by customer
-  const addressesByCustomer = new Map();
-  addressesResult.rows.forEach(addr => {
-    if (!addressesByCustomer.has(addr.customer_id)) {
-      addressesByCustomer.set(addr.customer_id, []);
-    }
-    addressesByCustomer.get(addr.customer_id).push(addr);
-  });
-
-  const channelsByContact = new Map();
-  channelsResult.rows.forEach(ch => {
-    if (!channelsByContact.has(ch.contact_id)) {
-      channelsByContact.set(ch.contact_id, []);
-    }
-    channelsByContact.get(ch.contact_id).push(ch);
-  });
-
-  // Process and decrypt with better error handling
-  return rows.map(row => {
-    const channels = channelsByContact.get(row.contact_id) || [];
+    const customerIds = rows.map(r => r.id);
     
-    // Safe decryption for PAN
-    let pan = null;
-    if (row.pan_encrypted) {
-      try {
-        const decryptedPan = EncryptionUtil.decrypt(row.pan_encrypted);
-        pan = maskSensitiveData ? EncryptionUtil.maskPAN(decryptedPan) : decryptedPan;
-      } catch (error) {
-        console.error(`Failed to decrypt PAN for customer ${row.id}:`, error);
-        pan = null; // Set to null if decryption fails
+    if (customerIds.length === 0) return [];
+
+    // Fetch addresses
+    const addressesQuery = `
+      SELECT * FROM t_customer_addresses
+      WHERE customer_id = ANY($1) AND is_live = $2 AND is_active = true
+      ORDER BY customer_id, is_primary DESC
+    `;
+    const addressesResult = await this.db.query(addressesQuery, [customerIds, isLive]);
+    
+    // Fetch channels
+    const contactIds = rows.map(r => r.contact_id);
+    const channelsQuery = `
+      SELECT * FROM t_contact_channels
+      WHERE contact_id = ANY($1) AND is_live = $2 AND is_active = true
+      ORDER BY contact_id, is_primary DESC
+    `;
+    const channelsResult = await this.db.query(channelsQuery, [contactIds, isLive]);
+
+    // Group by customer
+    const addressesByCustomer = new Map();
+    addressesResult.rows.forEach(addr => {
+      if (!addressesByCustomer.has(addr.customer_id)) {
+        addressesByCustomer.set(addr.customer_id, []);
       }
-    }
-    
-    // Safe decryption for iwell_code
-    let iwellCode = null;
-    if (row.iwell_code_encrypted) {
-      try {
-        iwellCode = EncryptionUtil.decrypt(row.iwell_code_encrypted);
-      } catch (error) {
-        console.error(`Failed to decrypt iwell_code for customer ${row.id}:`, error);
-        iwellCode = null; // Set to null if decryption fails
+      addressesByCustomer.get(addr.customer_id).push(addr);
+    });
+
+    const channelsByContact = new Map();
+    channelsResult.rows.forEach(ch => {
+      if (!channelsByContact.has(ch.contact_id)) {
+        channelsByContact.set(ch.contact_id, []);
       }
-    }
-    
-    return {
-      ...row,
-      date_of_birth: row.date_of_birth ? new Date(row.date_of_birth).toISOString().split('T')[0] : null,
-      anniversary_date: row.anniversary_date ? new Date(row.anniversary_date).toISOString().split('T')[0] : null,
-      pan: pan,
-      iwell_code: iwellCode,
-      addresses: addressesByCustomer.get(row.id) || [],
-      channels,
-      primary_email: channels.find((ch: any) => ch.channel_type === 'email' && ch.is_primary)?.channel_value,
-      primary_mobile: channels.find((ch: any) => ch.channel_type === 'mobile' && ch.is_primary)?.channel_value,
-      channel_count: channels.length
-    };
-  });
-}
+      channelsByContact.get(ch.contact_id).push(ch);
+    });
+
+    // Process and decrypt with better error handling
+    return rows.map(row => {
+      const channels = channelsByContact.get(row.contact_id) || [];
+      
+      // Safe decryption for PAN
+      let pan = null;
+      if (row.pan_encrypted) {
+        try {
+          const decryptedPan = EncryptionUtil.decrypt(row.pan_encrypted);
+          pan = maskSensitiveData ? EncryptionUtil.maskPAN(decryptedPan) : decryptedPan;
+        } catch (error) {
+          console.error(`Failed to decrypt PAN for customer ${row.id}:`, error);
+          pan = null;
+        }
+      }
+      
+      // Safe decryption for iwell_code
+      let iwellCode = null;
+      if (row.iwell_code_encrypted) {
+        try {
+          iwellCode = EncryptionUtil.decrypt(row.iwell_code_encrypted);
+        } catch (error) {
+          console.error(`Failed to decrypt iwell_code for customer ${row.id}:`, error);
+          iwellCode = null;
+        }
+      }
+      
+      return {
+        ...row,
+        date_of_birth: row.date_of_birth ? new Date(row.date_of_birth).toISOString().split('T')[0] : null,
+        anniversary_date: row.anniversary_date ? new Date(row.anniversary_date).toISOString().split('T')[0] : null,
+        pan: pan,
+        iwell_code: iwellCode,
+        addresses: addressesByCustomer.get(row.id) || [],
+        channels,
+        primary_email: channels.find((ch: any) => ch.channel_type === 'email' && ch.is_primary)?.channel_value,
+        primary_mobile: channels.find((ch: any) => ch.channel_type === 'mobile' && ch.is_primary)?.channel_value,
+        channel_count: channels.length
+      };
+    });
+  }
 
   private async addAddressInternal(
     client: any,

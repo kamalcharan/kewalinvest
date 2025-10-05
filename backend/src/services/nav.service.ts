@@ -1,5 +1,5 @@
 // backend/src/services/nav.service.ts
-// File 4/14: Core NAV operations service - ENHANCED with bookmark download status tracking
+// UPDATED: Date range overlap detection for historical downloads
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -43,7 +43,7 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
-   * Get user's bookmarked schemes with NAV statistics - ENHANCED for UI requirements
+   * Get user's bookmarked schemes with NAV statistics
    */
   async getUserBookmarks(
     tenantId: number,
@@ -66,7 +66,6 @@ export class NavService {
       const queryParams: any[] = [tenantId, isLive, userId];
       let paramIndex = 4;
 
-      // Add filters
       if (search) {
         baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex})`;
         queryParams.push(`%${search}%`);
@@ -83,13 +82,11 @@ export class NavService {
         paramIndex++;
       }
 
-      // Get total count with proper empty handling
       const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
       const countResult = await this.db.query(countQuery, queryParams);
       const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
         parseInt(countResult.rows[0].total) : 0;
 
-      // Early return for empty results
       if (total === 0) {
         return {
           bookmarks: [],
@@ -102,7 +99,6 @@ export class NavService {
         };
       }
 
-      // ENHANCED: Get paginated results with comprehensive NAV stats and download status
       const dataQuery = `
         SELECT 
           sb.*,
@@ -152,7 +148,6 @@ export class NavService {
         tenantId, userId, params, error: error.message
       }, userId, tenantId, error.stack);
       
-      // Return empty result instead of throwing
       return {
         bookmarks: [],
         total: 0,
@@ -166,7 +161,7 @@ export class NavService {
   }
 
   /**
-   * ADDED: Update bookmark download status after download operations
+   * Update bookmark download status after download operations
    */
   async updateBookmarkDownloadStatus(
     tenantId: number,
@@ -213,7 +208,7 @@ export class NavService {
   }
 
   /**
-   * ADDED: Get NAV data for a specific bookmark
+   * Get NAV data for a specific bookmark
    */
   async getBookmarkNavData(
     tenantId: number,
@@ -222,7 +217,6 @@ export class NavService {
     params: BookmarkNavDataParams
   ): Promise<NavDataListResponse> {
     try {
-      // First verify the bookmark belongs to the user
       const bookmarkQuery = `
         SELECT scheme_id FROM t_scheme_bookmarks
         WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
@@ -235,7 +229,6 @@ export class NavService {
 
       const schemeId = bookmarkResult.rows[0].scheme_id;
 
-      // Get NAV data for this scheme
       const navParams: NavDataSearchParams = {
         scheme_id: schemeId,
         start_date: params.start_date ? new Date(params.start_date) : undefined,
@@ -255,7 +248,7 @@ export class NavService {
   }
 
   /**
-   * Add scheme to user's bookmarks with denormalized scheme data - FIXED validation
+   * Add scheme to user's bookmarks with denormalized scheme data
    */
   async addBookmark(
     tenantId: number,
@@ -268,18 +261,15 @@ export class NavService {
     try {
       await client.query('BEGIN');
 
-      // Validate scheme_id is provided
       if (!request.scheme_id || !Number.isInteger(request.scheme_id)) {
         throw new Error('Valid scheme_id is required');
       }
 
-      // FIXED: Get scheme details using scheme ID, not scheme code
       const scheme = await this.schemeService.getSchemeById(tenantId, isLive, request.scheme_id);
       if (!scheme) {
         throw new Error(NAV_ERROR_CODES.SCHEME_NOT_FOUND);
       }
 
-      // Check if already bookmarked
       const existingQuery = `
         SELECT id FROM t_scheme_bookmarks
         WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND scheme_id = $4 AND is_active = true
@@ -329,7 +319,7 @@ export class NavService {
   }
 
   /**
-   * Update bookmark settings - FIXED validation
+   * Update bookmark settings
    */
   async updateBookmark(
     tenantId: number,
@@ -385,7 +375,7 @@ export class NavService {
   }
 
   /**
-   * Remove bookmark (soft delete) - FIXED validation
+   * Remove bookmark (soft delete)
    */
   async removeBookmark(
     tenantId: number,
@@ -417,10 +407,10 @@ export class NavService {
     }
   }
 
-  // ==================== NAV DATA OPERATIONS - FIXED ====================
+  // ==================== NAV DATA OPERATIONS ====================
 
   /**
-   * Get NAV data for schemes with filtering and pagination - FIXED for empty state
+   * Get NAV data for schemes with filtering and pagination
    */
   async getNavData(
     tenantId: number,
@@ -464,13 +454,11 @@ export class NavService {
         paramIndex++;
       }
 
-      // Get total count with proper empty handling
       const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
       const countResult = await this.db.query(countQuery, queryParams);
       const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
         parseInt(countResult.rows[0].total) : 0;
 
-      // Early return for empty results
       if (total === 0) {
         return {
           nav_data: [],
@@ -483,7 +471,6 @@ export class NavService {
         };
       }
 
-      // Get paginated results
       const dataQuery = `
         SELECT 
           nd.*,
@@ -512,7 +499,6 @@ export class NavService {
         tenantId, params, error: error.message
       }, undefined, tenantId, error.stack);
       
-      // Return empty result instead of throwing
       return {
         nav_data: [],
         total: 0,
@@ -526,7 +512,7 @@ export class NavService {
   }
 
   /**
-   * Get latest NAV for a specific scheme - FIXED for empty state
+   * Get latest NAV for a specific scheme
    */
   async getLatestNav(
     tenantId: number,
@@ -552,12 +538,12 @@ export class NavService {
       SimpleLogger.error('NavService', 'Failed to get latest NAV', 'getLatestNav', {
         tenantId, schemeId, error: error.message
       }, undefined, tenantId, error.stack);
-      return null; // Return null instead of throwing
+      return null;
     }
   }
 
   /**
-   * Check if NAV data exists for specific schemes on a date - FIXED for empty state
+   * Check if NAV data exists for specific schemes on a date
    */
   async checkNavDataExists(
     tenantId: number,
@@ -566,7 +552,6 @@ export class NavService {
     navDate: Date
   ): Promise<{ [schemeId: number]: boolean }> {
     try {
-      // Early return for empty scheme list
       if (!schemeIds || schemeIds.length === 0) {
         return {};
       }
@@ -589,7 +574,6 @@ export class NavService {
         tenantId, schemeIds, navDate, error: error.message
       }, undefined, tenantId, error.stack);
       
-      // Return empty status for all schemes
       return schemeIds.reduce((acc, schemeId) => {
         acc[schemeId] = false;
         return acc;
@@ -597,10 +581,10 @@ export class NavService {
     }
   }
 
-  // ==================== STATISTICS - FIXED FOR EMPTY STATE ====================
+  // ==================== STATISTICS ====================
 
   /**
-   * Get NAV statistics for dashboard - FIXED for empty database
+   * Get NAV statistics for dashboard
    */
   async getNavStatistics(tenantId: number, isLive: boolean, userId: number): Promise<NavStatistics> {
     try {
@@ -619,7 +603,6 @@ export class NavService {
       const result = await this.db.query(statsQuery, [tenantId, isLive, userId]);
       const stats = result.rows.length > 0 ? result.rows[0] : {};
 
-      // Provide safe defaults for all fields
       return {
         total_schemes_tracked: parseInt(stats.total_schemes_tracked) || 0,
         total_nav_records: parseInt(stats.total_nav_records) || 0,
@@ -635,14 +618,13 @@ export class NavService {
         tenantId, userId, error: error.message
       }, userId, tenantId, error.stack);
       
-      // Return zero statistics instead of throwing
       return {
         total_schemes_tracked: 0,
         total_nav_records: 0,
         schemes_with_daily_download: 0,
         schemes_with_historical_data: 0,
-       latest_nav_date: new Date(),
-       oldest_nav_date: new Date(),
+        latest_nav_date: new Date(),
+        oldest_nav_date: new Date(),
         download_jobs_today: 0,
         failed_downloads_today: 0
       };
@@ -668,7 +650,6 @@ export class NavService {
 
       for (const record of navRecords) {
         try {
-          // Get scheme_id from scheme_code using existing service
           const scheme = await this.schemeService.getSchemeByCode(tenantId, isLive, record.scheme_code);
           if (!scheme) {
             errors.push({ scheme_code: record.scheme_code, error: 'Scheme not found' });
@@ -699,7 +680,7 @@ export class NavService {
             record.repurchase_price || null,
             record.sale_price || null,
             isLive,
-            'daily' // Default data source
+            'daily'
           ]);
 
           if (result.rows[0].was_inserted) {
@@ -736,7 +717,7 @@ export class NavService {
   // ==================== DOWNLOAD JOB OPERATIONS ====================
 
   /**
-   * Create a new download job for n8n workflow execution
+   * UPDATED: Create download job with date range overlap detection
    */
   async createDownloadJob(
     tenantId: number,
@@ -749,23 +730,52 @@ export class NavService {
     try {
       await client.query('BEGIN');
 
-      // Validate historical download constraints
+      // UPDATED: Validate historical download with actual date range checking
       if (request.job_type === 'historical') {
         if (!request.start_date || !request.end_date) {
           throw new Error('Historical downloads require start_date and end_date');
         }
 
-        // Check if historical download already completed for any scheme
+        // Check for actual date overlap in NAV data for each scheme
         for (const schemeId of request.scheme_ids) {
-          const bookmarkQuery = `
-            SELECT historical_download_completed 
-            FROM t_scheme_bookmarks 
-            WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND scheme_id = $4 AND is_active = true
+          const overlapQuery = `
+            SELECT 
+              MIN(nav_date) as earliest_date,
+              MAX(nav_date) as latest_date,
+              COUNT(*) as record_count
+            FROM t_nav_data 
+            WHERE tenant_id = $1 
+              AND is_live = $2 
+              AND scheme_id = $3
           `;
-          const bookmarkResult = await client.query(bookmarkQuery, [tenantId, isLive, userId, schemeId]);
+          const overlapResult = await client.query(overlapQuery, [tenantId, isLive, schemeId]);
           
-          if (bookmarkResult.rows.length > 0 && bookmarkResult.rows[0].historical_download_completed) {
-            throw new Error(NAV_ERROR_CODES.HISTORICAL_DOWNLOAD_COMPLETED);
+          if (overlapResult.rows.length > 0 && overlapResult.rows[0].record_count > 0) {
+            const existingData = overlapResult.rows[0];
+            const existingStart = new Date(existingData.earliest_date);
+            const existingEnd = new Date(existingData.latest_date);
+            const requestedStart = new Date(request.start_date);
+            const requestedEnd = new Date(request.end_date);
+            
+            // Check if requested range overlaps with existing data
+            const hasOverlap = !(requestedEnd < existingStart || requestedStart > existingEnd);
+            
+            if (hasOverlap) {
+              // Get scheme name for better error message
+              const schemeQuery = `SELECT scheme_name FROM t_scheme_details WHERE id = $1`;
+              const schemeResult = await client.query(schemeQuery, [schemeId]);
+              const schemeName = schemeResult.rows[0]?.scheme_name || 'Unknown Scheme';
+              
+              const error = new Error('DATE_RANGE_OVERLAP');
+              (error as any).existingData = {
+                scheme_id: schemeId,
+                scheme_name: schemeName,
+                earliest_date: existingStart.toISOString().split('T')[0],
+                latest_date: existingEnd.toISOString().split('T')[0],
+                record_count: parseInt(existingData.record_count)
+              };
+              throw error;
+            }
           }
         }
       }
@@ -810,7 +820,7 @@ export class NavService {
   }
 
   /**
-   * Update download job status and results (called by n8n webhook)
+   * Update download job status and results
    */
   async updateDownloadJob(
     tenantId: number,
@@ -870,7 +880,7 @@ export class NavService {
   }
 
   /**
-   * Get download jobs with scheme details - FIXED for empty state
+   * Get download jobs with scheme details
    */
   async getDownloadJobs(
     tenantId: number,
@@ -913,13 +923,11 @@ export class NavService {
         paramIndex++;
       }
 
-      // Get total count with proper empty handling
       const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
       const countResult = await this.db.query(countQuery, queryParams);
       const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
         parseInt(countResult.rows[0].total) : 0;
 
-      // Early return for empty results
       if (total === 0) {
         return {
           jobs: [],
@@ -932,7 +940,6 @@ export class NavService {
         };
       }
 
-      // Get paginated results
       const dataQuery = `
         SELECT ndj.*
         ${baseQuery}
@@ -944,7 +951,6 @@ export class NavService {
       const result = await this.db.query(dataQuery, queryParams);
       const jobs = result.rows || [];
 
-      // Enhance jobs with scheme details
       const jobsWithSchemes: NavDownloadJobWithSchemes[] = [];
       for (const job of jobs) {
         try {
@@ -958,7 +964,6 @@ export class NavService {
             }))
           });
         } catch (error) {
-          // If scheme lookup fails, include job without scheme details
           jobsWithSchemes.push({
             ...job,
             schemes: []
@@ -982,7 +987,6 @@ export class NavService {
         tenantId, params, error: error.message
       }, undefined, tenantId, error.stack);
       
-      // Return empty result instead of throwing
       return {
         jobs: [],
         total: 0,
@@ -1036,10 +1040,10 @@ export class NavService {
     }
   }
 
-  // ==================== HELPER METHODS - FIXED ====================
+  // ==================== HELPER METHODS ====================
 
   /**
-   * Get schemes by IDs (helper method) - FIXED for empty results
+   * Get schemes by IDs (helper method)
    */
   private async getSchemesByIds(tenantId: number, isLive: boolean, schemeIds: number[]): Promise<SchemeDetail[]> {
     try {
@@ -1057,7 +1061,7 @@ export class NavService {
       return result.rows || [];
     } catch (error) {
       console.error('Error getting schemes by IDs:', error);
-      return []; // Return empty array instead of throwing
+      return [];
     }
   }
 }

@@ -1,6 +1,6 @@
 // frontend/src/components/customers/CustomerFilters.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { CustomerSearchParams, SurvivalStatus, OnboardingStatus } from '../../types/customer.types';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -18,15 +18,20 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Use ref to avoid dependency issues
+  const onFiltersChangeRef = useRef(onFiltersChange);
+  onFiltersChangeRef.current = onFiltersChange;
+
   // Form state
   const [filters, setFilters] = useState<CustomerSearchParams>({
     search: '',
-    sort_by: 'name',
+    sort_by: 'c.name',
     sort_order: 'asc',
     survival_status: undefined,
     onboarding_status: undefined,
     has_address: undefined,
     has_pan: undefined,
+    is_active: undefined,
     birthday_month: undefined,
     anniversary_month: undefined,
     page: 1,
@@ -34,36 +39,36 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
     ...initialFilters
   });
 
-  // Update parent when filters change
-  useEffect(() => {
-    onFiltersChange(filters);
-  }, [filters, onFiltersChange]);
-
-  // Handle filter changes
-  const handleFilterChange = (key: keyof CustomerSearchParams, value: any) => {
-    setFilters(prev => ({
-      ...prev,
+  // Handle filter changes - REMOVED useEffect, call parent directly
+  const handleFilterChange = useCallback((key: keyof CustomerSearchParams, value: any) => {
+    const newFilters = {
+      ...filters,
       [key]: value === '' ? undefined : value,
       page: 1 // Reset to first page when filters change
-    }));
-  };
+    };
+    setFilters(newFilters);
+    onFiltersChangeRef.current(newFilters);
+  }, [filters]);
 
   // Clear all filters
-  const clearFilters = () => {
-    setFilters({
+  const clearFilters = useCallback(() => {
+    const clearedFilters = {
       search: '',
-      sort_by: 'name',
-      sort_order: 'asc',
+      sort_by: 'c.name',
+      sort_order: 'asc' as 'asc' | 'desc',
       survival_status: undefined,
       onboarding_status: undefined,
       has_address: undefined,
       has_pan: undefined,
+      is_active: undefined,
       birthday_month: undefined,
       anniversary_month: undefined,
       page: 1,
       page_size: 20
-    });
-  };
+    };
+    setFilters(clearedFilters);
+    onFiltersChangeRef.current(clearedFilters);
+  }, []);
 
   // Check if any filters are active
   const hasActiveFilters = () => {
@@ -73,6 +78,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       filters.onboarding_status ||
       filters.has_address !== undefined ||
       filters.has_pan !== undefined ||
+      filters.is_active !== undefined ||
       filters.birthday_month ||
       filters.anniversary_month
     );
@@ -175,7 +181,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <SortIcon />
           <select
-            value={filters.sort_by || 'name'}
+            value={filters.sort_by || 'c.name'}
             onChange={(e) => handleFilterChange('sort_by', e.target.value)}
             disabled={loading}
             style={{
@@ -188,11 +194,11 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
               outline: 'none'
             }}
           >
-            <option value="name">Name</option>
-            <option value="created_at">Created Date</option>
-            <option value="updated_at">Updated Date</option>
-            <option value="date_of_birth">Birth Date</option>
-            <option value="anniversary_date">Anniversary</option>
+            <option value="c.name">Name</option>
+            <option value="cust.created_at">Created Date</option>
+            <option value="cust.updated_at">Updated Date</option>
+            <option value="cust.date_of_birth">Birth Date</option>
+            <option value="cust.anniversary_date">Anniversary</option>
           </select>
 
           <select
@@ -247,6 +253,38 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
         paddingTop: '16px',
         borderTop: `1px solid ${colors.utility.primaryText}10`
       }}>
+        {/* Active Status Filter */}
+        <div>
+          <label style={{
+            display: 'block',
+            marginBottom: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: colors.utility.primaryText
+          }}>
+            Active Status
+          </label>
+          <select
+            value={filters.is_active === undefined ? '' : filters.is_active.toString()}
+            onChange={(e) => handleFilterChange('is_active', e.target.value === '' ? undefined : e.target.value === 'true')}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText,
+              fontSize: '14px',
+              outline: 'none'
+            }}
+          >
+            <option value="">All Status</option>
+            <option value="true">Active Only</option>
+            <option value="false">Inactive Only</option>
+          </select>
+        </div>
+
         {/* Survival Status */}
         <div>
           <label style={{
@@ -256,7 +294,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
             fontWeight: '500',
             color: colors.utility.primaryText
           }}>
-            Status
+            Survival Status
           </label>
           <select
             value={filters.survival_status || ''}

@@ -1,5 +1,5 @@
 // frontend/src/hooks/useNavData.ts
-// UPDATED: Removed sequential download support - simplified to scheme-based downloads
+// UPDATED: Preserve existing_data from 409 responses in triggerHistoricalDownload
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -786,7 +786,7 @@ export const useNavData = (): UseNavDataReturn => {
   };
 };
 
-// ==================== SIMPLIFIED DOWNLOADS HOOK ====================
+// ==================== DOWNLOADS HOOK ====================
 
 export interface UseDownloadsReturn {
   downloadJobs: DownloadJob[];
@@ -906,7 +906,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     }
   }, []);
 
-  // SIMPLIFIED: Now returns simple response without sequential complexity
+  // UPDATED: Preserve existing_data from 409 responses
   const triggerHistoricalDownload = useCallback(async (
     request: HistoricalDownloadRequest
   ): Promise<{ 
@@ -918,7 +918,6 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     const startDate = new Date(request.start_date);
     const endDate = new Date(request.end_date);
     
-    // Simplified validation - no chunking calculations
     const validation = NavService.validateDateRange(startDate, endDate);
     
     if (!validation.valid) {
@@ -933,15 +932,23 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       if (response.success && response.data) {
         return response.data;
       } else {
+        // FIXED: Preserve existing_data when creating error
         const errorMsg = response.error || 'Failed to trigger historical download';
+        const error = new Error(errorMsg);
+        
+        // Attach existing_data if present (for date range overlap errors)
+        if ((response as any).existing_data) {
+          (error as any).existing_data = (response as any).existing_data;
+        }
+        
         setError(errorMsg);
-        throw new Error(errorMsg);
+        throw error;
       }
     } catch (err: any) {
       console.error('Trigger historical download error:', err);
       const errorMsg = err.message || 'Failed to trigger historical download';
       setError(errorMsg);
-      throw err;
+      throw err; // Re-throw to preserve existing_data if it exists
     }
   }, []);
 
@@ -1002,7 +1009,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
   };
 };
 
-// ==================== SIMPLIFIED PROGRESS HOOK ====================
+// ==================== DOWNLOAD PROGRESS HOOK ====================
 
 export interface UseDownloadProgressReturn {
   progress: DownloadProgress | null;

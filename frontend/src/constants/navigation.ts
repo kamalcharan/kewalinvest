@@ -45,23 +45,29 @@ export const NAVIGATION_MENU: NavigationSection[] = [
     ]
   },
   {
-    id: 'contacts',
-    name: 'Contacts',
-    items: [
-      {
-        id: 'contacts',
-        name: 'Contacts',
-        path: '/contacts',
-        icon: Users
-      },
-      {
-        id: 'customers',
-        name: 'Customers',
-        path: '/customers',
-        icon: Crown
-      }
-    ]
-  },
+  id: 'contacts',
+  name: 'Contacts',
+  items: [
+    {
+      id: 'contacts',
+      name: 'Contacts',
+      path: '/contacts',
+      icon: Users
+    },
+    {
+      id: 'customers',
+      name: 'Customers',
+      path: '/customers',
+      icon: Crown
+    },
+    {
+      id: 'transactions',
+      name: 'Transactions',
+      path: '/transactions',
+      icon: FileText
+    }
+  ]
+},
   {
     id: 'data_operations',
     name: 'Data Operations',

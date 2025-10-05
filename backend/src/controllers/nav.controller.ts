@@ -1,6 +1,5 @@
 // backend/src/controllers/nav.controller.ts
-// UPDATED: Modified triggerHistoricalDownload to use simplified MFAPI.in approach
-// UNCHANGED: All routes maintained for frontend compatibility
+// UPDATED: Handle DATE_RANGE_OVERLAP error with detailed information
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
@@ -658,8 +657,7 @@ export class NavController {
   };
 
   /**
-   * UPDATED: Trigger historical NAV download using simplified MFAPI.in approach
-   * Route unchanged for frontend compatibility
+   * UPDATED: Trigger historical download with date range overlap detection
    */
   triggerHistoricalDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -742,7 +740,15 @@ export class NavController {
         error: error.message
       }, req.user?.user_id, req.user?.tenant_id, error.stack);
 
-      if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
+      // UPDATED: Handle DATE_RANGE_OVERLAP error with detailed information
+      if (error.message === 'DATE_RANGE_OVERLAP') {
+        const existingData = (error as any).existingData;
+        res.status(409).json({
+          success: false,
+          error: `Date range overlaps with existing data for ${existingData.scheme_name}. Existing data: ${existingData.earliest_date} to ${existingData.latest_date} (${existingData.record_count} records). Please adjust your date range to avoid overlap.`,
+          existing_data: existingData
+        });
+      } else if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
         res.status(409).json({
           success: false,
           error: 'Historical download already completed for one or more schemes'
@@ -1023,7 +1029,7 @@ export class NavController {
     }
   };
 
-  // ==================== SCHEDULER MANAGEMENT (UNCHANGED) ====================
+  // ==================== SCHEDULER MANAGEMENT ====================
 
   getSchedulerConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {

@@ -1,15 +1,15 @@
 // frontend/src/pages/customers/CustomersPage.tsx
-// Updated version using real portfolio API
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCustomers, useCustomerStats } from '../../hooks/useCustomers';
+import { useCustomers, useCustomerStats, useActivateCustomer, useDeleteCustomer } from '../../hooks/useCustomers';
 import { usePortfolioMetrics } from '../../hooks/usePortfolioData';
 import { CustomerSearchParams, CustomerWithContact } from '../../types/customer.types';
 import { mockJTBDData } from '../../data/mock/mockJTBDData';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import CustomerCard from '../../components/customers/CustomerCard';
+import CustomerFilters from '../../components/customers/CustomerFilters';
 
 const CustomersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ const CustomersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useState<CustomerSearchParams>({
     page: 1,
     page_size: 20,
-    sort_by: 'name',
+    sort_by: 'c.name',
     sort_order: 'asc'
   });
   const [selectedCustomers, setSelectedCustomers] = useState<Set<number>>(new Set());
@@ -30,6 +30,8 @@ const CustomersPage: React.FC = () => {
   const { data: customerData, isLoading, error, refetch } = useCustomers(searchParams);
   const { data: stats } = useCustomerStats();
   const { metrics: portfolioMetrics, isLoading: metricsLoading } = usePortfolioMetrics();
+  const activateCustomerMutation = useActivateCustomer();
+  const deleteCustomerMutation = useDeleteCustomer();
 
   // Derived data
   const customers = customerData?.customers || [];
@@ -80,11 +82,26 @@ const CustomersPage: React.FC = () => {
 
   const handleDeleteCustomer = (customerId: number) => {
     try {
-      console.log('Delete customer:', customerId);
-      // Implement delete functionality
+      deleteCustomerMutation.mutate(customerId);
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Customer deletion failed',
+        'CustomersPage',
+        {
+          customerId,
+          errorMessage: error.message
+        },
+        error.stack
+      );
+    }
+  };
+
+  const handleActivateCustomer = (customerId: number) => {
+    try {
+      activateCustomerMutation.mutate(customerId);
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Customer activation failed',
         'CustomersPage',
         {
           customerId,
@@ -108,19 +125,15 @@ const CustomersPage: React.FC = () => {
     }
   };
 
-  const handleFiltersChange = (newFilters: CustomerSearchParams) => {
+  const handleSearchParamsChange = (newParams: CustomerSearchParams) => {
     try {
-      setSearchParams(prev => ({
-        ...prev,
-        ...newFilters,
-        page: newFilters.page || 1
-      }));
+      setSearchParams(newParams);
       setSelectedCustomers(new Set());
     } catch (error: any) {
       FrontendErrorLogger.error(
-        'Filter change failed',
+        'Search params change failed',
         'CustomersPage',
-        { newFilters, error: error.message },
+        { newParams, error: error.message },
         error.stack
       );
     }
@@ -383,6 +396,37 @@ const CustomersPage: React.FC = () => {
               <PlusIcon />
               Add Customer
             </button>
+
+            <button
+              onClick={() => {
+                try {
+                  refetch();
+                } catch (error: any) {
+                  FrontendErrorLogger.error(
+                    'Manual data refresh failed',
+                    'CustomersPage',
+                    { error: error.message },
+                    error.stack
+                  );
+                }
+              }}
+              disabled={isLoading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 16px',
+                backgroundColor: 'transparent',
+                color: colors.utility.secondaryText,
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                opacity: isLoading ? 0.6 : 1
+              }}
+            >
+              <RefreshIcon />
+            </button>
           </div>
         </div>
 
@@ -499,104 +543,12 @@ const CustomersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Search and Filter Section */}
-        <div style={{
-          backgroundColor: colors.utility.secondaryBackground,
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            marginBottom: '16px'
-          }}>
-            <input
-              type="text"
-              placeholder="Search customers by name, email, mobile, PAN, or IWell code..."
-              value={searchParams.search || ''}
-              onChange={(e) => handleFiltersChange({ ...searchParams, search: e.target.value, page: 1 })}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '8px',
-                backgroundColor: colors.utility.primaryBackground,
-                color: colors.utility.primaryText,
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            />
-            
-            <div style={{
-              display: 'flex',
-              gap: '4px',
-              padding: '4px',
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '6px'
-            }}>
-              <button
-                onClick={() => setViewMode('cards')}
-                style={{
-                  padding: '6px',
-                  backgroundColor: viewMode === 'cards' ? colors.brand.primary : 'transparent',
-                  color: viewMode === 'cards' ? 'white' : colors.utility.secondaryText,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                <GridIcon />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                style={{
-                  padding: '6px',
-                  backgroundColor: viewMode === 'list' ? colors.brand.primary : 'transparent',
-                  color: viewMode === 'list' ? 'white' : colors.utility.secondaryText,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                <ListIcon />
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                try {
-                  refetch();
-                } catch (error: any) {
-                  FrontendErrorLogger.error(
-                    'Manual data refresh failed',
-                    'CustomersPage',
-                    { error: error.message },
-                    error.stack
-                  );
-                }
-              }}
-              disabled={isLoading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                backgroundColor: 'transparent',
-                color: colors.utility.secondaryText,
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                opacity: isLoading ? 0.6 : 1
-              }}
-            >
-              <RefreshIcon />
-              Refresh
-            </button>
-          </div>
-        </div>
+        {/* Search Component */}
+        <CustomerFilters
+  onFiltersChange={handleSearchParamsChange}
+  initialFilters={searchParams}
+  loading={isLoading}
+/>
 
         {/* Customer List */}
         <div style={{
@@ -695,7 +647,7 @@ const CustomersPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            // Customer cards - Portfolio data will be fetched individually by CustomerCard component
+            // Customer cards
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
@@ -705,11 +657,12 @@ const CustomersPage: React.FC = () => {
                 <CustomerCard
                   key={customer.id}
                   customer={customer}
-                  portfolio={undefined}  // CustomerCard will fetch individually if needed
+                  portfolio={undefined}
                   jtbd={mockJTBDData[customer.id]}
                   onView={() => handleViewCustomer(customer.id)}
                   onEdit={() => handleEditCustomer(customer.id)}
                   onDelete={() => handleDeleteCustomer(customer.id)}
+                  onActivate={() => handleActivateCustomer(customer.id)}
                   selectable={true}
                   selected={selectedCustomers.has(customer.id)}
                   onSelectionChange={handleCustomerSelection}

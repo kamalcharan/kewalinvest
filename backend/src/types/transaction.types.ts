@@ -37,6 +37,7 @@ export interface TransactionType {
 
 export interface TransactionWithDetails extends Transaction {
   customer_name?: string;
+  iwell_code?: string;
   txn_type_code?: string;
   txn_type_name?: string;
   txn_type?: 'Addition' | 'Deduction';
@@ -45,10 +46,12 @@ export interface TransactionWithDetails extends Transaction {
 
 export interface TransactionFilters {
   customer_id?: number;
+  customer_search?: string;
   scheme_code?: string;
   start_date?: string;
   end_date?: string;
   txn_type_id?: number;
+  import_session_id?: number;
   is_potential_duplicate?: boolean;
   portfolio_flag?: boolean;
   page?: number;
@@ -134,4 +137,4 @@ export interface TransactionValidationResult {
   warnings: string[];
   is_duplicate: boolean;
   duplicate_reason?: string;
-}x`
+}

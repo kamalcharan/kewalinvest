@@ -1,5 +1,5 @@
 // frontend/src/services/nav.service.ts
-// UPDATED: Removed sequential download complexity - simplified to scheme-based downloads using MFAPI.in
+// UPDATED: Enhanced 409 error handling with existing_data details
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -11,6 +11,13 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  existing_data?: {
+    scheme_id: number;
+    scheme_name: string;
+    earliest_date: string;
+    latest_date: string;
+    record_count: number;
+  };
 }
 
 export interface PaginatedResponse<T> {
@@ -178,14 +185,12 @@ export interface DownloadJobParams {
   date_to?: string;
 }
 
-// SIMPLIFIED: Historical download request - backend handles MFAPI.in single-call approach
 export interface HistoricalDownloadRequest {
   scheme_ids: number[];
   start_date: string;
   end_date: string;
 }
 
-// SIMPLIFIED: Download progress - removed all chunk-related fields
 export interface DownloadProgress {
   jobId: number;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -273,61 +278,79 @@ export class NavService {
   }
 
   private async handleRequest<T>(
-  url: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T> | PaginatedResponse<T>> {
-  try {
-    console.log('🌐 NavService handleRequest:');
-    console.log('🌐 - URL:', url);
-    
-    const headers = this.getAuthHeaders();
-    console.log('🌐 - Headers:', headers);
-    
-    const response = await fetch(url, {
-      headers,
-      ...options
-    });
+    url: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T> | PaginatedResponse<T>> {
+    try {
+      console.log('🌐 NavService handleRequest:');
+      console.log('🌐 - URL:', url);
+      
+      const headers = this.getAuthHeaders();
+      console.log('🌐 - Headers:', headers);
+      
+      const response = await fetch(url, {
+        headers,
+        ...options
+      });
 
-    console.log('🌐 - Response status:', response.status);
-    console.log('🌐 - Response ok:', response.ok);
+      console.log('🌐 - Response status:', response.status);
+      console.log('🌐 - Response ok:', response.ok);
 
-    if (!response.ok) {
-      console.error('🌐 - Response not ok, status:', response.status);
-      const errorText = await response.text();
-      console.error('🌐 - Error response text:', errorText);
-      
-      // ADDED: Special handling for rate limiting
-      if (response.status === 429) {
-        return {
-          success: false,
-          error: 'Too many requests. Please wait a moment before trying again.'
-        };
+      if (!response.ok) {
+        console.error('🌐 - Response not ok, status:', response.status);
+        const errorText = await response.text();
+        console.error('🌐 - Error response text:', errorText);
+        
+        if (response.status === 429) {
+          return {
+            success: false,
+            error: 'Too many requests. Please wait a moment before trying again.'
+          };
+        }
+        
+        let errorData: any = {};
+        try {
+          errorData = errorText ? JSON.parse(errorText) : {};
+        } catch (parseError) {
+          errorData = { error: errorText };
+        }
+        
+        // UPDATED: Enhanced 409 handling with existing_data extraction
+        if (response.status === 409) {
+          const errorMsg = errorData.error || '';
+          const existingData = errorData.existing_data;
+          
+          // Check if this is a date range overlap error with details
+          if (existingData) {
+            return {
+              success: false,
+              error: errorMsg,
+              existing_data: existingData
+            };
+          }
+          
+          // Other 409 conflicts
+          return {
+            success: false,
+            error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
+          };
+        }
+        
+        throw new Error(getAPIErrorMessage(errorData));
       }
-      
-      // FIXED: Try to parse JSON, but handle plain text errors
-      let errorData: any = {};
-      try {
-        errorData = errorText ? JSON.parse(errorText) : {};
-      } catch (parseError) {
-        // If it's not JSON, use the text directly
-        errorData = { error: errorText };
-      }
-      
-      throw new Error(getAPIErrorMessage(errorData));
+
+      const data = await response.json();
+      console.log('🌐 - Success response data:', data);
+      return data;
+    } catch (error: any) {
+      console.error('🌐 NavService Error:', error);
+      console.error('🌐 URL was:', url);
+      return {
+        success: false,
+        error: error.message || 'An unexpected error occurred'
+      };
     }
-
-    const data = await response.json();
-    console.log('🌐 - Success response data:', data);
-    return data;
-  } catch (error: any) {
-    console.error('🌐 NavService Error:', error);
-    console.error('🌐 URL was:', url);
-    return {
-      success: false,
-      error: error.message || 'An unexpected error occurred'
-    };
   }
-}   
 
   // ==================== SCHEME SEARCH OPERATIONS ====================
 
@@ -575,7 +598,6 @@ export class NavService {
     return response as ApiResponse<{ jobId: number; message: string; alreadyExists?: boolean }>;
   }
 
-  // SIMPLIFIED: Historical download - backend returns simple response with job_id
   async triggerHistoricalDownload(
     request: HistoricalDownloadRequest
   ): Promise<ApiResponse<{ job_id: number; message: string; total_schemes: number; estimated_time_ms: number }>> {
@@ -592,7 +614,6 @@ export class NavService {
     });
     
     if (response.success) {
-      // Show success toast with scheme count
       const schemeCount = response.data?.total_schemes || request.scheme_ids.length;
       toastService.success(`Historical download started for ${schemeCount} scheme${schemeCount > 1 ? 's' : ''}`);
     } else {
@@ -806,7 +827,7 @@ export class NavService {
     return response as ApiResponse<{ active_schedulers: any[]; total_active: number }>;
   }
 
-  // ==================== SIMPLIFIED UTILITY METHODS ====================
+  // ==================== UTILITY METHODS ====================
 
   static formatEstimatedTime(ms: number): string {
     if (ms < 60000) {
@@ -818,7 +839,6 @@ export class NavService {
     }
   }
 
-  // SIMPLIFIED: Validate date range without chunking calculations
   static validateDateRange(startDate: Date, endDate: Date): { valid: boolean; error?: string; day_count?: number } {
     if (startDate >= endDate) {
       return { valid: false, error: 'Start date must be before end date' };
@@ -831,7 +851,6 @@ export class NavService {
 
     const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     
-    // No chunking needed anymore - MFAPI.in returns full history
     return {
       valid: true,
       day_count: dayCount
@@ -845,7 +864,7 @@ export class NavService {
       case 'daily':
         return `${minutes} ${hours} * * *`;
       case 'weekly':
-        return `${minutes} ${hours} * * 5`; // Friday
+        return `${minutes} ${hours} * * 5`;
       default:
         return `${minutes} ${hours} * * *`;
     }

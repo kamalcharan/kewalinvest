@@ -1,6 +1,6 @@
 // frontend/src/pages/contacts/ContactsPage.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,12 +9,12 @@ import {
   useContactStats, 
   useBulkContactAction,
   useDeleteContact,
-  useUpdateContact 
+  useUpdateContact,
+  useActivateContact
 } from '../../hooks/useContacts';
 import ContactSearch from '../../components/contacts/ContactSearch';
 import ContactCard from '../../components/contacts/ContactCard';
 import { ContactSearchParams } from '../../types/contact.types';
-import { PAGINATION_DEFAULTS } from '../../constants/contact.constants';
 import toastService from '../../services/toast.service';
 
 const ContactsPage: React.FC = () => {
@@ -23,32 +23,36 @@ const ContactsPage: React.FC = () => {
   const { environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Search and pagination state - FIXED: Default page_size to 50
   const [searchParams, setSearchParams] = useState<ContactSearchParams>({
     page: 1,
-    page_size: 50, // Changed from PAGINATION_DEFAULTS.pageSize to 50
+    page_size: 50,
     sort_by: 'name',
     sort_order: 'asc'
   });
 
-  // State for page input
   const [pageInputValue, setPageInputValue] = useState('1');
   const [showPageInput, setShowPageInput] = useState(false);
 
-  // UI state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
-  // Data fetching - This will re-run when searchParams changes
-  // Force new object reference to ensure React Query detects the change
   const queryParams = React.useMemo(() => ({
     ...searchParams,
     page: searchParams.page || 1,
     page_size: searchParams.page_size || 50
-  }), [searchParams.page, searchParams.page_size, searchParams.sort_by, searchParams.sort_order, searchParams.search]);
+  }), [
+    searchParams.page, 
+    searchParams.page_size, 
+    searchParams.sort_by, 
+    searchParams.sort_order, 
+    searchParams.search,
+    searchParams.has_customer,
+    searchParams.is_active,
+    searchParams.prefix,
+    searchParams.channel_type
+  ]);
   
-  // Debug: Log when params change
   useEffect(() => {
     console.log('Query params changed:', queryParams);
   }, [queryParams]);
@@ -58,24 +62,20 @@ const ContactsPage: React.FC = () => {
   const bulkActionMutation = useBulkContactAction();
   const deleteContactMutation = useDeleteContact();
   const updateContactMutation = useUpdateContact();
+  const activateContactMutation = useActivateContact();
 
-  // Update page input when page changes
   useEffect(() => {
     setPageInputValue((searchParams.page || 1).toString());
   }, [searchParams.page]);
 
-  // Handle search parameter changes
   const handleSearchParamsChange = (newParams: ContactSearchParams) => {
     setSearchParams(newParams);
     setSelectedContactIds([]);
   };
 
-  // FIXED: Handle pagination properly
   const handlePageChange = (page: number) => {
-    // Ensure page is within valid range
     if (contactsData) {
       const validPage = Math.max(1, Math.min(page, contactsData.total_pages));
-      // Create completely new object to trigger re-fetch
       const newParams = {
         ...searchParams,
         page: validPage,
@@ -87,7 +87,6 @@ const ContactsPage: React.FC = () => {
     }
   };
 
-  // Handle direct page input
   const handlePageInputSubmit = () => {
     const pageNum = parseInt(pageInputValue, 10);
     if (!isNaN(pageNum) && pageNum > 0 && contactsData && pageNum <= contactsData.total_pages) {
@@ -99,18 +98,16 @@ const ContactsPage: React.FC = () => {
     }
   };
 
-  // Handle page size change
   const handlePageSizeChange = (newSize: number) => {
     const newParams = {
       ...searchParams,
-      page: 1, // Reset to first page when changing page size
+      page: 1,
       page_size: newSize
     };
     setSearchParams(newParams);
     setSelectedContactIds([]);
   };
 
-  // Handle contact selection
   const handleContactSelection = (contactId: number, selected: boolean) => {
     setSelectedContactIds(prev => {
       if (selected) {
@@ -121,7 +118,6 @@ const ContactsPage: React.FC = () => {
     });
   };
 
-  // Handle select all
   const handleSelectAll = () => {
     if (!contactsData?.contacts) return;
     
@@ -143,7 +139,6 @@ const ContactsPage: React.FC = () => {
     }
   };
 
-  // Handle bulk actions
   const handleBulkAction = async (action: 'activate' | 'deactivate' | 'delete' | 'export') => {
     if (selectedContactIds.length === 0) {
       toastService.warning('Please select contacts to perform bulk action');
@@ -198,7 +193,6 @@ const ContactsPage: React.FC = () => {
 
   const selectionStats = getSelectionStats();
 
-  // Handle convert to customer
   const handleConvertToCustomer = async (contactId: number) => {
     try {
       await updateContactMutation.mutateAsync({
@@ -212,18 +206,24 @@ const ContactsPage: React.FC = () => {
     }
   };
 
-  // Handle delete contact
   const handleDeleteContact = async (contactId: number) => {
     try {
       await deleteContactMutation.mutateAsync(contactId);
-      toastService.success('Contact deleted successfully');
       refetch();
     } catch (error) {
-      toastService.error('Failed to delete contact');
+      // Error handled by mutation
     }
   };
 
-  // Icons
+  const handleActivateContact = async (contactId: number) => {
+    try {
+      await activateContactMutation.mutateAsync(contactId);
+      refetch();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
   const PlusIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <line x1="12" y1="5" x2="12" y2="19" />
@@ -496,7 +496,6 @@ const ContactsPage: React.FC = () => {
           </h2>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {/* Page Size Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '14px', color: colors.utility.secondaryText }}>Show:</span>
               <select
@@ -598,7 +597,7 @@ const ContactsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Contacts List - Single Column */}
+      {/* Contacts List */}
       {contactsData && contactsData.contacts.length > 0 && (
         <div style={{
           display: 'flex',
@@ -614,6 +613,7 @@ const ContactsPage: React.FC = () => {
               onEdit={() => navigate(`/contacts/${contact.id}/edit`)}
               onConvertToCustomer={() => handleConvertToCustomer(contact.id)}
               onDelete={() => handleDeleteContact(contact.id)}
+              onActivate={() => handleActivateContact(contact.id)}
               selectable={true}
               selected={selectedContactIds.includes(contact.id)}
               onSelectionChange={handleContactSelection}
@@ -681,7 +681,7 @@ const ContactsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Enhanced Pagination */}
+      {/* Pagination */}
       {contactsData && contactsData.total_pages > 1 && (
         <div style={{
           display: 'flex',
@@ -690,7 +690,6 @@ const ContactsPage: React.FC = () => {
           gap: '8px',
           padding: '20px 0'
         }}>
-          {/* First Page */}
           <button
             onClick={() => handlePageChange(1)}
             disabled={(searchParams.page || 1) === 1}
@@ -711,7 +710,6 @@ const ContactsPage: React.FC = () => {
             <ChevronDoubleLeftIcon />
           </button>
 
-          {/* Previous */}
           <button
             onClick={() => handlePageChange((searchParams.page || 1) - 1)}
             disabled={!contactsData.has_prev}
@@ -732,7 +730,6 @@ const ContactsPage: React.FC = () => {
             Previous
           </button>
 
-          {/* Page Indicator / Input */}
           {showPageInput ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <input
@@ -780,7 +777,6 @@ const ContactsPage: React.FC = () => {
             </button>
           )}
 
-          {/* Next */}
           <button
             onClick={() => handlePageChange((searchParams.page || 1) + 1)}
             disabled={!contactsData.has_next}
@@ -801,7 +797,6 @@ const ContactsPage: React.FC = () => {
             <ChevronRightIcon />
           </button>
 
-          {/* Last Page */}
           <button
             onClick={() => handlePageChange(contactsData.total_pages)}
             disabled={(searchParams.page || 1) === contactsData.total_pages}

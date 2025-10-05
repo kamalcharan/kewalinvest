@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `${API_BASE}/customers/${id}`,
     UPDATE: (id: number) => `${API_BASE}/customers/${id}`,
     DELETE: (id: number) => `${API_BASE}/customers/${id}`,
+      ACTIVATE: (id: number) => `${API_BASE}/customers/${id}/activate`,
     STATS: `${API_BASE}/customers/stats`,
     ADD_ADDRESS: (customerId: number) => `${API_BASE}/customers/${customerId}/addresses`,
     UPDATE_ADDRESS: (customerId: number, addressId: number) => 

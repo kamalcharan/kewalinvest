@@ -19,6 +19,7 @@ router.post('/', customerController.createCustomer);
 router.get('/:id', customerController.getCustomer);
 router.put('/:id', customerController.updateCustomer);
 router.delete('/:id', customerController.deleteCustomer);
+router.put('/:id/activate', customerController.activateCustomer);
 
 // Address routes
 router.post('/:id/addresses', customerController.addAddress);

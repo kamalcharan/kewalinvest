@@ -259,6 +259,15 @@ export class TransactionUtil {
       paramIndex++;
     }
 
+    if (filters.customer_search) {
+      conditions.push(`(
+        LOWER(c.name) LIKE LOWER($${paramIndex}) OR 
+        LOWER(c.iwell_code) LIKE LOWER($${paramIndex})
+      )`);
+      params.push(`%${filters.customer_search}%`);
+      paramIndex++;
+    }
+
     if (filters.scheme_code) {
       conditions.push(`scheme_code = $${paramIndex}`);
       params.push(this.sanitizeSchemeCode(filters.scheme_code));
@@ -280,6 +289,12 @@ export class TransactionUtil {
     if (filters.txn_type_id) {
       conditions.push(`txn_type_id = $${paramIndex}`);
       params.push(filters.txn_type_id);
+      paramIndex++;
+    }
+
+    if (filters.import_session_id) {
+      conditions.push(`import_session_id = $${paramIndex}`);
+      params.push(filters.import_session_id);
       paramIndex++;
     }
 

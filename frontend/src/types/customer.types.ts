@@ -231,6 +231,7 @@ export interface CustomerSearchParams {
   onboarding_status?: OnboardingStatus;
   has_address?: boolean;
   has_pan?: boolean;
+  is_active?: boolean;  // ✅ ADDED
   birthday_month?: number;
   anniversary_month?: number;
 }
@@ -245,15 +246,20 @@ export interface CustomerListResponse {
   has_prev: boolean;
 }
 
-// Statistics interface
+// Statistics interface - UPDATED to match backend
 export interface CustomerStats {
   total: number;
   active: number;
   inactive: number;
+  alive: number;              // ✅ ADDED
+  deceased: number;           // ✅ ADDED
   with_addresses: number;
   with_pan: number;
-  birthdays_this_month: number;
-  anniversaries_this_month: number;
+  onboarding_pending: number;    // ✅ ADDED
+  onboarding_completed: number;  // ✅ ADDED
+  recent_30_days: number;        // ✅ ADDED
+  birthdays_this_month?: number;
+  anniversaries_this_month?: number;
 }
 
 // Import/Export types

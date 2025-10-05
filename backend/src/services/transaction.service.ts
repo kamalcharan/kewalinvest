@@ -13,6 +13,7 @@ import {
   TransactionSummary
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
+import { EncryptionUtil } from '../utils/encryption.util';
 
 export class TransactionService {
   private db: Pool;
@@ -41,14 +42,35 @@ export class TransactionService {
       const params: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
+      // Handle customer search - find customer ID if search term provided
+      let customerIdFromSearch: number | undefined;
+      if (filters.customer_search && !filters.customer_id) {
+        const customerQuery = `
+          SELECT id FROM t_contacts
+          WHERE tenant_id = $1 
+            AND is_live = $2
+            AND (LOWER(name) LIKE LOWER($3) OR LOWER(iwell_code) LIKE LOWER($3))
+          LIMIT 1
+        `;
+        const customerResult = await this.db.query(customerQuery, [
+          tenantId,
+          isLive,
+          `%${filters.customer_search}%`
+        ]);
+        if (customerResult.rows.length > 0) {
+          customerIdFromSearch = customerResult.rows[0].id;
+        }
+      }
+
       // Apply filters
       const filterClause = TransactionUtil.buildFilterWhereClause(
         {
-          customer_id: filters.customer_id,
+          customer_id: filters.customer_id || customerIdFromSearch,
           scheme_code: filters.scheme_code,
           start_date: filters.start_date,
           end_date: filters.end_date,
           txn_type_id: filters.txn_type_id,
+          import_session_id: filters.import_session_id,
           is_potential_duplicate: filters.is_potential_duplicate,
           portfolio_flag: filters.portfolio_flag
         },
@@ -57,8 +79,6 @@ export class TransactionService {
 
       const whereClause = [...baseConditions, filterClause.where].join(' AND ');
       params.push(...filterClause.params);
-
-      // Update paramIndex for pagination
       paramIndex += filterClause.params.length;
 
       // Main query with joins
@@ -66,11 +86,12 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
+          c.iwell_code_encrypted as iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type
         FROM t_transaction_table tt
-        LEFT JOIN t_customers c ON tt.customer_id = c.id
+        LEFT JOIN t_contacts c ON tt.customer_id = c.id
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE ${whereClause}
         ORDER BY tt.${sortBy} ${sortOrder.toUpperCase()}
@@ -81,18 +102,26 @@ export class TransactionService {
 
       const result = await this.db.query(query, params);
 
-      // Get total count
+      // Decrypt sensitive fields
+      const transactions = result.rows.map(row => ({
+        ...row,
+        iwell_code: row.iwell_code ? EncryptionUtil.decrypt(row.iwell_code) : null
+      }));
+
+      // Get total count (exclude LIMIT and OFFSET params)
       const countQuery = `
         SELECT COUNT(*) as total
         FROM t_transaction_table tt
+        LEFT JOIN t_contacts c ON tt.customer_id = c.id
         WHERE ${whereClause}
       `;
 
-      const countResult = await this.db.query(countQuery, params.slice(0, paramIndex - 2));
+      const countParams = params.slice(0, -2); // Remove last 2 params (LIMIT and OFFSET)
+      const countResult = await this.db.query(countQuery, countParams);
       const total = parseInt(countResult.rows[0].total);
 
       return {
-        transactions: result.rows,
+        transactions,
         pagination: {
           page,
           page_size: pageSize,
@@ -119,12 +148,13 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
+          c.iwell_code_encrypted as iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type,
           isd.raw_data as staging_data
         FROM t_transaction_table tt
-        LEFT JOIN t_customers c ON tt.customer_id = c.id
+        LEFT JOIN t_contacts c ON tt.customer_id = c.id
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         LEFT JOIN t_import_staging_data isd ON tt.staging_record_id = isd.id
         WHERE tt.id = $1 AND tt.tenant_id = $2 AND tt.is_live = $3
@@ -136,7 +166,13 @@ export class TransactionService {
         return null;
       }
 
-      return result.rows[0];
+      // Decrypt sensitive fields
+      const transaction = {
+        ...result.rows[0],
+        iwell_code: result.rows[0].iwell_code ? EncryptionUtil.decrypt(result.rows[0].iwell_code) : null
+      };
+
+      return transaction;
     } catch (error: any) {
       console.error('Error getting transaction by ID:', error);
       throw new Error(`Failed to get transaction: ${error.message}`);
@@ -430,31 +466,53 @@ export class TransactionService {
   ): Promise<TransactionSummary> {
     try {
       // Build WHERE clause
-      const baseConditions = ['tenant_id = $1', 'is_live = $2', 'is_active = true'];
+      const baseConditions = ['tt.tenant_id = $1', 'tt.is_live = $2', 'tt.is_active = true'];
       const params: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
-      const filterClause = TransactionUtil.buildFilterWhereClause(
-        filters || {},
-        paramIndex
-      );
+      // Handle customer search for summary
+      let customerIdFromSearch: number | undefined;
+      if (filters?.customer_search && !filters?.customer_id) {
+        const customerQuery = `
+          SELECT id FROM t_contacts
+          WHERE tenant_id = $1 
+            AND is_live = $2
+            AND (LOWER(name) LIKE LOWER($3) OR LOWER(iwell_code_encrypted) LIKE LOWER($3))
+          LIMIT 1
+        `;
+        const customerResult = await this.db.query(customerQuery, [
+          tenantId,
+          isLive,
+          `%${filters.customer_search}%`
+        ]);
+        if (customerResult.rows.length > 0) {
+          customerIdFromSearch = customerResult.rows[0].id;
+        }
+      }
 
+     const filterClause = TransactionUtil.buildFilterWhereClause(
+  {
+    ...(filters || {}),
+    customer_id: filters?.customer_id || customerIdFromSearch
+  },
+  paramIndex
+);
       const whereClause = [...baseConditions, filterClause.where].join(' AND ');
       params.push(...filterClause.params);
 
       const query = `
         SELECT 
           COUNT(*) as total_transactions,
-          SUM(total_amount) as total_amount,
-          SUM(units) as total_units,
+          SUM(tt.total_amount) as total_amount,
+          SUM(tt.units) as total_units,
           COUNT(CASE WHEN mtt.txn_type = 'Addition' THEN 1 END) as addition_count,
           COUNT(CASE WHEN mtt.txn_type = 'Deduction' THEN 1 END) as deduction_count,
-          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN total_amount ELSE 0 END) as addition_amount,
-          SUM(CASE WHEN mtt.txn_type = 'Deduction' THEN total_amount ELSE 0 END) as deduction_amount,
-          COUNT(CASE WHEN is_potential_duplicate = true THEN 1 END) as duplicate_count,
-          COUNT(DISTINCT scheme_code) as unique_schemes,
-          MIN(txn_date) as earliest_date,
-          MAX(txn_date) as latest_date
+          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN tt.total_amount ELSE 0 END) as addition_amount,
+          SUM(CASE WHEN mtt.txn_type = 'Deduction' THEN tt.total_amount ELSE 0 END) as deduction_amount,
+          COUNT(CASE WHEN tt.is_potential_duplicate = true THEN 1 END) as duplicate_count,
+          COUNT(DISTINCT tt.scheme_code) as unique_schemes,
+          MIN(tt.txn_date) as earliest_date,
+          MAX(tt.txn_date) as latest_date
         FROM t_transaction_table tt
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE ${whereClause}

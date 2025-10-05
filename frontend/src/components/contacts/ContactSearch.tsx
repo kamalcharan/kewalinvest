@@ -86,7 +86,7 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
     setSearchInput('');
     onSearchParamsChange({
       page: 1,
-      page_size: currentParams.page_size || 50, // Changed from 20 to 50
+      page_size: currentParams.page_size || 50,
       sort_by: 'name',
       sort_order: 'asc'
     });
@@ -461,32 +461,6 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
           <option value="true">Active</option>
           <option value="false">Inactive</option>
         </select>
-
-        {/* Sort Options */}
-        <select
-          value={`${currentParams.sort_by || 'name'}_${currentParams.sort_order || 'asc'}`}
-          onChange={(e) => {
-            const [sort_by, sort_order] = e.target.value.split('_');
-            handleFilterChange('sort_by', sort_by);
-            handleFilterChange('sort_order', sort_order);
-          }}
-          style={{
-            backgroundColor: colors.utility.primaryBackground,
-            color: colors.utility.primaryText,
-            border: `1px solid ${colors.utility.secondaryText}40`,
-            borderRadius: '6px',
-            padding: '6px 8px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            outline: 'none'
-          }}
-        >
-          {CONTACT_SORT_OPTIONS.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Advanced Filters */}
@@ -580,8 +554,6 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
                 ))}
               </select>
             </div>
-
-            {/* Page Size - REMOVED from advanced filters since it's in main page */}
           </div>
         </div>
       )}

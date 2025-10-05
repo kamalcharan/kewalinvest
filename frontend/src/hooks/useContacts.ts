@@ -88,7 +88,6 @@ export function useContacts(params: ContactSearchParams = {}) {
       }
 
       try {
-        // Use apiService instead of raw axios
         const endpoint = `/contacts${buildQueryParams(params, environment)}`;
         const response = await apiService.get<{ success: boolean; data: ContactListResponse; error?: string }>(endpoint);
         
@@ -105,7 +104,6 @@ export function useContacts(params: ContactSearchParams = {}) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      // Don't retry 404s or auth errors
       if (error?.message?.includes('Service not found') || 
           error?.message?.includes('Authentication required')) {
         return false;
@@ -114,14 +112,12 @@ export function useContacts(params: ContactSearchParams = {}) {
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
-    // Transform the data and add computed properties
     select: (data: ContactListResponse): EnhancedContactListResponse => {
-      // Ensure contacts is always an array
       const contacts = data.contacts || [];
       
       return {
         ...data,
-        contacts, // Ensure this is properly typed
+        contacts,
         contactsByStatus: {
           active: contacts.filter(c => c.is_active),
           inactive: contacts.filter(c => !c.is_active),
@@ -142,7 +138,6 @@ export function useContacts(params: ContactSearchParams = {}) {
         }
       };
     },
-    // Provide fallback data structure with proper typing
     placeholderData: (): ContactListResponse => ({
       contacts: [],
       total: 0,
@@ -201,7 +196,6 @@ export function useContactStats() {
         growth: stats.recent > 0 ? 'growing' : 'stable'
       }
     }),
-    // Provide fallback stats
     placeholderData: {
       total: 0,
       active: 0,
@@ -283,7 +277,6 @@ export function useContactSearch(query: string, enabled: boolean = true) {
 
         return response.data;
       } catch (error) {
-        // Don't show error toasts for search failures - just return empty results
         console.warn('Search failed:', error);
         return [];
       }
@@ -291,7 +284,7 @@ export function useContactSearch(query: string, enabled: boolean = true) {
     enabled: !!user && !!tenantId && enabled && query.length >= 2,
     staleTime: 15 * 1000,
     gcTime: 2 * 60 * 1000,
-    retry: false, // Don't retry search failures
+    retry: false,
     select: (contacts) => contacts.map(contact => ({
       ...contact,
       searchRelevance: {
@@ -423,10 +416,39 @@ export function useDeleteContact() {
       queryClient.invalidateQueries({ queryKey: CONTACT_QUERY_KEYS.lists() });
       queryClient.invalidateQueries({ queryKey: CONTACT_QUERY_KEYS.stats() });
       queryClient.removeQueries({ queryKey: CONTACT_QUERY_KEYS.detail(contactId) });
-      toastService.success('Contact deleted successfully');
+      toastService.success('Contact deactivated successfully');
     },
     onError: (error) => {
       handleAPIError(error, 'Failed to delete contact');
+    }
+  });
+}
+
+// NEW: Mutation hook for activating contacts
+export function useActivateContact() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation({
+    mutationFn: async (contactId: number): Promise<void> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await apiService.put<{ success: boolean; error?: string }>(`/contacts/${contactId}/activate`, {});
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to activate contact');
+      }
+    },
+    onSuccess: (_, contactId) => {
+      queryClient.invalidateQueries({ queryKey: CONTACT_QUERY_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: CONTACT_QUERY_KEYS.stats() });
+      queryClient.invalidateQueries({ queryKey: CONTACT_QUERY_KEYS.detail(contactId) });
+      toastService.success('Contact activated successfully');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to activate contact');
     }
   });
 }

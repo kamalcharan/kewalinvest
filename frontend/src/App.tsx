@@ -36,6 +36,10 @@ import CustomersPage from './pages/customers/CustomersPage';
 import CustomerFormPage from './pages/customers/CustomerFormPage';
 import CustomerViewPage from './pages/customers/CustomerViewPage';
 
+//transaction pages
+// Transaction Pages
+import TransactionListPage from './pages/transactions/TransactionListPage';
+
 // Import Data pages
 import ImportDataPage from './pages/data-import/ImportDataPage';
 import ImportDashboard from './pages/data-import/ImportDashboard';
@@ -87,6 +91,10 @@ function App() {
                 
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
+
+                {/* Transaction Routes - NEW */}
+                <Route path="transactions" element={<TransactionListPage />} />
+                <Route path="transactions/:id" element={<TransactionListPage />} />
                 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>

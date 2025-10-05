@@ -2,13 +2,16 @@
 
 import apiService from './api.service';
 import { API_ENDPOINTS } from './serviceURLs';
+import { TransactionWithDetails } from '../types/transaction.types'
 
 export interface TransactionFilters {
   customer_id?: number;
+  customer_search?: string;
   scheme_code?: string;
   start_date?: string;
   end_date?: string;
   txn_type_id?: number;
+  import_session_id?: number;
   is_potential_duplicate?: boolean;
   portfolio_flag?: boolean;
   page?: number;
@@ -44,7 +47,7 @@ export interface Transaction {
 export interface TransactionListResponse {
   success: boolean;
   data: {
-    transactions: Transaction[];
+    transactions: TransactionWithDetails[];
     pagination: {
       page: number;
       page_size: number;
@@ -57,7 +60,7 @@ export interface TransactionListResponse {
 
 export interface TransactionDetailResponse {
   success: boolean;
-  data: Transaction;
+  data: TransactionWithDetails;
   error?: string;
 }
 
@@ -120,10 +123,12 @@ export class TransactionService {
       const queryParams = new URLSearchParams();
 
       if (filters.customer_id) queryParams.append('customer_id', filters.customer_id.toString());
+      if (filters.customer_search) queryParams.append('customer_search', filters.customer_search);
       if (filters.scheme_code) queryParams.append('scheme_code', filters.scheme_code);
       if (filters.start_date) queryParams.append('start_date', filters.start_date);
       if (filters.end_date) queryParams.append('end_date', filters.end_date);
       if (filters.txn_type_id) queryParams.append('txn_type_id', filters.txn_type_id.toString());
+      if (filters.import_session_id) queryParams.append('import_session_id', filters.import_session_id.toString());
       if (filters.is_potential_duplicate !== undefined) {
         queryParams.append('is_potential_duplicate', filters.is_potential_duplicate.toString());
       }
@@ -230,6 +235,7 @@ export class TransactionService {
       const queryParams = new URLSearchParams();
 
       if (filters.customer_id) queryParams.append('customer_id', filters.customer_id.toString());
+      if (filters.customer_search) queryParams.append('customer_search', filters.customer_search);
       if (filters.scheme_code) queryParams.append('scheme_code', filters.scheme_code);
       if (filters.start_date) queryParams.append('start_date', filters.start_date);
       if (filters.end_date) queryParams.append('end_date', filters.end_date);
@@ -245,40 +251,53 @@ export class TransactionService {
   /**
    * Helper: Format date for display
    */
-  static formatDate(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }
+static formatDate(dateString: string): string {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  return date.toLocaleDateString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
 
   /**
    * Helper: Format amount in INR
    */
-  static formatAmount(amount: number): string {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
+static formatAmount(amount: any): string {
+  if (!amount && amount !== 0) return '₹0.00';
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numAmount)) return '₹0.00';
+  
+  if (numAmount >= 10000000) {
+    return `₹${(numAmount / 10000000).toFixed(2)}Cr`;
+  } else if (numAmount >= 100000) {
+    return `₹${(numAmount / 100000).toFixed(2)}L`;
   }
+  return `₹${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
   /**
    * Helper: Format units
    */
-  static formatUnits(units: number): string {
-    return units.toFixed(4);
-  }
+  static formatUnits(units: any): string {
+  if (!units && units !== 0) return '0.0000';
+  const numUnits = typeof units === 'string' ? parseFloat(units) : units;
+  if (isNaN(numUnits)) return '0.0000';
+  return numUnits.toFixed(4);
+}
 
   /**
    * Helper: Format NAV
    */
-  static formatNAV(nav: number): string {
-    return nav.toFixed(4);
-  }
+  static formatNAV(nav: any): string {
+  if (!nav && nav !== 0) return '0.0000';
+  const numNav = typeof nav === 'string' ? parseFloat(nav) : nav;
+  if (isNaN(numNav)) return '0.0000';
+  return numNav.toFixed(4);
+}
 
   /**
    * Helper: Get transaction type color

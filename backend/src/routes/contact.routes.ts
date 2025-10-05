@@ -17,6 +17,7 @@ router.post('/', contactController.createContact);
 router.get('/:id', contactController.getContact);
 router.put('/:id', contactController.updateContact);
 router.delete('/:id', contactController.deleteContact);
+router.put('/:id/activate', contactController.activateContact);
 
 // Convert contact to customer - ADD THIS LINE
 router.post('/:id/convert-to-customer', contactController.convertToCustomer);

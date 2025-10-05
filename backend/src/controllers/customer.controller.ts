@@ -1,6 +1,7 @@
 // backend/src/controllers/customer.controller.ts
 
 import { Request, Response } from 'express';
+import { pool } from '../config/database';
 import { CustomerService } from '../services/customer.service';
 import {
   CreateCustomerRequest,
@@ -131,13 +132,11 @@ export class CustomerController {
       const isLive = environment === 'live';
       const data = req.body as CreateCustomerRequest;
 
-      // ADD THIS LOGGING  
-    console.log('=== CREATE CUSTOMER DEBUG ===');
-    console.log('Create Data:', JSON.stringify(data, null, 2));
-    console.log('Address in create:', data.address);
-    console.log('========================');
+      console.log('=== CREATE CUSTOMER DEBUG ===');
+      console.log('Create Data:', JSON.stringify(data, null, 2));
+      console.log('Address in create:', data.address);
+      console.log('========================');
 
-      // Validation
       if (!data.contact_id && !data.name) {
         res.status(400).json({
           success: false,
@@ -167,102 +166,138 @@ export class CustomerController {
     }
   };
 
-  
   /**
- * Update customer
- */
-updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const { user, environment } = req;
-    const isLive = environment === 'live';
-    const customerId = parseInt(req.params.id);
-    const { addresses, ...customerData } = req.body as UpdateCustomerRequest & { addresses?: any[] };
+   * Update customer
+   */
+  updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+      const { addresses, is_active, ...customerData } = req.body as UpdateCustomerRequest & { addresses?: any[]; is_active?: boolean };
 
-// ADD THIS LOGGING
-    console.log('=== UPDATE DEBUG START ===');
-    console.log('Customer ID:', customerId);
-    console.log('Addresses received:', JSON.stringify(addresses, null, 2));
-    console.log('Addresses length:', addresses?.length || 'undefined');
-    console.log('=== UPDATE DEBUG END ===');
+      console.log('=== UPDATE DEBUG START ===');
+      console.log('Customer ID:', customerId);
+      console.log('Addresses received:', JSON.stringify(addresses, null, 2));
+      console.log('Addresses length:', addresses?.length || 'undefined');
+      console.log('is_active:', is_active);
+      console.log('=== UPDATE DEBUG END ===');
 
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
 
-    if (isNaN(customerId)) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid customer ID'
-      });
-      return;
-    }
+      // Validate survival status logic
+      if (customerData.survival_status === 'deceased' && !customerData.date_of_death) {
+        res.status(400).json({
+          success: false,
+          error: 'Date of death is required when marking as deceased'
+        });
+        return;
+      }
 
-    // Validate survival status logic
-    if (customerData.survival_status === 'deceased' && !customerData.date_of_death) {
-      res.status(400).json({
-        success: false,
-        error: 'Date of death is required when marking as deceased'
-      });
-      return;
-    }
+      // Get customer to find contact_id before update
+      const customerCheck = await client.query(
+        'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, user!.tenant_id, isLive]
+      );
 
-    // Update customer data
-    await this.customerService.updateCustomer(
-      user!.tenant_id,
-      isLive,
-      customerId,
-      customerData
-    );
+      if (customerCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: 'Customer not found'
+        });
+        return;
+      }
 
-    // Handle addresses if provided
-    if (addresses && Array.isArray(addresses) && addresses.length > 0) {
-      for (const address of addresses) {
-        try {
-          if (address.id) {
-            // Skip existing address updates for now - can be implemented later if needed
-            console.log('Existing address update not implemented for id:', address.id);
-          } else {
-            // Add new address
-            await this.customerService.addAddress(
-              user!.tenant_id,
-              isLive,
-              customerId,
-              address
-            );
+      const contactId = customerCheck.rows[0].contact_id;
+
+      // Update customer data (including is_active if provided)
+      const updateData = is_active !== undefined 
+        ? { ...customerData, is_active } 
+        : customerData;
+        
+      await this.customerService.updateCustomer(
+        user!.tenant_id,
+        isLive,
+        customerId,
+        updateData
+      );
+
+      // CASCADE: If is_active changed, update linked contact
+      if (is_active !== undefined) {
+        await client.query(
+          `UPDATE t_contacts
+           SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2 AND tenant_id = $3 AND is_live = $4`,
+          [is_active, contactId, user!.tenant_id, isLive]
+        );
+      }
+
+      // Handle addresses if provided
+      if (addresses && Array.isArray(addresses) && addresses.length > 0) {
+        for (const address of addresses) {
+          try {
+            if (address.id) {
+              console.log('Existing address update not implemented for id:', address.id);
+            } else {
+              await this.customerService.addAddress(
+                user!.tenant_id,
+                isLive,
+                customerId,
+                address
+              );
+            }
+          } catch (addressError: any) {
+            console.error('Error processing address:', addressError);
           }
-        } catch (addressError: any) {
-          console.error('Error processing address:', addressError);
-          // Continue with other addresses instead of failing the entire request
         }
       }
+
+      await client.query('COMMIT');
+
+      // Fetch updated customer data with addresses
+      const updatedCustomer = await this.customerService.getCustomer(
+        user!.tenant_id,
+        isLive,
+        customerId
+      );
+
+      res.json({
+        success: true,
+        data: updatedCustomer,
+        message: 'Customer updated successfully'
+      });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('Error updating customer:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update customer'
+      });
+    } finally {
+      client.release();
     }
-
-    // Fetch updated customer data with addresses
-    const updatedCustomer = await this.customerService.getCustomer(
-      user!.tenant_id,
-      isLive,
-      customerId
-    );
-
-    res.json({
-      success: true,
-      data: updatedCustomer,
-      message: 'Customer updated successfully'
-    });
-  } catch (error: any) {
-    console.error('Error updating customer:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to update customer'
-    });
-  }
-};
-
-
-
+  };
 
   /**
-   * Delete customer (soft delete)
+   * Delete customer (soft delete) - MODIFIED: Added cascade to contact
    */
   deleteCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    
     try {
+      await client.query('BEGIN');
+      
       const { user, environment } = req;
       const isLive = environment === 'live';
       const customerId = parseInt(req.params.id);
@@ -275,22 +310,125 @@ updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
 
+      // Get customer to find contact_id
+      const customerCheck = await client.query(
+        'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, user!.tenant_id, isLive]
+      );
+
+      if (customerCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: 'Customer not found'
+        });
+        return;
+      }
+
+      const contactId = customerCheck.rows[0].contact_id;
+
+      // Deactivate customer
       await this.customerService.deleteCustomer(
         user!.tenant_id,
         isLive,
         customerId
       );
 
+      // CASCADE: Also deactivate linked contact
+      await client.query(
+        `UPDATE t_contacts
+         SET is_active = false, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [contactId, user!.tenant_id, isLive]
+      );
+
+      await client.query('COMMIT');
+
       res.json({
         success: true,
-        message: 'Customer deleted successfully'
+        message: 'Customer deactivated successfully'
       });
     } catch (error: any) {
+      await client.query('ROLLBACK');
       console.error('Error deleting customer:', error);
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to delete customer'
       });
+    } finally {
+      client.release();
+    }
+  };
+
+  /**
+   * Activate customer - NEW METHOD
+   */
+  activateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      // Get customer to find contact_id
+      const customerCheck = await client.query(
+        'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, user!.tenant_id, isLive]
+      );
+
+      if (customerCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          success: false,
+          error: 'Customer not found'
+        });
+        return;
+      }
+
+      const contactId = customerCheck.rows[0].contact_id;
+
+      // Activate the customer
+      await client.query(
+        `UPDATE t_customers 
+         SET is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [customerId, user!.tenant_id, isLive]
+      );
+
+      // CASCADE: Also activate linked contact
+      await client.query(
+        `UPDATE t_contacts
+         SET is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [contactId, user!.tenant_id, isLive]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: 'Customer activated successfully'
+      });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('Error activating customer:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to activate customer'
+      });
+    } finally {
+      client.release();
     }
   };
 
@@ -312,7 +450,6 @@ updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
 
-      // Validation
       if (!data.address_line1 || !data.city || !data.state || !data.pincode) {
         res.status(400).json({
           success: false,
@@ -347,7 +484,6 @@ updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void>
    */
   updateAddress = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      // Implementation for updating address
       res.json({
         success: true,
         message: 'Address update not implemented yet'
@@ -366,7 +502,6 @@ updateCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void>
    */
   deleteAddress = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      // Implementation for deleting address
       res.json({
         success: true,
         message: 'Address deletion not implemented yet'

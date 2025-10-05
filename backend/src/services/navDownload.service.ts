@@ -320,14 +320,21 @@ export class NavDownloadService {
         message: `Historical download started for ${request.scheme_ids.length} schemes using MFAPI.in`
       };
     } catch (error: any) {
-      this.downloadLocks.delete(lockKey);
-      
-      SimpleLogger.error('NavDownload', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
-        tenantId, userId, request, error: error.message
-      }, userId, tenantId, error.stack);
-      
-      throw error;
-    }
+  this.downloadLocks.delete(lockKey);
+  
+  SimpleLogger.error('NavDownload', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
+    tenantId, userId, request, error: error.message
+  }, userId, tenantId, error.stack);
+  
+  // FIXED: Preserve existingData property when re-throwing DATE_RANGE_OVERLAP error
+  if (error.message === 'DATE_RANGE_OVERLAP' && error.existingData) {
+    const preservedError = new Error(error.message);
+    (preservedError as any).existingData = error.existingData;
+    throw preservedError;
+  }
+  
+  throw error;
+}
   }
 
   /**
