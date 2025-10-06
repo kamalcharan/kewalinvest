@@ -16,7 +16,7 @@ const TransactionListPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   // State management
-const [filters, setFilters] = useState<TransactionFiltersType>({
+  const [filters, setFilters] = useState<TransactionFiltersType>({
     page: 1,
     page_size: 100,
     sort_by: 'txn_date',
@@ -75,8 +75,8 @@ const [filters, setFilters] = useState<TransactionFiltersType>({
   }, [transactionIdParam]);
 
   // Handle filter changes
-const handleFiltersChange = (newFilters: TransactionFiltersType) => {
-        setFilters(prev => ({
+  const handleFiltersChange = (newFilters: TransactionFiltersType) => {
+    setFilters(prev => ({
       ...prev,
       ...newFilters,
       page: newFilters.page || 1
@@ -97,12 +97,6 @@ const handleFiltersChange = (newFilters: TransactionFiltersType) => {
   const handleTransactionClick = (transaction: TransactionWithDetails) => {
     setSelectedTransactionId(transaction.id);
     navigate(`/transactions/${transaction.id}`);
-  };
-
-  // Handle edit transaction
-  const handleEditTransaction = (transactionId: number) => {
-    console.log('Edit transaction:', transactionId);
-    // TODO: Implement edit functionality
   };
 
   // Handle delete transaction
@@ -547,7 +541,6 @@ const handleFiltersChange = (newFilters: TransactionFiltersType) => {
             transactions={transactions?.transactions || []}
             loading={isLoading}
             onRowClick={handleTransactionClick}
-            onEdit={handleEditTransaction}
             onDelete={handleDeleteTransaction}
             onTogglePortfolioFlag={handleTogglePortfolioFlag}
             pagination={transactions?.pagination || { page: 1, page_size: 100, total: 0, total_pages: 1 }}

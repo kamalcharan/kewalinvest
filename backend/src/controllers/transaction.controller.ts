@@ -36,6 +36,8 @@ export class TransactionController {
 
       const filters: TransactionFilters = {
         customer_id: req.query.customer_id ? parseInt(req.query.customer_id as string) : undefined,
+        customer_search: req.query.customer_search as string,
+        iwell_code_search: req.query.iwell_code_search as string,
         scheme_code: req.query.scheme_code as string,
         start_date: req.query.start_date as string,
         end_date: req.query.end_date as string,
@@ -44,6 +46,7 @@ export class TransactionController {
                                req.query.is_potential_duplicate === 'false' ? false : undefined,
         portfolio_flag: req.query.portfolio_flag === 'true' ? true :
                        req.query.portfolio_flag === 'false' ? false : undefined,
+        import_session_id: req.query.import_session_id ? parseInt(req.query.import_session_id as string) : undefined,
         page: req.query.page ? parseInt(req.query.page as string) : 1,
         page_size: req.query.page_size ? parseInt(req.query.page_size as string) : 100,
         sort_by: req.query.sort_by as string || 'txn_date',
@@ -344,6 +347,8 @@ export class TransactionController {
 
       const filters: TransactionFilters = {
         customer_id: req.query.customer_id ? parseInt(req.query.customer_id as string) : undefined,
+        customer_search: req.query.customer_search as string,
+        iwell_code_search: req.query.iwell_code_search as string,
         scheme_code: req.query.scheme_code as string,
         start_date: req.query.start_date as string,
         end_date: req.query.end_date as string
@@ -364,6 +369,38 @@ export class TransactionController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get transaction summary'
+      });
+    }
+  };
+
+  /**
+   * GET /api/transactions/import-sessions
+   * Get list of import sessions for dropdown filtering
+   */
+  getImportSessions = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const isLive = req.headers['x-environment'] === 'live';
+
+      const sessions = await this.transactionService.getImportSessions(
+        user.tenant_id,
+        isLive
+      );
+
+      res.json({
+        success: true,
+        data: sessions
+      });
+    } catch (error: any) {
+      console.error('Error getting import sessions:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get import sessions'
       });
     }
   };

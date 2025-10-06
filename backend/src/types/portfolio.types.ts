@@ -162,6 +162,11 @@ export interface SchemePortfolioDetails extends PortfolioHolding {
   redemption_amount: number;
 }
 
+export interface DailyChange {
+  day_change: number;
+  day_change_percentage: number;
+}
+
 export interface PortfolioXIRR {
   customer_id: number;
   scheme_code?: string;

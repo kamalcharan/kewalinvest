@@ -117,34 +117,12 @@ export const NAVIGATION_MENU: NavigationSection[] = [
       }
     ]
   },
-  {
-    id: 'reports',
-    name: 'Reports & Analytics',
-    items: [
-      {
-        id: 'reports',
-        name: 'Reports',
-        path: '/reports',
-        icon: FileText
-      },
-      {
-        id: 'analytics',
-        name: 'Analytics',
-        path: '/analytics',
-        icon: BarChart3
-      }
-    ]
-  },
+  
   {
     id: 'system',
     name: 'System',
     items: [
-      {
-        id: 'settings',
-        name: 'Settings',
-        path: '/settings',
-        icon: Settings
-      },
+     
       {
         id: 'system_logs',
         name: 'System Logs',

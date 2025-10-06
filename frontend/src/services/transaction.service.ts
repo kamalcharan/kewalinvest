@@ -2,11 +2,12 @@
 
 import apiService from './api.service';
 import { API_ENDPOINTS } from './serviceURLs';
-import { TransactionWithDetails } from '../types/transaction.types'
+import { TransactionWithDetails } from '../types/transaction.types';
 
 export interface TransactionFilters {
   customer_id?: number;
   customer_search?: string;
+  iwell_code_search?: string;
   scheme_code?: string;
   start_date?: string;
   end_date?: string;
@@ -112,6 +113,26 @@ export interface TransactionSummaryResponse {
   error?: string;
 }
 
+export interface ImportSession {
+  id: number;
+  session_name: string;
+  import_type: string;
+  status: string;
+  total_records: number;
+  successful_records: number;
+  failed_records: number;
+  duplicate_records: number;
+  processing_started_at: string;
+  processing_completed_at: string;
+  created_at: string;
+}
+
+export interface ImportSessionsResponse {
+  success: boolean;
+  data: ImportSession[];
+  error?: string;
+}
+
 export class TransactionService {
   /**
    * Get list of transactions with filters
@@ -124,6 +145,7 @@ export class TransactionService {
 
       if (filters.customer_id) queryParams.append('customer_id', filters.customer_id.toString());
       if (filters.customer_search) queryParams.append('customer_search', filters.customer_search);
+      if (filters.iwell_code_search) queryParams.append('iwell_code_search', filters.iwell_code_search);
       if (filters.scheme_code) queryParams.append('scheme_code', filters.scheme_code);
       if (filters.start_date) queryParams.append('start_date', filters.start_date);
       if (filters.end_date) queryParams.append('end_date', filters.end_date);
@@ -236,6 +258,7 @@ export class TransactionService {
 
       if (filters.customer_id) queryParams.append('customer_id', filters.customer_id.toString());
       if (filters.customer_search) queryParams.append('customer_search', filters.customer_search);
+      if (filters.iwell_code_search) queryParams.append('iwell_code_search', filters.iwell_code_search);
       if (filters.scheme_code) queryParams.append('scheme_code', filters.scheme_code);
       if (filters.start_date) queryParams.append('start_date', filters.start_date);
       if (filters.end_date) queryParams.append('end_date', filters.end_date);
@@ -249,55 +272,68 @@ export class TransactionService {
   }
 
   /**
+   * Get import sessions for dropdown
+   */
+  static async getImportSessions(): Promise<ImportSessionsResponse> {
+    try {
+      const url = `${API_ENDPOINTS.TRANSACTIONS.LIST}/import-sessions`;
+      return await apiService.get<ImportSessionsResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching import sessions:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper: Format date for display
    */
-static formatDate(dateString: string): string {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Invalid Date';
-  
-  return date.toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-}
+  static formatDate(dateString: string): string {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    return date.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
 
   /**
    * Helper: Format amount in INR
    */
-static formatAmount(amount: any): string {
-  if (!amount && amount !== 0) return '₹0.00';
-  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(numAmount)) return '₹0.00';
-  
-  if (numAmount >= 10000000) {
-    return `₹${(numAmount / 10000000).toFixed(2)}Cr`;
-  } else if (numAmount >= 100000) {
-    return `₹${(numAmount / 100000).toFixed(2)}L`;
+  static formatAmount(amount: any): string {
+    if (!amount && amount !== 0) return '₹0.00';
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return '₹0.00';
+    
+    if (numAmount >= 10000000) {
+      return `₹${(numAmount / 10000000).toFixed(2)}Cr`;
+    } else if (numAmount >= 100000) {
+      return `₹${(numAmount / 100000).toFixed(2)}L`;
+    }
+    return `₹${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
-  return `₹${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
   /**
    * Helper: Format units
    */
   static formatUnits(units: any): string {
-  if (!units && units !== 0) return '0.0000';
-  const numUnits = typeof units === 'string' ? parseFloat(units) : units;
-  if (isNaN(numUnits)) return '0.0000';
-  return numUnits.toFixed(4);
-}
+    if (!units && units !== 0) return '0.0000';
+    const numUnits = typeof units === 'string' ? parseFloat(units) : units;
+    if (isNaN(numUnits)) return '0.0000';
+    return numUnits.toFixed(4);
+  }
 
   /**
    * Helper: Format NAV
    */
   static formatNAV(nav: any): string {
-  if (!nav && nav !== 0) return '0.0000';
-  const numNav = typeof nav === 'string' ? parseFloat(nav) : nav;
-  if (isNaN(numNav)) return '0.0000';
-  return numNav.toFixed(4);
-}
+    if (!nav && nav !== 0) return '0.0000';
+    const numNav = typeof nav === 'string' ? parseFloat(nav) : nav;
+    if (isNaN(numNav)) return '0.0000';
+    return numNav.toFixed(4);
+  }
 
   /**
    * Helper: Get transaction type color
@@ -305,11 +341,11 @@ static formatAmount(amount: any): string {
   static getTransactionTypeColor(txnType?: 'Addition' | 'Deduction'): string {
     switch (txnType) {
       case 'Addition':
-        return '#10B981'; // Green
+        return '#10B981';
       case 'Deduction':
-        return '#EF4444'; // Red
+        return '#EF4444';
       default:
-        return '#6B7280'; // Gray
+        return '#6B7280';
     }
   }
 

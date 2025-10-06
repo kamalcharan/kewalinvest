@@ -16,6 +16,7 @@ import schemeRoutes from './routes/scheme.routes';
 import navRoutes from './routes/nav.routes';
 import transactionRoutes from './routes/transaction.routes';
 import portfolioRoutes from './routes/portfolio.routes';
+import jtbdRoutes from './routes/jtbd.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -95,6 +96,7 @@ app.get('/health', (_req: Request, res: Response) => {
       nav: true,
       nav_enhanced_bookmarks: true, // NEW: Enhanced bookmark features
       nav_scheduler: !!navScheduler, // Indicate if scheduler is initialized
+      jtbd: true, // NEW: Jobs To Be Done feature
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -125,7 +127,8 @@ app.get('/api', (_req: Request, res: Response) => {
       portfolio: '/api/portfolio',
       import: '/api/import',
       logs: '/api/logs',
-      nav: '/api/nav'
+      nav: '/api/nav',
+      jtbd: '/api/jtbd'
     }
   });
 });
@@ -139,6 +142,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
+app.use('/api/jtbd', jtbdRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -273,6 +277,20 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/scheduler/status',
       'POST /api/nav/scheduler/trigger',
       'GET /api/nav/scheduler/all-active',
+      
+      // JTBD endpoints
+      'POST /api/jtbd',
+      'GET /api/jtbd/customer/:customerId',
+      'GET /api/jtbd/:id',
+      'PUT /api/jtbd/:id',
+      'DELETE /api/jtbd/:id',
+      'PATCH /api/jtbd/:id/toggle',
+      'GET /api/jtbd/dashboard/overview',
+      'GET /api/jtbd/dashboard/customers-without-jtbd',
+      'GET /api/jtbd/customer/:customerId/summary',
+      'GET /api/jtbd/schemes/:customerId',
+      'GET /api/jtbd/transaction-types',
+      'GET /api/jtbd/:id/occurrences',
       
       // System logs endpoints
       'GET /api/logs',
@@ -458,6 +476,20 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/scheduler/status      ║
 ║  • POST /api/nav/scheduler/trigger     ║
 ║                                        ║
+║  🎯 JTBD (NEW):                        ║
+║  • POST /api/jtbd                      ║
+║  • GET  /api/jtbd/customer/:customerId ║
+║  • GET  /api/jtbd/:id                  ║
+║  • PUT  /api/jtbd/:id                  ║
+║  • DELETE /api/jtbd/:id                ║
+║  • PATCH /api/jtbd/:id/toggle          ║
+║  • GET  /api/jtbd/dashboard/overview   ║
+║  • GET  /api/jtbd/dashboard/customers..║
+║  • GET  /api/jtbd/customer/:id/summary ║
+║  • GET  /api/jtbd/schemes/:customerId  ║
+║  • GET  /api/jtbd/transaction-types    ║
+║  • GET  /api/jtbd/:id/occurrences      ║
+║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
 ║  • GET  /api/import/headers/:fileId    ║
@@ -496,6 +528,7 @@ app.listen(PORT, async () => {
     console.log('✅ Portfolio tracking endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
     console.log('✅ Enhanced bookmark endpoints ready'); // NEW
+    console.log('✅ JTBD endpoints ready'); // NEW
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
@@ -565,6 +598,7 @@ app.listen(PORT, async () => {
 ║  Portfolio: ✅ Ready                   ║
 ║  NAV Routes: ✅ Ready                  ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
+║  JTBD: ✅ Ready                        ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

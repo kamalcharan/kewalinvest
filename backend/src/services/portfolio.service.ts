@@ -12,7 +12,9 @@ import {
   RefreshPortfolioRequest,
   RefreshPortfolioResponse,
   PortfolioStatistics,
-  SchemePortfolioDetails
+  SchemePortfolioDetails,
+  PortfolioPerformanceMetric,
+     DailyChange
 } from '../types/portfolio.types';
 import { PortfolioUtil } from '../utils/portfolio.util';
 
@@ -33,12 +35,12 @@ export class PortfolioService {
   ): Promise<CustomerPortfolioResponse | null> {
     try {
       // Get customer name
-     const customerQuery = `
-  SELECT c.name 
-  FROM t_customers cust
-  JOIN t_contacts c ON c.id = cust.contact_id  
-  WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
-`;
+      const customerQuery = `
+        SELECT c.name 
+        FROM t_customers cust
+        JOIN t_contacts c ON c.id = cust.contact_id  
+        WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
+      `;
       const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
 
       if (customerResult.rows.length === 0) {
@@ -155,8 +157,10 @@ export class PortfolioService {
 
       // Get customer name
       const customerQuery = `
-        SELECT name FROM t_customers
-        WHERE id = $1 AND tenant_id = $2 AND is_live = $3
+        SELECT c.name 
+        FROM t_customers cust
+        JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3
       `;
       const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
       const customerName = customerResult.rows[0]?.name;
@@ -520,4 +524,95 @@ export class PortfolioService {
       throw new Error(`Failed to get portfolio holdings: ${error.message}`);
     }
   }
+
+  /**
+ * Get daily performance data
+ */
+async getPortfolioPerformanceHistory(
+  tenantId: number,
+  isLive: boolean,
+  customerId: number,
+  days: number = 365
+): Promise<PortfolioPerformanceMetric[]> {
+  try {
+    const query = `
+      SELECT 
+        snapshot_date as date,
+        total_invested,
+        current_value,
+        total_returns,
+        return_percentage
+      FROM t_daily_portfolio_snapshots
+      WHERE customer_id = $1 
+        AND tenant_id = $2 
+        AND is_live = $3
+        AND snapshot_date >= CURRENT_DATE - INTERVAL '1 day' * $4
+      ORDER BY snapshot_date ASC
+    `;
+    
+    const result = await this.db.query(query, [customerId, tenantId, isLive, days]);
+
+    return result.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0], // Convert to YYYY-MM-DD string
+      invested: parseFloat(row.total_invested),
+      current_value: parseFloat(row.current_value),
+      returns: parseFloat(row.total_returns),
+      return_percentage: parseFloat(row.return_percentage)
+    }));
+  } catch (error: any) {
+    console.error('Error getting portfolio performance history:', error);
+    throw new Error(`Failed to get portfolio performance history: ${error.message}`);
+  }
+}
+
+/**
+ * Calculate day changes
+ */
+async calculateDailyChanges(
+  tenantId: number,
+  isLive: boolean,
+  customerId: number
+): Promise<DailyChange> {
+  try {
+    const query = `
+      WITH today_value AS (
+        SELECT current_value, total_returns
+        FROM t_daily_portfolio_snapshots
+        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+          AND snapshot_date = CURRENT_DATE
+        LIMIT 1
+      ),
+      yesterday_value AS (
+        SELECT current_value, total_returns
+        FROM t_daily_portfolio_snapshots
+        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+          AND snapshot_date = CURRENT_DATE - INTERVAL '1 day'
+        LIMIT 1
+      )
+      SELECT 
+        COALESCE(tv.current_value, 0) - COALESCE(yv.current_value, 0) as day_change,
+        CASE 
+          WHEN COALESCE(yv.current_value, 0) > 0 
+          THEN ((COALESCE(tv.current_value, 0) - COALESCE(yv.current_value, 0)) / yv.current_value) * 100
+          ELSE 0
+        END as day_change_percentage
+      FROM today_value tv
+      FULL OUTER JOIN yesterday_value yv ON true
+    `;
+
+    const result = await this.db.query(query, [customerId, tenantId, isLive]);
+
+    if (result.rows.length === 0) {
+      return { day_change: 0, day_change_percentage: 0 };
+    }
+
+    return {
+      day_change: parseFloat(result.rows[0].day_change) || 0,
+      day_change_percentage: parseFloat(result.rows[0].day_change_percentage) || 0
+    };
+  } catch (error: any) {
+    console.error('Error calculating daily changes:', error);
+    throw new Error(`Failed to calculate daily changes: ${error.message}`);
+  }
+}
 }

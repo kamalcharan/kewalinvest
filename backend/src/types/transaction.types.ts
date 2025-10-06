@@ -47,6 +47,7 @@ export interface TransactionWithDetails extends Transaction {
 export interface TransactionFilters {
   customer_id?: number;
   customer_search?: string;
+  iwell_code_search?: string;
   scheme_code?: string;
   start_date?: string;
   end_date?: string;

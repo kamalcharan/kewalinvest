@@ -514,4 +514,78 @@ export class CustomerController {
       });
     }
   };
+
+  /**
+   * Get customer's JTBD summary (for displaying badges/status)
+   * GET /api/customers/:id/jtbd-summary
+   */
+  getCustomerJTBDSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      // Query JTBD summary
+      const query = `
+        SELECT 
+          customer_id,
+          COUNT(*) as jtbd_count,
+          MIN(next_alert_date) as next_alert_date,
+          COUNT(*) FILTER (WHERE priority = 'critical') as critical_count,
+          COUNT(*) FILTER (WHERE priority = 'high') as high_count,
+          COUNT(*) FILTER (WHERE is_active = true) as active_count
+        FROM t_jtbd_configurations
+        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
+        GROUP BY customer_id
+      `;
+
+      const result = await pool.query(query, [user!.tenant_id, isLive, customerId]);
+
+      if (result.rows.length === 0) {
+        // No JTBD configured for this customer
+        res.json({
+          success: true,
+          data: {
+            customer_id: customerId,
+            jtbd_count: 0,
+            jtbd_setup_status: 'not_setup',
+            next_alert_date: null,
+            critical_count: 0,
+            high_count: 0,
+            active_count: 0
+          }
+        });
+        return;
+      }
+
+      const row = result.rows[0];
+
+      res.json({
+        success: true,
+        data: {
+          customer_id: customerId,
+          jtbd_count: parseInt(row.jtbd_count) || 0,
+          jtbd_setup_status: parseInt(row.jtbd_count) > 0 ? 'active' : 'not_setup',
+          next_alert_date: row.next_alert_date,
+          critical_count: parseInt(row.critical_count) || 0,
+          high_count: parseInt(row.high_count) || 0,
+          active_count: parseInt(row.active_count) || 0
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting customer JTBD summary:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get customer JTBD summary'
+      });
+    }
+  };
 }

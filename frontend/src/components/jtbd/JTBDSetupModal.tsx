@@ -1,0 +1,431 @@
+// frontend/src/components/jtbd/JTBDSetupModal.tsx
+
+import React, { useState } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { CreateJTBDRequest } from '../../types/jtbd.types';
+import { useCreateJTBD } from '../../hooks/useJTBD';
+import PortfolioAlertForm from './forms/PortfolioAlertForm';
+import TimeAlertForm from './forms/TimeAlertForm';
+import ProfileTriggerForm from './forms/ProfileTriggerForm';
+
+interface JTBDSetupModalProps {
+  customerId: number;
+  customerName: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+}
+
+type JTBDType = 'portfolio_alert' | 'time_based' | 'profile_trigger';
+type SetupStep = 'select_type' | 'configure';
+
+const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
+  customerId,
+  customerName,
+  isOpen,
+  onClose,
+  onSuccess
+}) => {
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  const [step, setStep] = useState<SetupStep>('select_type');
+  const [selectedType, setSelectedType] = useState<JTBDType | null>(null);
+
+  const createJTBDMutation = useCreateJTBD();
+
+  // Handle type selection
+  const handleTypeSelect = (type: JTBDType) => {
+    setSelectedType(type);
+    setStep('configure');
+  };
+
+  // Handle back to type selection
+  const handleBack = () => {
+    setStep('select_type');
+    setSelectedType(null);
+  };
+
+  // Handle form submission
+  const handleSubmit = async (data: CreateJTBDRequest) => {
+    try {
+      await createJTBDMutation.mutateAsync(data);
+      onSuccess?.();
+      handleClose();
+    } catch (error) {
+      console.error('Error creating JTBD:', error);
+      // Error toast already shown by mutation hook
+    }
+  };
+
+  // Handle modal close
+  const handleClose = () => {
+    setStep('select_type');
+    setSelectedType(null);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  // Icons
+  const XIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+
+  const ArrowLeftIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12,19 5,12 12,5" />
+    </svg>
+  );
+
+  const BellIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+
+  const CalendarIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+
+  const UserIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+
+  const ChevronRightIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="9,18 15,12 9,6" />
+    </svg>
+  );
+
+  // Type cards data
+  const typeCards = [
+    {
+      type: 'portfolio_alert' as JTBDType,
+      icon: <BellIcon />,
+      title: 'Portfolio Alert',
+      description: 'Get notified about expected transactions in customer portfolios',
+      color: colors.brand.primary,
+      features: ['Track SIPs & STPs', 'Monitor redemptions', 'Set frequency & amount', 'Deviation tracking']
+    },
+    {
+      type: 'time_based' as JTBDType,
+      icon: <CalendarIcon />,
+      title: 'Time-Based Alert',
+      description: 'Set alerts for specific dates throughout the year',
+      color: colors.brand.secondary,
+      features: ['Annual reminders', 'Custom dates', 'One-time or recurring', 'Tax deadlines']
+    },
+    {
+      type: 'profile_trigger' as JTBDType,
+      icon: <UserIcon />,
+      title: 'Profile Trigger',
+      description: 'Automated alerts based on customer life events',
+      color: colors.semantic.info,
+      features: ['Birthday reminders', 'Anniversary alerts', 'Configurable lead time', 'Personal touch']
+    }
+  ];
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9998,
+          animation: 'fadeIn 0.2s ease-out'
+        }}
+        onClick={handleClose}
+      />
+
+      {/* Modal */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: colors.utility.primaryBackground,
+          borderRadius: '16px',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          zIndex: 9999,
+          width: '90%',
+          maxWidth: step === 'select_type' ? '900px' : '600px',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'modalSlideIn 0.3s ease-out'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: '24px',
+            borderBottom: `1px solid ${colors.utility.primaryText}10`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {step === 'configure' && (
+              <button
+                onClick={handleBack}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '6px 12px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '6px',
+                  color: colors.utility.primaryText,
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                <ArrowLeftIcon />
+                Back
+              </button>
+            )}
+            <div>
+              <h2
+                style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: colors.utility.primaryText,
+                  margin: 0
+                }}
+              >
+                {step === 'select_type' ? 'Setup JTBD for Customer' : 'Configure Alert'}
+              </h2>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: colors.utility.secondaryText,
+                  margin: '4px 0 0 0'
+                }}
+              >
+                {step === 'select_type' 
+                  ? `Setting up alerts for ${customerName}`
+                  : `Type: ${selectedType ? typeCards.find(t => t.type === selectedType)?.title : ''}`
+                }
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleClose}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: colors.utility.secondaryText,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <XIcon />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div
+          style={{
+            padding: '24px',
+            overflowY: 'auto',
+            flex: 1
+          }}
+        >
+          {step === 'select_type' && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '20px'
+              }}
+            >
+              {typeCards.map((card) => (
+                <div
+                  key={card.type}
+                  onClick={() => handleTypeSelect(card.type)}
+                  style={{
+                    padding: '24px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    borderRadius: '12px',
+                    border: `2px solid ${colors.utility.primaryText}10`,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = card.color;
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = `0 8px 24px ${card.color}20`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = colors.utility.primaryText + '10';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {/* Icon */}
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      backgroundColor: card.color + '20',
+                      color: card.color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    {card.icon}
+                  </div>
+
+                  {/* Title */}
+                  <h3
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText,
+                      margin: '0 0 8px 0'
+                    }}
+                  >
+                    {card.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: colors.utility.secondaryText,
+                      margin: '0 0 16px 0',
+                      lineHeight: '1.5'
+                    }}
+                  >
+                    {card.description}
+                  </p>
+
+                  {/* Features */}
+                  <ul
+                    style={{
+                      listStyle: 'none',
+                      padding: 0,
+                      margin: 0
+                    }}
+                  >
+                    {card.features.map((feature, idx) => (
+                      <li
+                        key={idx}
+                        style={{
+                          fontSize: '12px',
+                          color: colors.utility.secondaryText,
+                          marginBottom: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <span style={{ color: card.color }}>✓</span>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Arrow */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '16px',
+                      right: '16px',
+                      color: card.color
+                    }}
+                  >
+                    <ChevronRightIcon />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {step === 'configure' && selectedType === 'portfolio_alert' && (
+            <PortfolioAlertForm
+              customerId={customerId}
+              onSubmit={handleSubmit}
+              onCancel={handleClose}
+              isSubmitting={createJTBDMutation.isPending}
+            />
+          )}
+
+          {step === 'configure' && selectedType === 'time_based' && (
+            <TimeAlertForm
+              customerId={customerId}
+              onSubmit={handleSubmit}
+              onCancel={handleClose}
+              isSubmitting={createJTBDMutation.isPending}
+            />
+          )}
+
+          {step === 'configure' && selectedType === 'profile_trigger' && (
+            <ProfileTriggerForm
+              customerId={customerId}
+              onSubmit={handleSubmit}
+              onCancel={handleClose}
+              isSubmitting={createJTBDMutation.isPending}
+            />
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes modalSlideIn {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -48%) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+        }
+      `}</style>
+    </>
+  );
+};
+
+export default JTBDSetupModal;

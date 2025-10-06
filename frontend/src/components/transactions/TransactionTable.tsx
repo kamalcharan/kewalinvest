@@ -9,7 +9,6 @@ interface TransactionTableProps {
   transactions: TransactionWithDetails[];
   loading?: boolean;
   onRowClick?: (transaction: TransactionWithDetails) => void;
-  onEdit?: (transactionId: number) => void;
   onDelete?: (transactionId: number) => void;
   onTogglePortfolioFlag?: (transactionId: number, currentFlag: boolean) => void;
   pagination: {
@@ -26,7 +25,6 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   transactions,
   loading = false,
   onRowClick,
-  onEdit,
   onDelete,
   onTogglePortfolioFlag,
   pagination,
@@ -36,32 +34,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<string>('txn_date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Handle row selection
-  const handleRowSelection = (transactionId: number, selected: boolean) => {
-    setSelectedRows(prev => {
-      const newSet = new Set(prev);
-      if (selected) {
-        newSet.add(transactionId);
-      } else {
-        newSet.delete(transactionId);
-      }
-      return newSet;
-    });
-  };
-
-  // Handle select all
-  const handleSelectAll = (selected: boolean) => {
-    if (selected) {
-      setSelectedRows(new Set(transactions.map(t => t.id)));
-    } else {
-      setSelectedRows(new Set());
-    }
-  };
 
   // Handle sort
   const handleSort = (column: string) => {
@@ -91,62 +65,29 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   };
 
   // Icons
-  const ChevronUpIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="18,15 12,9 6,15" />
-    </svg>
-  );
-
-  const ChevronDownIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="6,9 12,15 18,9" />
-    </svg>
-  );
-
-  const MoreVerticalIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="12" cy="5" r="1" />
-      <circle cx="12" cy="19" r="1" />
-    </svg>
-  );
-
   const EyeIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
 
   const EditIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   );
 
   const TrashIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="3,6 5,6 21,6" />
       <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2" />
     </svg>
   );
 
-  const ToggleIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="1" y="5" width="22" height="14" rx="7" ry="7" />
-      <circle cx="16" cy="12" r="3" />
-    </svg>
-  );
-
-  const CheckIcon = () => (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-      <polyline points="20,6 9,17 4,12" />
-    </svg>
-  );
-
   const AlertTriangleIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -165,20 +106,24 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     </svg>
   );
 
-  const allSelected = transactions.length > 0 && selectedRows.size === transactions.length;
-  const someSelected = selectedRows.size > 0 && selectedRows.size < transactions.length;
+  const UserIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
 
   // Loading skeleton
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {Array.from({ length: 10 }).map((_, index) => (
           <div
             key={index}
             style={{
-              height: '60px',
+              height: '140px',
               backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '8px',
+              borderRadius: '12px',
               animation: 'pulse 1.5s ease-in-out infinite',
               opacity: 0.6
             }}
@@ -198,7 +143,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   if (transactions.length === 0) {
     return (
       <div style={{
-        padding: '60px 20px',
+        padding: '80px 20px',
         textAlign: 'center',
         backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '12px',
@@ -237,581 +182,310 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 
   return (
     <div>
-      {/* Table Container */}
+      {/* Results Summary */}
       <div style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '12px',
-        overflow: 'hidden',
-        border: `1px solid ${colors.utility.primaryText}10`
+        fontSize: '14px',
+        color: colors.utility.secondaryText,
+        marginBottom: '16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse'
-          }}>
-            <thead>
-              <tr style={{
-                backgroundColor: colors.utility.primaryBackground,
-                borderBottom: `1px solid ${colors.utility.primaryText}10`
-              }}>
-                {/* Checkbox */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
-                  width: '40px'
+        <span>
+          Showing {((pagination.page - 1) * pagination.page_size) + 1}-
+          {Math.min(pagination.page * pagination.page_size, pagination.total)} of{' '}
+          {pagination.total.toLocaleString()} transactions
+        </span>
+        
+        {/* Sort Options */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Sort by:</span>
+          <select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [col, ord] = e.target.value.split('-');
+              handleSort(col);
+            }}
+            style={{
+              padding: '6px 12px',
+              border: `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              fontSize: '12px',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="txn_date-desc">Date (Newest)</option>
+            <option value="txn_date-asc">Date (Oldest)</option>
+            <option value="total_amount-desc">Amount (High to Low)</option>
+            <option value="total_amount-asc">Amount (Low to High)</option>
+            <option value="scheme_name-asc">Scheme (A-Z)</option>
+            <option value="scheme_name-desc">Scheme (Z-A)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Transaction Cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {transactions.map((transaction) => (
+          <div
+            key={transaction.id}
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              border: `1px solid ${colors.utility.primaryText}10`,
+              padding: '20px',
+              transition: 'all 0.2s ease',
+              cursor: onRowClick ? 'pointer' : 'default'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = `0 2px 8px ${colors.utility.primaryText}15`;
+              e.currentTarget.style.borderColor = colors.brand.primary + '40';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '10';
+            }}
+          >
+            {/* Card Header - Date, Type, and Actions */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '16px'
+            }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText
                 }}>
+                  {formatDate(transaction.txn_date)}
+                </div>
+                
+                <span style={{
+                  display: 'inline-block',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  backgroundColor: getTypeColor(transaction.txn_type) + '20',
+                  color: getTypeColor(transaction.txn_type)
+                }}>
+                  {getTypeLabel(transaction.txn_type)}
+                </span>
+
+                {/* Status Badges */}
+                {transaction.is_potential_duplicate && (
                   <div
                     style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '4px',
-                      border: `2px solid ${allSelected ? colors.brand.primary : colors.utility.secondaryText}`,
-                      backgroundColor: allSelected ? colors.brand.primary : 'transparent',
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      position: 'relative'
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      backgroundColor: colors.semantic.warning + '20',
+                      color: colors.semantic.warning
                     }}
-                    onClick={() => handleSelectAll(!allSelected)}
+                    title={transaction.duplicate_reason || 'Potential duplicate'}
                   >
-                    {allSelected && <CheckIcon />}
-                    {someSelected && !allSelected && (
-                      <div style={{
-                        width: '8px',
-                        height: '8px',
-                        backgroundColor: colors.brand.primary,
-                        borderRadius: '2px'
-                      }} />
-                    )}
+                    <AlertTriangleIcon />
+                    Duplicate
                   </div>
-                </th>
+                )}
 
-                {/* Date */}
-                <th
-                  onClick={() => handleSort('txn_date')}
+                {!transaction.portfolio_flag && (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      backgroundColor: colors.utility.secondaryText + '20',
+                      color: colors.utility.secondaryText
+                    }}
+                    title="Excluded from portfolio"
+                  >
+                    Excluded
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRowClick?.(transaction);
+                  }}
                   style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: colors.utility.secondaryText,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    backgroundColor: colors.utility.primaryBackground,
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '6px',
+                    color: colors.utility.primaryText,
+                    fontSize: '12px',
+                    fontWeight: '500',
                     cursor: 'pointer',
-                    userSelect: 'none'
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.brand.primary + '20';
+                    e.currentTarget.style.borderColor = colors.brand.primary;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                    e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    Date
-                    {sortBy === 'txn_date' && (
-                      sortOrder === 'desc' ? <ChevronDownIcon /> : <ChevronUpIcon />
-                    )}
-                  </div>
-                </th>
+                  <EyeIcon />
+                  View
+                </button>
 
-                {/* Customer */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
+
+              </div>
+            </div>
+
+            {/* Card Body - Main Transaction Info */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 3fr 1fr 1fr 1fr',
+              gap: '20px',
+              alignItems: 'start'
+            }}>
+              {/* Customer Info */}
+              <div>
+                <div style={{
                   fontSize: '11px',
-                  fontWeight: '600',
                   color: colors.utility.secondaryText,
+                  marginBottom: '6px',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}>
+                  <UserIcon />
                   Customer
-                </th>
-
-                {/* Scheme */}
-                <th
-                  onClick={() => handleSort('scheme_name')}
-                  style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: colors.utility.secondaryText,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    cursor: 'pointer',
-                    userSelect: 'none'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    Scheme
-                    {sortBy === 'scheme_name' && (
-                      sortOrder === 'desc' ? <ChevronDownIcon /> : <ChevronUpIcon />
-                    )}
-                  </div>
-                </th>
-
-                {/* Type */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
-                  fontSize: '11px',
+                </div>
+                <div style={{
+                  fontSize: '14px',
                   fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  marginBottom: '2px'
+                }}>
+                  {transaction.customer_name || 'Unknown Customer'}
+                </div>
+                {transaction.iwell_code && (
+                  <div style={{
+                    fontSize: '12px',
+                    color: colors.utility.secondaryText
+                  }}>
+                    {transaction.iwell_code}
+                  </div>
+                )}
+              </div>
+
+              {/* Scheme Info */}
+              <div>
+                <div style={{
+                  fontSize: '11px',
                   color: colors.utility.secondaryText,
+                  marginBottom: '6px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Type
-                </th>
-
-                {/* Amount */}
-                <th
-                  onClick={() => handleSort('total_amount')}
-                  style={{
-                    padding: '12px 16px',
-                    textAlign: 'right',
+                  Scheme
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: colors.utility.primaryText,
+                  lineHeight: '1.4'
+                }}>
+                  {transaction.scheme_name}
+                </div>
+                {transaction.folio_no && (
+                  <div style={{
                     fontSize: '11px',
-                    fontWeight: '600',
                     color: colors.utility.secondaryText,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    cursor: 'pointer',
-                    userSelect: 'none'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                    Amount
-                    {sortBy === 'total_amount' && (
-                      sortOrder === 'desc' ? <ChevronDownIcon /> : <ChevronUpIcon />
-                    )}
+                    marginTop: '4px'
+                  }}>
+                    Folio: {transaction.folio_no}
                   </div>
-                </th>
+                )}
+              </div>
 
-                {/* Units */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'right',
+              {/* Amount */}
+              <div>
+                <div style={{
                   fontSize: '11px',
-                  fontWeight: '600',
                   color: colors.utility.secondaryText,
+                  marginBottom: '6px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Amount
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: colors.utility.primaryText
+                }}>
+                  {formatCurrency(transaction.total_amount)}
+                </div>
+              </div>
+
+              {/* Units */}
+              <div>
+                <div style={{
+                  fontSize: '11px',
+                  color: colors.utility.secondaryText,
+                  marginBottom: '6px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
                   Units
-                </th>
-
-                {/* NAV */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'right',
-                  fontSize: '11px',
+                </div>
+                <div style={{
+                  fontSize: '14px',
                   fontWeight: '600',
+                  color: colors.utility.primaryText
+                }}>
+                  {TransactionService.formatUnits(transaction.units)}
+                </div>
+              </div>
+
+              {/* NAV */}
+              <div>
+                <div style={{
+                  fontSize: '11px',
                   color: colors.utility.secondaryText,
+                  marginBottom: '6px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
                   NAV
-                </th>
-
-                {/* Status */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'center',
-                  fontSize: '11px',
+                </div>
+                <div style={{
+                  fontSize: '14px',
                   fontWeight: '600',
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
+                  color: colors.utility.secondaryText
                 }}>
-                  Status
-                </th>
-
-                {/* Actions */}
-                <th style={{
-                  padding: '12px 16px',
-                  textAlign: 'center',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  width: '60px'
-                }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {transactions.map((transaction, index) => (
-                <tr
-                  key={transaction.id}
-                  style={{
-                    borderBottom: index < transactions.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none',
-                    cursor: onRowClick ? 'pointer' : 'default',
-                    transition: 'background-color 0.15s ease'
-                  }}
-                  onClick={() => onRowClick?.(transaction)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {/* Checkbox */}
-                  <td
-                    style={{ padding: '12px 16px' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div
-                      style={{
-                        width: '18px',
-                        height: '18px',
-                        borderRadius: '4px',
-                        border: `2px solid ${selectedRows.has(transaction.id) ? colors.brand.primary : colors.utility.secondaryText}`,
-                        backgroundColor: selectedRows.has(transaction.id) ? colors.brand.primary : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => handleRowSelection(transaction.id, !selectedRows.has(transaction.id))}
-                    >
-                      {selectedRows.has(transaction.id) && <CheckIcon />}
-                    </div>
-                  </td>
-
-                  {/* Date */}
-                  <td style={{
-                    padding: '12px 16px',
-                    fontSize: '13px',
-                    color: colors.utility.primaryText,
-                    fontWeight: '500'
-                  }}>
-                    {formatDate(transaction.txn_date)}
-                  </td>
-
-                  {/* Customer */}
-                  <td style={{
-                    padding: '12px 16px',
-                    fontSize: '13px',
-                    color: colors.utility.primaryText
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: '500' }}>
-                        {transaction.customer_name || 'Unknown Customer'}
-                      </div>
-                      {transaction.iwell_code && (
-                        <div style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText,
-                          marginTop: '2px'
-                        }}>
-                          {transaction.iwell_code}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Scheme */}
-                  <td style={{
-                    padding: '12px 16px',
-                    fontSize: '13px',
-                    color: colors.utility.primaryText,
-                    maxWidth: '250px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={transaction.scheme_name}
-                  >
-                    {transaction.scheme_name}
-                  </td>
-
-                  {/* Type */}
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 10px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      backgroundColor: getTypeColor(transaction.txn_type) + '20',
-                      color: getTypeColor(transaction.txn_type)
-                    }}>
-                      {getTypeLabel(transaction.txn_type)}
-                    </span>
-                  </td>
-
-                  {/* Amount */}
-                  <td style={{
-                    padding: '12px 16px',
-                    textAlign: 'right',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText
-                  }}>
-                    {formatCurrency(transaction.total_amount)}
-                  </td>
-
-                  {/* Units */}
-                  <td style={{
-                    padding: '12px 16px',
-                    textAlign: 'right',
-                    fontSize: '13px',
-                    color: colors.utility.primaryText
-                  }}>
-                    {TransactionService.formatUnits(transaction.units)}
-                  </td>
-
-                  {/* NAV */}
-                  <td style={{
-                    padding: '12px 16px',
-                    textAlign: 'right',
-                    fontSize: '13px',
-                    color: colors.utility.secondaryText
-                  }}>
-                    ₹{TransactionService.formatNAV(transaction.nav)}
-                  </td>
-
-                  {/* Status */}
-                  <td style={{
-                    padding: '12px 16px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                      {transaction.is_potential_duplicate && (
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 6px',
-                            borderRadius: '8px',
-                            fontSize: '10px',
-                            fontWeight: '600',
-                            backgroundColor: colors.semantic.warning + '20',
-                            color: colors.semantic.warning
-                          }}
-                          title={transaction.duplicate_reason || 'Potential duplicate'}
-                        >
-                          <AlertTriangleIcon />
-                        </div>
-                      )}
-                      {!transaction.portfolio_flag && (
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            padding: '3px 6px',
-                            borderRadius: '8px',
-                            fontSize: '10px',
-                            fontWeight: '600',
-                            backgroundColor: colors.utility.secondaryText + '20',
-                            color: colors.utility.secondaryText,
-                            textDecoration: 'line-through'
-                          }}
-                          title="Excluded from portfolio"
-                        >
-                          ✗
-                        </div>
-                      )}
-                      {transaction.portfolio_flag && !transaction.is_potential_duplicate && (
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            padding: '3px 6px',
-                            borderRadius: '8px',
-                            fontSize: '10px',
-                            fontWeight: '600',
-                            backgroundColor: colors.semantic.success + '20',
-                            color: colors.semantic.success
-                          }}
-                          title="Included in portfolio"
-                        >
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Actions */}
-                  <td
-                    style={{ padding: '12px 16px', textAlign: 'center', position: 'relative' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => setOpenMenuId(openMenuId === transaction.id ? null : transaction.id)}
-                      style={{
-                        padding: '4px',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        color: colors.utility.secondaryText,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      <MoreVerticalIcon />
-                    </button>
-
-                    {/* Actions Menu */}
-                    {openMenuId === transaction.id && (
-                      <>
-                        {/* Backdrop */}
-                        <div
-                          style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 999
-                          }}
-                          onClick={() => setOpenMenuId(null)}
-                        />
-
-                        {/* Menu */}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            right: '16px',
-                            top: '40px',
-                            backgroundColor: colors.utility.secondaryBackground,
-                            border: `1px solid ${colors.utility.primaryText}10`,
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            zIndex: 1000,
-                            minWidth: '180px',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              onRowClick?.(transaction);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '10px 16px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              fontSize: '13px',
-                              color: colors.utility.primaryText,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              borderBottom: `1px solid ${colors.utility.primaryText}10`
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            <EyeIcon />
-                            View Details
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              onEdit?.(transaction.id);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '10px 16px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              fontSize: '13px',
-                              color: colors.utility.primaryText,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              borderBottom: `1px solid ${colors.utility.primaryText}10`
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            <EditIcon />
-                            Edit
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              onTogglePortfolioFlag?.(transaction.id, transaction.portfolio_flag);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '10px 16px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              fontSize: '13px',
-                              color: colors.utility.primaryText,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              borderBottom: `1px solid ${colors.utility.primaryText}10`
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            <ToggleIcon />
-                            {transaction.portfolio_flag ? 'Exclude from Portfolio' : 'Include in Portfolio'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              if (window.confirm(`Delete transaction from ${formatDate(transaction.txn_date)}?`)) {
-                                onDelete?.(transaction.id);
-                              }
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '10px 16px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              fontSize: '13px',
-                              color: colors.semantic.error,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            <TrashIcon />
-                            Delete
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ₹{TransactionService.formatNAV(transaction.nav)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Pagination */}
@@ -820,7 +494,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginTop: '16px',
+          marginTop: '20px',
           padding: '16px',
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '8px'
@@ -829,9 +503,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
             fontSize: '13px',
             color: colors.utility.secondaryText
           }}>
-            Showing {((pagination.page - 1) * pagination.page_size) + 1} to{' '}
-            {Math.min(pagination.page * pagination.page_size, pagination.total)} of{' '}
-            {pagination.total} transactions
+            Page {pagination.page} of {pagination.total_pages}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -855,14 +527,6 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
               Previous
             </button>
 
-            <span style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              color: colors.utility.primaryText
-            }}>
-              Page {pagination.page} of {pagination.total_pages}
-            </span>
-
             <button
               onClick={() => onPageChange(pagination.page + 1)}
               disabled={pagination.page === pagination.total_pages}
@@ -883,43 +547,6 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
               <ChevronRightIcon />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Bulk Actions Bar */}
-      {selectedRows.size > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          padding: '16px 24px',
-          backgroundColor: colors.brand.primary,
-          color: 'white',
-          borderRadius: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          zIndex: 100
-        }}>
-          <span style={{ fontSize: '14px', fontWeight: '500' }}>
-            {selectedRows.size} transaction{selectedRows.size > 1 ? 's' : ''} selected
-          </span>
-          <button
-            onClick={() => setSelectedRows(new Set())}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '12px',
-              cursor: 'pointer'
-            }}
-          >
-            Clear Selection
-          </button>
         </div>
       )}
     </div>

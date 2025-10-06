@@ -1,5 +1,5 @@
 // frontend/src/services/nav.service.ts
-// UPDATED: Enhanced 409 error handling with existing_data details
+// UPDATED: Enhanced 409 error handling with existing_data details and improved toast messages
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -278,80 +278,80 @@ export class NavService {
   }
 
   private async handleRequest<T>(
-    url: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T> | PaginatedResponse<T>> {
-    try {
-      console.log('🌐 NavService handleRequest:');
-      console.log('🌐 - URL:', url);
-      
-      const headers = this.getAuthHeaders();
-      console.log('🌐 - Headers:', headers);
-      
-      const response = await fetch(url, {
-        headers,
-        ...options
-      });
+  url: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T> | PaginatedResponse<T>> {
+  try {
+    console.log('🌐 NavService handleRequest:');
+    console.log('🌐 - URL:', url);
+    
+    const headers = this.getAuthHeaders();
+    console.log('🌐 - Headers:', headers);
+    
+    const response = await fetch(url, {
+      headers,
+      ...options
+    });
 
-      console.log('🌐 - Response status:', response.status);
-      console.log('🌐 - Response ok:', response.ok);
+    console.log('🌐 - Response status:', response.status);
+    console.log('🌐 - Response ok:', response.ok);
 
-      if (!response.ok) {
-        console.error('🌐 - Response not ok, status:', response.status);
-        const errorText = await response.text();
-        console.error('🌐 - Error response text:', errorText);
-        
-        if (response.status === 429) {
-          return {
-            success: false,
-            error: 'Too many requests. Please wait a moment before trying again.'
-          };
-        }
-        
-        let errorData: any = {};
-        try {
-          errorData = errorText ? JSON.parse(errorText) : {};
-        } catch (parseError) {
-          errorData = { error: errorText };
-        }
-        
-        // UPDATED: Enhanced 409 handling with existing_data extraction
-        if (response.status === 409) {
-          const errorMsg = errorData.error || '';
-          const existingData = errorData.existing_data;
-          
-          // Check if this is a date range overlap error with details
-          if (existingData) {
-            return {
-              success: false,
-              error: errorMsg,
-              existing_data: existingData
-            };
-          }
-          
-          // Other 409 conflicts
-          return {
-            success: false,
-            error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
-          };
-        }
-        
-        throw new Error(getAPIErrorMessage(errorData));
+    if (!response.ok) {
+      console.error('🌐 - Response not ok, status:', response.status);
+      const errorText = await response.text();
+      console.error('🌐 - Error response text:', errorText);
+      
+      let errorData: any = {};
+      try {
+        errorData = errorText ? JSON.parse(errorText) : {};
+      } catch (parseError) {
+        errorData = { error: errorText };
       }
-
-      const data = await response.json();
-      console.log('🌐 - Success response data:', data);
-      return data;
-    } catch (error: any) {
-      console.error('🌐 NavService Error:', error);
-      console.error('🌐 URL was:', url);
-      return {
-        success: false,
-        error: error.message || 'An unexpected error occurred'
-      };
+      
+      // Handle 429 with actual backend error message
+      if (response.status === 429) {
+        return {
+          success: false,
+          error: errorData.error || 'Too many requests. Please wait a moment before trying again.'
+        };
+      }
+      
+      // Enhanced 409 handling with existing_data extraction
+      if (response.status === 409) {
+        const errorMsg = errorData.error || '';
+        const existingData = errorData.existing_data;
+        
+        // Check if this is a date range overlap error with details
+        if (existingData) {
+          return {
+            success: false,
+            error: errorMsg,
+            existing_data: existingData
+          };
+        }
+        
+        // Other 409 conflicts
+        return {
+          success: false,
+          error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
+        };
+      }
+      
+      throw new Error(getAPIErrorMessage(errorData));
     }
-  }
 
+    const data = await response.json();
+    console.log('🌐 - Success response data:', data);
+    return data;
+  } catch (error: any) {
+    console.error('🌐 NavService Error:', error);
+    console.error('🌐 URL was:', url);
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred'
+    };
+  }
+}
   // ==================== SCHEME SEARCH OPERATIONS ====================
 
   async searchSchemes(params: SchemeSearchParams): Promise<PaginatedResponse<{ schemes: SchemeSearchResult[] }>> {
@@ -617,7 +617,18 @@ export class NavService {
       const schemeCount = response.data?.total_schemes || request.scheme_ids.length;
       toastService.success(`Historical download started for ${schemeCount} scheme${schemeCount > 1 ? 's' : ''}`);
     } else {
-      toastService.error(response.error || 'Failed to trigger historical download');
+      // FIXED: Show detailed toast for date range overlap errors
+      if ((response as any).existing_data) {
+        const existingData = (response as any).existing_data;
+        toastService.error(
+          `Date range overlap detected for ${existingData.scheme_name}. ` +
+          `Existing data: ${new Date(existingData.earliest_date).toLocaleDateString()} to ` +
+          `${new Date(existingData.latest_date).toLocaleDateString()} ` +
+          `(${existingData.record_count} records). Please adjust your date range.`
+        );
+      } else {
+        toastService.error(response.error || 'Failed to trigger historical download');
+      }
     }
     
     return response as ApiResponse<{ 

@@ -86,6 +86,22 @@ export const API_ENDPOINTS = {
       `${API_BASE}/portfolio/${customerId}/scheme/${schemeCode}`,
   },
   
+  // JTBD (Jobs To Be Done) endpoints
+  JTBD: {
+    CREATE: `${API_BASE}/jtbd`,
+    GET_CUSTOMER_JTBDS: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}`,
+    GET: (id: number) => `${API_BASE}/jtbd/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/jtbd/${id}`,
+    DELETE: (id: number) => `${API_BASE}/jtbd/${id}`,
+    TOGGLE: (id: number) => `${API_BASE}/jtbd/${id}/toggle`,
+    DASHBOARD_OVERVIEW: `${API_BASE}/jtbd/dashboard/overview`,
+    CUSTOMERS_WITHOUT_JTBD: `${API_BASE}/jtbd/dashboard/customers-without-jtbd`,
+    CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}/summary`,
+    CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
+    TRANSACTION_TYPES: `${API_BASE}/jtbd/transaction-types`,
+    OCCURRENCES: (id: number) => `${API_BASE}/jtbd/${id}/occurrences`,
+  },
+  
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
@@ -177,6 +193,7 @@ export type CustomerEndpoints = typeof API_ENDPOINTS.CUSTOMERS;
 export type SchemeEndpoints = typeof API_ENDPOINTS.SCHEMES;
 export type TransactionEndpoints = typeof API_ENDPOINTS.TRANSACTIONS;
 export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
+export type JTBDEndpoints = typeof API_ENDPOINTS.JTBD;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
@@ -322,6 +339,57 @@ export const PORTFOLIO_URLS = {
     `${API_ENDPOINTS.PORTFOLIO.SCHEME_DETAILS(customerId, schemeCode)}${buildQueryParams({}, environment)}`,
 } as const;
 
+// JTBD-specific URL helpers
+export const JTBD_URLS = {
+  // Create JTBD
+  createJTBD: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.CREATE}${buildQueryParams({}, environment)}`,
+  
+  // Get customer JTBDs
+  getCustomerJTBDs: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.GET_CUSTOMER_JTBDS(customerId)}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get JTBD by ID
+  getJTBD: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.GET(id)}${buildQueryParams({}, environment)}`,
+  
+  // Update JTBD
+  updateJTBD: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.UPDATE(id)}${buildQueryParams({}, environment)}`,
+  
+  // Delete JTBD
+  deleteJTBD: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.DELETE(id)}${buildQueryParams({}, environment)}`,
+  
+  // Toggle JTBD active status
+  toggleJTBD: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.TOGGLE(id)}${buildQueryParams({}, environment)}`,
+  
+  // Get dashboard overview
+  getDashboardOverview: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.DASHBOARD_OVERVIEW}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get customers without JTBD
+  getCustomersWithoutJTBD: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.CUSTOMERS_WITHOUT_JTBD}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get customer summary
+  getCustomerSummary: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.CUSTOMER_SUMMARY(customerId)}${buildQueryParams({}, environment)}`,
+  
+  // Get customer schemes
+  getCustomerSchemes: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.CUSTOMER_SCHEMES(customerId)}${buildQueryParams({}, environment)}`,
+  
+  // Get transaction types
+  getTransactionTypes: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.TRANSACTION_TYPES}${buildQueryParams({}, environment)}`,
+  
+  // Get portfolio occurrences
+  getOccurrences: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.OCCURRENCES(id)}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
 // Contact-specific URL helpers
 export const CONTACT_URLS = {
   getContactList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
@@ -450,6 +518,7 @@ if (process.env.NODE_ENV === 'development') {
     Schemes: Object.keys(API_ENDPOINTS.SCHEMES).length,
     Transactions: Object.keys(API_ENDPOINTS.TRANSACTIONS).length,
     Portfolio: Object.keys(API_ENDPOINTS.PORTFOLIO).length,
+    JTBD: Object.keys(API_ENDPOINTS.JTBD).length,
     Import: Object.keys(API_ENDPOINTS.IMPORT).length,
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
@@ -465,6 +534,12 @@ if (process.env.NODE_ENV === 'development') {
   console.log('📊 Portfolio Endpoints:', {
     HOLDINGS: API_ENDPOINTS.PORTFOLIO.HOLDINGS,
     STATISTICS: API_ENDPOINTS.PORTFOLIO.STATISTICS,
+  });
+  
+  console.log('🎯 JTBD Endpoints:', {
+    CREATE: API_ENDPOINTS.JTBD.CREATE,
+    DASHBOARD_OVERVIEW: API_ENDPOINTS.JTBD.DASHBOARD_OVERVIEW,
+    TRANSACTION_TYPES: API_ENDPOINTS.JTBD.TRANSACTION_TYPES,
   });
 }
 

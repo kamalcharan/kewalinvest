@@ -357,25 +357,7 @@ const CustomersPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={handleNavigateToDashboard}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 20px',
-                backgroundColor: colors.brand.secondary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
-              <DashboardIcon />
-              Portfolio Dashboard
-            </button>
+            
 
             <button
               onClick={handleCreateCustomer}

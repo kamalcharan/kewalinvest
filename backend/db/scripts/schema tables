@@ -57,3 +57,52 @@ CREATE TABLE t_scheme_staging_data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed_at TIMESTAMP
 );
+
+
+-- From your backend code (inferred structure):
+
+CREATE TABLE t_customer_master_portfolio (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id),
+    scheme_code VARCHAR(50),
+    scheme_name VARCHAR(255),
+    folio_no VARCHAR(100),
+    tenant_id INTEGER,
+    is_live BOOLEAN,
+    -- Other fields
+    UNIQUE(customer_id, scheme_code, tenant_id, is_live)
+);
+
+CREATE TABLE t_transaction_table (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id),
+    scheme_code VARCHAR(50),
+    scheme_name VARCHAR(255),
+    folio_no VARCHAR(100),
+    txn_type_id INTEGER,
+    txn_date DATE,
+    total_amount DECIMAL(15,2),
+    units DECIMAL(15,4),
+    nav DECIMAL(10,4),
+    stamp_duty DECIMAL(10,2),
+    is_potential_duplicate BOOLEAN,
+    portfolio_flag BOOLEAN, -- Include/exclude from totals
+    tenant_id INTEGER,
+    is_live BOOLEAN,
+    is_active BOOLEAN,
+    -- Other fields
+);
+
+-- Materialized view for fast portfolio lookups
+CREATE MATERIALIZED VIEW t_customer_portfolio_totals AS
+SELECT 
+    customer_id,
+    scheme_code,
+    scheme_name,
+    SUM(CASE WHEN txn_type = 'Addition' THEN units ELSE -units END) as total_units,
+    SUM(CASE WHEN txn_type = 'Addition' THEN total_amount ELSE -total_amount END) as total_invested,
+    -- Calculate current value, returns, etc.
+    ...
+FROM t_transaction_table
+WHERE portfolio_flag = true AND is_active = true
+GROUP BY customer_id, scheme_code, scheme_name;

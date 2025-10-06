@@ -1,44 +1,30 @@
 // frontend/src/pages/nav/NavSearchPage.tsx
-// FIXED: Single toast, navigation to dashboard, page size 10, better rate limiting
+// SIMPLIFIED: Single search field only - removed AMC name and scheme type filters
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { navService, SchemeSearchResult, CreateBookmarkRequest } from '../../services/nav.service';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 
-interface SearchFilters {
-  search: string;
-  amc_name: string;
-  scheme_type: number | '';
-  scheme_category: number | '';
-}
-
 const NavSearchPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // State management
-  const [filters, setFilters] = useState<SearchFilters>({
-    search: '',
-    amc_name: '',
-    scheme_type: '',
-    scheme_category: ''
-  });
-  
+  // State management - SIMPLIFIED: Only search string needed
+  const [searchQuery, setSearchQuery] = useState('');
   const [schemes, setSchemes] = useState<SchemeSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearched, setIsSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookmarkingIds, setBookmarkingIds] = useState<Set<number>>(new Set());
   
-  // FIXED: Reduced rate limiting for better UX
   const [lastSearchTime, setLastSearchTime] = useState<number>(0);
-  const SEARCH_COOLDOWN = 500; // Reduced from 1000ms to 500ms
+  const SEARCH_COOLDOWN = 500;
   
-  // Pagination state - FIXED: Page size set to 10
+  // Pagination state
   const [pagination, setPagination] = useState({
     page: 1,
     total: 0,
@@ -47,19 +33,17 @@ const NavSearchPage: React.FC = () => {
     hasPrev: false
   });
 
-  // FIXED: Improved search function with better rate limiting
+  // SIMPLIFIED: Search with only the search query
   const searchSchemes = useCallback(async (page: number = 1, skipCooldown: boolean = false) => {
-    if (!filters.search.trim() || filters.search.trim().length < 2) {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
       setError('Please enter at least 2 characters to search');
       return;
     }
 
-    // FIXED: More lenient rate limiting check
     const now = Date.now();
     if (!skipCooldown && now - lastSearchTime < SEARCH_COOLDOWN) {
-      // Don't show error immediately, just wait a bit longer
       setTimeout(() => {
-        if (filters.search.trim().length >= 2) {
+        if (searchQuery.trim().length >= 2) {
           searchSchemes(page, true);
         }
       }, SEARCH_COOLDOWN - (now - lastSearchTime));
@@ -72,12 +56,9 @@ const NavSearchPage: React.FC = () => {
 
     try {
       const searchParams = {
-        search: filters.search.trim(),
+        search: searchQuery.trim(),
         page,
-        page_size: 10, // FIXED: Set to 10 items per page
-        ...(filters.amc_name && { amc_name: filters.amc_name }),
-        ...(filters.scheme_type && { scheme_type: Number(filters.scheme_type) }),
-        ...(filters.scheme_category && { scheme_category: Number(filters.scheme_category) })
+        page_size: 10
       };
 
       const response = await navService.searchSchemes(searchParams);
@@ -100,11 +81,10 @@ const NavSearchPage: React.FC = () => {
       FrontendErrorLogger.error(
         'Scheme search failed',
         'NavSearchPage',
-        { searchParams: filters, error: err.message },
+        { searchQuery, error: err.message },
         err.stack
       );
       
-      // FIXED: Better error handling for rate limiting
       if (err.message.includes('429') || err.message.includes('rate limit')) {
         setError('Please wait a moment before searching again.');
       } else {
@@ -113,30 +93,15 @@ const NavSearchPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [filters, lastSearchTime]);
+  }, [searchQuery, lastSearchTime]);
 
-  // Handle search form submission
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     searchSchemes(1, false);
   };
 
-  // Handle input changes
-  const handleFilterChange = (field: keyof SearchFilters, value: string | number) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Clear search and results
   const clearSearch = () => {
-    setFilters({
-      search: '',
-      amc_name: '',
-      scheme_type: '',
-      scheme_category: ''
-    });
+    setSearchQuery('');
     setSchemes([]);
     setIsSearched(false);
     setError(null);
@@ -149,14 +114,12 @@ const NavSearchPage: React.FC = () => {
     });
   };
 
-  // Handle pagination
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
-      searchSchemes(newPage, true); // Skip cooldown for pagination
+      searchSchemes(newPage, true);
     }
   };
 
-  // FIXED: Use NavService but prevent its automatic toast
   const handleBookmark = async (scheme: SchemeSearchResult) => {
     if (bookmarkingIds.has(scheme.id)) return;
 
@@ -169,12 +132,9 @@ const NavSearchPage: React.FC = () => {
         download_time: '23:00'
       };
 
-      // FIXED: Simpler approach - just use the service and rely on the fixed NavService
-      // which now doesn't show automatic toasts for createBookmark
       const response = await navService.createBookmark(bookmarkRequest);
 
       if (response.success) {
-        // Update local state
         setSchemes(prev => 
           prev.map(s => 
             s.id === scheme.id 
@@ -183,10 +143,8 @@ const NavSearchPage: React.FC = () => {
           )
         );
 
-        // Show only our meaningful toast with scheme name
         toastService.success(`${scheme.scheme_name} bookmarked successfully`);
         
-        // Navigate to dashboard after success
         setTimeout(() => {
           navigate('/nav/dashboard');
         }, 1500);
@@ -211,32 +169,12 @@ const NavSearchPage: React.FC = () => {
     }
   };
 
-  // Navigate to bookmarks page
   const handleViewBookmarks = () => {
-    try {
-      navigate('/nav/bookmarks');
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Navigation to bookmarks failed',
-        'NavSearchPage',
-        { action: 'navigate_bookmarks', error: error.message },
-        error.stack
-      );
-    }
+    navigate('/nav/bookmarks');
   };
 
-  // Navigate to dashboard
   const handleBackToDashboard = () => {
-    try {
-      navigate('/nav/dashboard');
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Navigation to dashboard failed',
-        'NavSearchPage',
-        { action: 'navigate_dashboard', error: error.message },
-        error.stack
-      );
-    }
+    navigate('/nav/dashboard');
   };
 
   return (
@@ -285,13 +223,10 @@ const NavSearchPage: React.FC = () => {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                fontWeight: '500'
               }}
             >
-              📚 View Bookmarks
+              View Bookmarks
             </button>
             
             <button
@@ -307,12 +242,12 @@ const NavSearchPage: React.FC = () => {
                 fontWeight: '500'
               }}
             >
-              ← Back to Dashboard
+              Back to Dashboard
             </button>
           </div>
         </div>
 
-        {/* Search Form */}
+        {/* SIMPLIFIED: Single search field */}
         <div style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
@@ -320,111 +255,37 @@ const NavSearchPage: React.FC = () => {
           marginBottom: '24px'
         }}>
           <form onSubmit={handleSearch}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '16px',
-              marginBottom: '20px'
-            }}>
-              {/* Search Input */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '500',
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText,
+                marginBottom: '8px'
+              }}>
+                Search Schemes
+              </label>
+              <input
+                type="text"
+                placeholder="Enter scheme name, code, or AMC name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 18px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '8px',
+                  backgroundColor: colors.utility.primaryBackground,
                   color: colors.utility.primaryText,
-                  marginBottom: '8px'
-                }}>
-                  Search Schemes *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter scheme name, code, or AMC..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                  minLength={2}
-                />
-              </div>
-
-              {/* AMC Filter */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: colors.utility.primaryText,
-                  marginBottom: '8px'
-                }}>
-                  AMC Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., SBI, HDFC, ICICI..."
-                  value={filters.amc_name}
-                  onChange={(e) => handleFilterChange('amc_name', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-
-              {/* Scheme Type Filter */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: colors.utility.primaryText,
-                  marginBottom: '8px'
-                }}>
-                  Scheme Type (Optional)
-                </label>
-                <select
-                  value={filters.scheme_type}
-                  onChange={(e) => handleFilterChange('scheme_type', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="">All Types</option>
-                  <option value="1">Equity</option>
-                  <option value="2">Debt</option>
-                  <option value="3">Hybrid</option>
-                  <option value="4">Solution Oriented</option>
-                  <option value="5">Other</option>
-                </select>
-              </div>
+                  fontSize: '15px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+                required
+                minLength={2}
+              />
             </div>
 
-            {/* Action Buttons */}
             <div style={{
               display: 'flex',
               gap: '12px',
@@ -432,16 +293,16 @@ const NavSearchPage: React.FC = () => {
             }}>
               <button
                 type="submit"
-                disabled={isLoading || !filters.search.trim()}
+                disabled={isLoading || !searchQuery.trim()}
                 style={{
                   padding: '12px 24px',
-                  backgroundColor: (!filters.search.trim() || isLoading) 
+                  backgroundColor: (!searchQuery.trim() || isLoading) 
                     ? colors.utility.secondaryText 
                     : colors.brand.primary,
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: (!filters.search.trim() || isLoading) ? 'not-allowed' : 'pointer',
+                  cursor: (!searchQuery.trim() || isLoading) ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
                   display: 'flex',
@@ -462,7 +323,7 @@ const NavSearchPage: React.FC = () => {
                     Searching...
                   </>
                 ) : (
-                  <>🔍 Search Schemes</>
+                  'Search Schemes'
                 )}
               </button>
 
@@ -508,7 +369,6 @@ const NavSearchPage: React.FC = () => {
             borderRadius: '12px',
             padding: '24px'
           }}>
-            {/* Results Header */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -535,7 +395,6 @@ const NavSearchPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Pagination Info */}
               {pagination.total > 0 && (
                 <div style={{
                   fontSize: '14px',
@@ -546,7 +405,6 @@ const NavSearchPage: React.FC = () => {
               )}
             </div>
 
-            {/* Results List */}
             {schemes.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {schemes.map((scheme) => (
@@ -562,7 +420,6 @@ const NavSearchPage: React.FC = () => {
                       alignItems: 'flex-start'
                     }}
                   >
-                    {/* Scheme Info */}
                     <div style={{ flex: 1 }}>
                       <div style={{
                         fontSize: '16px',
@@ -592,7 +449,6 @@ const NavSearchPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Latest NAV Info */}
                       {scheme.latest_nav_value && (
                         <div style={{
                           fontSize: '14px',
@@ -611,7 +467,6 @@ const NavSearchPage: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Action Button */}
                     <div style={{ marginLeft: '16px' }}>
                       <button
                         onClick={() => handleBookmark(scheme)}
@@ -651,9 +506,9 @@ const NavSearchPage: React.FC = () => {
                             Adding...
                           </>
                         ) : scheme.is_bookmarked ? (
-                          <>✓ Bookmarked</>
+                          'Bookmarked'
                         ) : (
-                          <>📚 Bookmark</>
+                          'Bookmark'
                         )}
                       </button>
                     </div>
@@ -681,7 +536,6 @@ const NavSearchPage: React.FC = () => {
               </div>
             ) : null}
 
-            {/* Pagination - FIXED: Updated for 10 items per page */}
             {pagination.total > 10 && (
               <div style={{
                 display: 'flex',
@@ -710,7 +564,7 @@ const NavSearchPage: React.FC = () => {
                     fontWeight: '500'
                   }}
                 >
-                  ← Previous
+                  Previous
                 </button>
 
                 <span style={{
@@ -739,14 +593,14 @@ const NavSearchPage: React.FC = () => {
                     fontWeight: '500'
                   }}
                 >
-                  Next →
+                  Next
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Initial State - No Search Yet */}
+        {/* Initial State */}
         {!isSearched && !isLoading && (
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
@@ -771,7 +625,7 @@ const NavSearchPage: React.FC = () => {
               maxWidth: '500px',
               margin: '0 auto 24px'
             }}>
-              Enter a scheme name, code, or AMC name to start searching through thousands of mutual fund schemes
+              Enter a scheme name, code, or AMC name to start searching
             </p>
             <div style={{
               display: 'flex',
@@ -814,7 +668,6 @@ const NavSearchPage: React.FC = () => {
         )}
       </div>
 
-      {/* CSS Animation */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }

@@ -42,30 +42,64 @@ export class TransactionService {
       const params: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
-      // Handle customer search - find customer ID if search term provided
-      let customerIdFromSearch: number | undefined;
+      // Handle customer name search
+      let customerIdFromNameSearch: number | undefined;
       if (filters.customer_search && !filters.customer_id) {
+        const searchTerm = filters.customer_search.trim();
         const customerQuery = `
-          SELECT id FROM t_contacts
-          WHERE tenant_id = $1 
-            AND is_live = $2
-            AND (LOWER(name) LIKE LOWER($3) OR LOWER(iwell_code) LIKE LOWER($3))
+          SELECT cust.id 
+          FROM t_customers cust
+          JOIN t_contacts c ON c.id = cust.contact_id
+          WHERE cust.tenant_id = $1 
+            AND cust.is_live = $2
+            AND LOWER(c.name) LIKE LOWER($3)
           LIMIT 1
         `;
         const customerResult = await this.db.query(customerQuery, [
           tenantId,
           isLive,
-          `%${filters.customer_search}%`
+          `%${searchTerm}%`
         ]);
         if (customerResult.rows.length > 0) {
-          customerIdFromSearch = customerResult.rows[0].id;
+          customerIdFromNameSearch = customerResult.rows[0].id;
         }
       }
+
+      // Handle IWELL code search (exact match on encrypted field)
+      let customerIdFromIwellSearch: number | undefined;
+      if (filters.iwell_code_search && !filters.customer_id) {
+        const iwellCode = filters.iwell_code_search.trim();
+        try {
+          const encryptedIwellCode = EncryptionUtil.encrypt(iwellCode);
+          const iwellQuery = `
+            SELECT id 
+            FROM t_customers
+            WHERE tenant_id = $1 
+              AND is_live = $2
+              AND iwell_code_encrypted = $3
+            LIMIT 1
+          `;
+          const iwellResult = await this.db.query(iwellQuery, [
+            tenantId,
+            isLive,
+            encryptedIwellCode
+          ]);
+          if (iwellResult.rows.length > 0) {
+            customerIdFromIwellSearch = iwellResult.rows[0].id;
+          }
+        } catch (error) {
+          console.error('Error searching by IWELL code:', error);
+          // If encryption fails, just continue without IWELL search
+        }
+      }
+
+      // Determine final customer_id (prioritize: direct > IWELL > name)
+      const finalCustomerId = filters.customer_id || customerIdFromIwellSearch || customerIdFromNameSearch;
 
       // Apply filters
       const filterClause = TransactionUtil.buildFilterWhereClause(
         {
-          customer_id: filters.customer_id || customerIdFromSearch,
+          customer_id: finalCustomerId,
           scheme_code: filters.scheme_code,
           start_date: filters.start_date,
           end_date: filters.end_date,
@@ -86,12 +120,13 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
-          c.iwell_code_encrypted as iwell_code,
+          cust.iwell_code_encrypted as iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type
         FROM t_transaction_table tt
-        LEFT JOIN t_contacts c ON tt.customer_id = c.id
+        LEFT JOIN t_customers cust ON tt.customer_id = cust.id
+        LEFT JOIN t_contacts c ON cust.contact_id = c.id
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE ${whereClause}
         ORDER BY tt.${sortBy} ${sortOrder.toUpperCase()}
@@ -112,7 +147,8 @@ export class TransactionService {
       const countQuery = `
         SELECT COUNT(*) as total
         FROM t_transaction_table tt
-        LEFT JOIN t_contacts c ON tt.customer_id = c.id
+        LEFT JOIN t_customers cust ON tt.customer_id = cust.id
+        LEFT JOIN t_contacts c ON cust.contact_id = c.id
         WHERE ${whereClause}
       `;
 
@@ -148,13 +184,14 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
-          c.iwell_code_encrypted as iwell_code,
+          cust.iwell_code_encrypted as iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type,
           isd.raw_data as staging_data
         FROM t_transaction_table tt
-        LEFT JOIN t_contacts c ON tt.customer_id = c.id
+        LEFT JOIN t_customers cust ON tt.customer_id = cust.id
+        LEFT JOIN t_contacts c ON cust.contact_id = c.id
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         LEFT JOIN t_import_staging_data isd ON tt.staging_record_id = isd.id
         WHERE tt.id = $1 AND tt.tenant_id = $2 AND tt.is_live = $3
@@ -470,33 +507,65 @@ export class TransactionService {
       const params: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
-      // Handle customer search for summary
-      let customerIdFromSearch: number | undefined;
+      // Handle customer name search for summary
+      let customerIdFromNameSearch: number | undefined;
       if (filters?.customer_search && !filters?.customer_id) {
+        const searchTerm = filters.customer_search.trim();
         const customerQuery = `
-          SELECT id FROM t_contacts
-          WHERE tenant_id = $1 
-            AND is_live = $2
-            AND (LOWER(name) LIKE LOWER($3) OR LOWER(iwell_code_encrypted) LIKE LOWER($3))
+          SELECT cust.id 
+          FROM t_customers cust
+          JOIN t_contacts c ON c.id = cust.contact_id
+          WHERE cust.tenant_id = $1 
+            AND cust.is_live = $2
+            AND LOWER(c.name) LIKE LOWER($3)
           LIMIT 1
         `;
         const customerResult = await this.db.query(customerQuery, [
           tenantId,
           isLive,
-          `%${filters.customer_search}%`
+          `%${searchTerm}%`
         ]);
         if (customerResult.rows.length > 0) {
-          customerIdFromSearch = customerResult.rows[0].id;
+          customerIdFromNameSearch = customerResult.rows[0].id;
         }
       }
 
-     const filterClause = TransactionUtil.buildFilterWhereClause(
-  {
-    ...(filters || {}),
-    customer_id: filters?.customer_id || customerIdFromSearch
-  },
-  paramIndex
-);
+      // Handle IWELL code search for summary
+      let customerIdFromIwellSearch: number | undefined;
+      if (filters?.iwell_code_search && !filters?.customer_id) {
+        const iwellCode = filters.iwell_code_search.trim();
+        try {
+          const encryptedIwellCode = EncryptionUtil.encrypt(iwellCode);
+          const iwellQuery = `
+            SELECT id 
+            FROM t_customers
+            WHERE tenant_id = $1 
+              AND is_live = $2
+              AND iwell_code_encrypted = $3
+            LIMIT 1
+          `;
+          const iwellResult = await this.db.query(iwellQuery, [
+            tenantId,
+            isLive,
+            encryptedIwellCode
+          ]);
+          if (iwellResult.rows.length > 0) {
+            customerIdFromIwellSearch = iwellResult.rows[0].id;
+          }
+        } catch (error) {
+          console.error('Error searching by IWELL code:', error);
+        }
+      }
+
+      const finalCustomerId = filters?.customer_id || customerIdFromIwellSearch || customerIdFromNameSearch;
+
+      const filterClause = TransactionUtil.buildFilterWhereClause(
+        {
+          ...(filters || {}),
+          customer_id: finalCustomerId
+        },
+        paramIndex
+      );
       const whereClause = [...baseConditions, filterClause.where].join(' AND ');
       params.push(...filterClause.params);
 
@@ -539,6 +608,43 @@ export class TransactionService {
     } catch (error: any) {
       console.error('Error getting transaction summary:', error);
       throw new Error(`Failed to get transaction summary: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get import sessions for filtering (TransactionData only)
+   */
+  async getImportSessions(
+    tenantId: number,
+    isLive: boolean
+  ): Promise<any[]> {
+    try {
+      const query = `
+        SELECT 
+          id,
+          session_name,
+          import_type,
+          status,
+          total_records,
+          successful_records,
+          failed_records,
+          duplicate_records,
+          processing_started_at,
+          processing_completed_at,
+          created_at
+        FROM t_import_sessions
+        WHERE tenant_id = $1 
+          AND is_live = $2
+          AND import_type = 'TransactionData'
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      return result.rows;
+    } catch (error: any) {
+      console.error('Error getting import sessions:', error);
+      throw new Error(`Failed to get import sessions: ${error.message}`);
     }
   }
 
