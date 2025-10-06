@@ -3,14 +3,14 @@
 import React, { useState } from 'react';
 import { CustomerWithContact } from '../../types/customer.types';
 import { CustomerPortfolioResponse } from '../../types/portfolio.types';
-import { JTBDData } from '../../types/jtbd.types';
+import { useCustomerJTBDSummary } from '../../hooks/useJTBD';
 import { useTheme } from '../../contexts/ThemeContext';
+import JTBDStatusBadge from '../jtbd/JTBDStatusBadge';
 import PerformanceSparkline from '../visualizations/PerformanceSparkline';
 
 interface CustomerCardProps {
   customer: CustomerWithContact;
   portfolio?: CustomerPortfolioResponse;
-  jtbd?: JTBDData;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -25,7 +25,6 @@ interface CustomerCardProps {
 const CustomerCard: React.FC<CustomerCardProps> = ({
   customer,
   portfolio,
-  jtbd,
   onView,
   onEdit,
   onDelete,
@@ -41,6 +40,9 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+
+  // Fetch JTBD summary for this customer
+  const { data: jtbdSummary } = useCustomerJTBDSummary(customer.id);
 
   const handleActionClick = (action: 'activate' | 'deactivate') => {
     setConfirmAction(action);
@@ -108,17 +110,6 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
     return colors.utility.secondaryText;
   };
 
-  // Get priority color
-  const getPriorityColor = (priority: string): string => {
-    switch (priority) {
-      case 'critical': return '#DC2626';
-      case 'high': return '#F97316';
-      case 'medium': return '#F59E0B';
-      case 'low': return '#10B981';
-      default: return colors.utility.secondaryText;
-    }
-  };
-
   const age = calculateAge(customer.date_of_birth);
 
   // Icons
@@ -167,13 +158,6 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="23,18 13.5,8.5 8.5,13.5 1,6" />
       <polyline points="17,18 23,18 23,12" />
-    </svg>
-  );
-
-  const BellIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   );
 
@@ -262,22 +246,18 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   {customer.is_active ? 'Active' : 'Inactive'}
                 </div>
                 
-                {/* JTBD Priority Indicator */}
-                {jtbd && jtbd.actions.length > 0 && (
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '2px 6px',
-                    borderRadius: '8px',
-                    fontSize: '10px',
-                    fontWeight: '500',
-                    backgroundColor: getPriorityColor(jtbd.actions[0].priority) + '20',
-                    color: getPriorityColor(jtbd.actions[0].priority)
-                  }}>
-                    <BellIcon />
-                    {jtbd.actions[0].priority === 'critical' ? 'Urgent' : jtbd.actions[0].priority}
-                  </div>
+                {/* JTBD Status Badge - NEW */}
+                {jtbdSummary && (
+                  <JTBDStatusBadge
+                    jtbdCount={jtbdSummary.jtbd_count}
+                    nextAlertDate={jtbdSummary.next_alert_date}
+                    criticalCount={jtbdSummary.critical_count}
+                    onClick={(e) => {
+                      e?.stopPropagation();
+                      onView(); // Navigate to customer view, Goals tab will be handled there
+                    }}
+                    size="small"
+                  />
                 )}
               </div>
               
@@ -364,36 +344,10 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   )}
                 </div>
               )}
-
-              {/* JTBD Top Action (if available) */}
-              {showFinancials && jtbd && jtbd.actions.length > 0 && (
-                <div style={{
-                  marginTop: '12px',
-                  padding: '10px',
-                  backgroundColor: colors.utility.primaryBackground,
-                  borderRadius: '8px',
-                  borderLeft: `3px solid ${getPriorityColor(jtbd.actions[0].priority)}`
-                }}>
-                  <div style={{
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText,
-                    marginBottom: '4px'
-                  }}>
-                    {jtbd.actions[0].title}
-                  </div>
-                  <div style={{
-                    fontSize: '11px',
-                    color: colors.utility.secondaryText
-                  }}>
-                    {jtbd.actions[0].description}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-            {/* Right side - Actions */}
+          {/* Right side - Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={(e) => {

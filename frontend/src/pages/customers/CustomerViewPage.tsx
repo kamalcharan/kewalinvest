@@ -1,26 +1,31 @@
-// src/pages/customers/CustomerViewPage.tsx
-// Complete file updated to use real backend API types with enhanced debugging and null safety
+// frontend/src/pages/customers/CustomerViewPage.tsx
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
-import { mockJTBDData, JTBDData } from '../../data/mock/mockJTBDData';
+import { useCustomerJTBDs } from '../../hooks/useJTBD';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
-import JTBDActionCard from '../../components/jtbd/JTBDActionCard';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
+import JTBDList from '../../components/jtbd/JTBDList';
+import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const customerId = id ? parseInt(id) : null;
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>('overview');
+  
+  // Get initial tab from URL or default to 'overview'
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'transactions') || 'overview';
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
+  const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
 
   // Fetch customer and portfolio data from real API
   const { data: customer, isLoading: customerLoading, error: customerError } = useCustomer(customerId || 0);
@@ -29,10 +34,15 @@ const CustomerViewPage: React.FC = () => {
     autoFetch: !!customerId
   });
   
-  // JTBD data (still using mock for now)
-  const jtbd: JTBDData | null = customerId ? mockJTBDData[customerId] : null;
+  // Fetch JTBD data
+  const { data: jtbds, isLoading: jtbdLoading } = useCustomerJTBDs(customerId || undefined);
 
   const isLoading = customerLoading || portfolioLoading;
+
+  // Update URL when tab changes
+  useEffect(() => {
+    setSearchParams({ tab: activeTab });
+  }, [activeTab, setSearchParams]);
 
   // Debug logging
   useEffect(() => {
@@ -41,10 +51,11 @@ const CustomerViewPage: React.FC = () => {
     console.log('🔢 Parsed Customer ID:', customerId);
     console.log('👤 Customer Data:', customer);
     console.log('💼 Portfolio Data:', portfolio);
-    console.log('🎯 JTBD Data:', jtbd);
+    console.log('🎯 JTBD Data:', jtbds);
     console.log('⏳ Loading States:', { 
       customerLoading, 
-      portfolioLoading, 
+      portfolioLoading,
+      jtbdLoading,
       isLoading 
     });
     console.log('❌ Errors:', { 
@@ -52,11 +63,10 @@ const CustomerViewPage: React.FC = () => {
       portfolioError 
     });
     console.groupEnd();
-  }, [id, customerId, customer, portfolio, jtbd, customerLoading, portfolioLoading, customerError, portfolioError]);
+  }, [id, customerId, customer, portfolio, jtbds, customerLoading, portfolioLoading, jtbdLoading, customerError, portfolioError]);
 
   // Format functions with null safety
   const formatCurrency = (value: number | null | undefined): string => {
-    // Handle null, undefined, or NaN values
     if (value === null || value === undefined || isNaN(value)) {
       return '₹0';
     }
@@ -67,7 +77,6 @@ const CustomerViewPage: React.FC = () => {
   };
 
   const formatPercentage = (value: number | null | undefined): string => {
-    // Handle null, undefined, or NaN values
     if (value === null || value === undefined || isNaN(value)) {
       return '0.0%';
     }
@@ -77,7 +86,6 @@ const CustomerViewPage: React.FC = () => {
   };
 
   const getValueColor = (value: number | null | undefined): string => {
-    // Handle null, undefined, or NaN values
     if (value === null || value === undefined || isNaN(value)) {
       return colors.utility.secondaryText;
     }
@@ -116,20 +124,30 @@ const CustomerViewPage: React.FC = () => {
     </svg>
   );
 
-  const CalendarIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
-
   const AlertIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+
+  const PackageIcon = () => (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+  );
+
+  const FileTextIcon = () => (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14,2 14,8 20,8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10,9 9,9 8,9" />
     </svg>
   );
 
@@ -257,6 +275,77 @@ const CustomerViewPage: React.FC = () => {
     </div>
   );
 
+  // Empty state component
+  const EmptyState = ({ 
+    icon, 
+    title, 
+    description, 
+    actionLabel, 
+    onAction 
+  }: { 
+    icon: React.ReactNode; 
+    title: string; 
+    description: string; 
+    actionLabel?: string; 
+    onAction?: () => void;
+  }) => (
+    <div style={{
+      backgroundColor: colors.utility.secondaryBackground,
+      borderRadius: '12px',
+      padding: '60px 24px',
+      textAlign: 'center'
+    }}>
+      <div style={{
+        color: colors.brand.primary,
+        marginBottom: '20px',
+        opacity: 0.6,
+        display: 'flex',
+        justifyContent: 'center'
+      }}>
+        {icon}
+      </div>
+      <h3 style={{
+        fontSize: '18px',
+        fontWeight: '600',
+        color: colors.utility.primaryText,
+        marginBottom: '8px'
+      }}>
+        {title}
+      </h3>
+      <p style={{
+        fontSize: '14px',
+        color: colors.utility.secondaryText,
+        marginBottom: actionLabel ? '24px' : '0',
+        lineHeight: '1.6',
+        maxWidth: '500px',
+        margin: '0 auto'
+      }}>
+        {description}
+      </p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          style={{
+            marginTop: '24px',
+            padding: '12px 24px',
+            backgroundColor: colors.brand.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500',
+            transition: 'transform 0.2s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+
   // Error handling with specific messages
   if (!customerId) {
     console.error('❌ Invalid customer ID from URL params:', id);
@@ -287,37 +376,13 @@ const CustomerViewPage: React.FC = () => {
     />;
   }
 
-  if (portfolioError) {
-    console.error('❌ Portfolio API Error:', portfolioError);
-    return <ErrorState 
-      message="Failed to Load Portfolio" 
-      details={`Error fetching portfolio data for ${customer.name}. Some features may be unavailable.`}
-    />;
-  }
-
-  if (!portfolio) {
-    console.warn('⚠️ Portfolio data not available for customer:', customerId);
-    return <ErrorState 
-      message="Portfolio Not Available" 
-      details={`Portfolio data not found for ${customer.name}. The customer may not have any active investments.`}
-    />;
-  }
-
-  if (!jtbd) {
-    console.warn('⚠️ JTBD data not available for customer:', customerId);
-    return <ErrorState 
-      message="Action Data Not Available" 
-      details={`Goals and actions data not found for ${customer.name}.`}
-    />;
-  }
-
   // All data loaded successfully
-  console.log('✅ All data loaded successfully');
+  console.log('✅ Customer data loaded successfully');
   
   // Calculate metrics from API data with null safety
-  const profitLoss = portfolio.summary.total_returns ?? 0;
-  const dayChangePercentage = portfolio.summary.day_change_percentage ?? 0;
-  const returnPercentage = portfolio.summary.return_percentage ?? 0;
+  const profitLoss = portfolio?.summary.total_returns ?? 0;
+  const dayChangePercentage = portfolio?.summary.day_change_percentage ?? 0;
+  const returnPercentage = portfolio?.summary.return_percentage ?? 0;
   
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.utility.primaryBackground }}>
@@ -372,7 +437,7 @@ const CustomerViewPage: React.FC = () => {
               }}>
                 <span>Customer ID: {customer.id}</span>
                 {customer.iwell_code && <span>IWell: {customer.iwell_code}</span>}
-                <span>Schemes: {portfolio.summary.total_schemes ?? 0}</span>
+                {portfolio && <span>Schemes: {portfolio.summary.total_schemes ?? 0}</span>}
                 <span>Member Since: 2016</span>
               </div>
             </div>
@@ -413,85 +478,87 @@ const CustomerViewPage: React.FC = () => {
       </div>
 
       {/* Key Metrics Bar */}
-      <div style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderBottom: `1px solid ${colors.utility.primaryText}10`,
-        padding: '20px 24px'
-      }}>
+      {portfolio && (
         <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(6, 1fr)',
-          gap: '24px'
+          backgroundColor: colors.utility.secondaryBackground,
+          borderBottom: `1px solid ${colors.utility.primaryText}10`,
+          padding: '20px 24px'
         }}>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {formatCurrency(portfolio.summary.current_value)}
+          <div style={{
+            maxWidth: '1400px',
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(6, 1fr)',
+            gap: '24px'
+          }}>
+            <div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
+                {formatCurrency(portfolio.summary.current_value)}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                CURRENT VALUE
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              CURRENT VALUE
+            
+            <div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(profitLoss) }}>
+                {formatCurrency(Math.abs(profitLoss))}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                {profitLoss >= 0 ? 'TOTAL PROFIT' : 'TOTAL LOSS'}
+              </div>
             </div>
-          </div>
-          
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(profitLoss) }}>
-              {formatCurrency(Math.abs(profitLoss))}
-            </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              {profitLoss >= 0 ? 'TOTAL PROFIT' : 'TOTAL LOSS'}
-            </div>
-          </div>
 
-          <div>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: getValueColor(dayChangePercentage),
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              {formatPercentage(dayChangePercentage)}
-              <TrendUpIcon />
+            <div>
+              <div style={{ 
+                fontSize: '24px', 
+                fontWeight: '700', 
+                color: getValueColor(dayChangePercentage),
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                {formatPercentage(dayChangePercentage)}
+                <TrendUpIcon />
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                TODAY'S CHANGE
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              TODAY'S CHANGE
-            </div>
-          </div>
 
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(returnPercentage) }}>
-              {formatPercentage(returnPercentage)}
+            <div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(returnPercentage) }}>
+                {formatPercentage(returnPercentage)}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                OVERALL RETURN
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              OVERALL RETURN
-            </div>
-          </div>
 
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {portfolio.holdings?.length || portfolio.summary.total_schemes || 0}
+            <div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
+                {portfolio.holdings?.length || portfolio.summary.total_schemes || 0}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                TOTAL FUNDS
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              TOTAL FUNDS
-            </div>
-          </div>
 
-          <div>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: jtbd.primaryGoal.onTrack ? '#10B981' : '#F97316' 
-            }}>
-              {jtbd.primaryGoal.currentProgress ?? 0}%
-            </div>
-            <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              GOAL PROGRESS
+            <div>
+              <div style={{ 
+                fontSize: '24px', 
+                fontWeight: '700', 
+                color: jtbds && jtbds.length > 0 ? colors.semantic.success : colors.utility.secondaryText
+              }}>
+                {jtbds?.length || 0}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                ACTIVE ALERTS
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
@@ -524,379 +591,111 @@ const CustomerViewPage: React.FC = () => {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-            {/* Left Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Portfolio Performance Chart */}
-              <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '24px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-                    Portfolio Performance
-                  </h3>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {['1M', '3M', '6M', '1Y', 'ALL'].map(period => (
-                      <button
-                        key={period}
-                        onClick={() => setSelectedTimeframe(period as any)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: selectedTimeframe === period ? colors.brand.primary : 'transparent',
-                          color: selectedTimeframe === period ? 'white' : colors.utility.secondaryText,
-                          border: `1px solid ${selectedTimeframe === period ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {period}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Performance Chart */}
-                <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {portfolio.performance && portfolio.performance.length > 0 ? (
-                    <PerformanceSparkline
-                      data={portfolio.performance.map(p => p.current_value ?? 0)}
-                      width={600}
-                      height={250}
-                      showArea={true}
-                      showDots={true}
-                      interactive={true}
-                    />
-                  ) : (
-                    <div style={{ color: colors.utility.secondaryText, fontSize: '14px' }}>
-                      Performance history not available
+          <>
+            {!portfolio ? (
+              <EmptyState
+                icon={<PackageIcon />}
+                title="Portfolio Data Not Available"
+                description="Portfolio data will appear once transactions are imported for this customer."
+                actionLabel="Import Transactions"
+                onAction={() => navigate('/import')}
+              />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+                {/* Left Column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Portfolio Performance Chart */}
+                  <div style={{
+                    backgroundColor: colors.utility.secondaryBackground,
+                    borderRadius: '12px',
+                    padding: '24px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
+                        Portfolio Performance
+                      </h3>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {['1M', '3M', '6M', '1Y', 'ALL'].map(period => (
+                          <button
+                            key={period}
+                            onClick={() => setSelectedTimeframe(period as any)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: selectedTimeframe === period ? colors.brand.primary : 'transparent',
+                              color: selectedTimeframe === period ? 'white' : colors.utility.secondaryText,
+                              border: `1px solid ${selectedTimeframe === period ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {period}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Top Actions */}
-              <JTBDActionCard
-                actions={jtbd.actions.slice(0, 3)}
-                primaryGoal={jtbd.primaryGoal}
-                riskAssessment={jtbd.riskAssessment}
-                compact={false}
-                maxActions={3}
-              />
-            </div>
-
-            {/* Right Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Asset Allocation */}
-              {portfolio.allocation && portfolio.allocation.length > 0 && (
-                <div style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderRadius: '12px',
-                  padding: '24px'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: colors.utility.primaryText, 
-                    margin: 0,
-                    marginBottom: '20px'
-                  }}>
-                    Asset Allocation
-                  </h3>
-                  <PortfolioDonutChart
-                    allocation={portfolio.allocation}
-                    size={240}
-                    strokeWidth={35}
-                    showLegend={true}
-                  />
-                </div>
-              )}
-
-              {/* Top Holdings */}
-              {portfolio.holdings && portfolio.holdings.length > 0 && (
-                <div style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderRadius: '12px',
-                  padding: '24px'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: colors.utility.primaryText, 
-                    margin: 0,
-                    marginBottom: '20px'
-                  }}>
-                    Top Holdings
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {portfolio.holdings.slice(0, 4).map((holding, idx) => (
-                      <div key={idx} style={{
-                        padding: '12px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '8px'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
-                            {holding.fund_name || holding.scheme_name}
-                          </div>
-                          <div style={{ fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
-                            {formatPercentage(holding.return_percentage)}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                            Value: {formatCurrency(holding.current_value)}
-                          </div>
-                          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                            {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                          </div>
-                        </div>
-                        <div style={{
-                          width: '100%',
-                          height: '4px',
-                          backgroundColor: colors.utility.primaryText + '20',
-                          borderRadius: '2px',
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{
-                            width: `${holding.allocation_percentage ?? 0}%`,
-                            height: '100%',
-                            backgroundColor: colors.brand.primary
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Upcoming Events */}
-              {jtbd.upcomingEvents && jtbd.upcomingEvents.length > 0 && (
-                <div style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderRadius: '12px',
-                  padding: '24px'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: colors.utility.primaryText, 
-                    margin: 0,
-                    marginBottom: '20px'
-                  }}>
-                    Upcoming Events
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {jtbd.upcomingEvents.map((event, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        gap: '12px',
-                        padding: '12px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '8px'
-                      }}>
-                        <CalendarIcon />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
-                            {event.event}
-                          </div>
-                          <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '2px' }}>
-                            {new Date(event.date).toLocaleDateString('en-IN')}
-                            {event.amount && ` • ${formatCurrency(event.amount)}`}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Portfolio Tab */}
-        {activeTab === 'portfolio' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <PortfolioSummaryWidget portfolio={portfolio} compact={false} showSparkline={true} />
-            
-            {portfolio.holdings && portfolio.holdings.length > 0 && (
-              <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '24px'
-              }}>
-                <h3 style={{ 
-                  fontSize: '18px', 
-                  fontWeight: '600', 
-                  color: colors.utility.primaryText, 
-                  margin: 0,
-                  marginBottom: '20px'
-                }}>
-                  Fund-wise Performance
-                </h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
-                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolio.holdings.map((holding, idx) => (
-                      <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-                        <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
-                          {holding.fund_name || holding.scheme_name}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                          {formatCurrency(holding.total_invested)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                          {formatCurrency(holding.current_value)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
-                          {formatPercentage(holding.return_percentage)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                          {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Goals Tab */}
-        {activeTab === 'goals' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <JTBDActionCard
-                actions={jtbd.actions}
-                primaryGoal={jtbd.primaryGoal}
-                riskAssessment={jtbd.riskAssessment}
-                compact={false}
-                maxActions={10}
-              />
-
-              {jtbd.recommendations && jtbd.recommendations.length > 0 && (
-                <div style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderRadius: '12px',
-                  padding: '24px'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: colors.utility.primaryText, 
-                    margin: 0,
-                    marginBottom: '20px'
-                  }}>
-                    Personalized Recommendations
-                  </h3>
-                  {jtbd.recommendations.map((rec, idx) => (
-                    <div key={idx} style={{
-                      padding: '16px',
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderRadius: '8px',
-                      marginBottom: '12px',
-                      borderLeft: `3px solid ${rec.priority === 'high' ? '#F97316' : colors.brand.primary}`
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-                          {rec.title}
-                        </div>
-                        <span style={{
-                          padding: '2px 8px',
-                          backgroundColor: rec.priority === 'high' ? '#F9731620' : colors.brand.primary + '20',
-                          color: rec.priority === 'high' ? '#F97316' : colors.brand.primary,
-                          borderRadius: '4px',
-                          fontSize: '10px',
-                          fontWeight: '600'
-                        }}>
-                          {rec.priority.toUpperCase()}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '8px' }}>
-                        {rec.description}
-                      </div>
-                      {(rec.potentialSaving || rec.expectedImpact) && (
-                        <div style={{ fontSize: '12px', color: colors.brand.primary, fontWeight: '500' }}>
-                          {rec.potentialSaving ? `Save ₹${rec.potentialSaving.toLocaleString('en-IN')}` : rec.expectedImpact}
+                    
+                    {/* Performance Chart */}
+                    <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {portfolio.performance && portfolio.performance.length > 0 ? (
+                        <PerformanceSparkline
+                          data={portfolio.performance.map(p => p.current_value ?? 0)}
+                          width={600}
+                          height={250}
+                          showArea={true}
+                          showDots={true}
+                          interactive={true}
+                        />
+                      ) : (
+                        <div style={{ color: colors.utility.secondaryText, fontSize: '14px' }}>
+                          Performance history not available
                         </div>
                       )}
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Quick JTBD Summary */}
+                  {jtbds && jtbds.length > 0 && (
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '20px'
+                    }}>
+                      <h3 style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '600', 
+                        color: colors.utility.primaryText, 
+                        margin: '0 0 16px 0'
+                      }}>
+                        Upcoming Actions
+                      </h3>
+                      <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                        {jtbds.filter(j => j.is_active).length} active alerts configured. 
+                        <button
+                          onClick={() => setActiveTab('goals')}
+                          style={{
+                            marginLeft: '8px',
+                            padding: '4px 12px',
+                            backgroundColor: colors.brand.primary,
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          View All
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {jtbd.detailedAnalysis && (
-                <>
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px'
-                  }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
-                      margin: 0,
-                      marginBottom: '20px'
-                    }}>
-                      Strengths
-                    </h3>
-                    {jtbd.detailedAnalysis.strengthAreas.map((strength, idx) => (
-                      <div key={idx} style={{
-                        padding: '8px',
-                        marginBottom: '8px',
-                        fontSize: '12px',
-                        color: colors.utility.primaryText,
-                        borderLeft: `2px solid #10B981`,
-                        paddingLeft: '12px'
-                      }}>
-                        ✓ {strength}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px'
-                  }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
-                      margin: 0,
-                      marginBottom: '20px'
-                    }}>
-                      Areas to Improve
-                    </h3>
-                    {jtbd.detailedAnalysis.improvementAreas.map((area, idx) => (
-                      <div key={idx} style={{
-                        padding: '8px',
-                        marginBottom: '8px',
-                        fontSize: '12px',
-                        color: colors.utility.primaryText,
-                        borderLeft: `2px solid #F97316`,
-                        paddingLeft: '12px'
-                      }}>
-                        ! {area}
-                      </div>
-                    ))}
-                  </div>
-
-                  {jtbd.detailedAnalysis.peerComparison && (
+                {/* Right Column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Asset Allocation */}
+                  {portfolio.allocation && portfolio.allocation.length > 0 && (
                     <div style={{
                       backgroundColor: colors.utility.secondaryBackground,
                       borderRadius: '12px',
@@ -909,86 +708,188 @@ const CustomerViewPage: React.FC = () => {
                         margin: 0,
                         marginBottom: '20px'
                       }}>
-                        Peer Comparison
+                        Asset Allocation
                       </h3>
-                      <div style={{
-                        fontSize: '36px',
-                        fontWeight: '700',
-                        color: colors.brand.primary,
-                        marginBottom: '8px',
-                        textAlign: 'center'
+                      <PortfolioDonutChart
+                        allocation={portfolio.allocation}
+                        size={240}
+                        strokeWidth={35}
+                        showLegend={true}
+                      />
+                    </div>
+                  )}
+
+                  {/* Top Holdings */}
+                  {portfolio.holdings && portfolio.holdings.length > 0 && (
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '24px'
+                    }}>
+                      <h3 style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '600', 
+                        color: colors.utility.primaryText, 
+                        margin: 0,
+                        marginBottom: '20px'
                       }}>
-                        {jtbd.detailedAnalysis.peerComparison.percentile}th
-                      </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: colors.utility.secondaryText,
-                        textAlign: 'center',
-                        marginBottom: '16px'
-                      }}>
-                        Percentile
-                      </div>
-                      <div style={{
-                        padding: '12px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: colors.utility.secondaryText }}>Your Returns:</span>
-                          <span style={{ float: 'right', fontWeight: '600', color: '#10B981' }}>
-                            {jtbd.detailedAnalysis.peerComparison.yourReturns}%
-                          </span>
-                        </div>
-                        <div>
-                          <span style={{ color: colors.utility.secondaryText }}>Peer Avg:</span>
-                          <span style={{ float: 'right', fontWeight: '600', color: colors.utility.primaryText }}>
-                            {jtbd.detailedAnalysis.peerComparison.avgPeerReturns}%
-                          </span>
-                        </div>
+                        Top Holdings
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {portfolio.holdings.slice(0, 4).map((holding, idx) => (
+                          <div key={idx} style={{
+                            padding: '12px',
+                            backgroundColor: colors.utility.primaryBackground,
+                            borderRadius: '8px'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
+                                {holding.fund_name || holding.scheme_name}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
+                                {formatPercentage(holding.return_percentage)}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                                Value: {formatCurrency(holding.current_value)}
+                              </div>
+                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
+                              </div>
+                            </div>
+                            <div style={{
+                              width: '100%',
+                              height: '4px',
+                              backgroundColor: colors.utility.primaryText + '20',
+                              borderRadius: '2px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${holding.allocation_percentage ?? 0}%`,
+                                height: '100%',
+                                backgroundColor: colors.brand.primary
+                              }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Portfolio Tab */}
+        {activeTab === 'portfolio' && (
+          <>
+            {!portfolio ? (
+              <EmptyState
+                icon={<PackageIcon />}
+                title="No Active Investments Found"
+                description="Portfolio holdings will appear once transactions are imported for this customer."
+                actionLabel="Import Transactions"
+                onAction={() => navigate('/import')}
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <PortfolioSummaryWidget portfolio={portfolio} compact={false} showSparkline={true} />
+                
+                {portfolio.holdings && portfolio.holdings.length > 0 && (
+                  <div style={{
+                    backgroundColor: colors.utility.secondaryBackground,
+                    borderRadius: '12px',
+                    padding: '24px'
+                  }}>
+                    <h3 style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      color: colors.utility.primaryText, 
+                      margin: 0,
+                      marginBottom: '20px'
+                    }}>
+                      Fund-wise Performance
+                    </h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
+                          <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
+                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
+                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
+                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
+                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {portfolio.holdings.map((holding, idx) => (
+                          <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
+                            <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
+                              {holding.fund_name || holding.scheme_name}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                              {formatCurrency(holding.total_invested)}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                              {formatCurrency(holding.current_value)}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
+                              {formatPercentage(holding.return_percentage)}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                              {(holding.allocation_percentage ?? 0).toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Goals & Actions Tab - UPDATED */}
+        {activeTab === 'goals' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* JTBD List Component */}
+            <JTBDList
+              customerId={customerId}
+              onSetupNew={() => setShowJTBDSetupModal(true)}
+              onEdit={(jtbdId) => {
+                // TODO: Implement edit functionality
+                console.log('Edit JTBD:', jtbdId);
+              }}
+              showFilters={true}
+            />
           </div>
         )}
 
         {/* Transactions Tab */}
         {activeTab === 'transactions' && (
-          <div style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '12px',
-            padding: '24px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-                Transaction History
-              </h3>
-              <button style={{
-                padding: '8px 16px',
-                backgroundColor: colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}>
-                View All Transactions
-              </button>
-            </div>
-
-            <div style={{
-              padding: '40px',
-              textAlign: 'center',
-              color: colors.utility.secondaryText
-            }}>
-              Transaction history will be available once transaction import is complete.
-            </div>
-          </div>
+          <EmptyState
+            icon={<FileTextIcon />}
+            title="Transaction History Coming Soon"
+            description="Transaction history will be available once transaction import is complete."
+            actionLabel="Import Transactions"
+            onAction={() => navigate('/import')}
+          />
         )}
       </div>
+
+      {/* JTBD Setup Modal */}
+      {showJTBDSetupModal && (
+        <JTBDSetupModal
+          customerId={customerId}
+          onClose={() => setShowJTBDSetupModal(false)}
+          onSuccess={() => {
+            setShowJTBDSetupModal(false);
+            // Data will auto-refresh via React Query invalidation
+          }}
+        />
+      )}
     </div>
   );
 };
