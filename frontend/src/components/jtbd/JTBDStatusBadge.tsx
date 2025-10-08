@@ -7,7 +7,7 @@ interface JTBDStatusBadgeProps {
   jtbdCount: number;
   nextAlertDate?: string;
   criticalCount?: number;
-  onClick?: () => void;
+  onClick?: () => void;  // Fixed: No parameters
   size?: 'small' | 'medium' | 'large';
 }
 
@@ -172,9 +172,17 @@ const JTBDStatusBadge: React.FC<JTBDStatusBadgeProps> = ({
     return parts.join(' • ');
   };
 
+  // Handle click with event management
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (onClick) {
+      e.stopPropagation();  // Prevent event bubbling
+      onClick();             // Call prop function with no parameters
+    }
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       title={getTooltipContent()}
       style={{
         display: 'inline-flex',

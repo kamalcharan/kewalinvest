@@ -248,17 +248,16 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                 
                 {/* JTBD Status Badge - NEW */}
                 {jtbdSummary && (
-                  <JTBDStatusBadge
-                    jtbdCount={jtbdSummary.jtbd_count}
-                    nextAlertDate={jtbdSummary.next_alert_date}
-                    criticalCount={jtbdSummary.critical_count}
-                    onClick={(e) => {
-                      e?.stopPropagation();
-                      onView(); // Navigate to customer view, Goals tab will be handled there
-                    }}
-                    size="small"
-                  />
-                )}
+  <JTBDStatusBadge
+    jtbdCount={jtbdSummary.jtbd_count}
+    nextAlertDate={jtbdSummary.next_alert_date}
+    criticalCount={jtbdSummary.critical_count}
+    onClick={() => {
+      onView(); // Navigate to customer view, Goals tab will be handled there
+    }}
+    size="small"
+  />
+)}
               </div>
               
               {/* Contact and Details */}

@@ -154,7 +154,10 @@ const ProfileTriggerForm: React.FC<ProfileTriggerFormProps> = ({
         <div style={{ display: 'flex', gap: '12px' }}>
           {/* Birthday Option */}
           <div
-            onClick={() => setFormData(prev => ({ ...prev, trigger_type: 'birthday' }))}
+            onClick={() => setFormData((prev: ProfileTriggerConfig) => ({ 
+  ...prev, 
+  trigger_type: 'birthday' 
+}))}
             style={{
               flex: 1,
               padding: '16px',
@@ -213,7 +216,10 @@ const ProfileTriggerForm: React.FC<ProfileTriggerFormProps> = ({
 
           {/* Anniversary Option */}
           <div
-            onClick={() => setFormData(prev => ({ ...prev, trigger_type: 'anniversary' }))}
+            onClick={() => setFormData((prev: ProfileTriggerConfig) => ({ 
+  ...prev, 
+  trigger_type: 'anniversary' 
+}))}
             style={{
               flex: 1,
               padding: '16px',
@@ -295,7 +301,10 @@ const ProfileTriggerForm: React.FC<ProfileTriggerFormProps> = ({
           min="0"
           max="60"
           value={formData.days_before}
-          onChange={(e) => setFormData(prev => ({ ...prev, days_before: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: ProfileTriggerConfig) => ({ 
+  ...prev, 
+  days_before: Number(e.target.value) 
+}))}
           style={{
             width: '100%',
             padding: '10px 12px',

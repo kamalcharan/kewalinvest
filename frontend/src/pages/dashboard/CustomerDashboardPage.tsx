@@ -479,16 +479,16 @@ const CustomerDashboardPage: React.FC = () => {
             ) : (
               filteredCustomers.map(customer => (
                 <CustomerCard
-                  key={customer.id}
-                  customer={customer}
-                  portfolio={undefined}  // Will fetch individually if needed
-                  jtbd={mockJTBDData[customer.id]}
-                  onView={() => setSelectedCustomerId(customer.id)}
-                  onEdit={() => navigate(`/customers/${customer.id}/edit`)}
-                  onDelete={() => console.log('Delete:', customer.id)}
-                  showFinancials={true}
-                  variant="dashboard"
-                />
+  key={customer.id}
+  customer={customer}
+  portfolio={undefined}  // Will fetch individually if needed
+  // jtbd prop removed - component fetches it internally
+  onView={() => setSelectedCustomerId(customer.id)}
+  onEdit={() => navigate(`/customers/${customer.id}/edit`)}
+  onDelete={() => console.log('Delete:', customer.id)}
+  showFinancials={true}
+  variant="dashboard"
+/>
               ))
             )}
           </div>

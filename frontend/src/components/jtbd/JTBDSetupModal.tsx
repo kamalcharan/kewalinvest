@@ -10,8 +10,8 @@ import ProfileTriggerForm from './forms/ProfileTriggerForm';
 
 interface JTBDSetupModalProps {
   customerId: number;
-  customerName: string;
-  isOpen: boolean;
+  customerName?: string;
+  isOpen?: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -21,8 +21,8 @@ type SetupStep = 'select_type' | 'configure';
 
 const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   customerId,
-  customerName,
-  isOpen,
+  customerName = 'Customer',
+  isOpen = true,
   onClose,
   onSuccess
 }) => {

@@ -123,7 +123,10 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
           min="1"
           max="31"
           value={formData.alert_date}
-          onChange={(e) => setFormData(prev => ({ ...prev, alert_date: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: TimeBasedConfig) => ({ 
+  ...prev, 
+  alert_date: Number(e.target.value) 
+}))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -156,7 +159,10 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
         </label>
         <select
           value={formData.alert_month}
-          onChange={(e) => setFormData(prev => ({ ...prev, alert_month: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: TimeBasedConfig) => ({ 
+  ...prev, 
+  alert_month: Number(e.target.value) 
+}))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -200,7 +206,10 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
           <input
             type="checkbox"
             checked={formData.is_recurring}
-            onChange={(e) => setFormData(prev => ({ ...prev, is_recurring: e.target.checked }))}
+            onChange={(e) => setFormData((prev: TimeBasedConfig) => ({ 
+  ...prev, 
+  is_recurring: e.target.checked 
+}))}
             style={{
               width: '18px',
               height: '18px',

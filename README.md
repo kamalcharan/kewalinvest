@@ -1,7 +1,8 @@
 Host: postgres  (or try 172.19.0.3)
 Database: kewalinvest
 User: kewal_admin
-Password: [check your .env file for DB_PASSWORD value]
+Password: kewal_secure_pass_2024
+
 Port: 5432
 SSL: Disable/None
 
@@ -21,3 +22,18 @@ docker push vikuna/kewalinvest-backend:latest
 
 docker build -t vikuna/kewalinvest-frontend:latest ./frontend
 docker push vikuna/kewalinvest-frontend:latest
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]

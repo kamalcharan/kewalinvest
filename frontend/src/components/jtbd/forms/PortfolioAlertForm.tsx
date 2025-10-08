@@ -50,9 +50,9 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
 
   // Handle scheme selection
   const handleSchemeChange = (schemeCode: string) => {
-    const selectedScheme = schemes?.find(s => s.scheme_code === schemeCode);
+    const selectedScheme = schemes?.find((s: any) => s.scheme_code === schemeCode);
     if (selectedScheme) {
-      setFormData(prev => ({
+      setFormData((prev: PortfolioAlertConfig) => ({
         ...prev,
         scheme_code: selectedScheme.scheme_code,
         scheme_name: selectedScheme.scheme_name,
@@ -63,9 +63,9 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
 
   // Handle transaction type selection
   const handleTxnTypeChange = (txnTypeId: number) => {
-    const selectedType = transactionTypes?.find(t => t.id === txnTypeId);
+    const selectedType = transactionTypes?.find((t: any) => t.id === txnTypeId);
     if (selectedType) {
-      setFormData(prev => ({
+      setFormData((prev: PortfolioAlertConfig) => ({
         ...prev,
         txn_type_id: selectedType.id,
         txn_type: selectedType.txn_name
@@ -158,7 +158,7 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
           <option value="">
             {isLoading ? 'Loading schemes...' : 'Select a scheme from portfolio'}
           </option>
-          {schemes?.map(scheme => (
+          {schemes?.map((scheme: any) => (
             <option key={scheme.scheme_code} value={scheme.scheme_code}>
               {scheme.scheme_name} {scheme.folio_no ? `(${scheme.folio_no})` : ''}
             </option>
@@ -201,7 +201,7 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
           <option value="">
             {isLoading ? 'Loading types...' : 'Select transaction type'}
           </option>
-          {transactionTypes?.map(type => (
+          {transactionTypes?.map((type: any) => (
             <option key={type.id} value={type.id}>
               {type.txn_name} ({type.txn_type})
             </option>
@@ -229,7 +229,10 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
         </label>
         <select
           value={formData.frequency}
-          onChange={(e) => setFormData(prev => ({ ...prev, frequency: e.target.value as any }))}
+          onChange={(e) => setFormData((prev: PortfolioAlertConfig) => ({ 
+            ...prev, 
+            frequency: e.target.value as 'daily' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly' | 'NA'
+          }))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -268,7 +271,10 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
             min="1"
             max="31"
             value={formData.day_of_month}
-            onChange={(e) => setFormData(prev => ({ ...prev, day_of_month: Number(e.target.value) }))}
+            onChange={(e) => setFormData((prev: PortfolioAlertConfig) => ({ 
+              ...prev, 
+              day_of_month: Number(e.target.value) 
+            }))}
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -308,7 +314,10 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
           min="0"
           max="10"
           value={formData.deviation_days}
-          onChange={(e) => setFormData(prev => ({ ...prev, deviation_days: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: PortfolioAlertConfig) => ({ 
+            ...prev, 
+            deviation_days: Number(e.target.value) 
+          }))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -349,7 +358,10 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
           min="0"
           step="0.01"
           value={formData.amount}
-          onChange={(e) => setFormData(prev => ({ ...prev, amount: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: PortfolioAlertConfig) => ({ 
+            ...prev, 
+            amount: Number(e.target.value) 
+          }))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -385,7 +397,10 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
           min="1"
           max="60"
           value={formData.track_till_months}
-          onChange={(e) => setFormData(prev => ({ ...prev, track_till_months: Number(e.target.value) }))}
+          onChange={(e) => setFormData((prev: PortfolioAlertConfig) => ({ 
+            ...prev, 
+            track_till_months: Number(e.target.value) 
+          }))}
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -421,7 +436,7 @@ const PortfolioAlertForm: React.FC<PortfolioAlertFormProps> = ({
         </label>
         <select
           value={priority}
-          onChange={(e) => setPriority(e.target.value as any)}
+          onChange={(e) => setPriority(e.target.value as 'critical' | 'high' | 'medium' | 'low')}
           style={{
             width: '100%',
             padding: '10px 12px',

@@ -81,15 +81,15 @@ export class JTBDService {
   /**
    * Get all JTBDs for a customer
    */
-  static async getCustomerJTBDs(customerId: number): Promise<JTBDListApiResponse> {
-    try {
-      const url = API_ENDPOINTS.JTBD.CUSTOMER_LIST(customerId);
-      return await apiService.get<JTBDListApiResponse>(url);
-    } catch (error: any) {
-      console.error('Error fetching customer JTBDs:', error);
-      throw error;
-    }
+ static async getCustomerJTBDs(customerId: number): Promise<JTBDListApiResponse> {
+  try {
+    const url = API_ENDPOINTS.JTBD.GET_CUSTOMER_JTBDS(customerId);
+    return await apiService.get<JTBDListApiResponse>(url);
+  } catch (error: any) {
+    console.error('Error fetching customer JTBDs:', error);
+    throw error;
   }
+}
 
   /**
    * Get single JTBD by ID
