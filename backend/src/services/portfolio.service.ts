@@ -29,101 +29,112 @@ export class PortfolioService {
    * Get customer's complete portfolio
    */
   async getCustomerPortfolio(
-    tenantId: number,
-    isLive: boolean,
-    customerId: number
-  ): Promise<CustomerPortfolioResponse | null> {
-    try {
-      // Get customer name
-      const customerQuery = `
-        SELECT c.name 
-        FROM t_customers cust
-        JOIN t_contacts c ON c.id = cust.contact_id  
-        WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
-      `;
-      const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
+  tenantId: number,
+  isLive: boolean,
+  customerId: number
+): Promise<CustomerPortfolioResponse | null> {
+  try {
+    // Get customer name
+    const customerQuery = `
+      SELECT c.name 
+      FROM t_customers cust
+      JOIN t_contacts c ON c.id = cust.contact_id  
+      WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
+    `;
+    const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
 
-      if (customerResult.rows.length === 0) {
-        return null;
-      }
+    if (customerResult.rows.length === 0) {
+      return null;
+    }
 
-      const customerName = customerResult.rows[0].name;
+    const customerName = customerResult.rows[0].name;
 
-      // Get portfolio holdings from materialized view
-      const holdingsQuery = `
-        SELECT *
-        FROM t_customer_portfolio_totals
-        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
-        ORDER BY current_value DESC
-      `;
-      const holdingsResult = await this.db.query(holdingsQuery, [customerId, tenantId, isLive]);
+    // Get portfolio holdings from materialized view
+    const holdingsQuery = `
+      SELECT *
+      FROM t_customer_portfolio_totals
+      WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+      ORDER BY current_value DESC
+    `;
+    const holdingsResult = await this.db.query(holdingsQuery, [customerId, tenantId, isLive]);
 
-      if (holdingsResult.rows.length === 0) {
-        return {
-          customer_id: customerId,
-          customer_name: customerName,
-          summary: {
-            customer_id: customerId,
-            customer_name: customerName,
-            total_invested: 0,
-            current_value: 0,
-            total_returns: 0,
-            return_percentage: 0,
-            total_schemes: 0
-          },
-          holdings: [],
-          allocation: []
-        };
-      }
-
-      const holdings = holdingsResult.rows;
-
-      // Calculate summary
-      const summary = PortfolioUtil.calculatePortfolioSummary(holdings);
-      const totalValue = summary.current_value;
-
-      // Transform holdings with allocation percentage
-      const holdingsWithAllocation: PortfolioHolding[] = holdings.map(h => ({
-        portfolio_id: h.portfolio_id,
-        scheme_code: h.scheme_code,
-        scheme_name: h.scheme_name,
-        fund_name: h.fund_name,
-        category: h.category,
-        sub_category: h.sub_category,
-        folio_no: h.folio_no,
-        total_units: parseFloat(h.total_units),
-        total_invested: parseFloat(h.total_invested),
-        latest_nav: parseFloat(h.latest_nav),
-        current_value: parseFloat(h.current_value),
-        total_returns: parseFloat(h.total_returns),
-        return_percentage: parseFloat(h.return_percentage),
-        allocation_percentage: PortfolioUtil.calculateAllocationPercentage(
-          parseFloat(h.current_value),
-          totalValue
-        ),
-        transaction_count: parseInt(h.transaction_count),
-        last_transaction_date: h.last_transaction_date
-      }));
-
-      // Calculate asset allocation
-      const allocation = PortfolioUtil.calculateCategoryAllocation(holdings, totalValue);
-
+    if (holdingsResult.rows.length === 0) {
       return {
         customer_id: customerId,
         customer_name: customerName,
         summary: {
           customer_id: customerId,
           customer_name: customerName,
-          ...summary
+          total_invested: 0,
+          current_value: 0,
+          total_returns: 0,
+          return_percentage: 0,
+          total_schemes: 0
         },
-        holdings: holdingsWithAllocation,
-        allocation
+        holdings: [],
+        allocation: []
       };
-    } catch (error: any) {
-      console.error('Error getting customer portfolio:', error);
-      throw new Error(`Failed to get customer portfolio: ${error.message}`);
     }
+
+    const holdings = holdingsResult.rows;
+
+    // ✅ FIX: Parse database values BEFORE calculations
+    const parsedHoldings = holdings.map(h => ({
+      ...h,
+      total_invested: parseFloat(h.total_invested) || 0,
+      current_value: parseFloat(h.current_value) || 0,
+      total_returns: parseFloat(h.total_returns) || 0,
+      return_percentage: parseFloat(h.return_percentage) || 0,
+      total_units: parseFloat(h.total_units) || 0,
+      latest_nav: parseFloat(h.latest_nav) || 0
+    }));
+
+    // Calculate summary with parsed values
+    const summary = PortfolioUtil.calculatePortfolioSummary(parsedHoldings);
+    const totalValue = summary.current_value;
+
+    // Transform holdings with allocation percentage
+    const holdingsWithAllocation: PortfolioHolding[] = parsedHoldings.map(h => ({
+      portfolio_id: h.portfolio_id,
+      scheme_code: h.scheme_code,
+      scheme_name: h.scheme_name,
+      fund_name: h.fund_name,
+      category: h.category,
+      sub_category: h.sub_category,
+      folio_no: h.folio_no,
+      total_units: h.total_units,
+      total_invested: h.total_invested,
+      latest_nav: h.latest_nav,
+      current_value: h.current_value,
+      total_returns: h.total_returns,
+      return_percentage: h.return_percentage,
+      allocation_percentage: PortfolioUtil.calculateAllocationPercentage(
+        h.current_value,
+        totalValue
+      ),
+      transaction_count: parseInt(h.transaction_count) || 0,
+      last_transaction_date: h.last_transaction_date
+    }));
+
+    // Calculate asset allocation
+    const allocation = PortfolioUtil.calculateCategoryAllocation(parsedHoldings, totalValue);
+
+    return {
+      customer_id: customerId,
+      customer_name: customerName,
+      summary: {
+        customer_id: customerId,
+        customer_name: customerName,
+        ...summary
+      },
+      holdings: holdingsWithAllocation,
+      allocation
+    };
+  } catch (error: any) {
+    console.error('Error getting customer portfolio:', error);
+    throw new Error(`Failed to get customer portfolio: ${error.message}`);
   }
+}
 
   /**
    * Get portfolio totals only (faster query)

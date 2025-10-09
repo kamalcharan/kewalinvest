@@ -341,21 +341,21 @@ export class JTBDController {
       const isLive = environment === 'live';
 
       // This could be enhanced with pagination if needed
-      const query = `
-        SELECT 
-          c.id,
-          cont.name,
-          c.jtbd_setup_status,
-          c.jtbd_count
-        FROM t_customers c
-        JOIN t_contacts cont ON c.contact_id = cont.id
-        WHERE c.tenant_id = $1 
-          AND c.is_live = $2 
-          AND c.is_active = true
-          AND (c.jtbd_count IS NULL OR c.jtbd_count = 0)
-        ORDER BY cont.name
-        LIMIT 50
-      `;
+     const query = `
+  SELECT 
+    c.id,
+    cont.name,
+    c.has_jtbd_setup,
+    c.jtbd_count
+  FROM t_customers c
+  JOIN t_contacts cont ON c.contact_id = cont.id
+  WHERE c.tenant_id = $1 
+    AND c.is_live = $2 
+    AND c.is_active = true
+    AND c.has_jtbd_setup = false
+  ORDER BY cont.name
+  LIMIT 50
+`;
 
       const result = await this.jtbdService['db'].query(query, [user!.tenant_id, isLive]);
 

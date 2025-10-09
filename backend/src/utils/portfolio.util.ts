@@ -2,13 +2,22 @@
 
 export class PortfolioUtil {
   /**
-   * Calculate return percentage
-   */
-  static calculateReturnPercentage(invested: number, currentValue: number): number {
-    if (!invested || invested === 0) return 0;
-    return Math.round(((currentValue - invested) / invested) * 10000) / 100;
+ * Calculate return percentage
+ * For small values (< 0.1%), shows 2 decimal places for precision
+ */
+static calculateReturnPercentage(invested: number, currentValue: number): number {
+  if (!invested || invested === 0) return 0;
+  
+  const percentage = ((currentValue - invested) / invested) * 100;
+  
+  // For very small values (< 0.1%), use 2 decimal places for precision
+  if (Math.abs(percentage) < 0.1) {
+    return Math.round(percentage * 100) / 100; // 2 decimals: -0.00%
   }
-
+  
+  // For larger values, use 1 decimal place
+  return Math.round(percentage * 10) / 10; // 1 decimal: +15.5%
+}
   /**
    * Calculate absolute returns
    */

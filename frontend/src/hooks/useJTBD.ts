@@ -1,5 +1,4 @@
 // frontend/src/hooks/useJTBD.ts
-// COMPLETE REPLACEMENT - Uses Real API instead of Mock Data
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
@@ -221,6 +220,7 @@ export function usePortfolioOccurrences(jtbdId?: number) {
 
 /**
  * Mutation: Create JTBD
+ * Enhanced with race condition protection
  */
 export function useCreateJTBD() {
   const queryClient = useQueryClient();
@@ -228,6 +228,12 @@ export function useCreateJTBD() {
 
   return useMutation<JTBDConfiguration, Error, CreateJTBDRequest>({
     mutationFn: async (data: CreateJTBDRequest) => {
+      console.log('🔵 useCreateJTBD: Starting mutation', {
+        timestamp: new Date().toISOString(),
+        customerId: data.customer_id,
+        type: data.jtbd_type
+      });
+
       if (!user || !tenantId) {
         throw new Error('Authentication required');
       }
@@ -238,9 +244,24 @@ export function useCreateJTBD() {
         throw new Error(response.error || 'Failed to create JTBD');
       }
 
+      console.log('✅ useCreateJTBD: Mutation successful', {
+        timestamp: new Date().toISOString(),
+        jtbdId: response.data.id
+      });
+
       return response.data;
     },
+    
+    // CRITICAL: Disable retries to prevent duplicate submissions
+    retry: false,
+    
     onSuccess: (newJTBD) => {
+      console.log('🎉 useCreateJTBD: onSuccess triggered', {
+        timestamp: new Date().toISOString(),
+        jtbdId: newJTBD.id,
+        customerId: newJTBD.customer_id
+      });
+
       // Invalidate customer's JTBD list
       queryClient.invalidateQueries({ 
         queryKey: JTBD_QUERY_KEYS.list(newJTBD.customer_id) 
@@ -261,8 +282,30 @@ export function useCreateJTBD() {
       
       toastService.success(`${newJTBD.title} created successfully`);
     },
+    
     onError: (error) => {
+      console.error('❌ useCreateJTBD: onError triggered', {
+        timestamp: new Date().toISOString(),
+        error: error.message
+      });
+      
       handleAPIError(error, 'Failed to create JTBD configuration');
+    },
+    
+    onMutate: (variables) => {
+      console.log('⏳ useCreateJTBD: onMutate triggered (mutation starting)', {
+        timestamp: new Date().toISOString(),
+        customerId: variables.customer_id,
+        type: variables.jtbd_type
+      });
+    },
+    
+    onSettled: (data, error, variables) => {
+      console.log('🏁 useCreateJTBD: onSettled triggered (mutation completed)', {
+        timestamp: new Date().toISOString(),
+        success: !!data,
+        error: error?.message
+      });
     }
   });
 }
@@ -288,6 +331,9 @@ export function useUpdateJTBD() {
 
       return response.data;
     },
+    
+    retry: false,
+    
     onSuccess: (updatedJTBD) => {
       // Invalidate customer's JTBD list
       queryClient.invalidateQueries({ 
@@ -329,6 +375,9 @@ export function useDeleteJTBD() {
         throw new Error('Failed to delete JTBD');
       }
     },
+    
+    retry: false,
+    
     onSuccess: (_, { id, customerId }) => {
       // Invalidate customer's JTBD list
       queryClient.invalidateQueries({ 
@@ -379,6 +428,9 @@ export function useToggleJTBD() {
 
       return response.data;
     },
+    
+    retry: false,
+    
     onSuccess: (updatedJTBD) => {
       // Invalidate customer's JTBD list
       queryClient.invalidateQueries({ 

@@ -5,6 +5,7 @@
 -- Execution: Run FOURTH after 03_indexes_triggers.sql
 -- Author: System
 -- Date: 2025-01-08
+-- Updated: 2025-01-09 (Added transaction import, materialized view, refresh function)
 -- ============================================================================
 
 -- ============================================================================
@@ -815,7 +816,244 @@ $$;
 COMMENT ON FUNCTION process_scheme_import_with_timing IS 'Process scheme import with controlled timing';
 
 -- ============================================================================
--- SECTION 4: CLEANUP FUNCTIONS
+-- SECTION 4: TRANSACTION IMPORT FUNCTIONS
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Transaction Import Functions...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: process_transaction_import_with_timing
+-- Description: Process transaction imports from staging with controlled timing
+-- Target Duration: 30-45 seconds
+-- NEW FUNCTION: Added for transaction import support
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION process_transaction_import_with_timing(
+    p_session_id INTEGER, 
+    p_target_duration_ms INTEGER DEFAULT 35000
+) 
+RETURNS TABLE(
+    total_processed INTEGER,
+    successful INTEGER, 
+    failed INTEGER,
+    duplicates INTEGER,
+    duration_ms INTEGER
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_start_time TIMESTAMP;
+    v_end_time TIMESTAMP;
+    v_total_rows INTEGER;
+    v_processed INTEGER := 0;
+    v_success INTEGER := 0;
+    v_failed INTEGER := 0;
+    v_duplicates INTEGER := 0;
+    v_batch_size INTEGER;
+    v_sleep_per_batch NUMERIC;
+    v_staging_record RECORD;
+    v_customer_id INTEGER;
+    v_txn_type_id INTEGER;
+    v_txn_type VARCHAR(20);
+    v_portfolio_id INTEGER;
+    v_is_duplicate BOOLEAN;
+    v_error_msg TEXT;
+BEGIN
+    v_start_time := clock_timestamp();
+    
+    -- Get total rows to process
+    SELECT COUNT(*) INTO v_total_rows
+    FROM t_import_staging_data
+    WHERE session_id = p_session_id
+        AND processing_status = 'pending';
+    
+    -- Calculate batch size and sleep time to target duration
+    IF v_total_rows > 0 THEN
+        v_batch_size := GREATEST(10, v_total_rows / 20); -- Process in ~20 batches
+        v_sleep_per_batch := (p_target_duration_ms / 20.0) / 1000.0; -- Sleep between batches in seconds
+    ELSE
+        -- No rows to process
+        RETURN QUERY SELECT 0, 0, 0, 0, 0;
+        RETURN;
+    END IF;
+    
+    -- Update session status
+    UPDATE t_import_sessions
+    SET status = 'processing',
+        processing_started_at = v_start_time,
+        total_records = v_total_rows
+    WHERE id = p_session_id;
+    
+    -- Process each staging record
+    FOR v_staging_record IN
+        SELECT * FROM t_import_staging_data
+        WHERE session_id = p_session_id
+            AND processing_status = 'pending'
+        ORDER BY row_number
+    LOOP
+        BEGIN
+            v_error_msg := NULL;
+            v_is_duplicate := false;
+            
+            -- 1. VALIDATE CUSTOMER (by IWELL code) - PLAIN TEXT
+            SELECT c.id INTO v_customer_id
+            FROM t_customers c
+            WHERE c.iwell_code = v_staging_record.mapped_data->>'iwell_code'
+                AND c.tenant_id = v_staging_record.tenant_id
+                AND c.is_live = v_staging_record.is_live
+                AND c.is_active = true;
+            
+            IF v_customer_id IS NULL THEN
+                v_error_msg := 'Customer data not found for import - IWELL code not matched';
+                RAISE EXCEPTION '%', v_error_msg;
+            END IF;
+            
+            -- 2. VALIDATE TRANSACTION TYPE
+            SELECT id, txn_type INTO v_txn_type_id, v_txn_type
+            FROM m_transaction_types
+            WHERE UPPER(txn_code) = UPPER(v_staging_record.mapped_data->>'txn_code')
+                AND is_active = true;
+            
+            IF v_txn_type_id IS NULL THEN
+                v_error_msg := 'Invalid transaction type: ' || (v_staging_record.mapped_data->>'txn_code');
+                RAISE EXCEPTION '%', v_error_msg;
+            END IF;
+            
+            -- 3. CHECK FOR DUPLICATE
+            SELECT EXISTS (
+                SELECT 1 FROM t_transaction_table
+                WHERE customer_id = v_customer_id
+                    AND scheme_code = v_staging_record.mapped_data->>'scheme_code'
+                    AND txn_date = (v_staging_record.mapped_data->>'txn_date')::DATE
+                    AND total_amount = (v_staging_record.mapped_data->>'total_amount')::DECIMAL
+                    AND txn_type_id = v_txn_type_id
+                    AND is_active = true
+            ) INTO v_is_duplicate;
+            
+            -- 4. CREATE/UPDATE PORTFOLIO ENTRY (if not exists)
+            INSERT INTO t_customer_master_portfolio (
+                tenant_id, is_live, customer_id, scheme_code, scheme_name,
+                folio_no, category, sub_category, fund_name, start_date
+            ) VALUES (
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_staging_record.mapped_data->>'scheme_code',
+                v_staging_record.mapped_data->>'scheme_name',
+                v_staging_record.mapped_data->>'folio_no',
+                v_staging_record.mapped_data->>'category',
+                v_staging_record.mapped_data->>'sub_category',
+                v_staging_record.mapped_data->>'fund_name',
+                (v_staging_record.mapped_data->>'txn_date')::DATE
+            )
+            ON CONFLICT (customer_id, scheme_code, tenant_id, is_live)
+            DO NOTHING
+            RETURNING id INTO v_portfolio_id;
+            
+            -- 5. INSERT TRANSACTION
+            INSERT INTO t_transaction_table (
+                tenant_id, is_live, customer_id, scheme_code, scheme_name, folio_no,
+                txn_type_id, txn_date, total_amount, units, nav, stamp_duty,
+                staging_record_id, import_session_id,
+                is_potential_duplicate, portfolio_flag,
+                duplicate_reason
+            ) VALUES (
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_staging_record.mapped_data->>'scheme_code',
+                v_staging_record.mapped_data->>'scheme_name',
+                v_staging_record.mapped_data->>'folio_no',
+                v_txn_type_id,
+                (v_staging_record.mapped_data->>'txn_date')::DATE,
+                (v_staging_record.mapped_data->>'total_amount')::DECIMAL,
+                (v_staging_record.mapped_data->>'units')::DECIMAL,
+                (v_staging_record.mapped_data->>'nav')::DECIMAL,
+                (v_staging_record.mapped_data->>'stamp_duty')::DECIMAL,
+                v_staging_record.id,
+                p_session_id,
+                v_is_duplicate,
+                true, -- portfolio_flag defaults to true
+                CASE WHEN v_is_duplicate THEN 'Duplicate transaction detected: same customer, scheme, date, amount, and type' ELSE NULL END
+            );
+            
+            -- 6. UPDATE STAGING RECORD
+            UPDATE t_import_staging_data
+            SET processing_status = CASE WHEN v_is_duplicate THEN 'duplicate' ELSE 'success' END,
+                processed_at = clock_timestamp(),
+                created_record_type = 'transaction'
+            WHERE id = v_staging_record.id;
+            
+            IF v_is_duplicate THEN
+                v_duplicates := v_duplicates + 1;
+            ELSE
+                v_success := v_success + 1;
+            END IF;
+            
+        EXCEPTION WHEN OTHERS THEN
+            -- Handle errors
+            v_error_msg := COALESCE(v_error_msg, SQLERRM);
+            
+            UPDATE t_import_staging_data
+            SET processing_status = 'failed',
+                error_messages = ARRAY[v_error_msg],
+                processed_at = clock_timestamp()
+            WHERE id = v_staging_record.id;
+            
+            v_failed := v_failed + 1;
+        END;
+        
+        v_processed := v_processed + 1;
+        
+        -- Update session progress
+        IF v_processed % 10 = 0 THEN
+            UPDATE t_import_sessions
+            SET processed_records = v_processed,
+                successful_records = v_success,
+                failed_records = v_failed,
+                duplicate_records = v_duplicates
+            WHERE id = p_session_id;
+        END IF;
+        
+        -- Sleep between batches to control duration
+        IF v_processed % v_batch_size = 0 THEN
+            PERFORM pg_sleep(v_sleep_per_batch);
+        END IF;
+    END LOOP;
+    
+    v_end_time := clock_timestamp();
+    
+    -- Final session update
+    UPDATE t_import_sessions
+    SET status = CASE 
+            WHEN v_failed > 0 THEN 'completed_with_errors'
+            ELSE 'completed'
+        END,
+        processed_records = v_processed,
+        successful_records = v_success,
+        failed_records = v_failed,
+        duplicate_records = v_duplicates,
+        processing_completed_at = v_end_time
+    WHERE id = p_session_id;
+    
+    -- Refresh materialized view
+    PERFORM refresh_portfolio_totals();
+    
+    RETURN QUERY SELECT 
+        v_processed,
+        v_success,
+        v_failed,
+        v_duplicates,
+        EXTRACT(EPOCH FROM (v_end_time - v_start_time))::INTEGER * 1000;
+END;
+$$;
+
+COMMENT ON FUNCTION process_transaction_import_with_timing IS 
+'Process transaction imports from staging with controlled timing (30-45 seconds target). Uses plain text iwell_code for customer lookup.';
+
+-- ============================================================================
+-- SECTION 5: CLEANUP FUNCTIONS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -966,7 +1204,7 @@ $$;
 COMMENT ON FUNCTION get_staging_storage_stats IS 'Get storage statistics for import staging tables';
 
 -- ============================================================================
--- SECTION 5: VIEWS
+-- SECTION 6: VIEWS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -1039,7 +1277,176 @@ LEFT JOIN v_import_staging_statistics st ON s.id = st.session_id;
 COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring view';
 
 -- ============================================================================
--- SECTION 6: ROW LEVEL SECURITY (RLS) POLICIES
+-- SECTION 7: MATERIALIZED VIEW - PORTFOLIO TOTALS
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Materialized View for Portfolio Totals...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- MATERIALIZED VIEW: t_customer_portfolio_totals
+-- Description: Pre-calculated portfolio totals with returns
+-- NEW: Added complete materialized view for portfolio calculations
+-- ----------------------------------------------------------------------------
+CREATE MATERIALIZED VIEW t_customer_portfolio_totals AS
+SELECT 
+    p.tenant_id,
+    p.is_live,
+    p.customer_id,
+    p.scheme_code,
+    p.scheme_name,
+    p.folio_no,
+    p.category,
+    p.sub_category,
+    p.fund_name,
+    p.start_date,
+    
+    -- Transaction Counts
+    COUNT(DISTINCT t.id) as transaction_count,
+    COUNT(DISTINCT CASE WHEN tt.txn_type = 'Addition' THEN t.id END) as purchase_count,
+    COUNT(DISTINCT CASE WHEN tt.txn_type = 'Deduction' THEN t.id END) as redemption_count,
+    
+    -- Units Totals - FIXED
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
+                     ELSE 0 END), 0) as total_units,
+    
+    -- Investment Amount - FIXED
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0) as total_invested,
+    
+    -- Latest NAV
+    (SELECT nav FROM t_transaction_table 
+     WHERE customer_id = p.customer_id 
+       AND scheme_code = p.scheme_code 
+       AND is_active = true 
+     ORDER BY txn_date DESC 
+     LIMIT 1) as latest_nav,
+    
+    -- Current Value - FIXED
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
+                     ELSE 0 END), 0) * 
+    COALESCE((SELECT nav FROM t_transaction_table 
+              WHERE customer_id = p.customer_id 
+                AND scheme_code = p.scheme_code 
+                AND is_active = true 
+              ORDER BY txn_date DESC 
+              LIMIT 1), 0) as current_value,
+    
+    -- Total Returns - FIXED
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
+                      WHEN tt.txn_type = 'Deduction' THEN -t.units 
+                      ELSE 0 END), 0) * 
+     COALESCE((SELECT nav FROM t_transaction_table 
+               WHERE customer_id = p.customer_id 
+                 AND scheme_code = p.scheme_code 
+                 AND is_active = true 
+               ORDER BY txn_date DESC 
+               LIMIT 1), 0)) - 
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+     COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) as total_returns,
+    
+    -- Return Percentage - FIXED
+    CASE 
+        WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+              COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) > 0
+        THEN ((COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
+                            WHEN tt.txn_type = 'Deduction' THEN -t.units 
+                            ELSE 0 END), 0) * 
+               COALESCE((SELECT nav FROM t_transaction_table 
+                         WHERE customer_id = p.customer_id 
+                           AND scheme_code = p.scheme_code 
+                           AND is_active = true 
+                         ORDER BY txn_date DESC 
+                         LIMIT 1), 0)) - 
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0))) / 
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) * 100
+        ELSE 0
+    END as return_percentage,
+    
+    MAX(t.txn_date) as last_transaction_date,
+    p.is_active,
+    p.id as portfolio_id,
+    NOW() as last_refreshed_at
+    
+FROM t_customer_master_portfolio p
+LEFT JOIN t_transaction_table t ON 
+    t.customer_id = p.customer_id 
+    AND t.scheme_code = p.scheme_code
+    AND t.tenant_id = p.tenant_id
+    AND t.is_live = p.is_live
+    AND t.is_active = true
+    AND t.portfolio_flag = true
+LEFT JOIN m_transaction_types tt ON t.txn_type_id = tt.id
+WHERE p.is_active = true
+GROUP BY 
+    p.id, p.tenant_id, p.is_live, p.customer_id,
+    p.scheme_code, p.scheme_name, p.folio_no,
+    p.category, p.sub_category, p.fund_name,
+    p.start_date, p.is_active;
+
+COMMENT ON MATERIALIZED VIEW t_customer_portfolio_totals IS 'Pre-calculated portfolio totals with returns and performance metrics';
+
+-- Create unique index for concurrent refresh
+CREATE UNIQUE INDEX idx_portfolio_totals_pk 
+    ON t_customer_portfolio_totals(customer_id, scheme_code, tenant_id, is_live);
+
+-- Create additional indexes for performance
+CREATE INDEX idx_portfolio_totals_customer 
+    ON t_customer_portfolio_totals(customer_id);
+
+CREATE INDEX idx_portfolio_totals_scheme 
+    ON t_customer_portfolio_totals(scheme_code);
+
+CREATE INDEX idx_portfolio_totals_tenant 
+    ON t_customer_portfolio_totals(tenant_id, is_live);
+
+CREATE INDEX idx_portfolio_totals_category 
+    ON t_customer_portfolio_totals(category);
+
+CREATE INDEX idx_portfolio_totals_value 
+    ON t_customer_portfolio_totals(current_value DESC);
+
+-- Initial population of materialized view
+REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+
+-- ============================================================================
+-- SECTION 8: MATERIALIZED VIEW REFRESH FUNCTION
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Materialized View Refresh Function...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: refresh_portfolio_totals
+-- Description: Refresh the portfolio totals materialized view
+-- NEW FUNCTION: Added for materialized view refresh
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION refresh_portfolio_totals()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Refresh the materialized view concurrently (if possible)
+    -- CONCURRENTLY allows reads during refresh but requires unique index
+    REFRESH MATERIALIZED VIEW CONCURRENTLY t_customer_portfolio_totals;
+    
+EXCEPTION WHEN OTHERS THEN
+    -- If concurrent refresh fails (e.g., no unique index), do regular refresh
+    REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+END;
+$$;
+
+COMMENT ON FUNCTION refresh_portfolio_totals IS 
+'Refreshes the t_customer_portfolio_totals materialized view. Attempts concurrent refresh first.';
+
+-- ============================================================================
+-- SECTION 9: ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -1103,7 +1510,7 @@ COMMENT ON POLICY tenant_isolation_users ON t_users IS 'Isolate users by tenant_
 COMMENT ON POLICY environment_filter_users ON t_users IS 'Filter users by environment (live/test)';
 
 -- ============================================================================
--- SECTION 7: GRANT PERMISSIONS
+-- SECTION 10: GRANT PERMISSIONS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -1127,11 +1534,15 @@ GRANT EXECUTE ON FUNCTION process_single_customer_record TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_customer_import_with_timing TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_single_scheme_record TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_scheme_import_with_timing TO kewal_admin;
+GRANT EXECUTE ON FUNCTION process_transaction_import_with_timing TO kewal_admin;
 
 -- Grant execute on cleanup functions
 GRANT EXECUTE ON FUNCTION cleanup_old_staging_data TO kewal_admin;
 GRANT EXECUTE ON FUNCTION cleanup_session_staging_data TO kewal_admin;
 GRANT EXECUTE ON FUNCTION get_staging_storage_stats TO kewal_admin;
+
+-- Grant execute on materialized view refresh function
+GRANT EXECUTE ON FUNCTION refresh_portfolio_totals TO kewal_admin;
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -1141,6 +1552,7 @@ DECLARE
     v_function_count INTEGER;
     v_view_count INTEGER;
     v_policy_count INTEGER;
+    v_mat_view_count INTEGER;
 BEGIN
     -- Count functions
     SELECT COUNT(*) INTO v_function_count
@@ -1153,6 +1565,11 @@ BEGIN
     FROM information_schema.views
     WHERE table_schema = 'public';
     
+    -- Count materialized views
+    SELECT COUNT(*) INTO v_mat_view_count
+    FROM pg_matviews
+    WHERE schemaname = 'public';
+    
     -- Count policies
     SELECT COUNT(*) INTO v_policy_count
     FROM pg_policies
@@ -1162,7 +1579,12 @@ BEGIN
     RAISE NOTICE 'Functions, Views, and Policies created!';
     RAISE NOTICE 'Total functions: %', v_function_count;
     RAISE NOTICE 'Total views: %', v_view_count;
+    RAISE NOTICE 'Total materialized views: %', v_mat_view_count;
     RAISE NOTICE 'Total RLS policies: %', v_policy_count;
+    RAISE NOTICE 'Updates included:';
+    RAISE NOTICE '  - Added process_transaction_import_with_timing()';
+    RAISE NOTICE '  - Added t_customer_portfolio_totals materialized view';
+    RAISE NOTICE '  - Added refresh_portfolio_totals() function';
     RAISE NOTICE 'Next: Run 05_seed_data.sql';
     RAISE NOTICE '========================================';
 END $$;

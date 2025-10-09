@@ -4,20 +4,69 @@ import { PortfolioAlertConfig, TimeBasedConfig, ProfileTriggerConfig, Calculated
 
 export class JTBDUtil {
   /**
+   * SMART DATE HELPERS
+   */
+  
+  /**
+   * Check if a year is a leap year
+   */
+  private static isLeapYear(year: number): boolean {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  }
+  
+  /**
+   * Get the actual last day of a month (handles Feb, 30-day months, etc.)
+   */
+  private static getDaysInMonth(year: number, month: number): number {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    
+    // Adjust February for leap years
+    if (month === 1 && this.isLeapYear(year)) {
+      return 29;
+    }
+    
+    return daysInMonth[month];
+  }
+  
+  /**
+   * Adjust day to be valid for the given month (smart month-end logic)
+   * Examples:
+   * - Feb 31 → Feb 28 (or 29 in leap year)
+   * - Apr 31 → Apr 30
+   * - Jan 31 → Jan 31 (valid)
+   */
+  private static adjustDayForMonth(year: number, month: number, requestedDay: number): number {
+    const maxDay = this.getDaysInMonth(year, month);
+    return Math.min(requestedDay, maxDay);
+  }
+  
+  /**
+   * Create a date with smart month-end adjustment
+   */
+  private static createSmartDate(year: number, month: number, requestedDay: number): Date {
+    const adjustedDay = this.adjustDayForMonth(year, month, requestedDay);
+    return new Date(year, month, adjustedDay);
+  }
+
+  /**
    * Calculate next alert date for portfolio alerts
+   * NOW WITH SMART MONTH-END LOGIC
    */
   static calculatePortfolioNextDate(config: PortfolioAlertConfig): Date {
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
+    const requestedDay = config.day_of_month || 1;
     
     let nextDate: Date;
     
     switch (config.frequency) {
       case 'monthly':
-        nextDate = new Date(currentYear, currentMonth, config.day_of_month || 1);
+        // Try current month first
+        nextDate = this.createSmartDate(currentYear, currentMonth, requestedDay);
         if (nextDate <= today) {
-          nextDate = new Date(currentYear, currentMonth + 1, config.day_of_month || 1);
+          // Move to next month
+          nextDate = this.createSmartDate(currentYear, currentMonth + 1, requestedDay);
         }
         break;
         
@@ -25,16 +74,18 @@ export class JTBDUtil {
         // Next quarter date
         const currentQuarter = Math.floor(currentMonth / 3);
         const nextQuarterMonth = (currentQuarter + 1) * 3;
-        nextDate = new Date(currentYear, nextQuarterMonth, config.day_of_month || 1);
+        nextDate = this.createSmartDate(currentYear, nextQuarterMonth, requestedDay);
         if (nextDate <= today) {
-          nextDate = new Date(currentYear, nextQuarterMonth + 3, config.day_of_month || 1);
+          nextDate = this.createSmartDate(currentYear, nextQuarterMonth + 3, requestedDay);
         }
         break;
         
       case 'yearly':
-        nextDate = new Date(currentYear, currentMonth, config.day_of_month || 1);
+        // Try this year first
+        nextDate = this.createSmartDate(currentYear, currentMonth, requestedDay);
         if (nextDate <= today) {
-          nextDate = new Date(currentYear + 1, currentMonth, config.day_of_month || 1);
+          // Move to next year
+          nextDate = this.createSmartDate(currentYear + 1, currentMonth, requestedDay);
         }
         break;
         
@@ -59,6 +110,7 @@ export class JTBDUtil {
   
   /**
    * Calculate all future occurrences for portfolio alert
+   * NOW WITH SMART MONTH-END LOGIC
    */
   static calculateAllOccurrences(config: PortfolioAlertConfig, startDate: Date = new Date()): CalculatedAlertInstance[] {
     const occurrences: CalculatedAlertInstance[] = [];
@@ -67,14 +119,9 @@ export class JTBDUtil {
     
     let currentDate = this.calculatePortfolioNextDate(config);
     let occurrenceNumber = 1;
+    const requestedDay = config.day_of_month || 1;
     
     while (currentDate <= trackTillDate && occurrenceNumber <= 100) { // Safety limit
-      // Calculate deviation range
-      const minDate = new Date(currentDate);
-      minDate.setDate(currentDate.getDate() - config.deviation_days);
-      const maxDate = new Date(currentDate);
-      maxDate.setDate(currentDate.getDate() + config.deviation_days);
-      
       occurrences.push({
         occurrence_date: currentDate.toISOString().split('T')[0],
         occurrence_number: occurrenceNumber,
@@ -82,17 +129,26 @@ export class JTBDUtil {
         amount: config.amount
       });
       
-      // Calculate next occurrence based on frequency
+      // Calculate next occurrence based on frequency WITH SMART DATE LOGIC
       switch (config.frequency) {
-        case 'monthly':
-          currentDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
+        case 'monthly': {
+          const nextYear = currentDate.getFullYear();
+          const nextMonth = currentDate.getMonth() + 1;
+          currentDate = this.createSmartDate(nextYear, nextMonth, requestedDay);
           break;
-        case 'quarterly':
-          currentDate = new Date(currentDate.setMonth(currentDate.getMonth() + 3));
+        }
+        case 'quarterly': {
+          const nextYear = currentDate.getFullYear();
+          const nextMonth = currentDate.getMonth() + 3;
+          currentDate = this.createSmartDate(nextYear, nextMonth, requestedDay);
           break;
-        case 'yearly':
-          currentDate = new Date(currentDate.setFullYear(currentDate.getFullYear() + 1));
+        }
+        case 'yearly': {
+          const nextYear = currentDate.getFullYear() + 1;
+          const nextMonth = currentDate.getMonth();
+          currentDate = this.createSmartDate(nextYear, nextMonth, requestedDay);
           break;
+        }
         case 'fortnightly':
           currentDate = new Date(currentDate.setDate(currentDate.getDate() + 14));
           break;
@@ -111,18 +167,21 @@ export class JTBDUtil {
   
   /**
    * Calculate next date for time-based alerts
+   * NOW WITH SMART MONTH-END LOGIC
    */
   static calculateTimeNextDate(config: TimeBasedConfig): Date {
     const today = new Date();
     const currentYear = today.getFullYear();
+    const requestedMonth = config.alert_month - 1; // JS months are 0-indexed
+    const requestedDay = config.alert_date;
     
-    // Create target date
-    let nextDate = new Date(currentYear, config.alert_month - 1, config.alert_date);
+    // Create target date with smart month-end adjustment
+    let nextDate = this.createSmartDate(currentYear, requestedMonth, requestedDay);
     
     // If date has passed this year, use next year
     if (nextDate <= today) {
       if (config.is_recurring) {
-        nextDate = new Date(currentYear + 1, config.alert_month - 1, config.alert_date);
+        nextDate = this.createSmartDate(currentYear + 1, requestedMonth, requestedDay);
       } else {
         // Non-recurring, no next date
         return new Date(9999, 11, 31);
@@ -150,20 +209,23 @@ export class JTBDUtil {
   
   /**
    * Helper: Get next occurrence of a date with days_before offset
+   * NOW WITH SMART MONTH-END LOGIC for Feb 29 birthdays
    */
   private static getNextOccurrence(baseDate: Date, daysBefore: number): Date {
     const today = new Date();
     const currentYear = today.getFullYear();
+    const month = baseDate.getMonth();
+    const requestedDay = baseDate.getDate();
     
-    // Create this year's occurrence
-    let nextDate = new Date(currentYear, baseDate.getMonth(), baseDate.getDate());
+    // Create this year's occurrence with smart date adjustment
+    let nextDate = this.createSmartDate(currentYear, month, requestedDay);
     
     // Subtract days_before
     nextDate.setDate(nextDate.getDate() - daysBefore);
     
     // If already passed, use next year
     if (nextDate <= today) {
-      nextDate = new Date(currentYear + 1, baseDate.getMonth(), baseDate.getDate());
+      nextDate = this.createSmartDate(currentYear + 1, month, requestedDay);
       nextDate.setDate(nextDate.getDate() - daysBefore);
     }
     
@@ -171,7 +233,12 @@ export class JTBDUtil {
   }
   
   /**
+   * VALIDATION FUNCTIONS
+   */
+  
+  /**
    * Validate portfolio alert configuration
+   * NOW WITH ENHANCED DATE VALIDATION
    */
   static validatePortfolioConfig(config: PortfolioAlertConfig): { is_valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -188,6 +255,8 @@ export class JTBDUtil {
       if (!config.day_of_month || config.day_of_month < 1 || config.day_of_month > 31) {
         errors.push('day_of_month must be between 1 and 31');
       }
+      // Note: We don't validate against specific months here because smart logic handles it
+      // e.g., Feb 31 will auto-adjust to Feb 28/29
     }
     
     return {
@@ -198,6 +267,7 @@ export class JTBDUtil {
   
   /**
    * Validate time-based configuration
+   * NOW WITH ENHANCED DATE VALIDATION
    */
   static validateTimeConfig(config: TimeBasedConfig): { is_valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -207,6 +277,16 @@ export class JTBDUtil {
     }
     if (!config.alert_month || config.alert_month < 1 || config.alert_month > 12) {
       errors.push('alert_month must be between 1 and 12');
+    }
+    
+    // Optional: Warn if date is invalid for month (but don't fail - smart logic will adjust)
+    if (config.alert_date && config.alert_month) {
+      const currentYear = new Date().getFullYear();
+      const maxDay = this.getDaysInMonth(currentYear, config.alert_month - 1);
+      if (config.alert_date > maxDay) {
+        // This is just informational - the smart logic will handle it
+        console.log(`INFO: Day ${config.alert_date} adjusted to ${maxDay} for month ${config.alert_month}`);
+      }
     }
     
     return {
@@ -227,6 +307,9 @@ export class JTBDUtil {
     if (config.days_before < 0) {
       errors.push('days_before cannot be negative');
     }
+    if (config.days_before > 365) {
+      errors.push('days_before cannot exceed 365 days');
+    }
     
     return {
       is_valid: errors.length === 0,
@@ -241,12 +324,27 @@ export class JTBDUtil {
     switch (type) {
       case 'portfolio_alert':
         return `${config.txn_type} alert for ${config.scheme_name}`;
-      case 'time_based':
-        return `Alert on ${config.alert_date}/${config.alert_month}`;
-      case 'profile_trigger':
-        return `${config.trigger_type} reminder`;
+      case 'time_based': {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthName = monthNames[config.alert_month - 1] || '';
+        return `Alert on ${config.alert_date} ${monthName}`;
+      }
+      case 'profile_trigger': {
+        const typeLabel = config.trigger_type === 'birthday' ? 'Birthday' : 'Anniversary';
+        return `${typeLabel} reminder (${config.days_before} days before)`;
+      }
       default:
         return 'JTBD Alert';
     }
+  }
+  
+  /**
+   * UTILITY EXPORT: Get month info (for debugging/logging)
+   */
+  static getMonthInfo(year: number, month: number): { daysInMonth: number; isLeapYear: boolean } {
+    return {
+      daysInMonth: this.getDaysInMonth(year, month),
+      isLeapYear: this.isLeapYear(year)
+    };
   }
 }

@@ -111,18 +111,22 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
   };
 
   const getDisplayColumns = (): string[] => {
-    if (!session) return [];
-    
-    const importType = session.import_type as string; // Cast to string for comparison
-    
-    if (importType === 'customer_import' || importType === 'CustomerData') {
-      return ['name', 'email', 'mobile', 'pan', 'city'];
-    } else if (importType === 'scheme_import' || importType === 'SchemeData') {
-      return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
-    } else {
-      return ['transaction_id', 'amount', 'date', 'customer_id', 'description'];
-    }
-  };
+  if (!session) return [];
+  
+  const importType = session.import_type as string; // Cast to string for comparison
+  
+  if (importType === 'customer_import' || importType === 'CustomerData') {
+    return ['name', 'email', 'mobile', 'pan', 'city'];
+  } else if (importType === 'scheme_import' || importType === 'SchemeData') {
+    return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
+  } else if (importType === 'transaction_import' || importType === 'TransactionData') {
+    // ✅ FIX: Use correct field names that match the staging mapped_data
+    return ['iwell_code', 'txn_date', 'scheme_name', 'total_amount', 'units'];
+  } else {
+    // Fallback for any other import types
+    return ['id', 'name', 'value', 'status', 'date'];
+  }
+};
 
   const getColumnLabel = (column: string): string => {
     return column

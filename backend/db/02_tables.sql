@@ -5,6 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
+-- Updated: 2025-01-09 (Added transaction import support, portfolio fields, system logs)
 -- ============================================================================
 
 -- ============================================================================
@@ -175,6 +176,7 @@ COMMENT ON COLUMN t_contact_channels.is_primary IS 'Primary channel for this typ
 -- Description: Customer records extending contacts with financial data
 -- Dependencies: t_contacts, t_tenants, t_users
 -- NOTE: Uses PLAIN TEXT for PAN and iwell_code (no encryption)
+-- UPDATED: Added jtbd_count and has_jtbd_setup columns
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_customers (
     id SERIAL PRIMARY KEY,
@@ -209,6 +211,10 @@ CREATE TABLE t_customers (
         onboarding_status IN ('pending', 'in_progress', 'completed', 'cancelled')
     ),
     
+    -- JTBD tracking (ADDED)
+    jtbd_count INTEGER DEFAULT 0,
+    has_jtbd_setup BOOLEAN DEFAULT false,
+    
     -- System fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -225,7 +231,8 @@ COMMENT ON TABLE t_customers IS 'Customer records with financial and personal da
 COMMENT ON COLUMN t_customers.pan IS 'PAN card number - stored as PLAIN TEXT';
 COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - stored as PLAIN TEXT';
 COMMENT ON COLUMN t_customers.survival_status IS 'Alive or deceased status for tracking';
-
+COMMENT ON COLUMN t_customers.jtbd_count IS 'Count of active JTBD configurations for this customer';
+COMMENT ON COLUMN t_customers.has_jtbd_setup IS 'Flag indicating if customer has any JTBD configurations';
 -- ----------------------------------------------------------------------------
 -- TABLE: t_customer_addresses
 -- Description: Multiple addresses per customer
@@ -270,6 +277,7 @@ END $$;
 -- TABLE: t_file_uploads
 -- Description: Track uploaded files for import processing
 -- Dependencies: t_tenants, t_customers
+-- UPDATED: Added updated_at column
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_file_uploads (
     id SERIAL PRIMARY KEY,
@@ -277,7 +285,7 @@ CREATE TABLE t_file_uploads (
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     
-    file_type VARCHAR(50) NOT NULL CHECK (file_type IN ('customer_import', 'transaction_import', 'customer_document', 'scheme_import')),
+    file_type VARCHAR(50) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     stored_filename VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
@@ -300,16 +308,19 @@ CREATE TABLE t_file_uploads (
     
     uploaded_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed_at TIMESTAMP
 );
 
 COMMENT ON TABLE t_file_uploads IS 'Track all uploaded files for import and document management';
 COMMENT ON COLUMN t_file_uploads.file_type IS 'Type: customer_import, transaction_import, customer_document, scheme_import';
+COMMENT ON COLUMN t_file_uploads.updated_at IS 'Timestamp of last update to this record';
 
 -- ----------------------------------------------------------------------------
 -- TABLE: t_import_sessions
 -- Description: Import processing sessions with progress tracking
 -- Dependencies: t_file_uploads, t_tenants, t_users
+-- UPDATED: Removed restrictive CHECK constraint on import_type
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_import_sessions (
     id SERIAL PRIMARY KEY,
@@ -318,7 +329,7 @@ CREATE TABLE t_import_sessions (
     tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
     is_live BOOLEAN DEFAULT true,
     
-    import_type VARCHAR(50) NOT NULL CHECK (import_type IN ('CustomerData', 'TransactionData', 'SchemeData')),
+    import_type VARCHAR(50) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
@@ -354,6 +365,7 @@ CREATE TABLE t_import_sessions (
 );
 
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
+COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
 COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
 
@@ -361,6 +373,7 @@ COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted i
 -- TABLE: t_import_staging_data
 -- Description: Staging table for ETL processing
 -- Dependencies: t_import_sessions, t_tenants
+-- UPDATED: Removed restrictive CHECK constraint on import_type
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_import_staging_data (
     id SERIAL PRIMARY KEY,
@@ -392,11 +405,13 @@ CREATE TABLE t_import_staging_data (
 COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processing';
 COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as received from uploaded file';
 COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
+COMMENT ON COLUMN t_import_staging_data.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 
 -- ----------------------------------------------------------------------------
 -- TABLE: t_import_field_mappings
 -- Description: Field mapping templates for import types
 -- Dependencies: t_tenants, t_users
+-- UPDATED: Removed restrictive CHECK constraint on import_type
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_import_field_mappings (
     id SERIAL PRIMARY KEY,
@@ -404,7 +419,7 @@ CREATE TABLE t_import_field_mappings (
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     
-    import_type VARCHAR(50) NOT NULL CHECK (import_type IN ('CustomerData', 'TransactionData', 'SchemeData')),
+    import_type VARCHAR(50) NOT NULL,
     template_name VARCHAR(255) NOT NULL,
     template_version INTEGER DEFAULT 1,
     
@@ -422,6 +437,7 @@ CREATE TABLE t_import_field_mappings (
 
 COMMENT ON TABLE t_import_field_mappings IS 'Field mapping templates for different import types';
 COMMENT ON COLUMN t_import_field_mappings.field_mappings IS 'JSON structure defining source to target field mappings';
+COMMENT ON COLUMN t_import_field_mappings.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 
 -- ----------------------------------------------------------------------------
 -- TABLE: t_import_record_results
@@ -671,6 +687,7 @@ END $$;
 -- TABLE: t_customer_master_portfolio
 -- Description: Customer portfolio master records
 -- Dependencies: t_customers, t_tenants
+-- UPDATED: Added category, sub_category, fund_name, start_date columns
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_customer_master_portfolio (
     id SERIAL PRIMARY KEY,
@@ -678,6 +695,13 @@ CREATE TABLE t_customer_master_portfolio (
     scheme_code VARCHAR(50),
     scheme_name VARCHAR(255),
     folio_no VARCHAR(100),
+    
+    -- Portfolio categorization (ADDED)
+    category VARCHAR(100),
+    sub_category VARCHAR(100),
+    fund_name VARCHAR(255),
+    start_date DATE,
+    
     tenant_id INTEGER,
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
@@ -687,12 +711,17 @@ CREATE TABLE t_customer_master_portfolio (
     UNIQUE(customer_id, scheme_code, tenant_id, is_live)
 );
 
-COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records';
+COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with categorization';
+COMMENT ON COLUMN t_customer_master_portfolio.category IS 'Fund category (e.g., Equity, Debt, Hybrid)';
+COMMENT ON COLUMN t_customer_master_portfolio.sub_category IS 'Fund sub-category (e.g., Large Cap, Mid Cap)';
+COMMENT ON COLUMN t_customer_master_portfolio.fund_name IS 'Full fund name';
+COMMENT ON COLUMN t_customer_master_portfolio.start_date IS 'Date of first transaction in this portfolio';
 
 -- ----------------------------------------------------------------------------
 -- TABLE: t_transaction_table
 -- Description: Investment transactions
--- Dependencies: t_customers, t_tenants
+-- Dependencies: t_customers, t_tenants, t_import_staging_data, t_import_sessions
+-- UPDATED: Added staging_record_id, import_session_id, duplicate_reason columns
 -- ----------------------------------------------------------------------------
 CREATE TABLE t_transaction_table (
     id SERIAL PRIMARY KEY,
@@ -708,15 +737,65 @@ CREATE TABLE t_transaction_table (
     stamp_duty DECIMAL(10,2),
     is_potential_duplicate BOOLEAN DEFAULT false,
     portfolio_flag BOOLEAN DEFAULT true,
+    
+    -- Import tracking fields (ADDED)
+    staging_record_id INTEGER,
+    import_session_id INTEGER,
+    duplicate_reason TEXT,
+    
     tenant_id INTEGER,
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Foreign key constraints for import tracking (ADDED)
+    CONSTRAINT fk_staging_record 
+        FOREIGN KEY (staging_record_id) 
+        REFERENCES t_import_staging_data(id) 
+        ON DELETE SET NULL,
+    
+    CONSTRAINT fk_import_session 
+        FOREIGN KEY (import_session_id) 
+        REFERENCES t_import_sessions(id) 
+        ON DELETE SET NULL
+);
+
+COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
+COMMENT ON COLUMN t_transaction_table.portfolio_flag IS 'Include/exclude from portfolio totals';
+COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the staging record that created this transaction';
+COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
+COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
+
+-- ============================================================================
+-- SECTION 6B: TRANSACTION TYPES MASTER TABLE
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Transaction Types Master Table...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- TABLE: m_transaction_types
+-- Description: Master data for transaction types
+-- Dependencies: None
+-- ----------------------------------------------------------------------------
+CREATE TABLE m_transaction_types (
+    id SERIAL PRIMARY KEY,
+    txn_code VARCHAR(50) UNIQUE NOT NULL,
+    txn_name VARCHAR(255) NOT NULL,
+    txn_type VARCHAR(50) NOT NULL CHECK (txn_type IN ('Addition', 'Deduction')),
+    is_active BOOLEAN DEFAULT true,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_transaction_table IS 'Investment transaction records';
-COMMENT ON COLUMN t_transaction_table.portfolio_flag IS 'Include/exclude from portfolio totals';
+COMMENT ON TABLE m_transaction_types IS 'Master data for transaction types (SIP, Purchase, Redemption, etc.)';
+COMMENT ON COLUMN m_transaction_types.txn_code IS 'Unique transaction code (e.g., SIP, PURCHASE)';
+COMMENT ON COLUMN m_transaction_types.txn_name IS 'Full name of transaction type';
+COMMENT ON COLUMN m_transaction_types.txn_type IS 'Addition or Deduction type for portfolio calculations';
+
 
 -- ============================================================================
 -- SECTION 7: JTBD (JOBS TO BE DONE) TABLES
@@ -757,6 +836,40 @@ COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert and reminder configura
 COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger';
 
 -- ============================================================================
+-- SECTION 8: SYSTEM LOGS TABLE
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating System Logs Table...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- TABLE: t_system_logs
+-- Description: System-wide logging for errors, warnings, and info
+-- Dependencies: t_tenants, t_users (optional references)
+-- NEW TABLE: Added for comprehensive system logging
+-- ----------------------------------------------------------------------------
+CREATE TABLE t_system_logs (
+    id BIGSERIAL PRIMARY KEY,
+    level VARCHAR(10) NOT NULL CHECK (level IN ('error', 'warn', 'info')),
+    source VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    context TEXT,
+    user_id INTEGER,
+    tenant_id INTEGER,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    stack_trace TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+COMMENT ON TABLE t_system_logs IS 'System-wide logs for errors, warnings, and info messages';
+COMMENT ON COLUMN t_system_logs.level IS 'Log level: error, warn, or info';
+COMMENT ON COLUMN t_system_logs.source IS 'Source of the log entry (e.g., backend, frontend, n8n)';
+COMMENT ON COLUMN t_system_logs.metadata IS 'Additional structured data in JSON format';
+COMMENT ON COLUMN t_system_logs.context IS 'Contextual information about where the log occurred';
+COMMENT ON COLUMN t_system_logs.stack_trace IS 'Stack trace for error-level logs';
+
+-- ============================================================================
 -- COMPLETION MESSAGE
 -- ============================================================================
 DO $$ 
@@ -771,6 +884,12 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Table creation completed!';
     RAISE NOTICE 'Total tables created: %', v_table_count;
+    RAISE NOTICE 'Updates included:';
+    RAISE NOTICE '  - t_file_uploads: added updated_at';
+    RAISE NOTICE '  - t_customer_master_portfolio: added category fields';
+    RAISE NOTICE '  - t_transaction_table: added import tracking';
+    RAISE NOTICE '  - t_system_logs: new table added';
+    RAISE NOTICE '  - Removed restrictive import_type constraints';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';
 END $$;

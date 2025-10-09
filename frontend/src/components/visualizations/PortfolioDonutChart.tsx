@@ -5,12 +5,13 @@ import { AssetAllocation } from '../../types/portfolio.types';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface PortfolioDonutChartProps {
-  allocation: AssetAllocation[]; // CHANGED: Now accepts array instead of nested object
+  allocation: AssetAllocation[];
   size?: number;
   strokeWidth?: number;
   showLabels?: boolean;
   showLegend?: boolean;
   interactive?: boolean;
+  totalValue?: number; // ✅ NEW: Accept total from parent
 }
 
 const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
@@ -19,34 +20,37 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
   strokeWidth = 30,
   showLabels = true,
   showLegend = true,
-  interactive = true
+  interactive = true,
+  totalValue: propTotalValue // ✅ NEW: Get from props
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const [hoveredSegment, setHoveredSegment] = React.useState<string | null>(null);
 
-  // Asset type colors - now mapped by category name
+  // Asset type colors
   const assetColors: Record<string, string> = {
     'Equity': '#3B82F6',
     'Debt': '#F59E0B',
     'Hybrid': '#8B5CF6',
     'Liquid': '#10B981',
-    'Money Market': '#10B981', // Same as Liquid
+    'Money Market': '#10B981',
     'Gold': '#EAB308',
     'Other': '#6B7280'
   };
 
-  // Get color for category
   const getCategoryColor = (category: string): string => {
     return assetColors[category] || assetColors['Other'];
   };
 
+  // ✅ FIX: Use prop total if provided, otherwise calculate from allocation
+  const totalValue = propTotalValue ?? allocation.reduce((sum, item) => sum + item.current_value, 0);
+
   // Calculate segments from API data
   const segments = useMemo(() => {
-    // Convert API AssetAllocation[] to segments
+    // Filter out zero/negative values
     const data = allocation
-      .filter(item => item.percentage > 0)
+      .filter(item => item.percentage > 0 && item.current_value > 0)
       .map(item => ({
         name: item.category,
         value: item.percentage,
@@ -54,35 +58,17 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
         color: getCategoryColor(item.category)
       }));
 
+    // ✅ ENHANCEMENT: Sort by value descending for better visual hierarchy
+    const sortedData = data.sort((a, b) => b.value - a.value);
+
     let cumulativePercentage = 0;
-    return data.map(item => {
+    return sortedData.map(item => {
       const startAngle = (cumulativePercentage * 360) / 100;
       cumulativePercentage += item.value;
       const endAngle = (cumulativePercentage * 360) / 100;
       return { ...item, startAngle, endAngle };
     });
-  }, [allocation]);
-
-  // Calculate path for each segment (kept for reference, using circle method below)
-  const createPath = (startAngle: number, endAngle: number, isHovered: boolean = false) => {
-    const radius = (size - strokeWidth) / 2;
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const hoverScale = isHovered ? 1.05 : 1;
-    const actualRadius = radius * hoverScale;
-    
-    const startAngleRad = ((startAngle - 90) * Math.PI) / 180;
-    const endAngleRad = ((endAngle - 90) * Math.PI) / 180;
-    
-    const x1 = centerX + actualRadius * Math.cos(startAngleRad);
-    const y1 = centerY + actualRadius * Math.sin(startAngleRad);
-    const x2 = centerX + actualRadius * Math.cos(endAngleRad);
-    const y2 = centerY + actualRadius * Math.sin(endAngleRad);
-    
-    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-    
-    return `M ${centerX} ${centerY} L ${x1} ${y1} A ${actualRadius} ${actualRadius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
-  };
+  }, [allocation, propTotalValue]);
 
   // Format currency
   const formatCurrency = (value: number): string => {
@@ -94,8 +80,9 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
     return `₹${value.toLocaleString('en-IN')}`;
   };
 
-  // Calculate total value from API data
-  const totalValue = allocation.reduce((sum, item) => sum + item.current_value, 0);
+  // ✅ ENHANCEMENT: Calculate actual percentage sum for validation
+  const totalPercentage = segments.reduce((sum, s) => sum + s.value, 0);
+  const showPercentageWarning = Math.abs(totalPercentage - 100) > 0.5; // More than 0.5% off
 
   return (
     <div style={{ position: 'relative' }}>
@@ -194,6 +181,16 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
               }}>
                 {formatCurrency(totalValue)}
               </div>
+              {/* ✅ DEBUG: Show if percentages don't add up (remove in production) */}
+              {showPercentageWarning && (
+                <div style={{
+                  fontSize: '9px',
+                  color: colors.semantic.warning,
+                  marginTop: '2px'
+                }}>
+                  {totalPercentage.toFixed(1)}%
+                </div>
+              )}
             </>
           )}
         </div>
@@ -233,7 +230,10 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
               <div style={{
                 fontSize: '11px',
                 color: colors.utility.secondaryText,
-                flex: 1
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
               }}>
                 {segment.name}
               </div>

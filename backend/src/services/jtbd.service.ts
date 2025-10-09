@@ -94,7 +94,7 @@ export class JTBDService {
       await client.query(
         `UPDATE t_customers 
          SET jtbd_count = jtbd_count + 1,
-             jtbd_setup_status = 'active',
+             has_jtbd_setup = true,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
         [data.customer_id, tenantId, isLive]
@@ -102,10 +102,7 @@ export class JTBDService {
 
       await client.query('COMMIT');
 
-      return {
-        ...result.rows[0],
-        config_data: JSON.parse(result.rows[0].config_data)
-      };
+      return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Error creating JTBD:', error);
@@ -132,10 +129,7 @@ export class JTBDService {
 
       const result = await this.db.query(query, [tenantId, isLive, customerId]);
 
-      return result.rows.map(row => ({
-        ...row,
-        config_data: JSON.parse(row.config_data)
-      }));
+      return result.rows;
     } catch (error) {
       console.error('Error getting customer JTBDs:', error);
       throw error;
@@ -162,10 +156,7 @@ export class JTBDService {
         return null;
       }
 
-      return {
-        ...result.rows[0],
-        config_data: JSON.parse(result.rows[0].config_data)
-      };
+      return result.rows[0];
     } catch (error) {
       console.error('Error getting JTBD:', error);
       throw error;
@@ -259,10 +250,7 @@ export class JTBDService {
 
       await client.query('COMMIT');
 
-      return {
-        ...result.rows[0],
-        config_data: JSON.parse(result.rows[0].config_data)
-      };
+      return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Error updating JTBD:', error);
@@ -301,9 +289,9 @@ export class JTBDService {
       await client.query(
         `UPDATE t_customers 
          SET jtbd_count = GREATEST(jtbd_count - 1, 0),
-             jtbd_setup_status = CASE 
-               WHEN jtbd_count - 1 <= 0 THEN 'not_setup' 
-               ELSE 'active' 
+             has_jtbd_setup = CASE 
+               WHEN jtbd_count - 1 <= 0 THEN false 
+               ELSE true 
              END,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
@@ -343,10 +331,7 @@ export class JTBDService {
         return null;
       }
 
-      return {
-        ...result.rows[0],
-        config_data: JSON.parse(result.rows[0].config_data)
-      };
+      return result.rows[0];
     } catch (error) {
       console.error('Error toggling JTBD:', error);
       throw error;
@@ -385,7 +370,7 @@ export class JTBDService {
         FROM t_customers
         WHERE tenant_id = $1 AND is_live = $2 
           AND is_active = true
-          AND (jtbd_count IS NULL OR jtbd_count = 0)
+          AND has_jtbd_setup = false
       `;
       const customersResult = await this.db.query(customersQuery, [tenantId, isLive]);
 

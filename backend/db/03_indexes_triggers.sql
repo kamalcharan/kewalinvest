@@ -5,6 +5,7 @@
 -- Execution: Run THIRD after 02_tables.sql
 -- Author: System
 -- Date: 2025-01-08
+-- Updated: 2025-01-09 (Added indexes for portfolio fields, transaction tracking, system logs, materialized view)
 -- ============================================================================
 
 -- ============================================================================
@@ -88,7 +89,7 @@ COMMENT ON INDEX idx_channels_mobile IS 'Fast mobile lookup for duplicate checki
 
 -- ----------------------------------------------------------------------------
 -- INDEXES: t_customers
--- NOTE: Fixed from pan_encrypted/iwell_code_encrypted to pan/iwell_code
+-- NOTE: Uses plain text pan/iwell_code fields
 -- ----------------------------------------------------------------------------
 CREATE INDEX idx_customers_contact ON t_customers(contact_id);
 CREATE INDEX idx_customers_tenant ON t_customers(tenant_id, is_live);
@@ -105,6 +106,10 @@ CREATE INDEX idx_customers_dob ON t_customers(date_of_birth)
     WHERE date_of_birth IS NOT NULL;
 CREATE INDEX idx_customers_referred_by ON t_customers(referred_by) 
     WHERE referred_by IS NOT NULL;
+ CREATE INDEX idx_customers_jtbd_setup ON t_customers(has_jtbd_setup) 
+    WHERE has_jtbd_setup = true;
+
+COMMENT ON INDEX idx_customers_jtbd_setup IS 'Fast lookup of customers with JTBD configurations';
 
 COMMENT ON INDEX idx_customers_pan IS 'Fast PAN lookup for duplicate checking - PLAIN TEXT';
 COMMENT ON INDEX idx_customers_iwell_code IS 'Fast IWELL code lookup - PLAIN TEXT';
@@ -275,6 +280,7 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- INDEXES: t_customer_master_portfolio
+-- UPDATED: Added indexes for new category and fund_name columns
 -- ----------------------------------------------------------------------------
 CREATE INDEX idx_portfolio_customer ON t_customer_master_portfolio(customer_id);
 CREATE INDEX idx_portfolio_scheme ON t_customer_master_portfolio(scheme_code);
@@ -282,9 +288,15 @@ CREATE INDEX idx_portfolio_folio ON t_customer_master_portfolio(folio_no);
 CREATE INDEX idx_portfolio_tenant ON t_customer_master_portfolio(tenant_id, is_live);
 CREATE INDEX idx_portfolio_active ON t_customer_master_portfolio(customer_id, is_active) 
     WHERE is_active = true;
+CREATE INDEX idx_portfolio_category ON t_customer_master_portfolio(category);
+CREATE INDEX idx_portfolio_fund_name ON t_customer_master_portfolio(fund_name);
+
+COMMENT ON INDEX idx_portfolio_category IS 'Fast filtering by fund category (Equity, Debt, Hybrid)';
+COMMENT ON INDEX idx_portfolio_fund_name IS 'Fast searching by fund name';
 
 -- ----------------------------------------------------------------------------
 -- INDEXES: t_transaction_table
+-- UPDATED: Added indexes for new import tracking columns
 -- ----------------------------------------------------------------------------
 CREATE INDEX idx_transactions_customer ON t_transaction_table(customer_id);
 CREATE INDEX idx_transactions_scheme ON t_transaction_table(scheme_code);
@@ -294,6 +306,25 @@ CREATE INDEX idx_transactions_folio ON t_transaction_table(folio_no);
 CREATE INDEX idx_transactions_portfolio_flag ON t_transaction_table(portfolio_flag) 
     WHERE portfolio_flag = true;
 CREATE INDEX idx_transactions_tenant ON t_transaction_table(tenant_id, is_live);
+CREATE INDEX idx_transaction_staging_record ON t_transaction_table(staging_record_id);
+CREATE INDEX idx_transaction_import_session ON t_transaction_table(import_session_id);
+CREATE INDEX idx_transaction_duplicates ON t_transaction_table(is_potential_duplicate) 
+    WHERE is_potential_duplicate = true;
+
+COMMENT ON INDEX idx_transaction_staging_record IS 'Link transactions back to staging records';
+COMMENT ON INDEX idx_transaction_import_session IS 'Find all transactions from specific import session';
+COMMENT ON INDEX idx_transaction_duplicates IS 'Fast lookup of potential duplicate transactions';
+
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: m_transaction_types
+-- ----------------------------------------------------------------------------
+CREATE INDEX idx_txn_types_code ON m_transaction_types(txn_code);
+CREATE INDEX idx_txn_types_active ON m_transaction_types(is_active) WHERE is_active = true;
+CREATE INDEX idx_txn_types_type ON m_transaction_types(txn_type);
+
+COMMENT ON INDEX idx_txn_types_code IS 'Fast lookup by transaction code';
+COMMENT ON INDEX
 
 -- ============================================================================
 -- SECTION 7: JTBD INDEXES
@@ -314,7 +345,31 @@ CREATE INDEX idx_jtbd_next_date ON t_jtbd_configurations(next_alert_date)
 CREATE INDEX idx_jtbd_priority ON t_jtbd_configurations(priority, is_active);
 
 -- ============================================================================
--- SECTION 8: TRIGGER FUNCTIONS
+-- SECTION 8: SYSTEM LOGS INDEXES
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Indexes for System Logs Table...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: t_system_logs
+-- NEW: All indexes for the system logs table
+-- ----------------------------------------------------------------------------
+CREATE INDEX idx_system_logs_created_at ON t_system_logs(created_at DESC);
+CREATE INDEX idx_system_logs_level ON t_system_logs(level);
+CREATE INDEX idx_system_logs_source ON t_system_logs(source);
+CREATE INDEX idx_system_logs_tenant_id ON t_system_logs(tenant_id);
+CREATE INDEX idx_system_logs_user_id ON t_system_logs(user_id);
+CREATE INDEX idx_system_logs_level_created_at ON t_system_logs(level, created_at DESC);
+
+COMMENT ON INDEX idx_system_logs_created_at IS 'Fast retrieval of recent logs';
+COMMENT ON INDEX idx_system_logs_level IS 'Filter logs by severity level';
+COMMENT ON INDEX idx_system_logs_source IS 'Filter logs by source system';
+COMMENT ON INDEX idx_system_logs_level_created_at IS 'Common query pattern: logs by level and time';
+
+-- ============================================================================
+-- SECTION 9: TRIGGER FUNCTIONS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -350,7 +405,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- SECTION 9: CREATE TRIGGERS
+-- SECTION 10: CREATE TRIGGERS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -385,7 +440,13 @@ CREATE TRIGGER update_customers_updated_at
 
 -- ----------------------------------------------------------------------------
 -- TRIGGERS: Import tables
+-- UPDATED: Added trigger for t_file_uploads
 -- ----------------------------------------------------------------------------
+CREATE TRIGGER update_file_uploads_updated_at 
+    BEFORE UPDATE ON t_file_uploads
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_import_sessions_updated_at 
     BEFORE UPDATE ON t_import_sessions
     FOR EACH ROW 
@@ -456,7 +517,7 @@ CREATE TRIGGER update_jtbd_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- SECTION 10: ANALYZE TABLES FOR QUERY PLANNER
+-- SECTION 11: ANALYZE TABLES FOR QUERY PLANNER
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -473,6 +534,9 @@ ANALYZE t_import_sessions;
 ANALYZE t_import_staging_data;
 ANALYZE t_scheme_details;
 ANALYZE t_nav_data;
+ANALYZE t_customer_master_portfolio;
+ANALYZE t_transaction_table;
+ANALYZE t_system_logs;
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -496,6 +560,11 @@ BEGIN
     RAISE NOTICE 'Indexes and Triggers created!';
     RAISE NOTICE 'Total indexes: %', v_index_count;
     RAISE NOTICE 'Total triggers: %', v_trigger_count;
+    RAISE NOTICE 'Updates included:';
+    RAISE NOTICE '  - Added trigger for t_file_uploads.updated_at';
+    RAISE NOTICE '  - Added indexes for portfolio categories';
+    RAISE NOTICE '  - Added indexes for transaction import tracking';
+    RAISE NOTICE '  - Added all indexes for t_system_logs';
     RAISE NOTICE 'Next: Run 04_functions_views_policies.sql';
     RAISE NOTICE '========================================';
 END $$;

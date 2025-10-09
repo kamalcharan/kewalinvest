@@ -6,11 +6,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
+import { TransactionService } from '../../services/transaction.service';
+import { TransactionWithDetails } from '../../types/transaction.types';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
+import TransactionTable from '../../components/transactions/TransactionTable';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,9 +30,20 @@ const CustomerViewPage: React.FC = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
 
+  // Transactions state
+  const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [transactionsPagination, setTransactionsPagination] = useState({
+    page: 1,
+    page_size: 20,
+    total: 0,
+    total_pages: 1
+  });
+
   // Fetch customer and portfolio data from real API
   const { data: customer, isLoading: customerLoading, error: customerError } = useCustomer(customerId || 0);
-  const { portfolio, isLoading: portfolioLoading, error: portfolioError } = usePortfolioData({
+  const { portfolio, isLoading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = usePortfolioData({
     customerId: customerId || undefined,
     autoFetch: !!customerId
   });
@@ -38,6 +52,43 @@ const CustomerViewPage: React.FC = () => {
   const { data: jtbds, isLoading: jtbdLoading } = useCustomerJTBDs(customerId || undefined);
 
   const isLoading = customerLoading || portfolioLoading;
+
+  // Fetch transactions function
+  const fetchTransactions = async (page: number = 1) => {
+    if (!customerId) return;
+    
+    try {
+      setTransactionsLoading(true);
+      setTransactionsError(null);
+      
+      const response = await TransactionService.getTransactions({
+        customer_id: customerId,
+        page: page,
+        page_size: 20,
+        sort_by: 'txn_date',
+        sort_order: 'desc'
+      });
+      
+      if (response.success && response.data) {
+        setTransactions(response.data.transactions);
+        setTransactionsPagination(response.data.pagination);
+      } else {
+        setTransactionsError(response.error || 'Failed to load transactions');
+      }
+    } catch (error: any) {
+      console.error('Error fetching transactions:', error);
+      setTransactionsError(error.message || 'Failed to load transactions');
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
+  // Fetch transactions when tab changes to transactions
+  useEffect(() => {
+    if (activeTab === 'transactions' && customerId) {
+      fetchTransactions();
+    }
+  }, [activeTab, customerId]);
 
   // Update URL when tab changes
   useEffect(() => {
@@ -118,6 +169,13 @@ const CustomerViewPage: React.FC = () => {
     </svg>
   );
 
+  const TrendDownIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="23,18 13.5,8.5 8.5,13.5 1,6" />
+      <polyline points="17,18 23,18 23,12" />
+    </svg>
+  );
+
   const StarIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -148,6 +206,13 @@ const CustomerViewPage: React.FC = () => {
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
       <polyline points="10,9 9,9 8,9" />
+    </svg>
+  );
+
+  const PieChartIcon = () => (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
     </svg>
   );
 
@@ -519,7 +584,7 @@ const CustomerViewPage: React.FC = () => {
                 gap: '6px'
               }}>
                 {formatPercentage(dayChangePercentage)}
-                <TrendUpIcon />
+                {dayChangePercentage >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
               </div>
               <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
                 TODAY'S CHANGE
@@ -637,7 +702,7 @@ const CustomerViewPage: React.FC = () => {
                     
                     {/* Performance Chart */}
                     <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {portfolio.performance && portfolio.performance.length > 0 ? (
+                      {portfolio.performance && portfolio.performance.length > 1 ? (
                         <PerformanceSparkline
                           data={portfolio.performance.map(p => p.current_value ?? 0)}
                           width={600}
@@ -647,8 +712,29 @@ const CustomerViewPage: React.FC = () => {
                           interactive={true}
                         />
                       ) : (
-                        <div style={{ color: colors.utility.secondaryText, fontSize: '14px' }}>
-                          Performance history not available
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ 
+                            fontSize: '48px', 
+                            fontWeight: '700', 
+                            color: colors.brand.primary,
+                            marginBottom: '12px'
+                          }}>
+                            {formatCurrency(portfolio.summary.current_value)}
+                          </div>
+                          <div style={{ 
+                            fontSize: '14px', 
+                            color: colors.utility.secondaryText,
+                            marginBottom: '8px'
+                          }}>
+                            Current Portfolio Value
+                          </div>
+                          <div style={{ 
+                            fontSize: '12px', 
+                            color: colors.utility.secondaryText,
+                            fontStyle: 'italic'
+                          }}>
+                            Historical performance data will appear as more transactions are recorded
+                          </div>
                         </div>
                       )}
                     </div>
@@ -694,30 +780,63 @@ const CustomerViewPage: React.FC = () => {
 
                 {/* Right Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Asset Allocation */}
-                  {portfolio.allocation && portfolio.allocation.length > 0 && (
-                    <div style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '12px',
-                      padding: '24px'
+                  {/* Asset Allocation - ALWAYS SHOW */}
+                  <div style={{
+                    backgroundColor: colors.utility.secondaryBackground,
+                    borderRadius: '12px',
+                    padding: '24px'
+                  }}>
+                    <h3 style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      color: colors.utility.primaryText, 
+                      margin: 0,
+                      marginBottom: '20px'
                     }}>
-                      <h3 style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600', 
-                        color: colors.utility.primaryText, 
-                        margin: 0,
-                        marginBottom: '20px'
-                      }}>
-                        Asset Allocation
-                      </h3>
+                      Asset Allocation
+                    </h3>
+                    {portfolio.allocation && portfolio.allocation.length > 0 ? (
                       <PortfolioDonutChart
                         allocation={portfolio.allocation}
                         size={240}
                         strokeWidth={35}
                         showLegend={true}
+                        totalValue={portfolio.summary.current_value}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '40px 20px',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{
+                          color: colors.brand.primary,
+                          marginBottom: '16px',
+                          opacity: 0.4
+                        }}>
+                          <PieChartIcon />
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          color: colors.utility.primaryText,
+                          marginBottom: '6px'
+                        }}>
+                          No Asset Allocation Data
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: colors.utility.secondaryText,
+                          lineHeight: '1.5'
+                        }}>
+                          Asset distribution will appear once portfolio holdings are available
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Top Holdings */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
@@ -744,7 +863,7 @@ const CustomerViewPage: React.FC = () => {
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                               <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
-                                {holding.fund_name || holding.scheme_name}
+                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
                               </div>
                               <div style={{ fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
                                 {formatPercentage(holding.return_percentage)}
@@ -823,25 +942,54 @@ const CustomerViewPage: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {portfolio.holdings.map((holding, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-                            <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
-                              {holding.fund_name || holding.scheme_name}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                              {formatCurrency(holding.total_invested)}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                              {formatCurrency(holding.current_value)}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
-                              {formatPercentage(holding.return_percentage)}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                              {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                            </td>
-                          </tr>
-                        ))}
+                        {portfolio.holdings.map((holding, idx) => {
+                          const isSmallReturn = Math.abs(holding.return_percentage) < 0.1;
+                          
+                          return (
+                            <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
+                              <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
+                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
+                              </td>
+                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                {formatCurrency(holding.total_invested)}
+                              </td>
+                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                {formatCurrency(holding.current_value)}
+                              </td>
+                              <td style={{ padding: '12px', textAlign: 'right' }}>
+                                {isSmallReturn ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                    <div style={{ 
+                                      fontSize: '13px', 
+                                      fontWeight: '600', 
+                                      color: getValueColor(holding.return_percentage) 
+                                    }}>
+                                      {formatPercentage(holding.return_percentage)}
+                                    </div>
+                                    <div style={{ 
+                                      fontSize: '10px', 
+                                      color: colors.utility.secondaryText,
+                                      fontStyle: 'italic'
+                                    }}>
+                                      (₹{holding.total_returns.toFixed(2)})
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{ 
+                                    fontSize: '13px', 
+                                    fontWeight: '600', 
+                                    color: getValueColor(holding.return_percentage) 
+                                  }}>
+                                    {formatPercentage(holding.return_percentage)}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -851,15 +999,13 @@ const CustomerViewPage: React.FC = () => {
           </>
         )}
 
-        {/* Goals & Actions Tab - UPDATED */}
+        {/* Goals & Actions Tab */}
         {activeTab === 'goals' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* JTBD List Component */}
             <JTBDList
               customerId={customerId}
               onSetupNew={() => setShowJTBDSetupModal(true)}
               onEdit={(jtbdId) => {
-                // TODO: Implement edit functionality
                 console.log('Edit JTBD:', jtbdId);
               }}
               showFilters={true}
@@ -869,13 +1015,97 @@ const CustomerViewPage: React.FC = () => {
 
         {/* Transactions Tab */}
         {activeTab === 'transactions' && (
-          <EmptyState
-            icon={<FileTextIcon />}
-            title="Transaction History Coming Soon"
-            description="Transaction history will be available once transaction import is complete."
-            actionLabel="Import Transactions"
-            onAction={() => navigate('/import')}
-          />
+          <>
+            {transactionsError ? (
+              <div style={{
+                padding: '40px',
+                textAlign: 'center',
+                backgroundColor: colors.semantic.error + '10',
+                borderRadius: '12px',
+                color: colors.semantic.error
+              }}>
+                <p style={{ marginBottom: '16px' }}>{transactionsError}</p>
+                <button
+                  onClick={() => fetchTransactions(1)}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: colors.semantic.error,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : transactions.length === 0 && !transactionsLoading ? (
+              <EmptyState
+                icon={<FileTextIcon />}
+                title="No Transactions Found"
+                description={`No transaction history available for ${customer.name}. Transactions will appear here once imported.`}
+              />
+            ) : (
+              <div style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '24px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '20px'
+                }}>
+                  <h3 style={{
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    margin: 0
+                  }}>
+                    Transaction History
+                  </h3>
+                  <div style={{
+                    fontSize: '14px',
+                    color: colors.utility.secondaryText
+                  }}>
+                    {transactionsPagination.total} transaction{transactionsPagination.total !== 1 ? 's' : ''}
+                  </div>
+                </div>
+
+                <TransactionTable
+                  transactions={transactions}
+                  loading={transactionsLoading}
+                  onRowClick={(transaction) => {
+                    navigate(`/transactions/${transaction.id}`);
+                  }}
+                  onDelete={async (transactionId) => {
+                    try {
+                      await TransactionService.deleteTransaction(transactionId);
+                      fetchTransactions(transactionsPagination.page);
+                      refetchPortfolio();
+                    } catch (error) {
+                      console.error('Failed to delete transaction:', error);
+                    }
+                  }}
+                  onTogglePortfolioFlag={async (transactionId, currentFlag) => {
+                    try {
+                      await TransactionService.updatePortfolioFlag(transactionId, !currentFlag);
+                      fetchTransactions(transactionsPagination.page);
+                      refetchPortfolio();
+                    } catch (error) {
+                      console.error('Failed to toggle portfolio flag:', error);
+                    }
+                  }}
+                  pagination={transactionsPagination}
+                  onPageChange={(newPage) => fetchTransactions(newPage)}
+                  onSortChange={(sortBy, sortOrder) => {
+                    console.log('Sort by:', sortBy, sortOrder);
+                  }}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -886,7 +1116,6 @@ const CustomerViewPage: React.FC = () => {
           onClose={() => setShowJTBDSetupModal(false)}
           onSuccess={() => {
             setShowJTBDSetupModal(false);
-            // Data will auto-refresh via React Query invalidation
           }}
         />
       )}

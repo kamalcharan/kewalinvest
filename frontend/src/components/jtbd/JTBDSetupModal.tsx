@@ -7,6 +7,7 @@ import { useCreateJTBD } from '../../hooks/useJTBD';
 import PortfolioAlertForm from './forms/PortfolioAlertForm';
 import TimeAlertForm from './forms/TimeAlertForm';
 import ProfileTriggerForm from './forms/ProfileTriggerForm';
+import ScrollGuard from './common/ScrollGuard';
 
 interface JTBDSetupModalProps {
   customerId: number;
@@ -31,6 +32,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
 
   const [step, setStep] = useState<SetupStep>('select_type');
   const [selectedType, setSelectedType] = useState<JTBDType | null>(null);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
   const createJTBDMutation = useCreateJTBD();
 
@@ -38,30 +40,44 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   const handleTypeSelect = (type: JTBDType) => {
     setSelectedType(type);
     setStep('configure');
+    setHasScrolledToBottom(false); // Reset scroll state for new form
   };
 
   // Handle back to type selection
   const handleBack = () => {
     setStep('select_type');
     setSelectedType(null);
+    setHasScrolledToBottom(false);
   };
 
-  // Handle form submission
+  // Handle form submission with race condition protection
   const handleSubmit = async (data: CreateJTBDRequest) => {
+    // Race condition guard: Check if already submitting
+    if (createJTBDMutation.isPending) {
+      console.log('⚠️ Submission already in progress, ignoring duplicate request');
+      return;
+    }
+
     try {
       await createJTBDMutation.mutateAsync(data);
       onSuccess?.();
       handleClose();
     } catch (error) {
       console.error('Error creating JTBD:', error);
-      // Error toast already shown by mutation hook
+      // Error is already handled by the mutation's onError in useJTBD
     }
   };
 
   // Handle modal close
   const handleClose = () => {
+    // Prevent closing while submitting
+    if (createJTBDMutation.isPending) {
+      return;
+    }
+    
     setStep('select_type');
     setSelectedType(null);
+    setHasScrolledToBottom(false);
     onClose();
   };
 
@@ -192,6 +208,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
             {step === 'configure' && (
               <button
                 onClick={handleBack}
+                disabled={createJTBDMutation.isPending}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -201,8 +218,9 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
                   border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   color: colors.utility.primaryText,
-                  cursor: 'pointer',
-                  fontSize: '14px'
+                  cursor: createJTBDMutation.isPending ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: createJTBDMutation.isPending ? 0.5 : 1
                 }}
               >
                 <ArrowLeftIcon />
@@ -236,6 +254,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
           </div>
           <button
             onClick={handleClose}
+            disabled={createJTBDMutation.isPending}
             style={{
               width: '40px',
               height: '40px',
@@ -243,11 +262,12 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
               backgroundColor: 'transparent',
               border: 'none',
               color: colors.utility.secondaryText,
-              cursor: 'pointer',
+              cursor: createJTBDMutation.isPending ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              opacity: createJTBDMutation.isPending ? 0.5 : 1
             }}
           >
             <XIcon />
@@ -255,14 +275,8 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
         </div>
 
         {/* Content */}
-        <div
-          style={{
-            padding: '24px',
-            overflowY: 'auto',
-            flex: 1
-          }}
-        >
-          {step === 'select_type' && (
+        {step === 'select_type' ? (
+          <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
             <div
               style={{
                 display: 'grid',
@@ -376,35 +390,41 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        ) : (
+          <ScrollGuard
+            onScrollComplete={setHasScrolledToBottom}
+            threshold={50}
+            disabled={hasScrolledToBottom}
+          >
+            {selectedType === 'portfolio_alert' && (
+              <PortfolioAlertForm
+                customerId={customerId}
+                onSubmit={handleSubmit}
+                onCancel={handleClose}
+                isSubmitting={createJTBDMutation.isPending}
+              />
+            )}
 
-          {step === 'configure' && selectedType === 'portfolio_alert' && (
-            <PortfolioAlertForm
-              customerId={customerId}
-              onSubmit={handleSubmit}
-              onCancel={handleClose}
-              isSubmitting={createJTBDMutation.isPending}
-            />
-          )}
+            {selectedType === 'time_based' && (
+              <TimeAlertForm
+                customerId={customerId}
+                onSubmit={handleSubmit}
+                onCancel={handleClose}
+                isSubmitting={createJTBDMutation.isPending}
+              />
+            )}
 
-          {step === 'configure' && selectedType === 'time_based' && (
-            <TimeAlertForm
-              customerId={customerId}
-              onSubmit={handleSubmit}
-              onCancel={handleClose}
-              isSubmitting={createJTBDMutation.isPending}
-            />
-          )}
-
-          {step === 'configure' && selectedType === 'profile_trigger' && (
-            <ProfileTriggerForm
-              customerId={customerId}
-              onSubmit={handleSubmit}
-              onCancel={handleClose}
-              isSubmitting={createJTBDMutation.isPending}
-            />
-          )}
-        </div>
+            {selectedType === 'profile_trigger' && (
+              <ProfileTriggerForm
+                customerId={customerId}
+                onSubmit={handleSubmit}
+                onCancel={handleClose}
+                isSubmitting={createJTBDMutation.isPending}
+              />
+            )}
+          </ScrollGuard>
+        )}
       </div>
 
       <style>{`
