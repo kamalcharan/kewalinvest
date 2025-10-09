@@ -7,7 +7,6 @@ import { useCreateJTBD } from '../../hooks/useJTBD';
 import PortfolioAlertForm from './forms/PortfolioAlertForm';
 import TimeAlertForm from './forms/TimeAlertForm';
 import ProfileTriggerForm from './forms/ProfileTriggerForm';
-import ScrollGuard from './common/ScrollGuard';
 
 interface JTBDSetupModalProps {
   customerId: number;
@@ -32,7 +31,6 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
 
   const [step, setStep] = useState<SetupStep>('select_type');
   const [selectedType, setSelectedType] = useState<JTBDType | null>(null);
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
   const createJTBDMutation = useCreateJTBD();
 
@@ -40,21 +38,19 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   const handleTypeSelect = (type: JTBDType) => {
     setSelectedType(type);
     setStep('configure');
-    setHasScrolledToBottom(false); // Reset scroll state for new form
   };
 
   // Handle back to type selection
   const handleBack = () => {
     setStep('select_type');
     setSelectedType(null);
-    setHasScrolledToBottom(false);
   };
 
   // Handle form submission with race condition protection
   const handleSubmit = async (data: CreateJTBDRequest) => {
-    // Race condition guard: Check if already submitting
+    // Race condition guard
     if (createJTBDMutation.isPending) {
-      console.log('⚠️ Submission already in progress, ignoring duplicate request');
+      console.log('⚠️ Submission already in progress');
       return;
     }
 
@@ -64,20 +60,15 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
       handleClose();
     } catch (error) {
       console.error('Error creating JTBD:', error);
-      // Error is already handled by the mutation's onError in useJTBD
     }
   };
 
   // Handle modal close
   const handleClose = () => {
-    // Prevent closing while submitting
-    if (createJTBDMutation.isPending) {
-      return;
-    }
+    if (createJTBDMutation.isPending) return;
     
     setStep('select_type');
     setSelectedType(null);
-    setHasScrolledToBottom(false);
     onClose();
   };
 
@@ -185,9 +176,8 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           zIndex: 9999,
           width: '90%',
-          maxWidth: step === 'select_type' ? '900px' : '600px',
+          maxWidth: step === 'select_type' ? '900px' : '1100px',
           maxHeight: '90vh',
-          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           animation: 'modalSlideIn 0.3s ease-out'
@@ -197,11 +187,12 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
         {/* Header */}
         <div
           style={{
-            padding: '24px',
+            padding: '20px 24px',
             borderBottom: `1px solid ${colors.utility.primaryText}10`,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            flexShrink: 0
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -219,7 +210,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
                   borderRadius: '6px',
                   color: colors.utility.primaryText,
                   cursor: createJTBDMutation.isPending ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   opacity: createJTBDMutation.isPending ? 0.5 : 1
                 }}
               >
@@ -230,17 +221,17 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
             <div>
               <h2
                 style={{
-                  fontSize: '24px',
+                  fontSize: '20px',
                   fontWeight: '700',
                   color: colors.utility.primaryText,
                   margin: 0
                 }}
               >
-                {step === 'select_type' ? 'Setup JTBD for Customer' : 'Configure Alert'}
+                {step === 'select_type' ? 'Setup JTBD Alert' : 'Configure Alert'}
               </h2>
               <p
                 style={{
-                  fontSize: '14px',
+                  fontSize: '13px',
                   color: colors.utility.secondaryText,
                   margin: '4px 0 0 0'
                 }}
@@ -256,8 +247,8 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
             onClick={handleClose}
             disabled={createJTBDMutation.isPending}
             style={{
-              width: '40px',
-              height: '40px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
               backgroundColor: 'transparent',
               border: 'none',
@@ -392,11 +383,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
             </div>
           </div>
         ) : (
-          <ScrollGuard
-            onScrollComplete={setHasScrolledToBottom}
-            threshold={50}
-            disabled={hasScrolledToBottom}
-          >
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {selectedType === 'portfolio_alert' && (
               <PortfolioAlertForm
                 customerId={customerId}
@@ -423,7 +410,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
                 isSubmitting={createJTBDMutation.isPending}
               />
             )}
-          </ScrollGuard>
+          </div>
         )}
       </div>
 
