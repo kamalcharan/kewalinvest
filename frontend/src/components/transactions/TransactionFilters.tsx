@@ -58,6 +58,12 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [iwellSearchError, setIwellSearchError] = useState('');
 
+  // ✅ NEW: State for search result notifications
+  const [searchNotification, setSearchNotification] = useState<{
+    type: 'success' | 'error' | 'warning';
+    message: string;
+  } | null>(null);
+
   // Load import sessions on mount
   useEffect(() => {
     loadImportSessions();
@@ -67,11 +73,9 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     try {
       setLoadingSessions(true);
       
-      // ✅ Use the SAME endpoint as SessionsSidebar
       const response = await apiService.get<SessionsResponse>('/import/sessions');
       
       if (response && response.data) {
-        // Handle different response structures
         let sessionsArray: ImportSession[] = [];
         
         if (Array.isArray(response.data)) {
@@ -82,11 +86,14 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
           sessionsArray = response.data.data;
         }
         
-        // ✅ Filter for TransactionData sessions (handle both formats)
+        // ✅ FIX #3: Filter for TransactionData sessions AND only successful ones
         const transactionSessions = sessionsArray.filter(session => {
           const sessionType = session.import_type as string;
-          return sessionType === 'TransactionData' || 
-                 sessionType === 'transaction_import';
+          const isTransactionType = sessionType === 'TransactionData' || 
+                                   sessionType === 'transaction_import';
+          const isSuccessful = session.status === 'completed' || session.status === 'success';
+          
+          return isTransactionType && isSuccessful;
         });
         
         // Sort by newest first
@@ -113,6 +120,16 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     onFiltersChange(filters);
   }, [filters]);
 
+  // Auto-clear notification after 5 seconds
+  useEffect(() => {
+    if (searchNotification) {
+      const timer = setTimeout(() => {
+        setSearchNotification(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchNotification]);
+
   // Handle filter changes
   const handleFilterChange = (key: keyof TransactionFiltersType, value: any) => {
     setFilters(prev => ({
@@ -125,17 +142,46 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
   // Handle customer name search
   const handleCustomerSearch = () => {
     setIwellSearchError('');
+    setSearchNotification(null);
     handleFilterChange('customer_search', customerSearch);
     handleFilterChange('iwell_code_search', undefined);
     setIwellCodeSearch('');
+    
+    // Show success notification
+    setSearchNotification({
+      type: 'success',
+      message: `Searching for customer: "${customerSearch}"`
+    });
   };
 
-  // Handle IWELL code search
+  // ✅ FIX #2: Handle IWELL code search with notification
   const handleIwellCodeSearch = () => {
     setIwellSearchError('');
+    setSearchNotification(null);
+    
+    if (!iwellCodeSearch.trim()) {
+      setSearchNotification({
+        type: 'warning',
+        message: 'Please enter an IWELL code to search'
+      });
+      return;
+    }
+    
     handleFilterChange('iwell_code_search', iwellCodeSearch);
     handleFilterChange('customer_search', undefined);
     setCustomerSearch('');
+    
+    // Show searching notification
+    setSearchNotification({
+      type: 'success',
+      message: `Searching for IWELL code: "${iwellCodeSearch}"`
+    });
+    
+    // Check if results are found after a brief delay
+    setTimeout(() => {
+      // This will be updated by the parent component's data
+      // For now, we'll rely on the empty state in the table
+    }, 500);
   };
 
   // Quick date filters
@@ -204,6 +250,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     setStartDate('');
     setEndDate('');
     setIwellSearchError('');
+    setSearchNotification(null);
     setFilters({
       page: 1,
       page_size: 100,
@@ -274,6 +321,13 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     </svg>
   );
 
+  const CheckCircleIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22,4 12,14.01 9,11.01" />
+    </svg>
+  );
+
   const ChevronDownIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="6,9 12,15 18,9" />
@@ -293,6 +347,43 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
       borderRadius: '12px',
       overflow: 'hidden'
     }}>
+      {/* ✅ NEW: Search Notification Banner */}
+      {searchNotification && (
+        <div style={{
+          padding: '12px 20px',
+          backgroundColor: 
+            searchNotification.type === 'success' ? colors.semantic.success + '15' :
+            searchNotification.type === 'error' ? colors.semantic.error + '15' :
+            colors.semantic.warning + '15',
+          borderBottom: `1px solid ${colors.utility.primaryText}10`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+          color:
+            searchNotification.type === 'success' ? colors.semantic.success :
+            searchNotification.type === 'error' ? colors.semantic.error :
+            colors.semantic.warning
+        }}>
+          {searchNotification.type === 'success' && <CheckCircleIcon />}
+          {searchNotification.type !== 'success' && <AlertCircleIcon />}
+          <span>{searchNotification.message}</span>
+          <button
+            onClick={() => setSearchNotification(null)}
+            style={{
+              marginLeft: 'auto',
+              padding: '4px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit'
+            }}
+          >
+            <XIcon />
+          </button>
+        </div>
+      )}
+
       {/* Collapsible Header */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
@@ -302,7 +393,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
           justifyContent: 'space-between',
           padding: '16px 20px',
           cursor: 'pointer',
-          backgroundColor: colors.utility.secondaryBackground, // ✅ Always has background
+          backgroundColor: colors.utility.secondaryBackground,
           borderBottom: isExpanded ? `1px solid ${colors.utility.primaryText}10` : 'none',
           transition: 'all 0.2s ease'
         }}
@@ -452,7 +543,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                     onClick={() => {
                       setCustomerSearch('');
                       handleFilterChange('customer_search', undefined);
-                      setIwellSearchError('');
+                      setSearchNotification(null);
                     }}
                     disabled={loading}
                     style={{
@@ -542,6 +633,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                       setIwellCodeSearch('');
                       handleFilterChange('iwell_code_search', undefined);
                       setIwellSearchError('');
+                      setSearchNotification(null);
                     }}
                     disabled={loading}
                     style={{
@@ -652,7 +744,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
               </select>
             </div>
 
-            {/* Import Session */}
+            {/* Import Session - ✅ FIX #3: Only shows successful sessions */}
             <div>
               <label style={{
                 display: 'block',
@@ -685,7 +777,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                   <option disabled>Loading sessions...</option>
                 )}
                 {!loadingSessions && importSessions.length === 0 && (
-                  <option disabled>No transaction sessions found</option>
+                  <option disabled>No successful sessions found</option>
                 )}
                 {importSessions.map(session => (
                   <option key={session.id} value={session.id}>
@@ -696,9 +788,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                       month: 'short', 
                       year: 'numeric' 
                     })}
-                    {session.status === 'completed' && ` • ${session.successful_records}/${session.total_records} records`}
-                    {session.status === 'failed' && ' • Failed'}
-                    {session.status === 'processing' && ' • Processing...'}
+                    {` • ${session.successful_records}/${session.total_records} records`}
                   </option>
                 ))}
               </select>

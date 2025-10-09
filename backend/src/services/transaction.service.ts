@@ -13,7 +13,6 @@ import {
   TransactionSummary
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
-import { EncryptionUtil } from '../utils/encryption.util';
 
 export class TransactionService {
   private db: Pool;
@@ -65,31 +64,30 @@ export class TransactionService {
         }
       }
 
-      // Handle IWELL code search (exact match on encrypted field)
+      // Handle IWELL code search (plain text match on unencrypted field)
       let customerIdFromIwellSearch: number | undefined;
       if (filters.iwell_code_search && !filters.customer_id) {
         const iwellCode = filters.iwell_code_search.trim();
         try {
-          const encryptedIwellCode = EncryptionUtil.encrypt(iwellCode);
           const iwellQuery = `
             SELECT id 
             FROM t_customers
             WHERE tenant_id = $1 
               AND is_live = $2
-              AND iwell_code_encrypted = $3
+              AND iwell_code = $3
             LIMIT 1
           `;
           const iwellResult = await this.db.query(iwellQuery, [
             tenantId,
             isLive,
-            encryptedIwellCode
+            iwellCode
           ]);
           if (iwellResult.rows.length > 0) {
             customerIdFromIwellSearch = iwellResult.rows[0].id;
           }
         } catch (error) {
           console.error('Error searching by IWELL code:', error);
-          // If encryption fails, just continue without IWELL search
+          // If search fails, just continue without IWELL search
         }
       }
 
@@ -120,7 +118,7 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
-          cust.iwell_code_encrypted as iwell_code,
+          cust.iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type
@@ -137,11 +135,8 @@ export class TransactionService {
 
       const result = await this.db.query(query, params);
 
-      // Decrypt sensitive fields
-      const transactions = result.rows.map(row => ({
-        ...row,
-        iwell_code: row.iwell_code ? EncryptionUtil.decrypt(row.iwell_code) : null
-      }));
+      // iwell_code is now plain text - no decryption needed
+      const transactions = result.rows;
 
       // Get total count (exclude LIMIT and OFFSET params)
       const countQuery = `
@@ -184,7 +179,7 @@ export class TransactionService {
         SELECT 
           tt.*,
           c.name as customer_name,
-          cust.iwell_code_encrypted as iwell_code,
+          cust.iwell_code,
           mtt.txn_code as txn_type_code,
           mtt.txn_name as txn_type_name,
           mtt.txn_type,
@@ -203,11 +198,8 @@ export class TransactionService {
         return null;
       }
 
-      // Decrypt sensitive fields
-      const transaction = {
-        ...result.rows[0],
-        iwell_code: result.rows[0].iwell_code ? EncryptionUtil.decrypt(result.rows[0].iwell_code) : null
-      };
+      // iwell_code is now plain text - no decryption needed
+      const transaction = result.rows[0];
 
       return transaction;
     } catch (error: any) {
@@ -495,6 +487,7 @@ export class TransactionService {
 
   /**
    * Get transaction summary statistics
+   * ✅ FIXED: Properly handles customer_search and iwell_code_search without SQL errors
    */
   async getTransactionSummary(
     tenantId: number,
@@ -530,24 +523,23 @@ export class TransactionService {
         }
       }
 
-      // Handle IWELL code search for summary
+      // Handle IWELL code search for summary (plain text match)
       let customerIdFromIwellSearch: number | undefined;
       if (filters?.iwell_code_search && !filters?.customer_id) {
         const iwellCode = filters.iwell_code_search.trim();
         try {
-          const encryptedIwellCode = EncryptionUtil.encrypt(iwellCode);
           const iwellQuery = `
             SELECT id 
             FROM t_customers
             WHERE tenant_id = $1 
               AND is_live = $2
-              AND iwell_code_encrypted = $3
+              AND iwell_code = $3
             LIMIT 1
           `;
           const iwellResult = await this.db.query(iwellQuery, [
             tenantId,
             isLive,
-            encryptedIwellCode
+            iwellCode
           ]);
           if (iwellResult.rows.length > 0) {
             customerIdFromIwellSearch = iwellResult.rows[0].id;
@@ -559,13 +551,22 @@ export class TransactionService {
 
       const finalCustomerId = filters?.customer_id || customerIdFromIwellSearch || customerIdFromNameSearch;
 
+      // ✅ FIX: Explicitly pass only safe filter fields to avoid SQL errors
+      // DO NOT pass customer_search or iwell_code_search as they reference table 'c' which isn't in FROM clause
       const filterClause = TransactionUtil.buildFilterWhereClause(
         {
-          ...(filters || {}),
-          customer_id: finalCustomerId
+          customer_id: finalCustomerId,
+          scheme_code: filters?.scheme_code,
+          start_date: filters?.start_date,
+          end_date: filters?.end_date,
+          txn_type_id: filters?.txn_type_id,
+          import_session_id: filters?.import_session_id,
+          is_potential_duplicate: filters?.is_potential_duplicate,
+          portfolio_flag: filters?.portfolio_flag
         },
         paramIndex
       );
+      
       const whereClause = [...baseConditions, filterClause.where].join(' AND ');
       params.push(...filterClause.params);
 

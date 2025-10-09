@@ -13,8 +13,8 @@ DECLARE
     v_error_messages TEXT[];
     v_clean_prefix VARCHAR(10);
     v_date_of_birth DATE;
-    v_anniversary_date DATE;  -- ADD THIS
-    v_iwell_code VARCHAR(500); -- ADD THIS (matching column size)
+    v_anniversary_date DATE;
+    v_iwell_code VARCHAR(100);  -- ✅ CHANGED: Reduced from 500 to 100
 BEGIN
     -- Get staging record
     SELECT * INTO v_staging
@@ -136,7 +136,7 @@ BEGIN
             END;
         END IF;
         
-        -- Handle anniversary date (ADD THIS SECTION)
+        -- Handle anniversary date
         v_anniversary_date := NULL;
         IF v_mapped_data->>'anniversary_date' IS NOT NULL AND TRIM(v_mapped_data->>'anniversary_date') != '' THEN
             BEGIN
@@ -154,39 +154,37 @@ BEGIN
             END;
         END IF;
         
-        -- Extract iwell_code (ADD THIS SECTION)
-        -- Note: The value is already encrypted in staging if it was a PAN
-        -- But iwell_code should be stored as-is (it's already uppercase from transformation)
+        -- Extract iwell_code (already uppercase from transformation)
         v_iwell_code := NULLIF(TRIM(v_mapped_data->>'iwell_code'), '');
         
-        -- Create customer record (UPDATED)
+        -- ✅ UPDATED: Create customer record with plain text fields
         INSERT INTO t_customers (
             contact_id,
             tenant_id,
             is_live,
-            pan_encrypted,
-            iwell_code_encrypted,  -- ADD THIS
+            pan,                        -- ✅ CHANGED FROM: pan_encrypted
+            iwell_code,                 -- ✅ CHANGED FROM: iwell_code_encrypted
             date_of_birth,
-            anniversary_date,      -- ADD THIS
+            anniversary_date,
             family_head_name,
-            family_head_iwell_code, -- ADD THIS
-            referred_by_name,       -- ADD THIS
+            family_head_iwell_code,
+            referred_by_name,
             created_at
         ) VALUES (
             v_contact_id,
             v_staging.tenant_id,
             v_staging.is_live,
-            v_mapped_data->>'pan',
-            v_iwell_code,          -- ADD THIS
+            v_mapped_data->>'pan',      -- Plain text PAN from staging
+            v_iwell_code,               -- Plain text IWELL code
             v_date_of_birth,
-            v_anniversary_date,    -- ADD THIS
+            v_anniversary_date,
             v_mapped_data->>'family_head_name',
-            v_mapped_data->>'family_head_iwell_code', -- ADD THIS
-            v_mapped_data->>'referred_by_name',       -- ADD THIS
+            v_mapped_data->>'family_head_iwell_code',
+            v_mapped_data->>'referred_by_name',
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_customer_id;
         
-        -- Create address if provided (UPDATED to handle more fields)
+        -- Create address if provided
         IF (v_mapped_data->>'address_line1' IS NOT NULL AND TRIM(v_mapped_data->>'address_line1') != '') OR 
            (v_mapped_data->>'city' IS NOT NULL AND TRIM(v_mapped_data->>'city') != '') THEN
             INSERT INTO t_customer_addresses (
@@ -195,10 +193,10 @@ BEGIN
                 is_live,
                 address_type,
                 address_line1,
-                address_line2,  -- ADD THIS
+                address_line2,
                 city,
                 state,
-                country,        -- ADD THIS
+                country,
                 pincode,
                 is_primary
             ) VALUES (
@@ -207,10 +205,10 @@ BEGIN
                 v_staging.is_live,
                 'residential',
                 COALESCE(NULLIF(TRIM(v_mapped_data->>'address_line1'), ''), 'Not Provided'),
-                NULLIF(TRIM(v_mapped_data->>'address_line2'), ''), -- ADD THIS
+                NULLIF(TRIM(v_mapped_data->>'address_line2'), ''),
                 COALESCE(NULLIF(TRIM(v_mapped_data->>'city'), ''), 'Unknown'),
                 COALESCE(NULLIF(TRIM(v_mapped_data->>'state'), ''), 'Unknown'),
-                COALESCE(NULLIF(TRIM(v_mapped_data->>'country'), ''), 'India'), -- ADD THIS
+                COALESCE(NULLIF(TRIM(v_mapped_data->>'country'), ''), 'India'),
                 COALESCE(NULLIF(TRIM(v_mapped_data->>'pincode'), ''), '000000'),
                 true
             );

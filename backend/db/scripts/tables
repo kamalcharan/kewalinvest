@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS t_contact_channels (
     
     CONSTRAINT unique_channel_per_contact UNIQUE (contact_id, channel_type, channel_value, is_live)
 );
+
 -- Customers (extended from contacts)
 CREATE TABLE IF NOT EXISTS t_customers (
     id SERIAL PRIMARY KEY,
@@ -45,9 +46,9 @@ CREATE TABLE IF NOT EXISTS t_customers (
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     
-    -- Encrypted sensitive data
-    pan_encrypted VARCHAR(500),
-    iwell_code_encrypted VARCHAR(500),
+    -- Sensitive data (plain text)
+    pan VARCHAR(10),
+    iwell_code VARCHAR(100),
     
     -- Personal details
     date_of_birth DATE,
@@ -76,12 +77,16 @@ CREATE TABLE IF NOT EXISTS t_customers (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id),
     
-    CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan_encrypted, is_live),
+    CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan, is_live),
     CONSTRAINT death_date_logic CHECK (
         (survival_status = 'alive' AND date_of_death IS NULL) OR 
         (survival_status = 'deceased' AND date_of_death IS NOT NULL)
     )
 );
+
+-- Indexes for customer sensitive data
+CREATE INDEX idx_customers_pan ON t_customers(pan) WHERE is_live = true AND pan IS NOT NULL;
+CREATE INDEX idx_customers_iwell_code ON t_customers(iwell_code) WHERE is_live = true AND iwell_code IS NOT NULL;
 
 -- Customer addresses
 CREATE TABLE IF NOT EXISTS t_customer_addresses (
@@ -107,6 +112,7 @@ CREATE TABLE IF NOT EXISTS t_customer_addresses (
     
     CONSTRAINT unique_address_type_per_customer UNIQUE (customer_id, address_type, is_live)
 );
+
 -- File upload tracking
 CREATE TABLE IF NOT EXISTS t_file_uploads (
     id SERIAL PRIMARY KEY,
@@ -158,8 +164,8 @@ CREATE TABLE IF NOT EXISTS t_import_logs (
     imported_by INTEGER REFERENCES t_users(id)
 );
 
-
-CREATE TABLE t_jtbd_configurations (
+-- JTBD Configurations
+CREATE TABLE IF NOT EXISTS t_jtbd_configurations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     is_live BOOLEAN NOT NULL DEFAULT true,
@@ -190,6 +196,7 @@ CREATE TABLE t_jtbd_configurations (
     CONSTRAINT fk_jtbd_creator FOREIGN KEY (created_by) REFERENCES t_users(id)
 );
 
+-- JTBD Indexes
 CREATE INDEX idx_jtbd_customer ON t_jtbd_configurations(customer_id, tenant_id, is_live);
 CREATE INDEX idx_jtbd_type ON t_jtbd_configurations(jtbd_type);
 CREATE INDEX idx_jtbd_active ON t_jtbd_configurations(is_active, tenant_id, is_live);

@@ -2,7 +2,6 @@
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
-import { EncryptionUtil } from '../utils/encryption.util';
 import {
   CustomerWithContact,
   CustomerAddress,
@@ -57,10 +56,12 @@ export class CustomerService {
         paramIndex++;
       }
 
+      // Search filter - name, family_head_name, and iwell_code
       if (search && search.trim()) {
         whereConditions.push(`(
           LOWER(c.name) LIKE LOWER($${paramIndex}) OR
-          LOWER(cust.family_head_name) LIKE LOWER($${paramIndex})
+          LOWER(cust.family_head_name) LIKE LOWER($${paramIndex}) OR
+          CAST(cust.iwell_code AS TEXT) LIKE $${paramIndex}
         )`);
         queryParams.push(`%${search.trim()}%`);
         paramIndex++;
@@ -127,7 +128,7 @@ export class CustomerService {
       queryParams.push(page_size, offset);
       const result = await this.db.query(query, queryParams);
       
-      const customers = await this.processCustomerRows(result.rows, isLive, true); // Mask for list view
+      const customers = await this.processCustomerRows(result.rows, isLive);
       const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
       const totalPages = Math.ceil(total / page_size);
 
@@ -177,7 +178,7 @@ export class CustomerService {
         return null;
       }
 
-      const customers = await this.processCustomerRows([result.rows[0]], isLive, false); // No masking for single customer view
+      const customers = await this.processCustomerRows([result.rows[0]], isLive);
       return customers[0];
     } catch (error) {
       console.error('Error getting customer:', error);
@@ -250,15 +251,14 @@ export class CustomerService {
         throw new Error('Customer already exists for this contact');
       }
 
-      // Encrypt sensitive data
-      const panEncrypted = data.pan ? EncryptionUtil.encrypt(data.pan) : null;
-      const iwellCodeEncrypted = data.iwell_code ? EncryptionUtil.encrypt(data.iwell_code) : null;
+      const pan = data.pan || null;
+      const iwellCode = data.iwell_code || null;
 
       // Insert customer
       const customerQuery = `
         INSERT INTO t_customers (
           contact_id, tenant_id, is_live,
-          pan_encrypted, iwell_code_encrypted,
+          pan, iwell_code,
           date_of_birth, anniversary_date,
           family_head_name, family_head_iwell_code,
           referred_by, referred_by_name,
@@ -271,8 +271,8 @@ export class CustomerService {
         contactId,
         tenantId,
         isLive,
-        panEncrypted,
-        iwellCodeEncrypted,
+        pan,
+        iwellCode,
         data.date_of_birth,
         data.anniversary_date,
         data.family_head_name,
@@ -348,15 +348,14 @@ export class CustomerService {
         throw new Error('Contact is already a customer');
       }
 
-      // Encrypt sensitive data
-      const panEncrypted = data.pan ? EncryptionUtil.encrypt(data.pan) : null;
-      const iwellCodeEncrypted = data.iwell_code ? EncryptionUtil.encrypt(data.iwell_code) : null;
+      const pan = data.pan || null;
+      const iwellCode = data.iwell_code || null;
 
       // Insert customer record
       const customerQuery = `
         INSERT INTO t_customers (
           contact_id, tenant_id, is_live,
-          pan_encrypted, iwell_code_encrypted,
+          pan, iwell_code,
           date_of_birth, anniversary_date,
           family_head_name, family_head_iwell_code,
           referred_by, referred_by_name,
@@ -369,8 +368,8 @@ export class CustomerService {
         contactId,
         tenantId,
         isLive,
-        panEncrypted,
-        iwellCodeEncrypted,
+        pan,
+        iwellCode,
         data.date_of_birth,
         data.anniversary_date,
         data.family_head_name,
@@ -426,14 +425,14 @@ export class CustomerService {
       let paramIndex = 4;
 
       if (data.pan !== undefined) {
-        updateFields.push(`pan_encrypted = $${paramIndex}`);
-        queryParams.push(data.pan ? EncryptionUtil.encrypt(data.pan) : null);
+        updateFields.push(`pan = $${paramIndex}`);
+        queryParams.push(data.pan || null);
         paramIndex++;
       }
 
       if (data.iwell_code !== undefined) {
-        updateFields.push(`iwell_code_encrypted = $${paramIndex}`);
-        queryParams.push(data.iwell_code ? EncryptionUtil.encrypt(data.iwell_code) : null);
+        updateFields.push(`iwell_code = $${paramIndex}`);
+        queryParams.push(data.iwell_code || null);
         paramIndex++;
       }
 
@@ -653,7 +652,7 @@ export class CustomerService {
           COUNT(*) FILTER (WHERE is_active = false) as inactive,
           COUNT(*) FILTER (WHERE survival_status = 'alive') as alive,
           COUNT(*) FILTER (WHERE survival_status = 'deceased') as deceased,
-          COUNT(*) FILTER (WHERE pan_encrypted IS NOT NULL) as with_pan,
+          COUNT(*) FILTER (WHERE pan IS NOT NULL) as with_pan,
           COUNT(*) FILTER (WHERE EXISTS (
             SELECT 1 FROM t_customer_addresses addr
             WHERE addr.customer_id = cust.id
@@ -690,7 +689,7 @@ export class CustomerService {
 
   // ==================== PRIVATE HELPERS ====================
 
-  private async processCustomerRows(rows: any[], isLive: boolean, maskSensitiveData: boolean = false): Promise<CustomerWithContact[]> {
+  private async processCustomerRows(rows: any[], isLive: boolean): Promise<CustomerWithContact[]> {
     const customerIds = rows.map(r => r.id);
     
     if (customerIds.length === 0) return [];
@@ -729,39 +728,15 @@ export class CustomerService {
       channelsByContact.get(ch.contact_id).push(ch);
     });
 
-    // Process and decrypt with better error handling
     return rows.map(row => {
       const channels = channelsByContact.get(row.contact_id) || [];
-      
-      // Safe decryption for PAN
-      let pan = null;
-      if (row.pan_encrypted) {
-        try {
-          const decryptedPan = EncryptionUtil.decrypt(row.pan_encrypted);
-          pan = maskSensitiveData ? EncryptionUtil.maskPAN(decryptedPan) : decryptedPan;
-        } catch (error) {
-          console.error(`Failed to decrypt PAN for customer ${row.id}:`, error);
-          pan = null;
-        }
-      }
-      
-      // Safe decryption for iwell_code
-      let iwellCode = null;
-      if (row.iwell_code_encrypted) {
-        try {
-          iwellCode = EncryptionUtil.decrypt(row.iwell_code_encrypted);
-        } catch (error) {
-          console.error(`Failed to decrypt iwell_code for customer ${row.id}:`, error);
-          iwellCode = null;
-        }
-      }
       
       return {
         ...row,
         date_of_birth: row.date_of_birth ? new Date(row.date_of_birth).toISOString().split('T')[0] : null,
         anniversary_date: row.anniversary_date ? new Date(row.anniversary_date).toISOString().split('T')[0] : null,
-        pan: pan,
-        iwell_code: iwellCode,
+        pan: row.pan,
+        iwell_code: row.iwell_code,
         addresses: addressesByCustomer.get(row.id) || [],
         channels,
         primary_email: channels.find((ch: any) => ch.channel_type === 'email' && ch.is_primary)?.channel_value,

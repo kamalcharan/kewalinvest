@@ -256,7 +256,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
           </div>
           <input
             type="text"
-            placeholder="Search customers (min 4 characters)..."
+            placeholder="Search by name, IWell code (min 4 characters)..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             disabled={loading}

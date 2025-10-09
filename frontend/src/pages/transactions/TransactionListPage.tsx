@@ -133,51 +133,6 @@ const TransactionListPage: React.FC = () => {
     fetchSummary();
   };
 
-  // Export to CSV
-  const handleExportCSV = () => {
-    if (!transactions?.transactions || transactions.transactions.length === 0) {
-      alert('No transactions to export');
-      return;
-    }
-
-    const headers = [
-      'Date',
-      'Customer Name',
-      'Scheme Name',
-      'Type',
-      'Amount',
-      'Units',
-      'NAV',
-      'Folio',
-      'Duplicate',
-      'Portfolio Flag'
-    ];
-
-    const rows = transactions.transactions.map(txn => [
-      TransactionService.formatDate(txn.txn_date),
-      txn.customer_name || '',
-      txn.scheme_name,
-      TransactionService.getTransactionTypeLabel(txn.txn_type),
-      txn.total_amount.toString(),
-      TransactionService.formatUnits(txn.units),
-      TransactionService.formatNAV(txn.nav),
-      txn.folio_no || '',
-      txn.is_potential_duplicate ? 'Yes' : 'No',
-      txn.portfolio_flag ? 'Included' : 'Excluded'
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  };
-
   // Format currency
   const formatCurrency = (value: number): string => {
     if (value >= 10000000) {
@@ -193,14 +148,6 @@ const TransactionListPage: React.FC = () => {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12,19 5,12 12,5" />
-    </svg>
-  );
-
-  const DownloadIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   );
 
@@ -375,6 +322,7 @@ const TransactionListPage: React.FC = () => {
             </div>
           </div>
 
+          {/* ✅ REMOVED EXPORT CSV BUTTON - Only Refresh button remains */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
               onClick={() => {
@@ -398,28 +346,6 @@ const TransactionListPage: React.FC = () => {
             >
               <RefreshIcon />
               Refresh
-            </button>
-
-            <button
-              onClick={handleExportCSV}
-              disabled={isLoading || !transactions?.transactions.length}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                backgroundColor: colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                opacity: isLoading || !transactions?.transactions.length ? 0.6 : 1
-              }}
-            >
-              <DownloadIcon />
-              Export CSV
             </button>
           </div>
         </div>
