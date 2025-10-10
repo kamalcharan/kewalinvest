@@ -1,6 +1,6 @@
 // frontend/src/components/jtbd/dashboard/CalendarView.tsx
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { AlertsByDate } from '../../../types/jtbd.types';
 
@@ -8,18 +8,20 @@ interface CalendarViewProps {
   alertsByDate: AlertsByDate[];
   onDateClick: (date: string) => void;
   currentMonth: Date;
+  onMonthChange: (newMonth: Date) => void;
 }
 
 const CalendarView: React.FC<CalendarViewProps> = ({
   alertsByDate,
   onDateClick,
-  currentMonth
+  currentMonth,
+  onMonthChange
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   // Generate calendar grid
-  const calendarDays = useMemo(() => {
+  const calendarDays = React.useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
 
@@ -90,32 +92,166 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   // Weekday names
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Navigation handlers
+  const goToPreviousMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() - 1);
+    onMonthChange(newMonth);
+  };
+
+  const goToNextMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + 1);
+    onMonthChange(newMonth);
+  };
+
+  const goToToday = () => {
+    onMonthChange(new Date());
+  };
+
+  // Icons
+  const ChevronLeftIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="15,18 9,12 15,6" />
+    </svg>
+  );
+
+  const ChevronRightIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="9,18 15,12 9,6" />
+    </svg>
+  );
+
+  const TodayIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12,6 12,12 16,14" />
+    </svg>
+  );
+
   return (
     <div style={{
-      backgroundColor: colors.utility.secondaryBackground,
+      backgroundColor: colors.utility.primaryBackground,
       borderRadius: '12px',
       padding: '20px',
       border: `1px solid ${colors.utility.primaryText}10`
     }}>
-      {/* Month Header */}
+      {/* Month Header with Navigation */}
       <div style={{
         marginBottom: '20px',
         paddingBottom: '16px',
-        borderBottom: `1px solid ${colors.utility.primaryText}10`
+        borderBottom: `1px solid ${colors.utility.primaryText}10`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
-        <div style={{
-          fontSize: '18px',
-          fontWeight: '700',
-          color: colors.utility.primaryText
-        }}>
-          {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+        {/* Month & Year */}
+        <div>
+          <div style={{
+            fontSize: '18px',
+            fontWeight: '700',
+            color: colors.utility.primaryText
+          }}>
+            {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+          </div>
+          <div style={{
+            fontSize: '12px',
+            color: colors.utility.secondaryText,
+            marginTop: '4px'
+          }}>
+            Click on any date to view alerts
+          </div>
         </div>
-        <div style={{
-          fontSize: '12px',
-          color: colors.utility.secondaryText,
-          marginTop: '4px'
-        }}>
-          Click on any date to view alerts
+
+        {/* Navigation Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Today Button */}
+          <button
+            onClick={goToToday}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${colors.brand.primary}40`,
+              borderRadius: '6px',
+              color: colors.brand.primary,
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <TodayIcon />
+            Today
+          </button>
+
+          {/* Previous Month */}
+          <button
+            onClick={goToPreviousMonth}
+            style={{
+              width: '36px',
+              height: '36px',
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              color: colors.utility.primaryText,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+              e.currentTarget.style.borderColor = colors.brand.primary;
+              e.currentTarget.style.color = colors.brand.primary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+              e.currentTarget.style.color = colors.utility.primaryText;
+            }}
+          >
+            <ChevronLeftIcon />
+          </button>
+
+          {/* Next Month */}
+          <button
+            onClick={goToNextMonth}
+            style={{
+              width: '36px',
+              height: '36px',
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              color: colors.utility.primaryText,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+              e.currentTarget.style.borderColor = colors.brand.primary;
+              e.currentTarget.style.color = colors.brand.primary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+              e.currentTarget.style.color = colors.utility.primaryText;
+            }}
+          >
+            <ChevronRightIcon />
+          </button>
         </div>
       </div>
 
@@ -167,7 +303,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     ? colors.brand.primary + '20'
                     : hasAlerts
                     ? colors.semantic.info + '10'
-                    : colors.utility.primaryBackground,
+                    : colors.utility.secondaryBackground,
                   border: day.isToday
                     ? `2px solid ${colors.brand.primary}`
                     : hasAlerts
@@ -277,7 +413,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             width: '12px',
             height: '12px',
             borderRadius: '4px',
-            backgroundColor: colors.utility.primaryBackground,
+            backgroundColor: colors.utility.secondaryBackground,
             border: `1px solid ${colors.utility.primaryText}10`
           }} />
           No Alerts

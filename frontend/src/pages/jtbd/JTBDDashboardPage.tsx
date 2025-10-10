@@ -7,6 +7,7 @@ import DashboardStatCard from '../../components/jtbd/dashboard/DashboardStatCard
 import DashboardFilters from '../../components/jtbd/dashboard/DashboardFilters';
 import CommunicationList from '../../components/jtbd/dashboard/CommunicationList';
 import CalendarView from '../../components/jtbd/dashboard/CalendarView';
+import TimelineView from '../../components/jtbd/dashboard/TimelineView';
 import AlertDetailsPanel from '../../components/jtbd/dashboard/AlertDetailsPanel';
 import { JTBDWithCommunication } from '../../types/jtbd.types';
 import { calculateDashboardStats } from '../../utils/jtbd.helpers';
@@ -21,14 +22,18 @@ const JTBDDashboardPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [jtbdTypeFilter, setJtbdTypeFilter] = useState<string>('');
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [view, setView] = useState<'list' | 'calendar' | 'timeline'>('list');
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<JTBDWithCommunication | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   // Custom date range state
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  // Calendar month state
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Calculate parameters based on time range
   const apiParams = useMemo(() => {
@@ -77,7 +82,6 @@ const JTBDDashboardPage: React.FC = () => {
   );
 
   // Calculate date range for calendar view
-  const [currentMonth] = useState(new Date());
   const calendarStart = useMemo(() => {
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     return JTBDService.formatDateToYYYYMMDD(date);
@@ -145,6 +149,15 @@ const JTBDDashboardPage: React.FC = () => {
       filtered = filtered.filter(a => a.communication_status === statusFilter);
     }
 
+    // Apply calendar date filter
+    if (selectedCalendarDate) {
+      filtered = filtered.filter(a => {
+        if (!a.next_alert_date) return false;
+        const alertDate = new Date(a.next_alert_date).toISOString().split('T')[0];
+        return alertDate === selectedCalendarDate;
+      });
+    }
+
     // Apply stat card filter
     if (activeStatFilter) {
       const today = new Date();
@@ -187,7 +200,7 @@ const JTBDDashboardPage: React.FC = () => {
     }
 
     return filtered;
-  }, [alerts, priorityFilter, jtbdTypeFilter, statusFilter, activeStatFilter]);
+  }, [alerts, priorityFilter, jtbdTypeFilter, statusFilter, activeStatFilter, selectedCalendarDate]);
 
   // Handle stat card click
   const handleStatCardClick = (filterType: string) => {
@@ -215,7 +228,8 @@ const JTBDDashboardPage: React.FC = () => {
   // Handle calendar date click
   const handleDateClick = (date: string) => {
     console.log('Date clicked:', date);
-    // Could navigate to that specific date or filter alerts
+    setSelectedCalendarDate(date);
+    setView('list'); // Switch to list view to show the alerts
   };
 
   // Handle date range change
@@ -542,6 +556,7 @@ const JTBDDashboardPage: React.FC = () => {
               setPriorityFilter('');
               setJtbdTypeFilter('');
               setStatusFilter('');
+              setSelectedCalendarDate(null);
             }}
             style={{
               padding: '6px 12px',
@@ -564,6 +579,73 @@ const JTBDDashboardPage: React.FC = () => {
             }}
           >
             Clear All Filters
+          </button>
+        </div>
+      )}
+
+      {/* Selected Date Indicator */}
+      {selectedCalendarDate && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '12px 16px',
+          backgroundColor: colors.semantic.info + '10',
+          border: `1px solid ${colors.semantic.info}40`,
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: colors.semantic.info,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap'
+          }}>
+            <span>📅</span>
+            <span>
+              Showing alerts for: {new Date(selectedCalendarDate).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </span>
+            <span style={{
+              padding: '4px 8px',
+              backgroundColor: colors.semantic.info + '20',
+              borderRadius: '4px',
+              fontSize: '12px'
+            }}>
+              {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedCalendarDate(null)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${colors.semantic.info}`,
+              borderRadius: '6px',
+              color: colors.semantic.info,
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.semantic.info;
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = colors.semantic.info;
+            }}
+          >
+            Clear Date Filter
           </button>
         </div>
       )}
@@ -608,11 +690,19 @@ const JTBDDashboardPage: React.FC = () => {
           onAlertClick={handleAlertClick}
           onCustomerClick={handleCustomerClick}
         />
+      ) : view === 'timeline' ? (
+        <TimelineView
+          alerts={filteredAlerts}
+          isLoading={isLoading}
+          onAlertClick={handleAlertClick}
+          onCustomerClick={handleCustomerClick}
+        />
       ) : (
         <CalendarView
           alertsByDate={alertsByDate || []}
           onDateClick={handleDateClick}
           currentMonth={currentMonth}
+          onMonthChange={setCurrentMonth}
         />
       )}
 

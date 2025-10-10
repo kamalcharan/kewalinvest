@@ -208,44 +208,182 @@ export class NavService {
   }
 
   /**
-   * Get NAV data for a specific bookmark
-   */
-  async getBookmarkNavData(
-    tenantId: number,
-    isLive: boolean,
-    userId: number,
-    params: BookmarkNavDataParams
-  ): Promise<NavDataListResponse> {
-    try {
-      const bookmarkQuery = `
-        SELECT scheme_id FROM t_scheme_bookmarks
-        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
-      `;
-      const bookmarkResult = await this.db.query(bookmarkQuery, [tenantId, isLive, userId, params.bookmark_id]);
-      
-      if (bookmarkResult.rows.length === 0) {
-        throw new Error('Bookmark not found or access denied');
-      }
-
-      const schemeId = bookmarkResult.rows[0].scheme_id;
-
-      const navParams: NavDataSearchParams = {
-        scheme_id: schemeId,
-        start_date: params.start_date ? new Date(params.start_date) : undefined,
-        end_date: params.end_date ? new Date(params.end_date) : undefined,
-        page: params.page || 1,
-        page_size: params.page_size || 50
-      };
-
-      return await this.getNavData(tenantId, isLive, navParams);
-
-    } catch (error: any) {
-      SimpleLogger.error('NavService', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
-        tenantId, userId, params, error: error.message
-      }, userId, tenantId, error.stack);
-      throw error;
+ * Get NAV data for a specific bookmark
+ * UPDATED: Support for monthly granularity
+ */
+async getBookmarkNavData(
+  tenantId: number,
+  isLive: boolean,
+  userId: number,
+  params: BookmarkNavDataParams
+): Promise<NavDataListResponse> {
+  try {
+    const bookmarkQuery = `
+      SELECT scheme_id FROM t_scheme_bookmarks
+      WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
+    `;
+    const bookmarkResult = await this.db.query(bookmarkQuery, [tenantId, isLive, userId, params.bookmark_id]);
+    
+    if (bookmarkResult.rows.length === 0) {
+      throw new Error('Bookmark not found or access denied');
     }
+
+    const schemeId = bookmarkResult.rows[0].scheme_id;
+
+    // NEW: Handle monthly granularity
+    if (params.granularity === 'monthly') {
+      return await this.getMonthlyNavData(
+        tenantId,
+        isLive,
+        schemeId,
+        params
+      );
+    }
+
+    // Existing daily logic
+    const navParams: NavDataSearchParams = {
+      scheme_id: schemeId,
+      start_date: params.start_date ? new Date(params.start_date) : undefined,
+      end_date: params.end_date ? new Date(params.end_date) : undefined,
+      page: params.page || 1,
+      page_size: params.page_size || 50
+    };
+
+    return await this.getNavData(tenantId, isLive, navParams);
+
+  } catch (error: any) {
+    SimpleLogger.error('NavService', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+      tenantId, userId, params, error: error.message
+    }, userId, tenantId, error.stack);
+    throw error;
   }
+}
+
+/**
+ * NEW: Get monthly closing NAV data (last trading day of each month)
+ * This returns one NAV entry per month - the NAV from the last available date in that month
+ */
+private async getMonthlyNavData(
+  tenantId: number,
+  isLive: boolean,
+  schemeId: number,
+  params: BookmarkNavDataParams
+): Promise<NavDataListResponse> {
+  try {
+    const { start_date, end_date, page = 1, page_size = 50 } = params;
+    const offset = (page - 1) * page_size;
+
+    // Build base query for monthly closing NAV (last trading day of each month)
+    // Uses DISTINCT ON to get the latest date within each month
+    let baseQuery = `
+      FROM (
+        SELECT DISTINCT ON (DATE_TRUNC('month', nav_date))
+          nd.id,
+          nd.tenant_id,
+          nd.scheme_id,
+          nd.scheme_code,
+          nd.nav_date,
+          nd.nav_value,
+          nd.repurchase_price,
+          nd.sale_price,
+          nd.is_live,
+          nd.data_source,
+          nd.created_at,
+          nd.updated_at,
+          sd.scheme_name,
+          sd.amc_name,
+          DATE_TRUNC('month', nav_date) as month_key
+        FROM t_nav_data nd
+        JOIN t_scheme_details sd ON nd.scheme_id = sd.id
+        WHERE nd.tenant_id = $1 
+          AND nd.is_live = $2 
+          AND nd.scheme_id = $3
+    `;
+
+    const queryParams: any[] = [tenantId, isLive, schemeId];
+    let paramIndex = 4;
+
+    if (start_date) {
+      baseQuery += ` AND nd.nav_date >= $${paramIndex}`;
+      queryParams.push(new Date(start_date));
+      paramIndex++;
+    }
+
+    if (end_date) {
+      baseQuery += ` AND nd.nav_date <= $${paramIndex}`;
+      queryParams.push(new Date(end_date));
+      paramIndex++;
+    }
+
+    baseQuery += `
+        ORDER BY DATE_TRUNC('month', nav_date) DESC, nav_date DESC
+      ) monthly_data
+    `;
+
+    // Count query
+    const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+    const countResult = await this.db.query(countQuery, queryParams);
+    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
+      parseInt(countResult.rows[0].total) : 0;
+
+    if (total === 0) {
+      return {
+        nav_data: [],
+        total: 0,
+        page,
+        page_size,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      };
+    }
+
+    // Data query with pagination
+    const dataQuery = `
+      SELECT 
+        id,
+        tenant_id,
+        scheme_id,
+        scheme_code,
+        nav_date,
+        nav_value,
+        repurchase_price,
+        sale_price,
+        is_live,
+        data_source,
+        created_at,
+        updated_at,
+        scheme_name,
+        amc_name
+      ${baseQuery}
+      ORDER BY nav_date DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(page_size, offset);
+    const result = await this.db.query(dataQuery, queryParams);
+    const total_pages = Math.ceil(total / page_size);
+
+    SimpleLogger.error('NavService', 'Monthly NAV data retrieved successfully', 'getMonthlyNavData', {
+      tenantId, schemeId, totalMonths: total, page, page_size
+    }, undefined, tenantId);
+
+    return {
+      nav_data: result.rows || [],
+      total,
+      page,
+      page_size,
+      total_pages,
+      has_next: page < total_pages,
+      has_prev: page > 1
+    };
+  } catch (error: any) {
+    SimpleLogger.error('NavService', 'Failed to get monthly NAV data', 'getMonthlyNavData', {
+      tenantId, schemeId, params, error: error.message
+    }, undefined, tenantId, error.stack);
+    throw error;
+  }
+}
 
   /**
    * Add scheme to user's bookmarks with denormalized scheme data

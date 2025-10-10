@@ -1,6 +1,6 @@
 // frontend/src/utils/jtbd.helpers.ts
 
-import { JTBDWithCommunication, CommunicationStatus } from '../types/jtbd.types';
+import { JTBDWithCommunication, CommunicationStatus, TimeBucket, GroupedAlerts } from '../types/jtbd.types';
 
 /**
  * Format date for display
@@ -234,4 +234,121 @@ export const getDateRange = (range: 'today' | '7days' | '30days' | 'overdue'): {
     default:
       return { start: today, end: today };
   }
+};
+
+/**
+ * TIMELINE VIEW HELPERS
+ */
+
+/**
+ * Determine which time bucket an alert belongs to
+ */
+export const getTimeBucketForAlert = (dateString?: string): TimeBucket => {
+  if (!dateString) return 'later';
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const alertDate = new Date(dateString);
+  alertDate.setHours(0, 0, 0, 0);
+  
+  const daysUntil = Math.ceil((alertDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Overdue
+  if (daysUntil < 0) {
+    return 'overdue';
+  }
+  
+  // Today
+  if (daysUntil === 0) {
+    return 'today';
+  }
+  
+  // Tomorrow
+  if (daysUntil === 1) {
+    return 'tomorrow';
+  }
+  
+  // This week (2-7 days)
+  if (daysUntil >= 2 && daysUntil <= 7) {
+    return 'this_week';
+  }
+  
+  // Later (8+ days)
+  return 'later';
+};
+
+/**
+ * Get metadata for a time bucket
+ */
+export const getTimeBucketMeta = (bucket: TimeBucket): { label: string; icon: string; color: string } => {
+  switch (bucket) {
+    case 'overdue':
+      return { label: 'OVERDUE', icon: '🔴', color: '#DC2626' };
+    case 'today':
+      return { label: 'TODAY', icon: '📍', color: '#F97316' };
+    case 'tomorrow':
+      return { label: 'TOMORROW', icon: '⚡', color: '#F59E0B' };
+    case 'this_week':
+      return { label: 'THIS WEEK', icon: '📅', color: '#3B82F6' };
+    case 'later':
+      return { label: 'LATER', icon: '📆', color: '#6B7280' };
+    default:
+      return { label: 'UNKNOWN', icon: '📋', color: '#6B7280' };
+  }
+};
+
+/**
+ * Group alerts by time buckets for timeline view
+ */
+export const groupAlertsByTimeBucket = (
+  alerts: JTBDWithCommunication[]
+): GroupedAlerts[] => {
+  // Initialize buckets
+  const buckets: Record<TimeBucket, JTBDWithCommunication[]> = {
+    overdue: [],
+    today: [],
+    tomorrow: [],
+    this_week: [],
+    later: []
+  };
+  
+  // Group alerts into buckets
+  alerts.forEach(alert => {
+    const bucket = getTimeBucketForAlert(alert.next_alert_date);
+    buckets[bucket].push(alert);
+  });
+  
+  // Convert to GroupedAlerts array with metadata
+  const bucketOrder: TimeBucket[] = ['overdue', 'today', 'tomorrow', 'this_week', 'later'];
+  
+  return bucketOrder.map(bucket => {
+    const meta = getTimeBucketMeta(bucket);
+    return {
+      bucket,
+      label: meta.label,
+      icon: meta.icon,
+      color: meta.color,
+      count: buckets[bucket].length,
+      alerts: buckets[bucket].sort((a, b) => {
+        // Sort by priority first (critical > high > medium > low)
+        const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+        const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 4;
+        const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 4;
+        
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        
+        // Then by date (earliest first)
+        if (a.next_alert_date && b.next_alert_date) {
+          return new Date(a.next_alert_date).getTime() - new Date(b.next_alert_date).getTime();
+        }
+        
+        return 0;
+      })
+    };
+  });
+  // REMOVED: .filter(group => group.count > 0); 
+  // Now returns ALL buckets, even empty ones
 };

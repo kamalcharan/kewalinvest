@@ -13,8 +13,8 @@ interface DashboardFiltersProps {
   onPriorityChange: (priority: string) => void;
   status: string;
   onStatusChange: (status: string) => void;
-  view: 'list' | 'calendar';
-  onViewChange: (view: 'list' | 'calendar') => void;
+  view: 'list' | 'calendar' | 'timeline';
+  onViewChange: (view: 'list' | 'calendar' | 'timeline') => void;
 }
 
 const DashboardFilters: React.FC<DashboardFiltersProps> = ({
@@ -359,7 +359,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
           </select>
         </div>
 
-        {/* View Toggle */}
+        {/* View Toggle - Only List and Calendar */}
         <div>
           <label style={{
             fontSize: '11px',
@@ -405,6 +405,39 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
               <ListIcon />
               List
             </button>
+            {/* Timeline button hidden for now */}
+            {/* <button
+              onClick={() => onViewChange('timeline')}
+              style={{
+                flex: 1,
+                padding: '8px',
+                backgroundColor: view === 'timeline' ? colors.brand.primary : 'transparent',
+                color: view === 'timeline' ? 'white' : colors.utility.primaryText,
+                border: `1px solid ${view === 'timeline' ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (view !== 'timeline') {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (view !== 'timeline') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              <TimelineIcon />
+              Timeline
+            </button> */}
             <button
               onClick={() => onViewChange('calendar')}
               style={{

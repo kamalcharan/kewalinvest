@@ -164,15 +164,18 @@ const CommunicationCard: React.FC<CommunicationCardProps> = ({
 
   // Full card view
   return (
-    <div
-      style={{
-        padding: '16px',
-        backgroundColor: colors.utility.secondaryBackground,
-        border: `1px solid ${colors.utility.primaryText}10`,
-        borderLeft: `4px solid ${getPriorityColor(alert.priority)}`,
-        borderRadius: '12px',
-        transition: 'all 0.2s ease'
-      }}
+  <div
+    style={{
+      padding: '16px',
+      backgroundColor: colors.utility.secondaryBackground,
+      border: `1px solid ${colors.utility.primaryText}10`,
+      borderLeft: `4px solid ${getPriorityColor(alert.priority)}`,
+      borderRadius: '12px',
+      transition: 'all 0.2s ease',
+      minHeight: '180px',
+      display: 'flex',
+      flexDirection: 'column'
+    }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = `0 4px 12px ${colors.utility.primaryText}15`;
       }}

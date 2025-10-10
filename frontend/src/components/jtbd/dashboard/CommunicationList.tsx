@@ -32,11 +32,11 @@ const CommunicationList: React.FC<CommunicationListProps> = ({
   // Loading state
   if (isLoading) {
     return (
-      <div style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '12px',
-        padding: '20px'
-      }}>
+  <div style={{
+    backgroundColor: colors.utility.primaryBackground,
+    borderRadius: '12px',
+    padding: '20px'
+  }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {Array.from({ length: 5 }).map((_, index) => (
             <div
@@ -127,15 +127,15 @@ const CommunicationList: React.FC<CommunicationListProps> = ({
         </div>
       </div>
 
-      {/* Alert Cards */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        maxHeight: '600px',
-        overflowY: 'auto',
-        paddingRight: '4px'
-      }}>
+     {/* Alert Cards */}
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+  gap: '12px',
+  maxHeight: '600px',
+  overflowY: 'auto',
+  paddingRight: '4px'
+}}>
         {alerts.map((alert) => (
           <CommunicationCard
             key={alert.id}

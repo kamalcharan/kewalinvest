@@ -73,6 +73,7 @@ export interface BookmarkNavDataParams {
   end_date?: string;
   page?: number;
   page_size?: number;
+  granularity?: 'daily' | 'monthly';
 }
 
 export interface UpdateBookmarkDownloadStatus {

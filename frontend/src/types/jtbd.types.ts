@@ -329,3 +329,15 @@ export interface AlertsByDate {
   alert_count: number;
   alerts: DashboardAlert[];
 }
+
+// Timeline view types
+export type TimeBucket = 'overdue' | 'today' | 'tomorrow' | 'this_week' | 'later';
+
+export interface GroupedAlerts {
+  bucket: TimeBucket;
+  label: string;
+  icon: string;
+  color: string;
+  count: number;
+  alerts: JTBDWithCommunication[];
+}

@@ -331,73 +331,73 @@ export class NavController {
   };
 
   getBookmarkNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      const { user, environment } = req;
-      const isLive = environment === 'live';
-      const bookmarkId = parseInt(req.params.id);
+  try {
+    const { user, environment } = req;
+    const isLive = environment === 'live';
+    const bookmarkId = parseInt(req.params.id);
 
-      if (isNaN(bookmarkId)) {
+    if (isNaN(bookmarkId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid bookmark ID'
+      });
+      return;
+    }
+
+    const params: BookmarkNavDataParams = {
+      bookmark_id: bookmarkId,
+      start_date: req.query.start_date as string,
+      end_date: req.query.end_date as string,
+      page: req.query.page ? Number(req.query.page) : 1,
+      page_size: req.query.page_size ? Number(req.query.page_size) : 50,
+      granularity: (req.query.granularity as 'daily' | 'monthly') || 'daily' // ADD THIS LINE
+    };
+
+    if (params.start_date && params.end_date) {
+      const startDate = new Date(params.start_date);
+      const endDate = new Date(params.end_date);
+      
+      if (startDate > endDate) {
         res.status(400).json({
           success: false,
-          error: 'Invalid bookmark ID'
+          error: 'Start date cannot be after end date'
         });
         return;
       }
-
-      const params: BookmarkNavDataParams = {
-        bookmark_id: bookmarkId,
-        start_date: req.query.start_date as string,
-        end_date: req.query.end_date as string,
-        page: req.query.page ? Number(req.query.page) : 1,
-        page_size: req.query.page_size ? Number(req.query.page_size) : 50
-      };
-
-      if (params.start_date && params.end_date) {
-        const startDate = new Date(params.start_date);
-        const endDate = new Date(params.end_date);
-        
-        if (startDate > endDate) {
-          res.status(400).json({
-            success: false,
-            error: 'Start date cannot be after end date'
-          });
-          return;
-        }
-      }
-
-      const result = await this.navService.getBookmarkNavData(
-        user!.tenant_id,
-        isLive,
-        user!.user_id,
-        params
-      );
-
-      res.json({
-        success: true,
-        data: result
-      });
-    } catch (error: any) {
-      SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
-        tenantId: req.user?.tenant_id,
-        userId: req.user?.user_id,
-        bookmarkId: req.params.id,
-        error: error.message
-      }, req.user?.user_id, req.user?.tenant_id, error.stack);
-
-      if (error.message === 'Bookmark not found or access denied') {
-        res.status(404).json({
-          success: false,
-          error: 'Bookmark not found'
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          error: error.message || 'Failed to get bookmark NAV data'
-        });
-      }
     }
-  };
 
+    const result = await this.navService.getBookmarkNavData(
+      user!.tenant_id,
+      isLive,
+      user!.user_id,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error: any) {
+    SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+      tenantId: req.user?.tenant_id,
+      userId: req.user?.user_id,
+      bookmarkId: req.params.id,
+      error: error.message
+    }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+    if (error.message === 'Bookmark not found or access denied') {
+      res.status(404).json({
+        success: false,
+        error: 'Bookmark not found'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get bookmark NAV data'
+      });
+    }
+  }
+};
   updateBookmarkDownloadStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;

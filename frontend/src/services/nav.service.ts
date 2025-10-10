@@ -104,6 +104,7 @@ export interface BookmarkNavDataParams {
   end_date?: string;
   page?: number;
   page_size?: number;
+  granularity?: 'daily' | 'monthly';
 }
 
 export interface BookmarkStats {
@@ -427,21 +428,22 @@ export class NavService {
   // ==================== ENHANCED BOOKMARK METHODS ====================
 
   async getBookmarkNavData(params: BookmarkNavDataParams): Promise<PaginatedResponse<{ nav_data: NavData[] }>> {
-    const url = NAV_URLS.getBookmarkNavData(params.bookmark_id, {
-      start_date: params.start_date,
-      end_date: params.end_date,
-      page: params.page,
-      page_size: params.page_size
-    }, this.getEnvironment());
-    
-    const response = await this.handleRequest<{ nav_data: NavData[] }>(url);
-    
-    if (!response.success) {
-      toastService.error(response.error || 'Failed to load bookmark NAV data');
-    }
-    
-    return response as PaginatedResponse<{ nav_data: NavData[] }>;
+  const url = NAV_URLS.getBookmarkNavData(params.bookmark_id, {
+    start_date: params.start_date,
+    end_date: params.end_date,
+    page: params.page,
+    page_size: params.page_size,
+    granularity: params.granularity // ADD THIS LINE
+  }, this.getEnvironment());
+  
+  const response = await this.handleRequest<{ nav_data: NavData[] }>(url);
+  
+  if (!response.success) {
+    toastService.error(response.error || 'Failed to load bookmark NAV data');
   }
+  
+  return response as PaginatedResponse<{ nav_data: NavData[] }>;
+}
 
   async getBookmarkStats(bookmarkId: number): Promise<ApiResponse<BookmarkStats>> {
     const url = NAV_URLS.getBookmarkStats(bookmarkId, this.getEnvironment());
