@@ -9,44 +9,84 @@ import CommunicationList from '../../components/jtbd/dashboard/CommunicationList
 import CalendarView from '../../components/jtbd/dashboard/CalendarView';
 import AlertDetailsPanel from '../../components/jtbd/dashboard/AlertDetailsPanel';
 import { JTBDWithCommunication } from '../../types/jtbd.types';
-import { calculateDashboardStats, getDateRange } from '../../utils/jtbd.helpers';
+import { calculateDashboardStats } from '../../utils/jtbd.helpers';
+import JTBDService from '../../services/jtbd.service';
 
 const JTBDDashboardPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   // Filter states
-  const [timeRange, setTimeRange] = useState<'today' | '7days' | '30days' | 'overdue'>('30days');
+  const [timeRange, setTimeRange] = useState<'today' | '7days' | '30days' | 'overdue' | 'custom'>('30days');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [jtbdTypeFilter, setJtbdTypeFilter] = useState<string>(''); // NEW
+  const [jtbdTypeFilter, setJtbdTypeFilter] = useState<string>('');
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<JTBDWithCommunication | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
+  // Custom date range state
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  // Calculate parameters based on time range
+  const apiParams = useMemo(() => {
+    if (timeRange === 'custom' && customStartDate && customEndDate) {
+      // Use custom date range
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate,
+        daysAhead: undefined,
+        status: undefined
+      };
+    } else if (timeRange === 'overdue') {
+      // Use overdue status
+      return {
+        startDate: undefined,
+        endDate: undefined,
+        daysAhead: undefined,
+        status: 'overdue' as const
+      };
+    } else {
+      // Use preset days ahead
+      const daysMap = {
+        today: 1,
+        '7days': 7,
+        '30days': 30
+      };
+      return {
+        startDate: undefined,
+        endDate: undefined,
+        daysAhead: daysMap[timeRange as keyof typeof daysMap] || 30,
+        status: undefined
+      };
+    }
+  }, [timeRange, customStartDate, customEndDate]);
+
+  console.log('📊 Dashboard params:', { timeRange, apiParams });
+
+  // Fetch alerts data
+  const { data: alerts, isLoading, error } = useUpcomingAlerts(
+    apiParams.daysAhead,
+    priorityFilter as any,
+    jtbdTypeFilter as any,
+    apiParams.status,
+    apiParams.startDate,
+    apiParams.endDate
+  );
+
   // Calculate date range for calendar view
   const [currentMonth] = useState(new Date());
   const calendarStart = useMemo(() => {
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    return date.toISOString().split('T')[0];
+    return JTBDService.formatDateToYYYYMMDD(date);
   }, [currentMonth]);
   
   const calendarEnd = useMemo(() => {
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-    return date.toISOString().split('T')[0];
+    return JTBDService.formatDateToYYYYMMDD(date);
   }, [currentMonth]);
-
-  // Fetch data based on time range
-  const daysAhead = timeRange === 'today' ? 1 : timeRange === '7days' ? 7 : 30;
-  const statusParam = timeRange === 'overdue' ? 'overdue' : undefined;
-
-  const { data: alerts, isLoading } = useUpcomingAlerts(
-    daysAhead,
-    priorityFilter as any,
-    jtbdTypeFilter as any, // Pass JTBD type filter
-    statusParam as any
-  );
 
   // Fetch calendar data (only when calendar view is active)
   const { data: alertsByDate } = useAlertsByDate(
@@ -84,7 +124,7 @@ const JTBDDashboardPage: React.FC = () => {
     };
   }, [alerts]);
 
-  // Filter alerts
+  // Filter alerts based on active filters
   const filteredAlerts = useMemo(() => {
     if (!alerts) return [];
 
@@ -175,6 +215,18 @@ const JTBDDashboardPage: React.FC = () => {
   // Handle calendar date click
   const handleDateClick = (date: string) => {
     console.log('Date clicked:', date);
+    // Could navigate to that specific date or filter alerts
+  };
+
+  // Handle date range change
+  const handleDateRangeChange = (start: string, end: string) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    
+    // Auto-set time range to custom if valid dates provided
+    if (start && end && timeRange !== 'custom') {
+      setTimeRange('custom');
+    }
   };
 
   // Icons
@@ -219,6 +271,38 @@ const JTBDDashboardPage: React.FC = () => {
           Monitor alerts and communication status across all customers
         </p>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          backgroundColor: colors.semantic.error + '10',
+          border: `2px solid ${colors.semantic.error}40`,
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '24px' }}>⚠️</span>
+          <div>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: colors.semantic.error,
+              marginBottom: '4px'
+            }}>
+              Failed to Load Alerts
+            </div>
+            <div style={{
+              fontSize: '13px',
+              color: colors.utility.secondaryText
+            }}>
+              {error.message || 'An error occurred while fetching alerts'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Statistics Cards Row 1: Communication Status */}
       <div style={{
@@ -277,7 +361,7 @@ const JTBDDashboardPage: React.FC = () => {
         />
       </div>
 
-      {/* Statistics Cards Row 2: JTBD Type Breakdown - NEW */}
+      {/* Statistics Cards Row 2: JTBD Type Breakdown */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -310,11 +394,14 @@ const JTBDDashboardPage: React.FC = () => {
         />
       </div>
 
-      {/* Filters - ENHANCED */}
+      {/* Filters */}
       <div style={{ marginBottom: '24px' }}>
         <DashboardFilters
           timeRange={timeRange}
           onTimeRangeChange={setTimeRange}
+          startDate={customStartDate}
+          endDate={customEndDate}
+          onDateRangeChange={handleDateRangeChange}
           priority={priorityFilter}
           onPriorityChange={setPriorityFilter}
           status={statusFilter}
@@ -323,7 +410,7 @@ const JTBDDashboardPage: React.FC = () => {
           onViewChange={setView}
         />
         
-        {/* JTBD Type Filter - NEW */}
+        {/* JTBD Type Filter */}
         <div style={{
           marginTop: '12px',
           padding: '12px 16px',
@@ -365,6 +452,16 @@ const JTBDDashboardPage: React.FC = () => {
                   gap: '6px',
                   transition: 'all 0.2s ease'
                 }}
+                onMouseEnter={(e) => {
+                  if (jtbdTypeFilter !== option.value) {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (jtbdTypeFilter !== option.value) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 <span>{option.icon}</span>
                 <span>{option.label}</span>
@@ -375,7 +472,7 @@ const JTBDDashboardPage: React.FC = () => {
       </div>
 
       {/* Active Filter Indicator */}
-      {activeStatFilter && (
+      {(activeStatFilter || priorityFilter || jtbdTypeFilter || statusFilter) && (
         <div style={{
           marginBottom: '16px',
           padding: '12px 16px',
@@ -384,30 +481,122 @@ const JTBDDashboardPage: React.FC = () => {
           borderRadius: '8px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
         }}>
           <div style={{
             fontSize: '13px',
             fontWeight: '600',
-            color: colors.brand.primary
+            color: colors.brand.primary,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap'
           }}>
-            🔍 Filtered by: {activeStatFilter.toUpperCase().replace('_', ' ')}
+            <span>🔍 Active Filters:</span>
+            {activeStatFilter && (
+              <span style={{
+                padding: '4px 8px',
+                backgroundColor: colors.brand.primary + '20',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                {activeStatFilter.replace('_', ' ').toUpperCase()}
+              </span>
+            )}
+            {priorityFilter && (
+              <span style={{
+                padding: '4px 8px',
+                backgroundColor: colors.brand.primary + '20',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                Priority: {priorityFilter}
+              </span>
+            )}
+            {jtbdTypeFilter && (
+              <span style={{
+                padding: '4px 8px',
+                backgroundColor: colors.brand.primary + '20',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                Type: {jtbdTypeFilter.replace('_', ' ')}
+              </span>
+            )}
+            {statusFilter && (
+              <span style={{
+                padding: '4px 8px',
+                backgroundColor: colors.brand.primary + '20',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                Status: {statusFilter}
+              </span>
+            )}
           </div>
           <button
-            onClick={() => setActiveStatFilter(null)}
+            onClick={() => {
+              setActiveStatFilter(null);
+              setPriorityFilter('');
+              setJtbdTypeFilter('');
+              setStatusFilter('');
+            }}
             style={{
-              padding: '4px 12px',
+              padding: '6px 12px',
               backgroundColor: 'transparent',
               border: `1px solid ${colors.brand.primary}`,
               borderRadius: '6px',
               color: colors.brand.primary,
               fontSize: '12px',
               fontWeight: '600',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.brand.primary;
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = colors.brand.primary;
             }}
           >
-            Clear Filter
+            Clear All Filters
           </button>
+        </div>
+      )}
+
+      {/* Date Range Display */}
+      {timeRange === 'custom' && customStartDate && customEndDate && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '12px 16px',
+          backgroundColor: colors.semantic.info + '10',
+          border: `1px solid ${colors.semantic.info}40`,
+          borderRadius: '8px',
+          fontSize: '13px',
+          color: colors.semantic.info,
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>📅</span>
+          <span>
+            Custom Date Range: {new Date(customStartDate).toLocaleDateString('en-IN', { 
+              day: 'numeric', 
+              month: 'short', 
+              year: 'numeric' 
+            })} 
+            {' → '}
+            {new Date(customEndDate).toLocaleDateString('en-IN', { 
+              day: 'numeric', 
+              month: 'short', 
+              year: 'numeric' 
+            })}
+          </span>
         </div>
       )}
 

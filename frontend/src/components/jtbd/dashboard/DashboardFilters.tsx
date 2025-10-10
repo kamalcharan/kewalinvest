@@ -4,8 +4,11 @@ import React from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 interface DashboardFiltersProps {
-  timeRange: 'today' | '7days' | '30days' | 'overdue';
-  onTimeRangeChange: (range: 'today' | '7days' | '30days' | 'overdue') => void;
+  timeRange: 'today' | '7days' | '30days' | 'overdue' | 'custom';
+  onTimeRangeChange: (range: 'today' | '7days' | '30days' | 'overdue' | 'custom') => void;
+  startDate?: string;
+  endDate?: string;
+  onDateRangeChange?: (startDate: string, endDate: string) => void;
   priority: string;
   onPriorityChange: (priority: string) => void;
   status: string;
@@ -17,6 +20,9 @@ interface DashboardFiltersProps {
 const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   timeRange,
   onTimeRangeChange,
+  startDate = '',
+  endDate = '',
+  onDateRangeChange,
   priority,
   onPriorityChange,
   status,
@@ -32,8 +38,32 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
     { value: 'today', label: 'Today', icon: '📍' },
     { value: '7days', label: '7 Days', icon: '📅' },
     { value: '30days', label: '30 Days', icon: '🗓️' },
-    { value: 'overdue', label: 'Overdue', icon: '⚠️' }
+    { value: 'overdue', label: 'Overdue', icon: '⚠️' },
+    { value: 'custom', label: 'Custom Range', icon: '📆' }
   ];
+
+  // Handle date change with validation
+  const handleStartDateChange = (newStartDate: string) => {
+    if (onDateRangeChange) {
+      // If end date exists and new start is after end, reset end date
+      if (endDate && newStartDate > endDate) {
+        onDateRangeChange(newStartDate, newStartDate);
+      } else {
+        onDateRangeChange(newStartDate, endDate);
+      }
+    }
+  };
+
+  const handleEndDateChange = (newEndDate: string) => {
+    if (onDateRangeChange) {
+      // If start date exists and new end is before start, adjust start date
+      if (startDate && newEndDate < startDate) {
+        onDateRangeChange(newEndDate, newEndDate);
+      } else {
+        onDateRangeChange(startDate, newEndDate);
+      }
+    }
+  };
 
   // Icons
   const ListIcon = () => (
@@ -112,6 +142,135 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
         </div>
       </div>
 
+      {/* Custom Date Range Inputs */}
+      {timeRange === 'custom' && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '12px',
+          backgroundColor: colors.utility.primaryBackground,
+          borderRadius: '8px',
+          border: `2px solid ${colors.brand.primary}40`
+        }}>
+          <div style={{
+            fontSize: '11px',
+            fontWeight: '600',
+            color: colors.brand.primary,
+            marginBottom: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span>📆</span>
+            <span>Custom Date Range</span>
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '12px'
+          }}>
+            <div>
+              <label style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                marginBottom: '6px',
+                display: 'block'
+              }}>
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                max={endDate || undefined}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  border: `1px solid ${startDate ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: colors.utility.primaryText,
+                  cursor: 'pointer',
+                  outline: 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = colors.brand.primary;
+                }}
+                onBlur={(e) => {
+                  if (!startDate) {
+                    e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                marginBottom: '6px',
+                display: 'block'
+              }}>
+                End Date
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                min={startDate || undefined}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  border: `1px solid ${endDate ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: colors.utility.primaryText,
+                  cursor: 'pointer',
+                  outline: 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = colors.brand.primary;
+                }}
+                onBlur={(e) => {
+                  if (!endDate) {
+                    e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+                  }
+                }}
+              />
+            </div>
+          </div>
+          
+          {/* Validation Message */}
+          {(!startDate || !endDate) && (
+            <div style={{
+              marginTop: '8px',
+              fontSize: '11px',
+              color: colors.semantic.warning,
+              fontStyle: 'italic'
+            }}>
+              ⚠️ Please select both start and end dates
+            </div>
+          )}
+          
+          {startDate && endDate && (
+            <div style={{
+              marginTop: '8px',
+              fontSize: '11px',
+              color: colors.semantic.success,
+              fontWeight: '600'
+            }}>
+              ✓ {Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} days selected
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Other Filters Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
         {/* Priority Filter */}
@@ -139,7 +298,14 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
               fontSize: '12px',
               color: colors.utility.primaryText,
               cursor: 'pointer',
-              outline: 'none'
+              outline: 'none',
+              transition: 'all 0.2s ease'
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = colors.brand.primary;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
             }}
           >
             <option value="">All Priorities</option>
@@ -150,7 +316,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
           </select>
         </div>
 
-        {/* Status Filter */}
+        {/* Communication Status Filter */}
         <div>
           <label style={{
             fontSize: '11px',
@@ -161,7 +327,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
             textTransform: 'uppercase',
             letterSpacing: '0.5px'
           }}>
-            Status
+            Comm Status
           </label>
           <select
             value={status}
@@ -175,7 +341,14 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
               fontSize: '12px',
               color: colors.utility.primaryText,
               cursor: 'pointer',
-              outline: 'none'
+              outline: 'none',
+              transition: 'all 0.2s ease'
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = colors.brand.primary;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
             }}
           >
             <option value="">All Status</option>
@@ -218,6 +391,16 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
                 gap: '4px',
                 transition: 'all 0.2s ease'
               }}
+              onMouseEnter={(e) => {
+                if (view !== 'list') {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (view !== 'list') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
               <ListIcon />
               List
@@ -239,6 +422,16 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
                 justifyContent: 'center',
                 gap: '4px',
                 transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (view !== 'calendar') {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (view !== 'calendar') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
               }}
             >
               <CalendarIcon />

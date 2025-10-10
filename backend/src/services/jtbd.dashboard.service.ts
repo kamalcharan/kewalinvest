@@ -1,6 +1,6 @@
 // backend/src/services/jtbd.dashboard.service.ts
 
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 import { pool } from '../config/database';
 
 // Types for dashboard
@@ -163,8 +163,8 @@ export class JTBDDashboardService {
 
   /**
    * Get upcoming alerts with communication status
-   * FIXED: Improved date filtering to properly handle all dates within range
-   * UPDATED: Retrieve email/mobile from t_contact_channels table
+   * FIXED: Proper date filtering with type casting and parameter tracking
+   * ADDED: Custom date range support
    */
   async getUpcomingAlerts(
     tenantId: number,
@@ -172,11 +172,13 @@ export class JTBDDashboardService {
     daysAhead: number = 30,
     priority?: 'critical' | 'high' | 'medium' | 'low',
     jtbdType?: 'portfolio_alert' | 'time_based' | 'profile_trigger',
-    status?: 'pending' | 'overdue'
+    status?: 'pending' | 'overdue',
+    startDate?: string,  // NEW: Custom start date (YYYY-MM-DD)
+    endDate?: string     // NEW: Custom end date (YYYY-MM-DD)
   ): Promise<JTBDWithCommunication[]> {
     try {
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // FIXED: Set to midnight to avoid time-based filtering issues
+      today.setHours(0, 0, 0, 0);
       
       const futureDate = new Date(today);
       futureDate.setDate(futureDate.getDate() + daysAhead);
@@ -206,39 +208,48 @@ export class JTBDDashboardService {
       const params: any[] = [tenantId, isLive];
       let paramIndex = 3;
 
-      // FIXED: Better date filtering logic
-      if (status === 'overdue') {
+      // FIXED: Date filtering with proper type casting and parameter tracking
+      if (startDate && endDate) {
+        // Custom date range provided
+        query += ` AND j.next_alert_date >= $${paramIndex}::date AND j.next_alert_date <= $${paramIndex + 1}::date`;
+        params.push(startDate, endDate);
+        paramIndex += 2;
+      } else if (status === 'overdue') {
         // Show overdue alerts (past dates)
-        query += ` AND j.next_alert_date < ${paramIndex}`;
-        params.push(today.toISOString());
+        query += ` AND j.next_alert_date < $${paramIndex}::date`;
+        params.push(today.toISOString().split('T')[0]);
         paramIndex++;
       } else {
         // Show all alerts from today up to daysAhead in the future
-        // This will include dates like Nov 5th if they fall within range
-        query += ` AND j.next_alert_date >= ${paramIndex} AND j.next_alert_date <= ${paramIndex + 1}`;
-       const todayStr = today.toISOString().split('T')[0];
-        const futureDateStr = futureDate.toISOString().split('T')[0];
-        params.push(todayStr, futureDateStr);
+        query += ` AND j.next_alert_date >= $${paramIndex}::date AND j.next_alert_date <= $${paramIndex + 1}::date`;
+        params.push(
+          today.toISOString().split('T')[0],
+          futureDate.toISOString().split('T')[0]
+        );
         paramIndex += 2;
       }
 
       // Filter by priority
       if (priority) {
-        query += ` AND j.priority = ${paramIndex}`;
+        query += ` AND j.priority = $${paramIndex}`;
         params.push(priority);
         paramIndex++;
       }
 
       // Filter by JTBD type
       if (jtbdType) {
-        query += ` AND j.jtbd_type = ${paramIndex}`;
+        query += ` AND j.jtbd_type = $${paramIndex}`;
         params.push(jtbdType);
         paramIndex++;
       }
 
       query += ` ORDER BY j.next_alert_date ASC, j.priority DESC`;
 
+      console.log('📊 Executing query with params:', { params, query: query.substring(0, 200) });
+
       const result = await this.db.query(query, params);
+
+      console.log('✅ Query executed successfully, rows returned:', result.rows.length);
 
       // Add communication data to each alert
       return result.rows.map((row, index) => {
@@ -249,13 +260,14 @@ export class JTBDDashboardService {
         };
       });
     } catch (error) {
-      console.error('Error getting upcoming alerts:', error);
+      console.error('❌ Error getting upcoming alerts:', error);
       throw error;
     }
   }
 
   /**
    * Get alerts grouped by date
+   * FIXED: Proper date type casting
    */
   async getAlertsByDate(
     tenantId: number,
@@ -279,8 +291,8 @@ export class JTBDDashboardService {
         WHERE j.tenant_id = $1 
           AND j.is_live = $2 
           AND j.is_active = true
-          AND j.next_alert_date >= $3
-          AND j.next_alert_date <= $4
+          AND j.next_alert_date >= $3::date
+          AND j.next_alert_date <= $4::date
         ORDER BY j.next_alert_date ASC
       `;
 
@@ -333,7 +345,6 @@ export class JTBDDashboardService {
 
   /**
    * Get communication queue filtered by status
-   * UPDATED: Retrieve email/mobile from t_contact_channels table
    */
   async getCommunicationQueue(
     tenantId: number,

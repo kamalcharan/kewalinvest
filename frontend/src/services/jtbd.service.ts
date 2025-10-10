@@ -69,6 +69,15 @@ interface TransactionTypesApiResponse {
 interface UpcomingAlertsApiResponse {
   success: boolean;
   data: JTBDWithCommunication[];
+  meta?: {
+    count: number;
+    filters_applied: {
+      date_range: string;
+      priority: string;
+      jtbd_type: string;
+      status: string;
+    };
+  };
   error?: string;
 }
 
@@ -252,25 +261,46 @@ export class JTBDService {
 
   /**
    * Get upcoming alerts with communication status
+   * UPDATED: Added date range support
    */
   static async getUpcomingAlerts(
     daysAhead: number = 30,
     priority?: 'critical' | 'high' | 'medium' | 'low',
     jtbdType?: 'portfolio_alert' | 'time_based' | 'profile_trigger',
-    status?: 'pending' | 'overdue'
+    status?: 'pending' | 'overdue',
+    startDate?: string,  // NEW: YYYY-MM-DD format
+    endDate?: string     // NEW: YYYY-MM-DD format
   ): Promise<UpcomingAlertsApiResponse> {
     try {
       const params = new URLSearchParams();
-      params.append('days_ahead', daysAhead.toString());
+      
+      // Use custom date range if provided, otherwise use days_ahead
+      if (startDate && endDate) {
+        params.append('start_date', startDate);
+        params.append('end_date', endDate);
+        console.log('📅 Using custom date range:', { startDate, endDate });
+      } else {
+        params.append('days_ahead', daysAhead.toString());
+        console.log('📅 Using days ahead:', daysAhead);
+      }
       
       if (priority) params.append('priority', priority);
       if (jtbdType) params.append('jtbd_type', jtbdType);
       if (status) params.append('status', status);
 
       const url = `${API_ENDPOINTS.JTBD.UPCOMING_ALERTS}?${params.toString()}`;
-      return await apiService.get<UpcomingAlertsApiResponse>(url);
+      console.log('🔵 Fetching upcoming alerts:', url);
+
+      const response = await apiService.get<UpcomingAlertsApiResponse>(url);
+      
+      console.log('✅ Alerts fetched successfully:', {
+        count: response.data.length,
+        meta: response.meta
+      });
+
+      return response;
     } catch (error: any) {
-      console.error('Error fetching upcoming alerts:', error);
+      console.error('❌ Error fetching upcoming alerts:', error);
       throw error;
     }
   }
@@ -407,6 +437,64 @@ export class JTBDService {
       failed: 'Failed'
     };
     return statuses[status] || status;
+  }
+
+  /**
+   * Helper: Format date to YYYY-MM-DD
+   */
+  static formatDateToYYYYMMDD(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Helper: Get date range for preset filters
+   */
+  static getPresetDateRange(preset: 'today' | '7days' | '30days' | 'overdue'): {
+    startDate?: string;
+    endDate?: string;
+    daysAhead?: number;
+    status?: 'overdue';
+  } {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (preset) {
+      case 'today':
+        return {
+          startDate: this.formatDateToYYYYMMDD(today),
+          endDate: this.formatDateToYYYYMMDD(today),
+          daysAhead: 1
+        };
+      
+      case '7days':
+        const sevenDays = new Date(today);
+        sevenDays.setDate(today.getDate() + 7);
+        return {
+          startDate: this.formatDateToYYYYMMDD(today),
+          endDate: this.formatDateToYYYYMMDD(sevenDays),
+          daysAhead: 7
+        };
+      
+      case '30days':
+        const thirtyDays = new Date(today);
+        thirtyDays.setDate(today.getDate() + 30);
+        return {
+          startDate: this.formatDateToYYYYMMDD(today),
+          endDate: this.formatDateToYYYYMMDD(thirtyDays),
+          daysAhead: 30
+        };
+      
+      case 'overdue':
+        return {
+          status: 'overdue'
+        };
+      
+      default:
+        return { daysAhead: 30 };
+    }
   }
 }
 

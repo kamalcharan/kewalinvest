@@ -28,13 +28,15 @@ export const JTBD_QUERY_KEYS = {
   transactionTypes: () => [...JTBD_QUERY_KEYS.all, 'transaction-types'] as const,
   occurrences: (jtbdId: number) => [...JTBD_QUERY_KEYS.all, 'occurrences', jtbdId] as const,
   
-  // Dashboard keys
+  // Dashboard keys - UPDATED with date range support
   dashboard: () => [...JTBD_QUERY_KEYS.all, 'dashboard'] as const,
   upcomingAlerts: (params: {
-    daysAhead: number;
+    daysAhead?: number;
     priority?: string;
     jtbdType?: string;
     status?: string;
+    startDate?: string;  // NEW
+    endDate?: string;    // NEW
   }) => [...JTBD_QUERY_KEYS.dashboard(), 'upcoming', params] as const,
   alertsByDate: (startDate: string, endDate: string) => 
     [...JTBD_QUERY_KEYS.dashboard(), 'by-date', startDate, endDate] as const,
@@ -235,12 +237,15 @@ export function usePortfolioOccurrences(jtbdId?: number) {
 
 /**
  * Hook: Get upcoming alerts with communication status
+ * UPDATED: Added date range support
  */
 export function useUpcomingAlerts(
   daysAhead: number = 30,
   priority?: 'critical' | 'high' | 'medium' | 'low',
   jtbdType?: 'portfolio_alert' | 'time_based' | 'profile_trigger',
-  status?: 'pending' | 'overdue'
+  status?: 'pending' | 'overdue',
+  startDate?: string,  // NEW: YYYY-MM-DD format
+  endDate?: string     // NEW: YYYY-MM-DD format
 ) {
   const { user, tenantId } = useAuth();
 
@@ -249,23 +254,41 @@ export function useUpcomingAlerts(
       daysAhead,
       priority: priority || '',
       jtbdType: jtbdType || '',
-      status: status || ''
+      status: status || '',
+      startDate: startDate || '',  // NEW
+      endDate: endDate || ''        // NEW
     }),
     queryFn: async (): Promise<JTBDWithCommunication[]> => {
       if (!user || !tenantId) {
         throw new Error('Authentication required');
       }
 
+      console.log('🔵 useUpcomingAlerts: Fetching with params:', {
+        daysAhead,
+        priority,
+        jtbdType,
+        status,
+        startDate,
+        endDate
+      });
+
       const response = await JTBDService.getUpcomingAlerts(
         daysAhead,
         priority,
         jtbdType,
-        status
+        status,
+        startDate,  // NEW
+        endDate     // NEW
       );
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to fetch upcoming alerts');
       }
+
+      console.log('✅ useUpcomingAlerts: Data fetched successfully:', {
+        count: response.data.length,
+        meta: response.meta
+      });
 
       return response.data;
     },
@@ -612,10 +635,12 @@ export const jtbdQueryHelpers = {
   },
   
   getCachedUpcomingAlerts: (queryClient: any, params: {
-    daysAhead: number;
+    daysAhead?: number;
     priority?: string;
     jtbdType?: string;
     status?: string;
+    startDate?: string;
+    endDate?: string;
   }) => {
     return queryClient.getQueryData(JTBD_QUERY_KEYS.upcomingAlerts(params));
   },

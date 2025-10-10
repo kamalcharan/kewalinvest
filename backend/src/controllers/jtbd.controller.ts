@@ -506,6 +506,7 @@ export class JTBDController {
   /**
    * GET /api/jtbd/dashboard/upcoming-alerts
    * Get upcoming alerts with communication status
+   * FIXED: Added date range support
    */
   getUpcomingAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -517,9 +518,54 @@ export class JTBDController {
       const priority = req.query.priority as 'critical' | 'high' | 'medium' | 'low' | undefined;
       const jtbdType = req.query.jtbd_type as 'portfolio_alert' | 'time_based' | 'profile_trigger' | undefined;
       const status = req.query.status as 'pending' | 'overdue' | undefined;
+      
+      // NEW: Date range params
+      const startDate = req.query.start_date as string | undefined;
+      const endDate = req.query.end_date as string | undefined;
+
+      // Validate date range if provided
+      if ((startDate && !endDate) || (!startDate && endDate)) {
+        res.status(400).json({
+          success: false,
+          error: 'Both start_date and end_date must be provided together'
+        });
+        return;
+      }
+
+      if (startDate && endDate) {
+        // Basic date validation (YYYY-MM-DD format)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+          res.status(400).json({
+            success: false,
+            error: 'Dates must be in YYYY-MM-DD format'
+          });
+          return;
+        }
+
+        // Check if start_date is before end_date
+        if (new Date(startDate) > new Date(endDate)) {
+          res.status(400).json({
+            success: false,
+            error: 'start_date must be before or equal to end_date'
+          });
+          return;
+        }
+      }
 
       const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
       const dashboardService = new JTBDDashboardService();
+
+      console.log('📊 Dashboard API called with params:', {
+        daysAhead,
+        priority,
+        jtbdType,
+        status,
+        startDate,
+        endDate,
+        tenantId: user!.tenant_id,
+        isLive
+      });
 
       const alerts = await dashboardService.getUpcomingAlerts(
         user!.tenant_id,
@@ -527,15 +573,28 @@ export class JTBDController {
         daysAhead,
         priority,
         jtbdType,
-        status
+        status,
+        startDate,  // NEW
+        endDate     // NEW
       );
+
+      console.log('✅ Dashboard API returning alerts:', alerts.length);
 
       res.json({
         success: true,
-        data: alerts
+        data: alerts,
+        meta: {
+          count: alerts.length,
+          filters_applied: {
+            date_range: startDate && endDate ? `${startDate} to ${endDate}` : `${daysAhead} days ahead`,
+            priority: priority || 'all',
+            jtbd_type: jtbdType || 'all',
+            status: status || 'all'
+          }
+        }
       });
     } catch (error: any) {
-      console.error('Error getting upcoming alerts:', error);
+      console.error('❌ Error getting upcoming alerts:', error);
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get upcoming alerts'
@@ -546,6 +605,7 @@ export class JTBDController {
   /**
    * GET /api/jtbd/dashboard/alerts-by-date
    * Get alerts grouped by date
+   * FIXED: Date validation and type casting
    */
   getAlertsByDate = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -560,6 +620,16 @@ export class JTBDController {
         res.status(400).json({
           success: false,
           error: 'start_date and end_date are required'
+        });
+        return;
+      }
+
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+        res.status(400).json({
+          success: false,
+          error: 'Dates must be in YYYY-MM-DD format'
         });
         return;
       }
@@ -599,6 +669,14 @@ export class JTBDController {
       // Query params
       const status = req.query.status as 'pending' | 'scheduled' | 'sent' | 'failed' | undefined;
       const limit = parseInt(req.query.limit as string) || 50;
+
+      if (limit < 1 || limit > 500) {
+        res.status(400).json({
+          success: false,
+          error: 'Limit must be between 1 and 500'
+        });
+        return;
+      }
 
       const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
       const dashboardService = new JTBDDashboardService();
