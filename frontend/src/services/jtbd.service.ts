@@ -8,7 +8,9 @@ import {
   UpdateJTBDRequest,
   JTBDDashboardStats,
   CustomerJTBDSummary,
-  CalculatedAlertInstance
+  CalculatedAlertInstance,
+  JTBDWithCommunication,
+  AlertsByDate
 } from '../types/jtbd.types';
 
 // API Response wrappers
@@ -64,6 +66,18 @@ interface TransactionTypesApiResponse {
   error?: string;
 }
 
+interface UpcomingAlertsApiResponse {
+  success: boolean;
+  data: JTBDWithCommunication[];
+  error?: string;
+}
+
+interface AlertsByDateApiResponse {
+  success: boolean;
+  data: AlertsByDate[];
+  error?: string;
+}
+
 export class JTBDService {
   /**
    * Create new JTBD configuration
@@ -81,15 +95,15 @@ export class JTBDService {
   /**
    * Get all JTBDs for a customer
    */
- static async getCustomerJTBDs(customerId: number): Promise<JTBDListApiResponse> {
-  try {
-    const url = API_ENDPOINTS.JTBD.GET_CUSTOMER_JTBDS(customerId);
-    return await apiService.get<JTBDListApiResponse>(url);
-  } catch (error: any) {
-    console.error('Error fetching customer JTBDs:', error);
-    throw error;
+  static async getCustomerJTBDs(customerId: number): Promise<JTBDListApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD.GET_CUSTOMER_JTBDS(customerId);
+      return await apiService.get<JTBDListApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching customer JTBDs:', error);
+      throw error;
+    }
   }
-}
 
   /**
    * Get single JTBD by ID
@@ -233,6 +247,80 @@ export class JTBDService {
   }
 
   /**
+   * DASHBOARD METHODS
+   */
+
+  /**
+   * Get upcoming alerts with communication status
+   */
+  static async getUpcomingAlerts(
+    daysAhead: number = 30,
+    priority?: 'critical' | 'high' | 'medium' | 'low',
+    jtbdType?: 'portfolio_alert' | 'time_based' | 'profile_trigger',
+    status?: 'pending' | 'overdue'
+  ): Promise<UpcomingAlertsApiResponse> {
+    try {
+      const params = new URLSearchParams();
+      params.append('days_ahead', daysAhead.toString());
+      
+      if (priority) params.append('priority', priority);
+      if (jtbdType) params.append('jtbd_type', jtbdType);
+      if (status) params.append('status', status);
+
+      const url = `${API_ENDPOINTS.JTBD.UPCOMING_ALERTS}?${params.toString()}`;
+      return await apiService.get<UpcomingAlertsApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching upcoming alerts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get alerts grouped by date
+   */
+  static async getAlertsByDate(
+    startDate: string,
+    endDate: string
+  ): Promise<AlertsByDateApiResponse> {
+    try {
+      const params = new URLSearchParams();
+      params.append('start_date', startDate);
+      params.append('end_date', endDate);
+
+      const url = `${API_ENDPOINTS.JTBD.ALERTS_BY_DATE}?${params.toString()}`;
+      return await apiService.get<AlertsByDateApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching alerts by date:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get communication queue
+   */
+  static async getCommunicationQueue(
+    status?: 'pending' | 'scheduled' | 'sent' | 'failed',
+    limit: number = 50
+  ): Promise<UpcomingAlertsApiResponse> {
+    try {
+      const params = new URLSearchParams();
+      params.append('limit', limit.toString());
+      
+      if (status) params.append('status', status);
+
+      const url = `${API_ENDPOINTS.JTBD.COMMUNICATION_QUEUE}?${params.toString()}`;
+      return await apiService.get<UpcomingAlertsApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching communication queue:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * HELPER METHODS
+   */
+
+  /**
    * Helper: Format frequency for display
    */
   static formatFrequency(frequency: string): string {
@@ -293,6 +381,32 @@ export class JTBDService {
     const targetDate = new Date(dateString);
     const diffTime = targetDate.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  /**
+   * Helper: Get communication status badge color
+   */
+  static getCommunicationStatusColor(status: string): string {
+    const colors: Record<string, string> = {
+      pending: '#F59E0B',
+      scheduled: '#3B82F6',
+      sent: '#10B981',
+      failed: '#DC2626'
+    };
+    return colors[status] || '#6B7280';
+  }
+
+  /**
+   * Helper: Format communication status for display
+   */
+  static formatCommunicationStatus(status: string): string {
+    const statuses: Record<string, string> = {
+      pending: 'Pending',
+      scheduled: 'Scheduled',
+      sent: 'Sent',
+      failed: 'Failed'
+    };
+    return statuses[status] || status;
   }
 }
 

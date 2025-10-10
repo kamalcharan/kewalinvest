@@ -26,6 +26,8 @@ import NavSchedulerPage from './pages/nav/NavSchedulerPage';
 import NavBookmarksPage from './pages/nav/NavBookmarksPage';
 
 
+
+
 // Contact pages
 import ContactsPage from './pages/contacts/ContactsPage';
 import ContactFormPage from './pages/contacts/ContactFormPage';
@@ -39,6 +41,9 @@ import CustomerViewPage from './pages/customers/CustomerViewPage';
 //transaction pages
 // Transaction Pages
 import TransactionListPage from './pages/transactions/TransactionListPage';
+
+// JTBD pages
+import JTBDDashboardPage from './pages/jtbd/JTBDDashboardPage';
 
 // Import Data pages
 import ImportDataPage from './pages/data-import/ImportDataPage';
@@ -95,6 +100,8 @@ function App() {
                 {/* Transaction Routes - NEW */}
                 <Route path="transactions" element={<TransactionListPage />} />
                 <Route path="transactions/:id" element={<TransactionListPage />} />
+                 {/* JTBD Dashboard Route - ADD THIS */}
+                <Route path="jtbd/dashboard" element={<JTBDDashboardPage />} />
                 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>

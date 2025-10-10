@@ -288,3 +288,44 @@ export interface JTBDPortfolioAlignment {
     potentialValue: number;
   }>;
 }
+
+// ==================== DASHBOARD TYPES ====================
+
+// Communication Types
+export type CommunicationStatus = 'pending' | 'scheduled' | 'sent' | 'failed' | 'cancelled';
+export type CommunicationChannel = 'email' | 'whatsapp' | 'sms';
+
+// Extended JTBD with Communication Data
+export interface JTBDWithCommunication extends JTBDConfiguration {
+  customer_name: string;
+  customer_email?: string;
+  customer_mobile?: string;
+  
+  // Communication fields (DUMMY DATA for now)
+  communication_status: CommunicationStatus;
+  communication_channel: CommunicationChannel;
+  communication_sent_at?: string;
+  communication_scheduled_at?: string;
+  communication_read?: boolean;
+  communication_clicked?: boolean;
+  communication_error?: string;
+}
+
+// Dashboard Alert (lightweight)
+export interface DashboardAlert {
+  id: number;
+  title: string;
+  customer_id: number;
+  customer_name: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  jtbd_type: 'portfolio_alert' | 'time_based' | 'profile_trigger';
+  next_alert_date: string;
+  communication_status: CommunicationStatus;
+}
+
+// Alerts grouped by date
+export interface AlertsByDate {
+  alert_date: string;
+  alert_count: number;
+  alerts: DashboardAlert[];
+}

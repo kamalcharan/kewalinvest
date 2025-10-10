@@ -10,7 +10,9 @@ import {
   UpdateJTBDRequest,
   JTBDDashboardStats,
   CustomerJTBDSummary,
-  CalculatedAlertInstance
+  CalculatedAlertInstance,
+  JTBDWithCommunication,
+  AlertsByDate
 } from '../types/jtbd.types';
 
 // Query Keys for consistent caching
@@ -25,6 +27,19 @@ export const JTBD_QUERY_KEYS = {
   schemes: (customerId: number) => [...JTBD_QUERY_KEYS.all, 'schemes', customerId] as const,
   transactionTypes: () => [...JTBD_QUERY_KEYS.all, 'transaction-types'] as const,
   occurrences: (jtbdId: number) => [...JTBD_QUERY_KEYS.all, 'occurrences', jtbdId] as const,
+  
+  // Dashboard keys
+  dashboard: () => [...JTBD_QUERY_KEYS.all, 'dashboard'] as const,
+  upcomingAlerts: (params: {
+    daysAhead: number;
+    priority?: string;
+    jtbdType?: string;
+    status?: string;
+  }) => [...JTBD_QUERY_KEYS.dashboard(), 'upcoming', params] as const,
+  alertsByDate: (startDate: string, endDate: string) => 
+    [...JTBD_QUERY_KEYS.dashboard(), 'by-date', startDate, endDate] as const,
+  communicationQueue: (status?: string, limit?: number) => 
+    [...JTBD_QUERY_KEYS.dashboard(), 'queue', status || 'all', limit || 50] as const,
 } as const;
 
 // Error handling
@@ -219,6 +234,105 @@ export function usePortfolioOccurrences(jtbdId?: number) {
 }
 
 /**
+ * Hook: Get upcoming alerts with communication status
+ */
+export function useUpcomingAlerts(
+  daysAhead: number = 30,
+  priority?: 'critical' | 'high' | 'medium' | 'low',
+  jtbdType?: 'portfolio_alert' | 'time_based' | 'profile_trigger',
+  status?: 'pending' | 'overdue'
+) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<JTBDWithCommunication[], Error>({
+    queryKey: JTBD_QUERY_KEYS.upcomingAlerts({
+      daysAhead,
+      priority: priority || '',
+      jtbdType: jtbdType || '',
+      status: status || ''
+    }),
+    queryFn: async (): Promise<JTBDWithCommunication[]> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.getUpcomingAlerts(
+        daysAhead,
+        priority,
+        jtbdType,
+        status
+      );
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch upcoming alerts');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook: Get alerts grouped by date
+ */
+export function useAlertsByDate(startDate: string, endDate: string, enabled: boolean = true) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<AlertsByDate[], Error>({
+    queryKey: JTBD_QUERY_KEYS.alertsByDate(startDate, endDate),
+    queryFn: async (): Promise<AlertsByDate[]> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.getAlertsByDate(startDate, endDate);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch alerts by date');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId && enabled && !!startDate && !!endDate,
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook: Get communication queue
+ */
+export function useCommunicationQueue(
+  status?: 'pending' | 'scheduled' | 'sent' | 'failed',
+  limit: number = 50
+) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<JTBDWithCommunication[], Error>({
+    queryKey: JTBD_QUERY_KEYS.communicationQueue(status, limit),
+    queryFn: async (): Promise<JTBDWithCommunication[]> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.getCommunicationQueue(status, limit);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch communication queue');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
  * Mutation: Create JTBD
  * Enhanced with race condition protection
  */
@@ -275,6 +389,11 @@ export function useCreateJTBD() {
       // Invalidate dashboard stats
       queryClient.invalidateQueries({ 
         queryKey: JTBD_QUERY_KEYS.stats() 
+      });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({ 
+        queryKey: JTBD_QUERY_KEYS.dashboard() 
       });
       
       // Set the new JTBD in cache
@@ -344,6 +463,11 @@ export function useUpdateJTBD() {
       queryClient.invalidateQueries({ 
         queryKey: JTBD_QUERY_KEYS.summary(updatedJTBD.customer_id) 
       });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({ 
+        queryKey: JTBD_QUERY_KEYS.dashboard() 
+      });
       
       // Update the JTBD in cache
       queryClient.setQueryData(JTBD_QUERY_KEYS.detail(updatedJTBD.id), updatedJTBD);
@@ -393,6 +517,11 @@ export function useDeleteJTBD() {
       queryClient.invalidateQueries({ 
         queryKey: JTBD_QUERY_KEYS.stats() 
       });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({ 
+        queryKey: JTBD_QUERY_KEYS.dashboard() 
+      });
       
       // Remove from cache
       queryClient.removeQueries({ 
@@ -441,6 +570,11 @@ export function useToggleJTBD() {
       queryClient.invalidateQueries({ 
         queryKey: JTBD_QUERY_KEYS.summary(updatedJTBD.customer_id) 
       });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({ 
+        queryKey: JTBD_QUERY_KEYS.dashboard() 
+      });
       
       // Update the JTBD in cache
       queryClient.setQueryData(JTBD_QUERY_KEYS.detail(updatedJTBD.id), updatedJTBD);
@@ -475,5 +609,22 @@ export const jtbdQueryHelpers = {
   
   getCachedStats: (queryClient: any) => {
     return queryClient.getQueryData(JTBD_QUERY_KEYS.stats());
+  },
+  
+  getCachedUpcomingAlerts: (queryClient: any, params: {
+    daysAhead: number;
+    priority?: string;
+    jtbdType?: string;
+    status?: string;
+  }) => {
+    return queryClient.getQueryData(JTBD_QUERY_KEYS.upcomingAlerts(params));
+  },
+  
+  getCachedAlertsByDate: (queryClient: any, startDate: string, endDate: string) => {
+    return queryClient.getQueryData(JTBD_QUERY_KEYS.alertsByDate(startDate, endDate));
+  },
+  
+  getCachedCommunicationQueue: (queryClient: any, status?: string, limit?: number) => {
+    return queryClient.getQueryData(JTBD_QUERY_KEYS.communicationQueue(status, limit));
   },
 };

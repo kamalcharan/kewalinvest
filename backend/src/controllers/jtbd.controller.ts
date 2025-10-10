@@ -340,22 +340,21 @@ export class JTBDController {
       const { user, environment } = req;
       const isLive = environment === 'live';
 
-      // This could be enhanced with pagination if needed
-     const query = `
-  SELECT 
-    c.id,
-    cont.name,
-    c.has_jtbd_setup,
-    c.jtbd_count
-  FROM t_customers c
-  JOIN t_contacts cont ON c.contact_id = cont.id
-  WHERE c.tenant_id = $1 
-    AND c.is_live = $2 
-    AND c.is_active = true
-    AND c.has_jtbd_setup = false
-  ORDER BY cont.name
-  LIMIT 50
-`;
+      const query = `
+        SELECT 
+          c.id,
+          cont.name,
+          c.has_jtbd_setup,
+          c.jtbd_count
+        FROM t_customers c
+        JOIN t_contacts cont ON c.contact_id = cont.id
+        WHERE c.tenant_id = $1 
+          AND c.is_live = $2 
+          AND c.is_active = true
+          AND c.has_jtbd_setup = false
+        ORDER BY cont.name
+        LIMIT 50
+      `;
 
       const result = await this.jtbdService['db'].query(query, [user!.tenant_id, isLive]);
 
@@ -500,6 +499,126 @@ export class JTBDController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get portfolio occurrences'
+      });
+    }
+  };
+
+  /**
+   * GET /api/jtbd/dashboard/upcoming-alerts
+   * Get upcoming alerts with communication status
+   */
+  getUpcomingAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      // Query params
+      const daysAhead = parseInt(req.query.days_ahead as string) || 30;
+      const priority = req.query.priority as 'critical' | 'high' | 'medium' | 'low' | undefined;
+      const jtbdType = req.query.jtbd_type as 'portfolio_alert' | 'time_based' | 'profile_trigger' | undefined;
+      const status = req.query.status as 'pending' | 'overdue' | undefined;
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const alerts = await dashboardService.getUpcomingAlerts(
+        user!.tenant_id,
+        isLive,
+        daysAhead,
+        priority,
+        jtbdType,
+        status
+      );
+
+      res.json({
+        success: true,
+        data: alerts
+      });
+    } catch (error: any) {
+      console.error('Error getting upcoming alerts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get upcoming alerts'
+      });
+    }
+  };
+
+  /**
+   * GET /api/jtbd/dashboard/alerts-by-date
+   * Get alerts grouped by date
+   */
+  getAlertsByDate = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      // Query params
+      const startDate = req.query.start_date as string;
+      const endDate = req.query.end_date as string;
+
+      if (!startDate || !endDate) {
+        res.status(400).json({
+          success: false,
+          error: 'start_date and end_date are required'
+        });
+        return;
+      }
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const alertsByDate = await dashboardService.getAlertsByDate(
+        user!.tenant_id,
+        isLive,
+        startDate,
+        endDate
+      );
+
+      res.json({
+        success: true,
+        data: alertsByDate
+      });
+    } catch (error: any) {
+      console.error('Error getting alerts by date:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get alerts by date'
+      });
+    }
+  };
+
+  /**
+   * GET /api/jtbd/dashboard/communication-queue
+   * Get communication queue
+   */
+  getCommunicationQueue = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      // Query params
+      const status = req.query.status as 'pending' | 'scheduled' | 'sent' | 'failed' | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const queue = await dashboardService.getCommunicationQueue(
+        user!.tenant_id,
+        isLive,
+        status,
+        limit
+      );
+
+      res.json({
+        success: true,
+        data: queue
+      });
+    } catch (error: any) {
+      console.error('Error getting communication queue:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get communication queue'
       });
     }
   };

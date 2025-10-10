@@ -43,7 +43,7 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `${API_BASE}/customers/${id}`,
     UPDATE: (id: number) => `${API_BASE}/customers/${id}`,
     DELETE: (id: number) => `${API_BASE}/customers/${id}`,
-      ACTIVATE: (id: number) => `${API_BASE}/customers/${id}/activate`,
+    ACTIVATE: (id: number) => `${API_BASE}/customers/${id}/activate`,
     STATS: `${API_BASE}/customers/stats`,
     ADD_ADDRESS: (customerId: number) => `${API_BASE}/customers/${customerId}/addresses`,
     UPDATE_ADDRESS: (customerId: number, addressId: number) => 
@@ -96,6 +96,9 @@ export const API_ENDPOINTS = {
     TOGGLE: (id: number) => `${API_BASE}/jtbd/${id}/toggle`,
     DASHBOARD_OVERVIEW: `${API_BASE}/jtbd/dashboard/overview`,
     CUSTOMERS_WITHOUT_JTBD: `${API_BASE}/jtbd/dashboard/customers-without-jtbd`,
+    UPCOMING_ALERTS: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,
+    ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
+    COMMUNICATION_QUEUE: `${API_BASE}/jtbd/dashboard/communication-queue`,
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}/summary`,
     CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
     TRANSACTION_TYPES: `${API_BASE}/jtbd/transaction-types`,
@@ -373,6 +376,18 @@ export const JTBD_URLS = {
   getCustomersWithoutJTBD: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CUSTOMERS_WITHOUT_JTBD}${buildQueryParams(params || {}, environment)}`,
   
+  // Get upcoming alerts
+  getUpcomingAlerts: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.UPCOMING_ALERTS}${buildQueryParams(params || {}, environment)}`,
+  
+  // Get alerts by date
+  getAlertsByDate: (startDate: string, endDate: string, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.ALERTS_BY_DATE}${buildQueryParams({ start_date: startDate, end_date: endDate, ...params }, environment)}`,
+  
+  // Get communication queue
+  getCommunicationQueue: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD.COMMUNICATION_QUEUE}${buildQueryParams(params || {}, environment)}`,
+  
   // Get customer summary
   getCustomerSummary: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CUSTOMER_SUMMARY(customerId)}${buildQueryParams({}, environment)}`,
@@ -539,6 +554,9 @@ if (process.env.NODE_ENV === 'development') {
   console.log('🎯 JTBD Endpoints:', {
     CREATE: API_ENDPOINTS.JTBD.CREATE,
     DASHBOARD_OVERVIEW: API_ENDPOINTS.JTBD.DASHBOARD_OVERVIEW,
+    UPCOMING_ALERTS: API_ENDPOINTS.JTBD.UPCOMING_ALERTS,
+    ALERTS_BY_DATE: API_ENDPOINTS.JTBD.ALERTS_BY_DATE,
+    COMMUNICATION_QUEUE: API_ENDPOINTS.JTBD.COMMUNICATION_QUEUE,
     TRANSACTION_TYPES: API_ENDPOINTS.JTBD.TRANSACTION_TYPES,
   });
 }

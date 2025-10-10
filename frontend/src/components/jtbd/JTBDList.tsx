@@ -118,12 +118,16 @@ const JTBDList: React.FC<JTBDListProps> = ({
         borderRadius: '12px',
         padding: '20px'
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {Array.from({ length: 3 }).map((_, index) => (
+        <div style={{ 
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+          gap: '12px'
+        }}>
+          {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
               style={{
-                height: '100px',
+                height: '70px',
                 backgroundColor: colors.utility.primaryBackground,
                 borderRadius: '8px',
                 animation: 'pulse 1.5s ease-in-out infinite',
@@ -423,7 +427,7 @@ const JTBDList: React.FC<JTBDListProps> = ({
         </div>
       )}
 
-      {/* JTBD Cards */}
+      {/* JTBD Cards - 2 Column Responsive Grid */}
       {filteredJTBDs.length === 0 ? (
         <div style={{
           padding: '40px 20px',
@@ -440,7 +444,11 @@ const JTBDList: React.FC<JTBDListProps> = ({
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', 
+          gap: '12px' 
+        }}>
           {filteredJTBDs.map((jtbd) => (
             <JTBDCard
               key={jtbd.id}

@@ -13,7 +13,8 @@ import {
   Upload,
   FileSpreadsheet,
   Bug,
-  Target  // Add this for NAV tracking
+  Target,
+  Bell
 } from 'lucide-react';
 
 export interface NavigationItem {
@@ -96,6 +97,12 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'NAV Tracking',
         path: '/nav/dashboard',
         icon: Target
+      },
+      {
+        id: 'jtbd_dashboard',
+        name: 'JTBD Dashboard',
+        path: '/jtbd/dashboard',
+        icon: Bell
       },
       {
         id: 'portfolios',

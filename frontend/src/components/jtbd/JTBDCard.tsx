@@ -19,7 +19,6 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
-  const [isExpanded, setIsExpanded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const toggleMutation = useToggleJTBD();
@@ -78,28 +77,23 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Check if today
     if (date.toDateString() === today.toDateString()) {
       return '🔥 Today';
     }
 
-    // Check if tomorrow
     if (date.toDateString() === tomorrow.toDateString()) {
       return '⚡ Tomorrow';
     }
 
-    // Check if within next 7 days
     const daysUntil = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     if (daysUntil > 0 && daysUntil <= 7) {
       return `📍 ${date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`;
     }
 
-    // Check if overdue
     if (daysUntil < 0) {
       return `⚠️ Overdue`;
     }
 
-    // Format as date
     return date.toLocaleDateString('en-IN', { 
       day: 'numeric', 
       month: 'short',
@@ -140,82 +134,31 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
     }
   };
 
-  // Render configuration details (expandable)
-  const renderConfigDetails = () => {
-    if (!isExpanded) return null;
-
-    return (
-      <div style={{
-        marginTop: '12px',
-        padding: '12px',
-        backgroundColor: colors.utility.primaryBackground,
-        borderRadius: '6px',
-        fontSize: '12px',
-        color: colors.utility.secondaryText
-      }}>
-        {jtbd.jtbd_type === 'portfolio_alert' && (
-          <div>
-            <div><strong>Scheme Code:</strong> {(jtbd.config_data as PortfolioAlertConfig).scheme_code}</div>
-            {(jtbd.config_data as PortfolioAlertConfig).folio_no && (
-              <div><strong>Folio:</strong> {(jtbd.config_data as PortfolioAlertConfig).folio_no}</div>
-            )}
-            <div><strong>Frequency:</strong> {(jtbd.config_data as PortfolioAlertConfig).frequency}</div>
-            {(jtbd.config_data as PortfolioAlertConfig).day_of_month && (
-              <div><strong>Day of Month:</strong> {(jtbd.config_data as PortfolioAlertConfig).day_of_month}</div>
-            )}
-            <div><strong>Deviation:</strong> ±{(jtbd.config_data as PortfolioAlertConfig).deviation_days} days</div>
-            <div><strong>Track for:</strong> {(jtbd.config_data as PortfolioAlertConfig).track_till_months} months</div>
-          </div>
-        )}
-
-        {jtbd.jtbd_type === 'time_based' && (
-          <div>
-            <div><strong>Date:</strong> {(jtbd.config_data as TimeBasedConfig).alert_date}</div>
-            <div><strong>Month:</strong> {(jtbd.config_data as TimeBasedConfig).alert_month}</div>
-            <div><strong>Recurring:</strong> {(jtbd.config_data as TimeBasedConfig).is_recurring ? 'Yes' : 'No'}</div>
-          </div>
-        )}
-
-        {jtbd.jtbd_type === 'profile_trigger' && (
-          <div>
-            <div><strong>Trigger:</strong> {(jtbd.config_data as ProfileTriggerConfig).trigger_type}</div>
-            <div><strong>Days Before:</strong> {(jtbd.config_data as ProfileTriggerConfig).days_before}</div>
-          </div>
-        )}
-
-        {jtbd.description && (
-          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
-            <strong>Notes:</strong> {jtbd.description}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Icons
   const EditIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   );
 
   const TrashIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="3,6 5,6 21,6" />
       <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2" />
     </svg>
   );
 
-  const ChevronDownIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="6,9 12,15 18,9" />
+  const PauseIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
     </svg>
   );
 
-  const ChevronUpIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="18,15 12,9 6,15" />
+  const PlayIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <polygon points="5 3 19 12 5 21 5 3" />
     </svg>
   );
 
@@ -226,68 +169,81 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
           backgroundColor: colors.utility.secondaryBackground,
           border: `1px solid ${jtbd.is_active ? colors.utility.primaryText + '10' : colors.utility.secondaryText + '40'}`,
           borderLeft: `3px solid ${getPriorityColor(jtbd.priority)}`,
-          borderRadius: '8px',
-          padding: compact ? '12px' : '16px',
+          borderRadius: '6px',
+          padding: '10px 12px',
           transition: 'all 0.2s ease',
-          opacity: jtbd.is_active ? 1 : 0.6
+          opacity: jtbd.is_active ? 1 : 0.6,
+          minHeight: '60px',
+          maxHeight: '80px'
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <div style={{ flex: 1 }}>
-            {/* Title */}
+        {/* Single Row Layout - Ultra Compact */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          
+          {/* Left: Content - Takes most space */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Title with Status Badge - Single Line */}
             <div style={{
-              fontSize: compact ? '13px' : '14px',
+              fontSize: '12px',
               fontWeight: '600',
               color: colors.utility.primaryText,
-              marginBottom: '4px',
+              marginBottom: '3px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '6px',
+              overflow: 'hidden'
             }}>
-              <span>{actionText.title}</span>
+              <span style={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap',
+                flex: 1
+              }}>
+                {actionText.title}
+              </span>
               {!jtbd.is_active && (
                 <span style={{
-                  fontSize: '9px',
-                  padding: '2px 6px',
+                  fontSize: '8px',
+                  padding: '1px 4px',
                   backgroundColor: colors.utility.secondaryText + '20',
                   color: colors.utility.secondaryText,
-                  borderRadius: '4px',
-                  fontWeight: '500'
+                  borderRadius: '3px',
+                  fontWeight: '500',
+                  flexShrink: 0
                 }}>
                   PAUSED
                 </span>
               )}
             </div>
 
-            {/* Subtitle */}
+            {/* Subtitle - Truncated */}
             <div style={{
-              fontSize: '12px',
+              fontSize: '10px',
               color: colors.utility.secondaryText,
-              marginBottom: '8px'
+              marginBottom: '4px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
             }}>
               {actionText.subtitle}
             </div>
 
-            {/* Next Date & Priority */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Bottom Row: Date and Priority - Inline */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 fontWeight: '600',
-                color: colors.utility.primaryText,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
+                color: colors.utility.primaryText
               }}>
                 {formatNextDate(jtbd.next_alert_date)}
               </div>
 
               <span style={{
-                fontSize: '9px',
-                padding: '2px 6px',
+                fontSize: '8px',
+                padding: '1px 5px',
                 backgroundColor: getPriorityColor(jtbd.priority) + '20',
                 color: getPriorityColor(jtbd.priority),
-                borderRadius: '4px',
+                borderRadius: '3px',
                 fontWeight: '600',
                 textTransform: 'uppercase'
               }}>
@@ -296,91 +252,80 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
-          {!compact && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '12px' }}>
-              {/* Toggle Active/Inactive */}
+          {/* Right: Action Buttons - Compact */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '3px',
+            flexShrink: 0 
+          }}>
+            {/* Toggle Active/Inactive */}
+            <button
+              onClick={handleToggle}
+              disabled={toggleMutation.isPending}
+              title={jtbd.is_active ? 'Pause Alert' : 'Activate Alert'}
+              style={{
+                padding: '5px',
+                backgroundColor: 'transparent',
+                color: jtbd.is_active ? colors.semantic.success : colors.utility.secondaryText,
+                border: `1px solid ${jtbd.is_active ? colors.semantic.success + '40' : colors.utility.secondaryText + '40'}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: '26px',
+                minHeight: '26px'
+              }}
+            >
+              {jtbd.is_active ? <PauseIcon /> : <PlayIcon />}
+            </button>
+
+            {/* Edit */}
+            {onEdit && (
               <button
-                onClick={handleToggle}
-                disabled={toggleMutation.isPending}
-                title={jtbd.is_active ? 'Pause Alert' : 'Activate Alert'}
+                onClick={() => onEdit(jtbd.id)}
+                title="Edit Alert"
                 style={{
-                  padding: '6px',
+                  padding: '5px',
                   backgroundColor: 'transparent',
-                  color: jtbd.is_active ? colors.semantic.success : colors.utility.secondaryText,
-                  border: `1px solid ${jtbd.is_active ? colors.semantic.success + '40' : colors.utility.secondaryText + '40'}`,
+                  color: colors.semantic.info,
+                  border: `1px solid ${colors.semantic.info}40`,
                   borderRadius: '4px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  fontSize: '10px',
-                  fontWeight: '500'
+                  justifyContent: 'center',
+                  minWidth: '26px',
+                  minHeight: '26px'
                 }}
               >
-                {jtbd.is_active ? '●' : '○'}
+                <EditIcon />
               </button>
+            )}
 
-              {/* Edit */}
-              {onEdit && (
-                <button
-                  onClick={() => onEdit(jtbd.id)}
-                  title="Edit Alert"
-                  style={{
-                    padding: '6px',
-                    backgroundColor: 'transparent',
-                    color: colors.semantic.info,
-                    border: `1px solid ${colors.semantic.info}40`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  <EditIcon />
-                </button>
-              )}
-
-              {/* Delete */}
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                title="Delete Alert"
-                style={{
-                  padding: '6px',
-                  backgroundColor: 'transparent',
-                  color: colors.semantic.error,
-                  border: `1px solid ${colors.semantic.error}40`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                <TrashIcon />
-              </button>
-
-              {/* Expand/Collapse */}
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                title={isExpanded ? 'Hide Details' : 'Show Details'}
-                style={{
-                  padding: '6px',
-                  backgroundColor: 'transparent',
-                  color: colors.utility.secondaryText,
-                  border: `1px solid ${colors.utility.secondaryText}40`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-              </button>
-            </div>
-          )}
+            {/* Delete */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Delete Alert"
+              style={{
+                padding: '5px',
+                backgroundColor: 'transparent',
+                color: colors.semantic.error,
+                border: `1px solid ${colors.semantic.error}40`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: '26px',
+                minHeight: '26px'
+              }}
+            >
+              <TrashIcon />
+            </button>
+          </div>
         </div>
-
-        {/* Expandable Config Details */}
-        {renderConfigDetails()}
       </div>
 
       {/* Delete Confirmation Modal */}

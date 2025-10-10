@@ -124,7 +124,13 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', height: '75vh', maxHeight: '700px' }}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column',
+      height: '75vh', 
+      maxHeight: '700px',
+      width: '100%'
+    }}>
       {/* Toast Notification */}
       {showToast && (
         <div style={{
@@ -148,261 +154,66 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
         </div>
       )}
 
-      {/* LEFT PANEL: Preview */}
-      <div style={{
-        width: '280px',
-        borderRight: `1px solid ${colors.utility.primaryText}15`,
+      {/* Main Content - Single Panel */}
+      <div style={{ 
+        flex: 1, 
+        overflowY: 'auto', 
+        padding: '24px',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: colors.utility.secondaryBackground,
-        padding: '20px'
+        gap: '20px'
       }}>
-        <div style={{
-          fontSize: '12px',
-          fontWeight: '600',
-          color: colors.utility.secondaryText,
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          marginBottom: '16px'
-        }}>
-          Next Alert Date
-        </div>
         
-        <div style={{
-          padding: '24px',
-          backgroundColor: colors.brand.primary + '10',
-          borderRadius: '12px',
-          border: `2px solid ${colors.brand.primary}40`,
-          textAlign: 'center'
-        }}>
-          <div style={{
-            fontSize: '40px',
-            marginBottom: '8px'
+        {/* Title - Full Width */}
+        <div>
+          <label style={{ 
+            fontSize: '13px', 
+            fontWeight: '600', 
+            color: colors.utility.secondaryText, 
+            marginBottom: '8px', 
+            display: 'block',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
           }}>
-            📅
-          </div>
-          <div style={{
-            fontSize: '24px',
-            fontWeight: '700',
-            color: colors.brand.primary,
-            marginBottom: '8px'
-          }}>
-            {nextOccurrence.toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short'
-            })}
-          </div>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: '600',
-            color: colors.utility.primaryText,
-            marginBottom: '12px'
-          }}>
-            {nextOccurrence.getFullYear()}
-          </div>
-          <div style={{
-            fontSize: '11px',
-            color: colors.utility.secondaryText,
-            borderTop: `1px solid ${colors.utility.primaryText}10`,
-            paddingTop: '12px'
-          }}>
-            {isRecurring ? '🔄 Repeats yearly' : '⚡ One-time only'}
-          </div>
+            Alert Title *
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Tax Filing Deadline, Policy Renewal"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: '14px',
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `2px solid ${errors.title ? colors.semantic.error : colors.utility.primaryText + '15'}`,
+              borderRadius: '8px',
+              color: colors.utility.primaryText,
+              outline: 'none'
+            }}
+          />
+          {errors.title && (
+            <div style={{ fontSize: '11px', color: colors.semantic.error, marginTop: '4px' }}>
+              {errors.title}
+            </div>
+          )}
         </div>
 
+        {/* Two Column Layout */}
         <div style={{
-          marginTop: '20px',
-          padding: '12px',
-          backgroundColor: colors.utility.primaryBackground,
-          borderRadius: '8px',
-          fontSize: '11px',
-          color: colors.utility.secondaryText,
-          lineHeight: '1.5'
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '20px'
         }}>
-          💡 Tip: Use time-based alerts for tax deadlines, policy renewals, or annual reviews.
-        </div>
-      </div>
-
-      {/* RIGHT PANEL: Form */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Scrollable Form Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           
-          {/* Title */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.secondaryText, marginBottom: '6px', display: 'block' }}>
-              Alert Title *
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Tax Filing Deadline, Policy Renewal"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: '14px',
-                backgroundColor: colors.utility.secondaryBackground,
-                border: `1px solid ${errors.title ? colors.semantic.error : colors.utility.primaryText + '15'}`,
-                borderRadius: '6px',
-                color: colors.utility.primaryText
-              }}
-            />
-            {errors.title && (
-              <div style={{ fontSize: '11px', color: colors.semantic.error, marginTop: '4px' }}>
-                {errors.title}
-              </div>
-            )}
-          </div>
-
-          {/* Month Selection - 6x2 Grid - FIXED */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              color: colors.utility.secondaryText,
-              marginBottom: '10px',
-              display: 'block',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              Select Month *
-            </label>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(6, 1fr)',
-              gap: '8px'
-            }}>
-              {months.map((month) => (
-                <div
-                  key={month.value}
-                  onClick={() => setAlertMonth(month.value)}
-                  style={{
-                    padding: '12px 8px',
-                    backgroundColor: alertMonth === month.value ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
-                    border: `2px solid ${alertMonth === month.value ? colors.brand.primary : colors.utility.primaryText + '10'}`,
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <div style={{ fontSize: '18px', marginBottom: '4px' }}>{month.icon}</div>
-                  <div style={{ fontSize: '11px', fontWeight: '600', color: colors.utility.primaryText }}>
-                    {month.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recurring Toggle - Inline Radio */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              color: colors.utility.secondaryText,
-              marginBottom: '10px',
-              display: 'block',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              Recurrence Type
-            </label>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div
-                onClick={() => setIsRecurring(true)}
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  backgroundColor: isRecurring ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
-                  border: `2px solid ${isRecurring ? colors.brand.primary : colors.utility.primaryText + '10'}`,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  border: `2px solid ${isRecurring ? colors.brand.primary : colors.utility.secondaryText}`,
-                  backgroundColor: isRecurring ? colors.brand.primary : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  {isRecurring && (
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />
-                  )}
-                </div>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
-                    🔄 Recurring Yearly
-                  </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                    Repeats every year
-                  </div>
-                </div>
-              </div>
-
-              <div
-                onClick={() => setIsRecurring(false)}
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  backgroundColor: !isRecurring ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
-                  border: `2px solid ${!isRecurring ? colors.brand.primary : colors.utility.primaryText + '10'}`,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  border: `2px solid ${!isRecurring ? colors.brand.primary : colors.utility.secondaryText}`,
-                  backgroundColor: !isRecurring ? colors.brand.primary : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  {!isRecurring && (
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />
-                  )}
-                </div>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
-                    ⚡ One-time Only
-                  </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                    Triggers once
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Priority + Day + Description */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '180px 1fr',
-            gap: '20px',
-            marginBottom: '16px'
-          }}>
-            {/* Priority - Vertical Stack */}
+          {/* LEFT COLUMN */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Month Selection - 4x3 Grid */}
             <div>
               <label style={{
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
                 marginBottom: '10px',
@@ -410,189 +221,413 @@ const TimeAlertForm: React.FC<TimeAlertFormProps> = ({
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px'
               }}>
-                Priority
+                Select Month *
               </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {priorityOptions.map((option) => (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '8px'
+              }}>
+                {months.map((month) => (
                   <div
-                    key={option.value}
-                    onClick={() => setPriority(option.value as any)}
+                    key={month.value}
+                    onClick={() => setAlertMonth(month.value)}
                     style={{
-                      padding: '12px',
-                      backgroundColor: priority === option.value ? option.color + '20' : colors.utility.secondaryBackground,
-                      border: `2px solid ${priority === option.value ? option.color : colors.utility.primaryText + '10'}`,
+                      padding: '10px 6px',
+                      backgroundColor: alertMonth === month.value ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
+                      border: `2px solid ${alertMonth === month.value ? colors.brand.primary : colors.utility.primaryText + '10'}`,
                       borderRadius: '8px',
+                      textAlign: 'center',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <div style={{
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      border: `2px solid ${priority === option.value ? option.color : colors.utility.secondaryText}`,
-                      backgroundColor: priority === option.value ? option.color : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      {priority === option.value && (
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'white' }} />
-                      )}
-                    </div>
-                    <div style={{
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      color: priority === option.value ? option.color : colors.utility.primaryText
-                    }}>
-                      {option.label}
+                    <div style={{ fontSize: '16px', marginBottom: '4px' }}>{month.icon}</div>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      {month.label}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Day + Description */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Alert Day */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.secondaryText, marginBottom: '6px', display: 'block' }}>
-                  Alert Day *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={alertDate}
-                  onChange={(e) => setAlertDate(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: '14px',
-                    backgroundColor: colors.utility.secondaryBackground,
-                    border: `1px solid ${errors.alert_date ? colors.semantic.error : colors.utility.primaryText + '15'}`,
-                    borderRadius: '6px',
-                    color: colors.utility.primaryText
-                  }}
-                />
-                {errors.alert_date && (
-                  <div style={{ fontSize: '11px', color: colors.semantic.error, marginTop: '4px' }}>
-                    {errors.alert_date}
-                  </div>
-                )}
-                {alertDate >= 29 && (
-                  <div style={{
-                    marginTop: '6px',
-                    padding: '8px',
-                    backgroundColor: colors.semantic.info + '10',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                    color: colors.semantic.info,
-                    lineHeight: '1.4'
-                  }}>
-                    💡 Alert will adjust to last day of month when needed
-                  </div>
-                )}
-              </div>
+            {/* Alert Day */}
+            <div>
+              <label style={{ 
+                fontSize: '13px', 
+                fontWeight: '600', 
+                color: colors.utility.secondaryText, 
+                marginBottom: '8px', 
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Alert Day *
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={alertDate}
+                onChange={(e) => setAlertDate(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: '16px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  border: `2px solid ${errors.alert_date ? colors.semantic.error : colors.utility.primaryText + '15'}`,
+                  borderRadius: '8px',
+                  color: colors.utility.primaryText,
+                  outline: 'none',
+                  fontWeight: '600'
+                }}
+              />
+              {errors.alert_date && (
+                <div style={{ fontSize: '11px', color: colors.semantic.error, marginTop: '4px' }}>
+                  {errors.alert_date}
+                </div>
+              )}
+              {alertDate >= 29 && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px',
+                  backgroundColor: colors.semantic.info + '10',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  color: colors.semantic.info,
+                  lineHeight: '1.4'
+                }}>
+                  💡 Alert will adjust to last day of month when needed
+                </div>
+              )}
+            </div>
 
-              {/* Description */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.secondaryText, marginBottom: '6px', display: 'block' }}>
-                  Description (optional)
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  placeholder="Add any additional notes..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: '13px',
-                    backgroundColor: colors.utility.secondaryBackground,
-                    border: `1px solid ${colors.utility.primaryText}15`,
-                    borderRadius: '6px',
-                    color: colors.utility.primaryText,
-                    resize: 'vertical',
-                    fontFamily: 'inherit'
-                  }}
-                />
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Next Alert Preview Box */}
+            <div style={{
+              padding: '20px',
+              backgroundColor: colors.brand.primary + '10',
+              borderRadius: '12px',
+              border: `2px solid ${colors.brand.primary}40`,
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Next Alert Date
+              </div>
+              <div style={{
+                fontSize: '32px',
+                marginBottom: '4px'
+              }}>
+                📅
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: '700',
+                color: colors.brand.primary,
+                marginBottom: '4px'
+              }}>
+                {nextOccurrence.toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short'
+                })}
+              </div>
+              <div style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '8px'
+              }}>
+                {nextOccurrence.getFullYear()}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                borderTop: `1px solid ${colors.utility.primaryText}10`,
+                paddingTop: '8px',
+                marginTop: '8px'
+              }}>
+                {isRecurring ? '🔄 Repeats yearly' : '⚡ One-time only'}
               </div>
             </div>
+
+            {/* Recurrence Type - Stacked */}
+            <div>
+              <label style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                marginBottom: '10px',
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Recurrence Type
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div
+                  onClick={() => setIsRecurring(true)}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: isRecurring ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
+                    border: `2px solid ${isRecurring ? colors.brand.primary : colors.utility.primaryText + '10'}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    border: `2px solid ${isRecurring ? colors.brand.primary : colors.utility.secondaryText}`,
+                    backgroundColor: isRecurring ? colors.brand.primary : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    {isRecurring && (
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      🔄 Recurring Yearly
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      Repeats every year
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setIsRecurring(false)}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: !isRecurring ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
+                    border: `2px solid ${!isRecurring ? colors.brand.primary : colors.utility.primaryText + '10'}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    border: `2px solid ${!isRecurring ? colors.brand.primary : colors.utility.secondaryText}`,
+                    backgroundColor: !isRecurring ? colors.brand.primary : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    {!isRecurring && (
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      ⚡ One-time Only
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      Triggers once
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tip Box */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '8px',
+              fontSize: '11px',
+              color: colors.utility.secondaryText,
+              lineHeight: '1.5'
+            }}>
+              💡 Tip: Use time-based alerts for tax deadlines, policy renewals, or annual reviews.
+            </div>
+
           </div>
         </div>
 
-        {/* COMPACT PREVIEW FOOTER */}
-        <div style={{
-          borderTop: `2px solid ${colors.brand.primary}30`,
-          padding: '12px 24px',
-          backgroundColor: colors.utility.secondaryBackground,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px'
-        }}>
-          {/* Preview Info */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-            {title && (
-              <>
-                <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                  📝 {title.substring(0, 30)}{title.length > 30 ? '...' : ''}
+        {/* Priority - Horizontal 4 Columns */}
+        <div>
+          <label style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: colors.utility.secondaryText,
+            marginBottom: '10px',
+            display: 'block',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            Priority Level
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            {priorityOptions.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => setPriority(option.value as any)}
+                style={{
+                  padding: '12px',
+                  backgroundColor: priority === option.value ? option.color + '20' : colors.utility.secondaryBackground,
+                  border: `2px solid ${priority === option.value ? option.color : colors.utility.primaryText + '10'}`,
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  border: `2px solid ${priority === option.value ? option.color : colors.utility.secondaryText}`,
+                  backgroundColor: priority === option.value ? option.color : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {priority === option.value && (
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'white' }} />
+                  )}
                 </div>
-                <div style={{ width: '1px', height: '16px', backgroundColor: colors.utility.primaryText + '20' }} />
-              </>
-            )}
-            <div style={{ fontSize: '12px', fontWeight: '600', color: colors.brand.primary }}>
-              📅 {months[alertMonth - 1].label} {alertDate}
-            </div>
-            <div style={{ width: '1px', height: '16px', backgroundColor: colors.utility.primaryText + '20' }} />
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-              {isRecurring ? '🔄 Yearly' : '⚡ Once'}
-            </div>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: priority === option.value ? option.color : colors.utility.primaryText
+                }}>
+                  {option.label}
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isSubmitting}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: 'transparent',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '6px',
-                color: colors.utility.primaryText,
-                fontSize: '13px',
-                fontWeight: '500',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting ? 0.5 : 1
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting || !title.trim()}
-              style={{
-                padding: '8px 20px',
-                backgroundColor: colors.brand.primary,
-                border: 'none',
-                borderRadius: '6px',
-                color: 'white',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: isSubmitting || !title.trim() ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting || !title.trim() ? 0.6 : 1
-              }}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Alert'}
-            </button>
+        {/* Description - Full Width */}
+        <div>
+          <label style={{ 
+            fontSize: '13px', 
+            fontWeight: '600', 
+            color: colors.utility.secondaryText, 
+            marginBottom: '8px', 
+            display: 'block',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="Add any additional notes..."
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: '13px',
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `2px solid ${colors.utility.primaryText}15`,
+              borderRadius: '8px',
+              color: colors.utility.primaryText,
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              outline: 'none'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Footer with Actions */}
+      <div style={{
+        borderTop: `2px solid ${colors.brand.primary}30`,
+        padding: '16px 24px',
+        backgroundColor: colors.utility.secondaryBackground,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px'
+      }}>
+        {/* Preview Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+          {title && (
+            <>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                📝 {title.substring(0, 30)}{title.length > 30 ? '...' : ''}
+              </div>
+              <div style={{ width: '1px', height: '16px', backgroundColor: colors.utility.primaryText + '20' }} />
+            </>
+          )}
+          <div style={{ fontSize: '12px', fontWeight: '600', color: colors.brand.primary }}>
+            📅 {months[alertMonth - 1].label} {alertDate}
           </div>
+          <div style={{ width: '1px', height: '16px', backgroundColor: colors.utility.primaryText + '20' }} />
+          <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+            {isRecurring ? '🔄 Yearly' : '⚡ Once'}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '8px',
+              color: colors.utility.primaryText,
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.5 : 1
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !title.trim()}
+            style={{
+              padding: '10px 24px',
+              backgroundColor: colors.brand.primary,
+              border: 'none',
+              borderRadius: '8px',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: isSubmitting || !title.trim() ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting || !title.trim() ? 0.6 : 1
+            }}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Alert'}
+          </button>
         </div>
       </div>
 

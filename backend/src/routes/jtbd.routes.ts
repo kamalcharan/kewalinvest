@@ -20,6 +20,9 @@ router.use(environmentMiddleware);
 // Dashboard & Overview (must come before /:id)
 router.get('/dashboard/overview', jtbdController.getDashboardOverview);
 router.get('/dashboard/customers-without-jtbd', jtbdController.getCustomersWithoutJTBD);
+router.get('/dashboard/upcoming-alerts', jtbdController.getUpcomingAlerts);
+router.get('/dashboard/alerts-by-date', jtbdController.getAlertsByDate);
+router.get('/dashboard/communication-queue', jtbdController.getCommunicationQueue);
 
 // Helper Endpoints - dropdowns (must come before /:id)
 router.get('/transaction-types', jtbdController.getTransactionTypes);

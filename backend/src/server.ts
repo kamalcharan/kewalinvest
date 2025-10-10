@@ -94,9 +94,10 @@ app.get('/health', (_req: Request, res: Response) => {
       staging: true,
       logs: true,
       nav: true,
-      nav_enhanced_bookmarks: true, // NEW: Enhanced bookmark features
-      nav_scheduler: !!navScheduler, // Indicate if scheduler is initialized
-      jtbd: true, // NEW: Jobs To Be Done feature
+      nav_enhanced_bookmarks: true,
+      nav_scheduler: !!navScheduler,
+      jtbd: true,
+      jtbd_dashboard: true, // NEW: JTBD Dashboard features
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -287,6 +288,9 @@ app.use((_req: Request, res: Response) => {
       'PATCH /api/jtbd/:id/toggle',
       'GET /api/jtbd/dashboard/overview',
       'GET /api/jtbd/dashboard/customers-without-jtbd',
+      'GET /api/jtbd/dashboard/upcoming-alerts',
+      'GET /api/jtbd/dashboard/alerts-by-date',
+      'GET /api/jtbd/dashboard/communication-queue',
       'GET /api/jtbd/customer/:customerId/summary',
       'GET /api/jtbd/schemes/:customerId',
       'GET /api/jtbd/transaction-types',
@@ -476,15 +480,20 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/scheduler/status      ║
 ║  • POST /api/nav/scheduler/trigger     ║
 ║                                        ║
-║  🎯 JTBD (NEW):                        ║
+║  🎯 JTBD:                              ║
 ║  • POST /api/jtbd                      ║
 ║  • GET  /api/jtbd/customer/:customerId ║
 ║  • GET  /api/jtbd/:id                  ║
 ║  • PUT  /api/jtbd/:id                  ║
 ║  • DELETE /api/jtbd/:id                ║
 ║  • PATCH /api/jtbd/:id/toggle          ║
+║                                        ║
+║  📊 JTBD Dashboard (NEW):              ║
 ║  • GET  /api/jtbd/dashboard/overview   ║
 ║  • GET  /api/jtbd/dashboard/customers..║
+║  • GET  /api/jtbd/dashboard/upcoming.. ║
+║  • GET  /api/jtbd/dashboard/alerts-by..║
+║  • GET  /api/jtbd/dashboard/comm-queue ║
 ║  • GET  /api/jtbd/customer/:id/summary ║
 ║  • GET  /api/jtbd/schemes/:customerId  ║
 ║  • GET  /api/jtbd/transaction-types    ║
@@ -527,8 +536,9 @@ app.listen(PORT, async () => {
     console.log('✅ Transaction management endpoints ready');
     console.log('✅ Portfolio tracking endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
-    console.log('✅ Enhanced bookmark endpoints ready'); // NEW
-    console.log('✅ JTBD endpoints ready'); // NEW
+    console.log('✅ Enhanced bookmark endpoints ready');
+    console.log('✅ JTBD endpoints ready');
+    console.log('✅ JTBD Dashboard endpoints ready'); // NEW
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
@@ -599,6 +609,7 @@ app.listen(PORT, async () => {
 ║  NAV Routes: ✅ Ready                  ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
 ║  JTBD: ✅ Ready                        ║
+║  JTBD Dashboard: ✅ Ready              ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║
