@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import toastService from '../services/toast.service';
 import apiService from '../services/api.service';
-import { API_ENDPOINTS, buildQueryParams, getAPIErrorMessage } from '../services/serviceURLs';
+import { API_ENDPOINTS, CUSTOMER_URLS, buildQueryParams, getAPIErrorMessage } from '../services/serviceURLs';
 import {
   Customer,
   CustomerWithContact,
@@ -16,10 +16,16 @@ import {
   CustomerSearchParams,
   CustomerListResponse,
   CustomerStats,
-  ConvertToCustomerRequest
+  ConvertToCustomerRequest,
+  BookmarkReason,
+  BookmarkReasonsResponse,
+  CreateBookmarkRequest,
+  UpdateBookmarkRequest,
+  BookmarkResponse
 } from '../types/customer.types';
 
 // Query Keys for consistent caching
+// UPDATED: Added bookmark-related keys
 export const CUSTOMER_QUERY_KEYS = {
   all: ['customers'] as const,
   lists: () => [...CUSTOMER_QUERY_KEYS.all, 'list'] as const,
@@ -28,6 +34,7 @@ export const CUSTOMER_QUERY_KEYS = {
   detail: (id: number) => [...CUSTOMER_QUERY_KEYS.details(), id] as const,
   stats: () => [...CUSTOMER_QUERY_KEYS.all, 'stats'] as const,
   addresses: (customerId: number) => [...CUSTOMER_QUERY_KEYS.detail(customerId), 'addresses'] as const,
+  bookmarkReasons: () => [...CUSTOMER_QUERY_KEYS.all, 'bookmark-reasons'] as const,
 } as const;
 
 // Enhanced error handling
@@ -396,6 +403,151 @@ export function useDeleteCustomerAddress() {
   });
 }
 
+// ==================== BOOKMARK HOOKS (NEW) ====================
+
+/**
+ * Hook for getting bookmark reasons
+ * Fetches the list of available bookmark reasons for the tenant
+ */
+export function useBookmarkReasons() {
+  const { user, tenantId, environment } = useAuth();
+
+  return useQuery<BookmarkReason[], Error>({
+    queryKey: CUSTOMER_QUERY_KEYS.bookmarkReasons(),
+    queryFn: async (): Promise<BookmarkReason[]> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        const endpoint = CUSTOMER_URLS.getBookmarkReasons(environment);
+        const response = await apiService.get<BookmarkReasonsResponse>(endpoint);
+        
+        if (!response.success) {
+          throw new Error('Failed to fetch bookmark reasons');
+        }
+
+        return response.data.reasons;
+      } catch (error) {
+        throw handleAPIError(error, 'Failed to load bookmark reasons');
+      }
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes (reasons don't change often)
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+/**
+ * Mutation for bookmarking a customer
+ * Creates or updates a bookmark for the specified customer
+ */
+export function useBookmarkCustomer() {
+  const queryClient = useQueryClient();
+  const { user, tenantId, environment } = useAuth();
+
+  return useMutation<void, Error, { customerId: number; data: CreateBookmarkRequest }>({
+    mutationFn: async ({ customerId, data }): Promise<void> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const endpoint = CUSTOMER_URLS.addBookmark(customerId, environment);
+      const response = await apiService.post<BookmarkResponse>(endpoint, data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to bookmark customer');
+      }
+    },
+    onSuccess: (_, { customerId }) => {
+      // Invalidate customer lists to refresh bookmark status
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.lists() });
+      // Invalidate stats to update bookmarked count
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.stats() });
+      // Invalidate specific customer detail to show updated bookmark
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.detail(customerId) });
+      
+      toastService.success('Customer bookmarked successfully');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to bookmark customer');
+    }
+  });
+}
+
+/**
+ * Mutation for removing a bookmark from a customer
+ * Soft deletes the bookmark
+ */
+export function useUnbookmarkCustomer() {
+  const queryClient = useQueryClient();
+  const { user, tenantId, environment } = useAuth();
+
+  return useMutation<void, Error, number>({
+    mutationFn: async (customerId: number): Promise<void> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const endpoint = CUSTOMER_URLS.removeBookmark(customerId, environment);
+      const response = await apiService.delete<{ success: boolean; message: string; error?: string }>(endpoint);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to remove bookmark');
+      }
+    },
+    onSuccess: (_, customerId) => {
+      // Invalidate customer lists to refresh bookmark status
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.lists() });
+      // Invalidate stats to update bookmarked count
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.stats() });
+      // Invalidate specific customer detail to remove bookmark
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.detail(customerId) });
+      
+      toastService.success('Bookmark removed successfully');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to remove bookmark');
+    }
+  });
+}
+
+/**
+ * Mutation for updating an existing bookmark
+ * Updates bookmark reason or notes
+ */
+export function useUpdateBookmark() {
+  const queryClient = useQueryClient();
+  const { user, tenantId, environment } = useAuth();
+
+  return useMutation<void, Error, { customerId: number; data: UpdateBookmarkRequest }>({
+    mutationFn: async ({ customerId, data }): Promise<void> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const endpoint = CUSTOMER_URLS.updateBookmark(customerId, environment);
+      const response = await apiService.patch<BookmarkResponse>(endpoint, data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update bookmark');
+      }
+    },
+    onSuccess: (_, { customerId }) => {
+      // Invalidate customer lists to refresh bookmark info
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.lists() });
+      // Invalidate specific customer detail to show updated bookmark
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.detail(customerId) });
+      
+      toastService.success('Bookmark updated successfully');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to update bookmark');
+    }
+  });
+}
+
 // Helper functions for cache management
 export const customerQueryHelpers = {
   getCachedCustomers: (queryClient: any, params: CustomerSearchParams = {}) => {
@@ -410,10 +562,21 @@ export const customerQueryHelpers = {
     return queryClient.getQueryData(CUSTOMER_QUERY_KEYS.stats());
   },
   
+  getCachedBookmarkReasons: (queryClient: any) => {
+    return queryClient.getQueryData(CUSTOMER_QUERY_KEYS.bookmarkReasons());
+  },
+  
   prefetchCustomerData: async (queryClient: any, customerId: number) => {
     await queryClient.prefetchQuery({
       queryKey: CUSTOMER_QUERY_KEYS.detail(customerId),
       staleTime: 30 * 1000
+    });
+  },
+  
+  prefetchBookmarkReasons: async (queryClient: any) => {
+    await queryClient.prefetchQuery({
+      queryKey: CUSTOMER_QUERY_KEYS.bookmarkReasons(),
+      staleTime: 5 * 60 * 1000
     });
   }
 };

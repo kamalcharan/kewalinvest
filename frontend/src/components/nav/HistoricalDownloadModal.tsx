@@ -1,5 +1,8 @@
 // frontend/src/components/nav/HistoricalDownloadModal.tsx
-// UPDATED: Display detailed date range overlap errors with existing data info
+// FIXED: 
+// 1. "Since Inception" now goes back 20 years (or uses actual launch_date/earliest_nav_date)
+// 2. Added fund start date display in scheme info section
+// 3. Display detailed date range overlap errors with existing data info
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -54,8 +57,72 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     { label: 'Last 90 Days', days: 90, description: '3 months' },
     { label: 'Last 6 Months', days: 180, description: '6 months' },
     { label: 'Last 1 Year', days: 365, description: '1 year' },
+    { label: 'Last 3 Years', days: 1095, description: '3 years' },
+    { label: 'Last 5 Years', days: 1825, description: '5 years' },
     { label: 'Since Inception', days: -1, description: 'Full history' }
   ];
+
+  // FIXED: Calculate the actual fund inception date
+  const getFundInceptionDate = (): Date => {
+    if (!bookmark) {
+      // Fallback: 20 years ago to ensure we get all available data
+      const fallback = new Date();
+      fallback.setFullYear(fallback.getFullYear() - 20);
+      return fallback;
+    }
+    
+    // Priority 1: Use launch_date if available
+    if (bookmark.launch_date) {
+      return new Date(bookmark.launch_date);
+    }
+    
+    // Priority 2: Use earliest_nav_date if available
+    if (bookmark.earliest_nav_date) {
+      return new Date(bookmark.earliest_nav_date);
+    }
+    
+    // Fallback: Go back 20 years to capture everything from MFAPI
+    const fallback = new Date();
+    fallback.setFullYear(fallback.getFullYear() - 20);
+    return fallback;
+  };
+
+  // NEW: Get display text for fund inception with source indicator
+  const getFundInceptionDisplay = (): { date: string; source: string } => {
+    if (!bookmark) {
+      return { 
+        date: 'Unknown', 
+        source: '' 
+      };
+    }
+    
+    if (bookmark.launch_date) {
+      return {
+        date: new Date(bookmark.launch_date).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        source: 'Launch Date'
+      };
+    }
+    
+    if (bookmark.earliest_nav_date) {
+      return {
+        date: new Date(bookmark.earliest_nav_date).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        source: 'Earliest NAV'
+      };
+    }
+    
+    return { 
+      date: 'Data available from ~20 years ago', 
+      source: '' 
+    };
+  };
 
   useEffect(() => {
     if (isOpen && bookmark) {
@@ -68,6 +135,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   const resetForm = () => {
     if (!bookmark) return;
 
+    // Set end date to latest NAV date or today
     let defaultEndDate: Date;
     if (bookmark.latest_nav_date) {
       defaultEndDate = new Date(bookmark.latest_nav_date);
@@ -83,6 +151,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     const endDateStr = defaultEndDate.toISOString().split('T')[0];
     setEndDate(endDateStr);
 
+    // Default to Last 90 Days
     const defaultStartDate = new Date(defaultEndDate);
     defaultStartDate.setDate(defaultStartDate.getDate() - 89);
     
@@ -109,37 +178,40 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     setExistingDataInfo(null);
 
     const today = new Date();
-    let endDate = today;
+    let calculatedEndDate = today;
     
+    // Use latest NAV date if available and earlier than today
     if (bookmark.latest_nav_date) {
       const latestNavDate = new Date(bookmark.latest_nav_date);
       if (latestNavDate < today) {
-        endDate = latestNavDate;
+        calculatedEndDate = latestNavDate;
       }
     }
 
-    const endDateStr = endDate.toISOString().split('T')[0];
+    const endDateStr = calculatedEndDate.toISOString().split('T')[0];
     setEndDate(endDateStr);
 
+    // FIXED: Handle "Since Inception" properly
     if (preset.days === -1) {
-      let inceptionDate: Date;
-      
-      if (bookmark.launch_date) {
-        inceptionDate = new Date(bookmark.launch_date);
-      } else if (bookmark.earliest_nav_date) {
-        inceptionDate = new Date(bookmark.earliest_nav_date);
-      } else {
-        inceptionDate = new Date(endDate);
-        inceptionDate.setFullYear(inceptionDate.getFullYear() - 1);
-      }
-      
+      const inceptionDate = getFundInceptionDate();
       const startDateStr = inceptionDate.toISOString().split('T')[0];
       setStartDate(startDateStr);
-    } else {
-      const startDate = new Date(endDate);
-      startDate.setDate(startDate.getDate() - (preset.days - 1));
       
-      const startDateStr = startDate.toISOString().split('T')[0];
+      FrontendErrorLogger.info(
+        'Since Inception selected',
+        'HistoricalDownloadModal',
+        {
+          bookmarkId: bookmark.id,
+          inceptionDate: startDateStr,
+          source: bookmark.launch_date ? 'launch_date' : bookmark.earliest_nav_date ? 'earliest_nav_date' : 'fallback_20_years'
+        }
+      );
+    } else {
+      // Calculate start date based on preset days
+      const calculatedStartDate = new Date(calculatedEndDate);
+      calculatedStartDate.setDate(calculatedStartDate.getDate() - (preset.days - 1));
+      
+      const startDateStr = calculatedStartDate.toISOString().split('T')[0];
       setStartDate(startDateStr);
     }
   };
@@ -177,7 +249,11 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   };
 
   const getEstimatedTime = (): string => {
-    return '~2 minutes';
+    const days = calculateDayCount();
+    if (days <= 100) return '~2 minutes';
+    if (days <= 365) return '~3-4 minutes';
+    if (days <= 1825) return '~5-8 minutes';
+    return '~10-15 minutes';
   };
 
   const handleSubmit = async () => {
@@ -241,7 +317,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
         error.stack
       );
       
-      // UPDATED: Extract existing_data if present
+      // Handle date range overlap with detailed info
       if (error.existing_data) {
         setExistingDataInfo(error.existing_data);
         setValidationError(null);
@@ -265,6 +341,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
 
   const dayCount = calculateDayCount();
   const isValidRange = validateDateRange() === null;
+  const fundInception = getFundInceptionDisplay();
 
   return (
     <div style={{
@@ -291,6 +368,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
         border: `1px solid ${colors.utility.primaryText}10`
       }}>
+        {/* Header */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -306,7 +384,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             alignItems: 'center',
             gap: '8px'
           }}>
-            Download Historical NAV Data
+            📥 Download Historical NAV Data
           </h3>
           
           {!isSubmitting && (
@@ -328,6 +406,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           )}
         </div>
 
+        {/* Scheme Info with Fund Start Date - ENHANCED */}
         <div style={{
           padding: '16px',
           backgroundColor: colors.utility.secondaryBackground,
@@ -342,17 +421,39 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           }}>
             {bookmark.scheme_name}
           </div>
+          
           <div style={{
             fontSize: '14px',
             color: colors.utility.secondaryText,
             marginBottom: '8px'
           }}>
             <strong>Code:</strong> {bookmark.scheme_code} • <strong>AMC:</strong> {bookmark.amc_name}
-            {bookmark.launch_date && (
-              <> • <strong>Launch Date:</strong> {new Date(bookmark.launch_date).toLocaleDateString()}</>
+          </div>
+
+          {/* NEW: Fund Start Date Display */}
+          <div style={{
+            fontSize: '13px',
+            color: colors.brand.secondary,
+            backgroundColor: colors.brand.secondary + '10',
+            padding: '6px 8px',
+            borderRadius: '4px',
+            display: 'inline-block',
+            marginBottom: '8px',
+            border: `1px solid ${colors.brand.secondary}30`
+          }}>
+            <strong>🗓️ Fund Start:</strong> {fundInception.date}
+            {fundInception.source && (
+              <span style={{ 
+                fontSize: '11px', 
+                opacity: 0.8,
+                marginLeft: '6px'
+              }}>
+                ({fundInception.source})
+              </span>
             )}
           </div>
           
+          {/* Existing NAV Data Info */}
           {bookmark.earliest_nav_date && bookmark.latest_nav_date ? (
             <div style={{
               fontSize: '12px',
@@ -360,9 +461,11 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
               backgroundColor: colors.brand.primary + '10',
               padding: '6px 8px',
               borderRadius: '4px',
-              display: 'inline-block'
+              display: 'inline-block',
+              marginLeft: '8px',
+              border: `1px solid ${colors.brand.primary}30`
             }}>
-              <strong>Current data:</strong> {new Date(bookmark.earliest_nav_date).toLocaleDateString()} to {new Date(bookmark.latest_nav_date).toLocaleDateString()} ({bookmark.nav_records_count || 0} records)
+              <strong>📊 Current data:</strong> {new Date(bookmark.earliest_nav_date).toLocaleDateString('en-IN')} to {new Date(bookmark.latest_nav_date).toLocaleDateString('en-IN')} ({bookmark.nav_records_count || 0} records)
             </div>
           ) : (
             <div style={{
@@ -371,13 +474,16 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
               backgroundColor: colors.semantic.warning + '10',
               padding: '6px 8px',
               borderRadius: '4px',
-              display: 'inline-block'
+              display: 'inline-block',
+              marginLeft: '8px',
+              border: `1px solid ${colors.semantic.warning}30`
             }}>
-              No existing NAV data found
+              ⚠️ No existing NAV data found
             </div>
           )}
         </div>
 
+        {/* Quick Date Selection */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{
             display: 'block',
@@ -430,6 +536,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           </div>
         </div>
 
+        {/* Custom Date Range */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{
             display: 'block',
@@ -516,6 +623,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             </div>
           </div>
 
+          {/* Download Preview */}
           {dayCount > 0 && isValidRange && !existingDataInfo && (
             <div style={{
               padding: '16px',
@@ -530,14 +638,14 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                 marginBottom: '8px',
                 fontWeight: '600'
               }}>
-                Download Preview
+                ✅ Download Preview
               </div>
               <div style={{
                 fontSize: '13px',
                 color: colors.utility.secondaryText,
                 lineHeight: '1.5'
               }}>
-                • <strong>Date range:</strong> {dayCount} days ({new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()})<br/>
+                • <strong>Date range:</strong> {dayCount} days ({new Date(startDate).toLocaleDateString('en-IN')} to {new Date(endDate).toLocaleDateString('en-IN')})<br/>
                 • <strong>Scheme:</strong> {bookmark.scheme_name}<br/>
                 • <strong>Estimated time:</strong> {getEstimatedTime()}<br/>
                 • Full history will be downloaded in a single operation
@@ -545,6 +653,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
             </div>
           )}
 
+          {/* Date Range Overlap Warning */}
           {existingDataInfo && (
             <div style={{
               padding: '16px',
@@ -592,7 +701,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                   color: colors.utility.primaryText,
                   lineHeight: '1.5'
                 }}>
-                  • <strong>Date Range:</strong> {new Date(existingDataInfo.earliest_date).toLocaleDateString()} to {new Date(existingDataInfo.latest_date).toLocaleDateString()}<br/>
+                  • <strong>Date Range:</strong> {new Date(existingDataInfo.earliest_date).toLocaleDateString('en-IN')} to {new Date(existingDataInfo.latest_date).toLocaleDateString('en-IN')}<br/>
                   • <strong>Records:</strong> {existingDataInfo.record_count.toLocaleString()} NAV entries
                 </div>
               </div>
@@ -601,11 +710,12 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                 color: colors.utility.secondaryText,
                 fontStyle: 'italic'
               }}>
-                Tip: Select dates before {new Date(existingDataInfo.earliest_date).toLocaleDateString()} or after {new Date(existingDataInfo.latest_date).toLocaleDateString()} to download non-overlapping data.
+                💡 Tip: Select dates before {new Date(existingDataInfo.earliest_date).toLocaleDateString('en-IN')} or after {new Date(existingDataInfo.latest_date).toLocaleDateString('en-IN')} to download non-overlapping data.
               </div>
             </div>
           )}
 
+          {/* Validation Error */}
           {validationError && (
             <div style={{
               padding: '12px',
@@ -617,11 +727,12 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
               fontSize: '14px',
               lineHeight: '1.5'
             }}>
-              {validationError}
+              ❌ {validationError}
             </div>
           )}
         </div>
 
+        {/* Action Buttons */}
         <div style={{
           display: 'flex',
           justifyContent: 'flex-end',
@@ -680,11 +791,12 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                 Starting Download...
               </>
             ) : (
-              <>Start Download</>
+              <>🚀 Start Download</>
             )}
           </button>
         </div>
 
+        {/* Info Footer */}
         <div style={{
           marginTop: '16px',
           padding: '12px',
@@ -693,12 +805,13 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           fontSize: '12px',
           color: colors.utility.secondaryText
         }}>
-          <strong>How it works:</strong> MFAPI.in provides complete historical data in a single download. 
+          <strong>ℹ️ How it works:</strong> MFAPI.in provides complete historical data in a single download. 
           Your selected date range will be filtered from the full history. The download runs in the background 
           and you'll be notified when complete.
         </div>
       </div>
 
+      {/* CSS Animation */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }

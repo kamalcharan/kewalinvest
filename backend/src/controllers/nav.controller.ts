@@ -176,6 +176,7 @@ export class NavController {
 
       const request: CreateSchemeBookmarkRequest = {
         scheme_id: req.body.scheme_id,
+        alias_name: req.body.alias_name,
         daily_download_enabled: req.body.daily_download_enabled,
         download_time: req.body.download_time
       };
@@ -242,6 +243,7 @@ export class NavController {
       }
 
       const updates: UpdateSchemeBookmarkRequest = {
+        alias_name: req.body.alias_name,
         daily_download_enabled: req.body.daily_download_enabled,
         download_time: req.body.download_time,
         historical_download_completed: req.body.historical_download_completed
@@ -553,7 +555,6 @@ export class NavController {
       }
 
       const result = await this.navService.getNavData(
-        user!.tenant_id,
         isLive,
         params
       );
@@ -591,7 +592,6 @@ export class NavController {
       }
 
       const latestNav = await this.navService.getLatestNav(
-        user!.tenant_id,
         isLive,
         schemeId
       );
@@ -994,7 +994,6 @@ export class NavController {
       const today = new Date();
       
       const existingData = await this.navService.checkNavDataExists(
-        user!.tenant_id,
         isLive,
         schemeIds,
         today

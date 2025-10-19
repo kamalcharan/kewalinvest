@@ -1,9 +1,11 @@
 // frontend/src/components/jtbd/JTBDCard.tsx
+// UPDATED: Added goal_tracking type handling
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { JTBDConfiguration, PortfolioAlertConfig, TimeBasedConfig, ProfileTriggerConfig } from '../../types/jtbd.types';
 import { useToggleJTBD, useDeleteJTBD } from '../../hooks/useJTBD';
+import GoalCard from '../goals/GoalCard';
 
 interface JTBDCardProps {
   jtbd: JTBDConfiguration;
@@ -23,6 +25,17 @@ const JTBDCard: React.FC<JTBDCardProps> = ({
 
   const toggleMutation = useToggleJTBD();
   const deleteMutation = useDeleteJTBD();
+
+  // UPDATED: Handle goal_tracking type - render as GoalCard instead
+  if (jtbd.jtbd_type === 'goal_tracking') {
+  return (
+    <GoalCard
+      goal={jtbd as any}
+      onEdit={() => onEdit?.(jtbd.id)}
+      compact={compact}
+    />
+  );
+}
 
   // Get action-oriented display text
   const getActionText = (): { title: string; subtitle: string; icon: string } => {

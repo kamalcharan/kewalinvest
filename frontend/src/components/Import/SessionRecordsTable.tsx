@@ -89,6 +89,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
       'success': { bg: colors.semantic.success + '20', text: colors.semantic.success },
       'failed': { bg: colors.semantic.error + '20', text: colors.semantic.error },
       'duplicate': { bg: colors.semantic.warning + '20', text: colors.semantic.warning },
+       'orphan': { bg: '#8B7355' + '20', text: '#8B7355' },
       'pending': { bg: colors.utility.secondaryText + '20', text: colors.utility.secondaryText },
       'processing': { bg: colors.semantic.info + '20', text: colors.semantic.info }
     };
@@ -193,7 +194,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
           gap: '8px',
           flex: 1
         }}>
-          {['all', 'success', 'failed', 'duplicate', 'pending'].map(filterType => (
+          {['all', 'success', 'failed','orphan', 'duplicate', 'pending'].map(filterType => (
             <button
               key={filterType}
               onClick={() => {

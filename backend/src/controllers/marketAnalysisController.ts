@@ -1,0 +1,413 @@
+// backend/src/controllers/marketAnalysisController.ts
+// Market Analysis API Controller - Metrics Calculation
+
+import { Request, Response } from 'express';
+import { MarketService } from '../services/market.service';
+import { marketMetricsCalculator } from '../services/marketMetricsCalculator.service';
+import { SimpleLogger } from '../services/simpleLogger.service';
+import { CalculateMetricsRequest, CalculateMetricsResponse } from '../types/market.types';
+
+export class MarketAnalysisController {
+  private marketService: MarketService;
+
+  constructor() {
+    this.marketService = new MarketService();
+  }
+
+  /**
+   * POST /api/market-analysis/calculate-metrics/:indexId
+   * Calculate metrics for an index on demand
+   * Called when user clicks "Calculate" button on index detail page
+   */
+  calculateMetrics = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+    const indexId = parseInt(req.params.indexId);
+
+    try {
+      // Validate index ID
+      if (isNaN(indexId) || indexId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid index ID'
+        });
+        return;
+      }
+
+      // Get request body
+      const body = req.body as CalculateMetricsRequest;
+      const recalculate = body.recalculate || false;
+      
+      // Default to yesterday if no date provided
+      const asOfDate = body.as_of_date 
+        ? new Date(body.as_of_date)
+        : new Date(new Date().setDate(new Date().getDate() - 1));
+
+      SimpleLogger.info('MarketAnalysisController', 'Calculate metrics requested', 'calculateMetrics', {
+        indexId,
+        recalculate,
+        asOfDate: asOfDate.toISOString().split('T')[0]
+      });
+
+      // Get index details
+      const index = await this.marketService.getIndexById(indexId);
+      if (!index) {
+        res.status(404).json({
+          success: false,
+          error: `Index not found: ${indexId}`
+        });
+        return;
+      }
+
+      // Check if metrics already calculated for this date
+      if (!recalculate) {
+        const existingData = await this.marketService.getMarketData(
+          indexId,
+          asOfDate,
+          asOfDate,
+          1,
+          1
+        );
+
+        if (existingData.data.length > 0 && existingData.data[0].metrics_calculated_at) {
+          SimpleLogger.info('MarketAnalysisController', 'Metrics already calculated', 'calculateMetrics', {
+            indexId,
+            date: asOfDate.toISOString().split('T')[0],
+            calculatedAt: existingData.data[0].metrics_calculated_at
+          });
+
+          res.json({
+            success: true,
+            index_id: indexId,
+            date: asOfDate.toISOString().split('T')[0],
+            metrics: {
+              daily_return: existingData.data[0].daily_return,
+              return_1w: existingData.data[0].return_1w,
+              return_1m: existingData.data[0].return_1m,
+              return_3m: existingData.data[0].return_3m,
+              return_6m: existingData.data[0].return_6m,
+              return_1y: existingData.data[0].return_1y,
+              return_ytd: existingData.data[0].return_ytd,
+              return_all: existingData.data[0].return_all,
+              sd_7d: existingData.data[0].sd_7d,
+              sd_14d: existingData.data[0].sd_14d,
+              sd_21d: existingData.data[0].sd_21d,
+              sd_42d: existingData.data[0].sd_42d,
+              sd_3m: existingData.data[0].sd_3m,
+              sd_6m: existingData.data[0].sd_6m,
+              count_3m: existingData.data[0].count_3m || 0,
+              count_42d: existingData.data[0].count_42d || 0,
+              sharpe_ratio: existingData.data[0].sharpe_ratio,
+              max_drawdown: existingData.data[0].max_drawdown,
+              total_risk: existingData.data[0].total_risk,
+              cagr: existingData.data[0].cagr
+            },
+            records_processed: 1,
+            calculation_time_ms: Date.now() - startTime,
+            message: 'Metrics already calculated for this date'
+          } as CalculateMetricsResponse);
+          return;
+        }
+      }
+
+      // Fetch all historical data for index up to asOfDate
+      const historicalData = await this.marketService.getMarketData(
+        indexId,
+        undefined, // Start from earliest
+        asOfDate,
+        1,
+        10000 // Get all records
+      );
+
+      if (historicalData.data.length === 0) {
+        SimpleLogger.warn('MarketAnalysisController', 'No historical data found', 'calculateMetrics', {
+          indexId,
+          asOfDate: asOfDate.toISOString().split('T')[0]
+        });
+
+        res.status(404).json({
+          success: false,
+          error: `No historical data available for index ${indexId}. Please download historical data first.`
+        });
+        return;
+      }
+
+      // Find today's price point
+      const todayData = historicalData.data.find(d => {
+        const dataDate = new Date(d.date);
+        return dataDate.toDateString() === asOfDate.toDateString();
+      });
+
+      if (!todayData) {
+        SimpleLogger.warn('MarketAnalysisController', 'No data for calculation date', 'calculateMetrics', {
+          indexId,
+          date: asOfDate.toISOString().split('T')[0],
+          availableDates: `${historicalData.data[0].date} to ${historicalData.data[historicalData.data.length - 1].date}`
+        });
+
+        res.status(404).json({
+          success: false,
+          error: `No market data available for ${asOfDate.toISOString().split('T')[0]}. Please ensure EOD data is downloaded for this date.`
+        });
+        return;
+      }
+
+      // Convert to PricePoint format for calculator
+      const pricePoints = historicalData.data.map(d => ({
+        date: new Date(d.date),
+        close: d.close,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        volume: d.volume
+      }));
+
+      // Calculate metrics using calculator service
+      const calculatedMetrics = await marketMetricsCalculator.calculateMetricsForDate(
+        {
+          date: new Date(todayData.date),
+          close: todayData.close,
+          open: todayData.open,
+          high: todayData.high,
+          low: todayData.low,
+          volume: todayData.volume
+        },
+        pricePoints
+      );
+
+      // Update database with calculated metrics
+      await this.updateMetricsInDatabase(indexId, asOfDate, calculatedMetrics, todayData.id);
+
+      SimpleLogger.info('MarketAnalysisController', 'Metrics calculated successfully', 'calculateMetrics', {
+        indexId,
+        date: asOfDate.toISOString().split('T')[0],
+        calculationTimeMs: Date.now() - startTime
+      });
+
+      // Return successful response
+      res.json({
+        success: true,
+        index_id: indexId,
+        date: asOfDate.toISOString().split('T')[0],
+        metrics: {
+          daily_return: calculatedMetrics.daily_return,
+          return_1w: calculatedMetrics.return_1w,
+          return_1m: calculatedMetrics.return_1m,
+          return_3m: calculatedMetrics.return_3m,
+          return_6m: calculatedMetrics.return_6m,
+          return_1y: calculatedMetrics.return_1y,
+          return_ytd: calculatedMetrics.return_ytd,
+          return_all: calculatedMetrics.return_all,
+          sd_7d: calculatedMetrics.sd_7d,
+          sd_14d: calculatedMetrics.sd_14d,
+          sd_21d: calculatedMetrics.sd_21d,
+          sd_42d: calculatedMetrics.sd_42d,
+          sd_3m: calculatedMetrics.sd_3m,
+          sd_6m: calculatedMetrics.sd_6m,
+          count_3m: calculatedMetrics.count_3m,
+          count_42d: calculatedMetrics.count_42d,
+          sharpe_ratio: calculatedMetrics.sharpe_ratio,
+          max_drawdown: calculatedMetrics.max_drawdown,
+          total_risk: calculatedMetrics.total_risk,
+          cagr: calculatedMetrics.cagr
+        },
+        records_processed: 1,
+        calculation_time_ms: Date.now() - startTime,
+        message: 'Metrics calculated and stored successfully'
+      } as CalculateMetricsResponse);
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to calculate metrics',
+        'calculateMetrics',
+        {
+          indexId,
+          error: error.message
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to calculate metrics',
+        message: 'An error occurred while calculating metrics'
+      });
+    }
+  };
+
+  /**
+   * Private method to update metrics in database
+   */
+  private async updateMetricsInDatabase(
+    indexId: number,
+    date: Date,
+    metrics: any,
+    recordId: number
+  ): Promise<void> {
+    try {
+      // Update the market data record with calculated metrics
+      const query = `
+        UPDATE t_market_data_records
+        SET 
+          daily_return = $2,
+          return_1w = $3,
+          return_1m = $4,
+          return_3m = $5,
+          return_6m = $6,
+          return_1y = $7,
+          return_ytd = $8,
+          return_all = $9,
+          sd_7d = $10,
+          sd_14d = $11,
+          sd_21d = $12,
+          sd_42d = $13,
+          sd_3m = $14,
+          sd_6m = $15,
+          count_3m = $16,
+          count_42d = $17,
+          sharpe_ratio = $18,
+          max_drawdown = $19,
+          total_risk = $20,
+          cagr = $21,
+          metrics_calculated_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `;
+
+      const params = [
+        recordId,
+        metrics.daily_return,
+        metrics.return_1w,
+        metrics.return_1m,
+        metrics.return_3m,
+        metrics.return_6m,
+        metrics.return_1y,
+        metrics.return_ytd,
+        metrics.return_all,
+        metrics.sd_7d,
+        metrics.sd_14d,
+        metrics.sd_21d,
+        metrics.sd_42d,
+        metrics.sd_3m,
+        metrics.sd_6m,
+        metrics.count_3m,
+        metrics.count_42d,
+        metrics.sharpe_ratio,
+        metrics.max_drawdown,
+        metrics.total_risk,
+        metrics.cagr
+      ];
+
+      // Use the pool directly (assuming you have access to it)
+      const { pool } = require('../config/database');
+      await pool.query(query, params);
+
+      SimpleLogger.info('MarketAnalysisController', 'Metrics updated in database', 'updateMetricsInDatabase', {
+        indexId,
+        date: date.toISOString().split('T')[0],
+        recordId
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to update metrics in database',
+        'updateMetricsInDatabase',
+        {
+          indexId,
+          error: error.message
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/market-analysis/metrics/:indexId
+   * Get latest calculated metrics for an index
+   */
+  getLatestMetrics = async (req: Request, res: Response): Promise<void> => {
+    const indexId = parseInt(req.params.indexId);
+
+    try {
+      if (isNaN(indexId) || indexId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid index ID'
+        });
+        return;
+      }
+
+      // Get latest data with metrics
+      const latestData = await this.marketService.getLatestData(indexId);
+
+      if (!latestData) {
+        res.status(404).json({
+          success: false,
+          error: `No data found for index ${indexId}`
+        });
+        return;
+      }
+
+      if (!latestData.metrics_calculated_at) {
+        res.status(404).json({
+          success: false,
+          error: `No calculated metrics available for index ${indexId}. Please run calculations first.`
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        index_id: indexId,
+        date: latestData.date,
+        metrics: {
+          daily_return: latestData.daily_return,
+          return_1w: latestData.return_1w,
+          return_1m: latestData.return_1m,
+          return_3m: latestData.return_3m,
+          return_6m: latestData.return_6m,
+          return_1y: latestData.return_1y,
+          return_ytd: latestData.return_ytd,
+          return_all: latestData.return_all,
+          sd_7d: latestData.sd_7d,
+          sd_14d: latestData.sd_14d,
+          sd_21d: latestData.sd_21d,
+          sd_42d: latestData.sd_42d,
+          sd_3m: latestData.sd_3m,
+          sd_6m: latestData.sd_6m,
+          count_3m: latestData.count_3m,
+          count_42d: latestData.count_42d,
+          sharpe_ratio: latestData.sharpe_ratio,
+          max_drawdown: latestData.max_drawdown,
+          total_risk: latestData.total_risk,
+          cagr: latestData.cagr
+        },
+        metrics_calculated_at: latestData.metrics_calculated_at
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to get latest metrics',
+        'getLatestMetrics',
+        { indexId, error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve metrics'
+      });
+    }
+  };
+}
+
+export const marketAnalysisController = new MarketAnalysisController();

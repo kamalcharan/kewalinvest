@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
+import { FrontendErrorLogger } from '../services/errorLogger.service';
+import { toastService } from '../services/toast.service';
 import type {
   SchemeSearchResult,
   SchemeBookmark,
@@ -1329,4 +1331,274 @@ export const useNavDashboard = (): UseNavDashboardReturn => {
     error,
     refetchAll,
   };
+};
+
+// ==================== BULK DOWNLOAD HOOK - SEQUENTIAL VERSION ====================
+
+export interface BulkDownloadProgress {
+  current: number;
+  total: number;
+  currentScheme: SchemeBookmark | null;
+  isProcessing: boolean;
+}
+
+export interface BulkDownloadResult {
+  totalAttempted: number;
+  successful: number;
+  failed: number;
+  skipped: number;
+  details: Array<{
+    schemeId: number;
+    schemeCode: string;
+    schemeName: string;
+    status: 'success' | 'failed' | 'skipped';
+    message?: string;
+  }>;
+}
+
+export interface UseBulkDownloadReturn {
+  processSchemes: (schemes: SchemeBookmark[]) => Promise<BulkDownloadResult>;
+  progress: BulkDownloadProgress;
+  cancel: () => void;
+  isProcessing: boolean;
+}
+
+export const useBulkDownload = (): UseBulkDownloadReturn => {
+  const [progress, setProgress] = useState<BulkDownloadProgress>({
+    current: 0,
+    total: 0,
+    currentScheme: null,
+    isProcessing: false
+  });
+  
+  const [isCancelled, setIsCancelled] = useState(false);
+  const { triggerHistoricalDownload } = useDownloads();
+  const { startPolling, stopPolling } = useDownloadProgress();
+
+  const processSchemes = useCallback(async (schemes: SchemeBookmark[]): Promise<BulkDownloadResult> => {
+    setIsCancelled(false);
+    
+    const result: BulkDownloadResult = {
+      totalAttempted: 0,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      details: []
+    };
+
+    setProgress({
+      current: 0,
+      total: schemes.length,
+      currentScheme: null,
+      isProcessing: true
+    });
+
+    FrontendErrorLogger.info(
+      'Starting SEQUENTIAL bulk historical download',
+      'useBulkDownload',
+      { 
+        totalSchemes: schemes.length,
+        mode: 'sequential'
+      }
+    );
+
+    // Process schemes ONE AT A TIME
+    for (let i = 0; i < schemes.length; i++) {
+      if (isCancelled) {
+        result.skipped = schemes.length - i;
+        
+        FrontendErrorLogger.info(
+          'Bulk download cancelled by user',
+          'useBulkDownload',
+          { 
+            processedCount: i,
+            totalCount: schemes.length,
+            remainingCount: result.skipped
+          }
+        );
+        
+        toastService.info(`Bulk download cancelled. Processed ${i} of ${schemes.length} schemes.`);
+        break;
+      }
+
+      const scheme = schemes[i];
+      result.totalAttempted++;
+
+      setProgress({
+        current: i + 1,
+        total: schemes.length,
+        currentScheme: scheme,
+        isProcessing: true
+      });
+
+      try {
+        // Calculate date range
+        const startDate = '2020-01-01';
+        const endDate = new Date().toISOString().split('T')[0];
+
+        FrontendErrorLogger.info(
+          `[${i + 1}/${schemes.length}] Starting download for scheme`,
+          'useBulkDownload',
+          {
+            schemeId: scheme.scheme_id,
+            schemeCode: scheme.scheme_code,
+            schemeName: scheme.scheme_name,
+            dateRange: `${startDate} to ${endDate}`
+          }
+        );
+
+        // STEP 1: Trigger the download (this creates a job)
+        const response = await triggerHistoricalDownload({
+          scheme_ids: [scheme.scheme_id],
+          start_date: startDate,
+          end_date: endDate
+        });
+
+        const jobId = response.job_id;
+
+        FrontendErrorLogger.info(
+          'Download job created, waiting for completion...',
+          'useBulkDownload',
+          {
+            schemeId: scheme.scheme_id,
+            jobId,
+            estimatedTimeMs: response.estimated_time_ms
+          }
+        );
+
+        toastService.info(
+          `[${i + 1}/${schemes.length}] Processing ${scheme.scheme_code}...`
+        );
+
+        // STEP 2: Wait for the job to complete
+        // This will poll the backend until status is 'completed', 'failed', or 'cancelled'
+        const finalProgress = await startPolling(jobId);
+
+        // STEP 3: Check the final status
+        if (finalProgress.status === 'completed') {
+          result.successful++;
+          result.details.push({
+            schemeId: scheme.scheme_id,
+            schemeCode: scheme.scheme_code,
+            schemeName: scheme.scheme_name,
+            status: 'success'
+          });
+
+          toastService.success(
+            `✅ [${i + 1}/${schemes.length}] ${scheme.scheme_code} - Completed (${finalProgress.processedRecords} records)`
+          );
+
+          FrontendErrorLogger.info(
+            'Scheme download completed successfully',
+            'useBulkDownload',
+            {
+              schemeId: scheme.scheme_id,
+              schemeCode: scheme.scheme_code,
+              jobId,
+              recordsProcessed: finalProgress.processedRecords
+            }
+          );
+
+        } else if (finalProgress.status === 'failed') {
+          throw new Error(finalProgress.currentStep || 'Download failed');
+        } else if (finalProgress.status === 'cancelled') {
+          throw new Error('Download was cancelled');
+        }
+
+      } catch (error: any) {
+        result.failed++;
+        const errorMessage = error?.response?.data?.message || error.message || 'Unknown error';
+        
+        result.details.push({
+          schemeId: scheme.scheme_id,
+          schemeCode: scheme.scheme_code,
+          schemeName: scheme.scheme_name,
+          status: 'failed',
+          message: errorMessage
+        });
+
+        toastService.error(
+          `❌ [${i + 1}/${schemes.length}] ${scheme.scheme_code} - ${errorMessage}`
+        );
+
+        FrontendErrorLogger.error(
+          'Scheme download failed',
+          'useBulkDownload',
+          {
+            schemeId: scheme.scheme_id,
+            schemeCode: scheme.scheme_code,
+            error: errorMessage
+          },
+          error.stack
+        );
+
+      } finally {
+        // Always stop polling after each scheme
+        stopPolling();
+      }
+
+      // Optional: Small delay between schemes (can be 0 or removed)
+      if (i < schemes.length - 1 && !isCancelled) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // All done!
+    setProgress({
+      current: 0,
+      total: 0,
+      currentScheme: null,
+      isProcessing: false
+    });
+
+    FrontendErrorLogger.info(
+      'Bulk download completed',
+      'useBulkDownload',
+      {
+        totalAttempted: result.totalAttempted,
+        successful: result.successful,
+        failed: result.failed,
+        skipped: result.skipped,
+        successRate: result.totalAttempted > 0 
+          ? `${((result.successful / result.totalAttempted) * 100).toFixed(1)}%` 
+          : '0%'
+      }
+    );
+
+    // Show final summary
+    if (result.successful > 0 && result.failed === 0 && result.skipped === 0) {
+      toastService.success(
+        `🎉 All ${result.successful} schemes downloaded successfully!`
+      );
+    } else if (result.successful > 0) {
+      toastService.info(
+        `Download complete: ${result.successful} successful, ${result.failed} failed${result.skipped > 0 ? `, ${result.skipped} skipped` : ''}`
+      );
+    } else if (result.failed > 0) {
+      toastService.error(
+        `All ${result.failed} scheme downloads failed. Please check logs.`
+      );
+    }
+
+    return result;
+  }, [triggerHistoricalDownload, startPolling, stopPolling, isCancelled]);
+
+  const cancel = useCallback(() => {
+    setIsCancelled(true);
+    stopPolling();
+    
+    FrontendErrorLogger.info(
+      'Bulk download cancellation requested',
+      'useBulkDownload',
+      { currentProgress: progress.current, total: progress.total }
+    );
+  }, [progress, stopPolling]);
+
+  return {
+    processSchemes,
+    progress,
+    cancel,
+    isProcessing: progress.isProcessing
+  };
+
 };

@@ -1,5 +1,5 @@
 // frontend/src/App.tsx
-// MINIMAL UPDATE - Only adding the missing NAV routes to your existing App.tsx
+// Updated with Market Analysis routes
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -9,7 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Auth Pages (these already exist)
+// Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
@@ -19,14 +19,18 @@ import MainLayout from './components/layout/MainLayout';
 // Dashboard page
 import Dashboard from './pages/Dashboard';
 
-// NAV Pages - ADD THESE TWO NEW IMPORTS
+// NAV Pages
 import NavDashboardPage from './pages/nav/NavDashboardPage';
 import NavSearchPage from './pages/nav/NavSearchPage';
 import NavSchedulerPage from './pages/nav/NavSchedulerPage';
 import NavBookmarksPage from './pages/nav/NavBookmarksPage';
+import NavHistoryPage from './pages/nav/NavHistoryPage';
+import MarketHistoryPage from './pages/nav/MarketHistoryPage';
+import SchemeDashboardPage from './pages/nav/SchemeDashboardPage';
 
-
-
+// Market Analysis Pages - NEW
+import MarketAnalysisDashboard from './pages/market/MarketAnalysisDashboard';
+import IndexDetailPage from './pages/market/IndexDetailPage';
 
 // Contact pages
 import ContactsPage from './pages/contacts/ContactsPage';
@@ -38,8 +42,7 @@ import CustomersPage from './pages/customers/CustomersPage';
 import CustomerFormPage from './pages/customers/CustomerFormPage';
 import CustomerViewPage from './pages/customers/CustomerViewPage';
 
-//transaction pages
-// Transaction Pages
+// Transaction pages
 import TransactionListPage from './pages/transactions/TransactionListPage';
 
 // JTBD pages
@@ -88,19 +91,27 @@ function App() {
                 <Route path="data-import/:step" element={<ImportDataPage />} />
                 <Route path="data-import/results/:sessionId" element={<ImportDataPage />} />
                 
-               {/* NAV Tracking Routes - ADDED */}
+                {/* NAV Tracking Routes */}
                 <Route path="nav/dashboard" element={<NavDashboardPage />} />
                 <Route path="nav/search" element={<NavSearchPage />} />
                 <Route path="nav/bookmarks" element={<NavBookmarksPage />} />
                 <Route path="nav/scheduler" element={<NavSchedulerPage />} />
+                <Route path="nav/history" element={<NavHistoryPage />} />
+                <Route path="nav/market-history" element={<MarketHistoryPage />} />
+                <Route path="fund-dashboard/:schemeId" element={<SchemeDashboardPage />} />
+                
+                {/* Market Analysis Routes - NEW */}
+                <Route path="market/dashboard" element={<MarketAnalysisDashboard />} />
+                <Route path="market/indices/:id" element={<IndexDetailPage />} />
                 
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
 
-                {/* Transaction Routes - NEW */}
+                {/* Transaction Routes */}
                 <Route path="transactions" element={<TransactionListPage />} />
                 <Route path="transactions/:id" element={<TransactionListPage />} />
-                 {/* JTBD Dashboard Route - ADD THIS */}
+                
+                {/* JTBD Dashboard Route */}
                 <Route path="jtbd/dashboard" element={<JTBDDashboardPage />} />
                 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

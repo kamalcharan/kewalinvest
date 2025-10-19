@@ -1,11 +1,11 @@
 -- ============================================================================
 -- File: 02_tables.sql
--- Description: All table definitions in dependency order
--- Purpose: Create complete database schema
+-- Description: All table definitions in proper dependency order
+-- Purpose: Create complete database schema with all tables
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-01-09 (Added transaction import support, portfolio fields, system logs)
+-- Updated: 2025-01-15 (Schema extraction from live database)
 -- ============================================================================
 
 -- ============================================================================
@@ -18,11 +18,7 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_tenants
--- Description: Multi-tenancy support for isolating customer data
--- Dependencies: None
--- ----------------------------------------------------------------------------
 CREATE TABLE t_tenants (
     id SERIAL PRIMARY KEY,
     tenant_code VARCHAR(50) UNIQUE NOT NULL,
@@ -38,14 +34,10 @@ COMMENT ON TABLE t_tenants IS 'Multi-tenant isolation - each client has separate
 COMMENT ON COLUMN t_tenants.tenant_code IS 'Unique identifier for tenant (e.g., kewal, localsing)';
 COMMENT ON COLUMN t_tenants.settings IS 'JSON configuration for tenant-specific settings';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_users
--- Description: User accounts with tenant association
--- Dependencies: t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_users (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -54,7 +46,6 @@ CREATE TABLE t_users (
     theme_preference VARCHAR(50) DEFAULT 'techy-simple',
     environment_preference VARCHAR(10) DEFAULT 'live',
     is_live BOOLEAN DEFAULT true,
-    
     CONSTRAINT unique_email_per_tenant UNIQUE (tenant_id, email)
 );
 
@@ -70,32 +61,23 @@ BEGIN
     RAISE NOTICE 'Creating Chat Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_chat_sessions
--- Description: AI chat conversation sessions
--- Dependencies: t_tenants, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_chat_sessions (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     user_id INTEGER REFERENCES t_users(id),
     session_name VARCHAR(255),
     is_live BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     CONSTRAINT check_tenant_consistency CHECK (tenant_id IS NOT NULL AND user_id IS NOT NULL)
 );
 
 COMMENT ON TABLE t_chat_sessions IS 'AI chat conversation sessions for tracking context';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_chat_messages
--- Description: Individual messages within chat sessions
--- Dependencies: t_tenants, t_chat_sessions
--- ----------------------------------------------------------------------------
 CREATE TABLE t_chat_messages (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     session_id INTEGER REFERENCES t_chat_sessions(id),
     message_type VARCHAR(20) NOT NULL,
     content TEXT NOT NULL,
@@ -115,23 +97,15 @@ BEGIN
     RAISE NOTICE 'Creating Contact and Customer Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_contacts
--- Description: Main contacts table (base for customers and other contacts)
--- Dependencies: t_tenants, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_contacts (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     is_customer BOOLEAN DEFAULT false,
-    
-    -- Contact basic info
     prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
     name VARCHAR(255) NOT NULL,
-    
-    -- System fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id)
@@ -141,18 +115,13 @@ COMMENT ON TABLE t_contacts IS 'Base contact information - extended by customers
 COMMENT ON COLUMN t_contacts.is_customer IS 'Flag to indicate if contact is also a customer';
 COMMENT ON COLUMN t_contacts.prefix IS 'Title: Mr, Mrs, Ms, Dr, Prof, Sri';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_contact_channels
--- Description: Unified communication channels (email, mobile, social media)
--- Dependencies: t_contacts, t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_contact_channels (
     id SERIAL PRIMARY KEY,
     contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     channel_type VARCHAR(50) NOT NULL CHECK (
         channel_type IN ('email', 'mobile', 'whatsapp', 'instagram', 'twitter', 'linkedin', 'other')
     ),
@@ -161,9 +130,7 @@ CREATE TABLE t_contact_channels (
         channel_subtype IN ('personal', 'work', 'other')
     ),
     is_primary BOOLEAN DEFAULT false,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     CONSTRAINT unique_channel_per_contact UNIQUE (contact_id, channel_type, channel_value, is_live)
 );
 
@@ -171,55 +138,32 @@ COMMENT ON TABLE t_contact_channels IS 'Flexible communication channels for cont
 COMMENT ON COLUMN t_contact_channels.channel_type IS 'Type: email, mobile, whatsapp, social media';
 COMMENT ON COLUMN t_contact_channels.is_primary IS 'Primary channel for this type';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_customers
--- Description: Customer records extending contacts with financial data
--- Dependencies: t_contacts, t_tenants, t_users
--- NOTE: Uses PLAIN TEXT for PAN and iwell_code (no encryption)
--- UPDATED: Added jtbd_count and has_jtbd_setup columns
--- ----------------------------------------------------------------------------
 CREATE TABLE t_customers (
     id SERIAL PRIMARY KEY,
     contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
-    -- Sensitive data stored as PLAIN TEXT
     pan VARCHAR(10),
     iwell_code VARCHAR(100),
-    
-    -- Personal details
     date_of_birth DATE,
     anniversary_date DATE,
-    
-    -- Survival status
     survival_status VARCHAR(20) DEFAULT 'alive' CHECK (survival_status IN ('alive', 'deceased')),
     date_of_death DATE,
-    
-    -- Family details
     family_head_name VARCHAR(255),
     family_head_iwell_code VARCHAR(100),
-    
-    -- Referral information
     referred_by INTEGER REFERENCES t_contacts(id),
     referred_by_name VARCHAR(255),
-    
-    -- Onboarding status
     onboarding_form_id INTEGER,
     onboarding_status VARCHAR(50) DEFAULT 'pending' CHECK (
         onboarding_status IN ('pending', 'in_progress', 'completed', 'cancelled')
     ),
-    
-    -- JTBD tracking (ADDED)
     jtbd_count INTEGER DEFAULT 0,
     has_jtbd_setup BOOLEAN DEFAULT false,
-    
-    -- System fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id),
-    
     CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan, is_live),
     CONSTRAINT death_date_logic CHECK (
         (survival_status = 'alive' AND date_of_death IS NULL) OR 
@@ -233,18 +177,14 @@ COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - stored as PLAIN TEXT';
 COMMENT ON COLUMN t_customers.survival_status IS 'Alive or deceased status for tracking';
 COMMENT ON COLUMN t_customers.jtbd_count IS 'Count of active JTBD configurations for this customer';
 COMMENT ON COLUMN t_customers.has_jtbd_setup IS 'Flag indicating if customer has any JTBD configurations';
--- ----------------------------------------------------------------------------
+
 -- TABLE: t_customer_addresses
--- Description: Multiple addresses per customer
--- Dependencies: t_customers, t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_customer_addresses (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES t_customers(id) ON DELETE CASCADE,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     address_type VARCHAR(50) DEFAULT 'residential' CHECK (
         address_type IN ('residential', 'office', 'mailing', 'permanent', 'temporary', 'other')
     ),
@@ -254,11 +194,8 @@ CREATE TABLE t_customer_addresses (
     state VARCHAR(100) NOT NULL,
     country VARCHAR(100) DEFAULT 'India',
     pincode VARCHAR(20) NOT NULL,
-    
     is_primary BOOLEAN DEFAULT false,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     CONSTRAINT unique_address_type_per_customer UNIQUE (customer_id, address_type, is_live)
 );
 
@@ -273,18 +210,12 @@ BEGIN
     RAISE NOTICE 'Creating Import and File Upload Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_file_uploads
--- Description: Track uploaded files for import processing
--- Dependencies: t_tenants, t_customers
--- UPDATED: Added updated_at column
--- ----------------------------------------------------------------------------
 CREATE TABLE t_file_uploads (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     file_type VARCHAR(50) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     stored_filename VARCHAR(255) NOT NULL,
@@ -292,11 +223,7 @@ CREATE TABLE t_file_uploads (
     folder_path VARCHAR(500),
     file_size BIGINT,
     mime_type VARCHAR(100),
-    
-    -- For customer-specific files
     customer_id INTEGER REFERENCES t_customers(id),
-    
-    -- Import processing status
     processing_status VARCHAR(50) DEFAULT 'pending' CHECK (
         processing_status IN ('pending', 'processing', 'completed', 'failed')
     ),
@@ -305,7 +232,6 @@ CREATE TABLE t_file_uploads (
     error_details TEXT,
     is_processed BOOLEAN DEFAULT false,
     processed_folder_path VARCHAR(500),
-    
     uploaded_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -316,32 +242,22 @@ COMMENT ON TABLE t_file_uploads IS 'Track all uploaded files for import and docu
 COMMENT ON COLUMN t_file_uploads.file_type IS 'Type: customer_import, transaction_import, customer_document, scheme_import';
 COMMENT ON COLUMN t_file_uploads.updated_at IS 'Timestamp of last update to this record';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_import_sessions
--- Description: Import processing sessions with progress tracking
--- Dependencies: t_file_uploads, t_tenants, t_users
--- UPDATED: Removed restrictive CHECK constraint on import_type
--- ----------------------------------------------------------------------------
 CREATE TABLE t_import_sessions (
     id SERIAL PRIMARY KEY,
     session_name VARCHAR(255) NOT NULL,
     file_upload_id INTEGER REFERENCES t_file_uploads(id),
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
-    
     import_type VARCHAR(50) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
-    
-    -- Processing stats
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
     successful_records INTEGER DEFAULT 0,
     failed_records INTEGER DEFAULT 0,
     duplicate_records INTEGER DEFAULT 0,
-    
-    -- Staging info
     staging_completed_at TIMESTAMP,
     staging_total_rows INTEGER DEFAULT 0,
     batch_size INTEGER DEFAULT 100,
@@ -349,16 +265,11 @@ CREATE TABLE t_import_sessions (
     total_batches INTEGER DEFAULT 0,
     last_processed_row INTEGER DEFAULT 0,
     processing_metadata JSONB,
-    
-    -- Metadata
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
     error_summary TEXT,
-    
-    -- N8N integration
     n8n_webhook_id VARCHAR(255),
     n8n_execution_id VARCHAR(255),
-    
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -369,12 +280,7 @@ COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, Transact
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
 COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_import_staging_data
--- Description: Staging table for ETL processing
--- Dependencies: t_import_sessions, t_tenants
--- UPDATED: Removed restrictive CHECK constraint on import_type
--- ----------------------------------------------------------------------------
 CREATE TABLE t_import_staging_data (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
@@ -382,23 +288,19 @@ CREATE TABLE t_import_staging_data (
     session_id INTEGER NOT NULL REFERENCES t_import_sessions(id) ON DELETE CASCADE,
     import_type VARCHAR(50) NOT NULL,
     row_number INTEGER NOT NULL,
-    
     raw_data JSONB NOT NULL,
     mapped_data JSONB,
-    
     processing_status VARCHAR(20) DEFAULT 'pending' CHECK (
-        processing_status IN ('pending', 'processing', 'success', 'failed', 'skipped', 'duplicate')
+        processing_status IN ('pending', 'processing', 'success', 'failed', 'skipped', 'duplicate', 'orphan')
     ),
     error_messages TEXT[],
     warnings TEXT[],
-    
     created_record_id INTEGER,
     created_record_type VARCHAR(50),
-    
     processed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    processing_metadata JSONB DEFAULT '{}'::jsonb,
     CONSTRAINT idx_unique_session_row UNIQUE(session_id, row_number)
 );
 
@@ -407,31 +309,21 @@ COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as receiv
 COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
 COMMENT ON COLUMN t_import_staging_data.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_import_field_mappings
--- Description: Field mapping templates for import types
--- Dependencies: t_tenants, t_users
--- UPDATED: Removed restrictive CHECK constraint on import_type
--- ----------------------------------------------------------------------------
 CREATE TABLE t_import_field_mappings (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     import_type VARCHAR(50) NOT NULL,
     template_name VARCHAR(255) NOT NULL,
     template_version INTEGER DEFAULT 1,
-    
     field_mappings JSONB NOT NULL,
     validation_rules JSONB,
-    
     is_default BOOLEAN DEFAULT false,
-    
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     CONSTRAINT unique_template_per_type UNIQUE (tenant_id, import_type, template_name, is_live)
 );
 
@@ -439,52 +331,37 @@ COMMENT ON TABLE t_import_field_mappings IS 'Field mapping templates for differe
 COMMENT ON COLUMN t_import_field_mappings.field_mappings IS 'JSON structure defining source to target field mappings';
 COMMENT ON COLUMN t_import_field_mappings.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_import_record_results
--- Description: Detailed record-level processing results
--- Dependencies: t_import_sessions, t_contacts, t_customers, t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_import_record_results (
     id SERIAL PRIMARY KEY,
     import_session_id INTEGER REFERENCES t_import_sessions(id) ON DELETE CASCADE,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
-    
     row_number INTEGER NOT NULL,
     raw_data JSONB NOT NULL,
-    
     status VARCHAR(50) NOT NULL CHECK (status IN ('success', 'failed', 'duplicate', 'skipped')),
     error_messages TEXT[],
     warnings TEXT[],
-    
     created_contact_id INTEGER REFERENCES t_contacts(id),
     created_customer_id INTEGER REFERENCES t_customers(id),
-    
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE t_import_record_results IS 'Detailed results for each imported record';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_import_logs
--- Description: Import audit trail
--- Dependencies: t_file_uploads, t_tenants, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_import_logs (
     id SERIAL PRIMARY KEY,
     file_upload_id INTEGER REFERENCES t_file_uploads(id),
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
-    
     import_type VARCHAR(50) NOT NULL,
     total_records INTEGER,
     successful_records INTEGER,
     failed_records INTEGER,
     duplicate_records INTEGER,
-    
     import_summary JSONB,
     error_details TEXT,
-    
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
     imported_by INTEGER REFERENCES t_users(id)
@@ -500,22 +377,16 @@ BEGIN
     RAISE NOTICE 'Creating Scheme and NAV Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_scheme_masters
--- Description: Master data for scheme types and categories
--- Dependencies: t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_scheme_masters (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     master_type VARCHAR(50) CHECK (master_type IN ('scheme_type', 'scheme_category')),
     code VARCHAR(50) UNIQUE,
     name VARCHAR(255) NOT NULL,
     display_order INTEGER DEFAULT 0,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -523,30 +394,31 @@ CREATE TABLE t_scheme_masters (
 COMMENT ON TABLE t_scheme_masters IS 'Master data for scheme types and categories';
 COMMENT ON COLUMN t_scheme_masters.master_type IS 'Type: scheme_type or scheme_category';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_scheme_details
--- Description: Mutual fund scheme details
--- Dependencies: t_tenants, t_scheme_masters, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_scheme_details (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT 1,
+    tenant_id INTEGER REFERENCES t_tenants(id) DEFAULT NULL,
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    
     amc_name VARCHAR(255),
     scheme_code VARCHAR(100) UNIQUE,
     scheme_name VARCHAR(500) NOT NULL,
     scheme_type_id INTEGER REFERENCES t_scheme_masters(id),
     scheme_category_id INTEGER REFERENCES t_scheme_masters(id),
     scheme_nav_name VARCHAR(500),
-    scheme_minimum_amount DECIMAL(15,2),
+    scheme_minimum_amount NUMERIC(15,2),
     launch_date DATE,
     closure_date DATE,
     isin_div_payout VARCHAR(50),
     isin_growth VARCHAR(50),
     isin_div_reinvestment VARCHAR(50),
-    
+    last_nav_download_date DATE,
+    last_nav_download_status VARCHAR(20) CHECK (last_nav_download_status IN ('success', 'failed', 'in_progress', NULL)),
+    last_nav_download_error TEXT,
+    historical_data_available BOOLEAN DEFAULT false,
+    earliest_nav_date DATE,
+    latest_nav_date DATE,
+    total_nav_records INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id)
@@ -554,20 +426,20 @@ CREATE TABLE t_scheme_details (
 
 COMMENT ON TABLE t_scheme_details IS 'Mutual fund scheme details and metadata';
 COMMENT ON COLUMN t_scheme_details.scheme_code IS 'Unique scheme identifier from AMFI';
+COMMENT ON COLUMN t_scheme_details.last_nav_download_date IS 'Last NAV download attempt date (global)';
+COMMENT ON COLUMN t_scheme_details.historical_data_available IS 'Whether historical NAV data has been downloaded';
+COMMENT ON COLUMN t_scheme_details.total_nav_records IS 'Count of NAV records in t_nav_data';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_scheme_bookmarks
--- Description: User bookmarked schemes for tracking
--- Dependencies: t_tenants, t_users, t_scheme_details
--- ----------------------------------------------------------------------------
 CREATE TABLE t_scheme_bookmarks (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 NOT NULL REFERENCES t_tenants(id),
     user_id INTEGER NOT NULL REFERENCES t_users(id),
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
     scheme_code VARCHAR(100) NOT NULL,
     scheme_name VARCHAR(500) NOT NULL,
     amc_name VARCHAR(255),
+    alias_name VARCHAR(255),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     daily_download_enabled BOOLEAN DEFAULT false,
@@ -575,44 +447,35 @@ CREATE TABLE t_scheme_bookmarks (
     historical_download_completed BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(tenant_id, user_id, scheme_id, is_live)
+    CONSTRAINT unique_tenant_bookmark UNIQUE(tenant_id, scheme_id, is_live)
 );
 
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
+COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference). Falls back to scheme_name if NULL';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_nav_data
--- Description: Daily NAV data for schemes
--- Dependencies: t_tenants, t_scheme_details
--- ----------------------------------------------------------------------------
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL DEFAULT 1,
+    tenant_id INTEGER DEFAULT NULL,
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
     scheme_code VARCHAR(100) NOT NULL,
     nav_date DATE NOT NULL,
-    nav_value DECIMAL(15,4) NOT NULL,
-    repurchase_price DECIMAL(15,4),
-    sale_price DECIMAL(15,4),
+    nav_value NUMERIC(15,4) NOT NULL,
+    repurchase_price NUMERIC(15,4),
+    sale_price NUMERIC(15,4),
     is_live BOOLEAN DEFAULT true,
     data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(tenant_id, scheme_id, nav_date, is_live)
+    CONSTRAINT unique_nav_record UNIQUE (scheme_id, nav_date, is_live)
 );
 
 COMMENT ON TABLE t_nav_data IS 'Historical NAV data for mutual fund schemes';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_nav_download_jobs
--- Description: NAV download job tracking
--- Dependencies: t_tenants
--- ----------------------------------------------------------------------------
 CREATE TABLE t_nav_download_jobs (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL DEFAULT 1,
+    tenant_id INTEGER DEFAULT 1 NOT NULL REFERENCES t_tenants(id),
     job_type VARCHAR(20) NOT NULL CHECK (job_type IN ('daily', 'historical', 'weekly')),
     scheme_ids INTEGER[] NOT NULL,
     scheduled_date TIMESTAMP NOT NULL,
@@ -630,14 +493,10 @@ CREATE TABLE t_nav_download_jobs (
 
 COMMENT ON TABLE t_nav_download_jobs IS 'Track NAV download jobs for schemes';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_nav_scheduler_configs
--- Description: NAV scheduler configurations
--- Dependencies: t_tenants, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_nav_scheduler_configs (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     user_id INTEGER NOT NULL REFERENCES t_users(id),
     is_live BOOLEAN NOT NULL,
     schedule_type VARCHAR(20) NOT NULL CHECK (schedule_type IN ('daily', 'weekly', 'custom')),
@@ -651,17 +510,12 @@ CREATE TABLE t_nav_scheduler_configs (
     failure_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(tenant_id, user_id, is_live)
+    CONSTRAINT unique_scheduler_config UNIQUE(tenant_id, user_id, is_live)
 );
 
 COMMENT ON TABLE t_nav_scheduler_configs IS 'Scheduler configurations for NAV downloads';
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_nav_schedule_executions
--- Description: NAV scheduler execution history
--- Dependencies: t_nav_scheduler_configs
--- ----------------------------------------------------------------------------
 CREATE TABLE t_nav_schedule_executions (
     id SERIAL PRIMARY KEY,
     scheduler_config_id INTEGER NOT NULL REFERENCES t_nav_scheduler_configs(id) ON DELETE CASCADE,
@@ -683,32 +537,23 @@ BEGIN
     RAISE NOTICE 'Creating Portfolio and Transaction Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_customer_master_portfolio
--- Description: Customer portfolio master records
--- Dependencies: t_customers, t_tenants
--- UPDATED: Added category, sub_category, fund_name, start_date columns
--- ----------------------------------------------------------------------------
 CREATE TABLE t_customer_master_portfolio (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES t_customers(id),
     scheme_code VARCHAR(50),
     scheme_name VARCHAR(255),
     folio_no VARCHAR(100),
-    
-    -- Portfolio categorization (ADDED)
     category VARCHAR(100),
     sub_category VARCHAR(100),
     fund_name VARCHAR(255),
     start_date DATE,
-    
     tenant_id INTEGER,
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(customer_id, scheme_code, tenant_id, is_live)
+    CONSTRAINT unique_portfolio_record UNIQUE(customer_id, scheme_code, tenant_id, is_live)
 );
 
 COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with categorization';
@@ -717,69 +562,7 @@ COMMENT ON COLUMN t_customer_master_portfolio.sub_category IS 'Fund sub-category
 COMMENT ON COLUMN t_customer_master_portfolio.fund_name IS 'Full fund name';
 COMMENT ON COLUMN t_customer_master_portfolio.start_date IS 'Date of first transaction in this portfolio';
 
--- ----------------------------------------------------------------------------
--- TABLE: t_transaction_table
--- Description: Investment transactions
--- Dependencies: t_customers, t_tenants, t_import_staging_data, t_import_sessions
--- UPDATED: Added staging_record_id, import_session_id, duplicate_reason columns
--- ----------------------------------------------------------------------------
-CREATE TABLE t_transaction_table (
-    id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES t_customers(id),
-    scheme_code VARCHAR(50),
-    scheme_name VARCHAR(255),
-    folio_no VARCHAR(100),
-    txn_type_id INTEGER,
-    txn_date DATE,
-    total_amount DECIMAL(15,2),
-    units DECIMAL(15,4),
-    nav DECIMAL(10,4),
-    stamp_duty DECIMAL(10,2),
-    is_potential_duplicate BOOLEAN DEFAULT false,
-    portfolio_flag BOOLEAN DEFAULT true,
-    
-    -- Import tracking fields (ADDED)
-    staging_record_id INTEGER,
-    import_session_id INTEGER,
-    duplicate_reason TEXT,
-    
-    tenant_id INTEGER,
-    is_live BOOLEAN,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Foreign key constraints for import tracking (ADDED)
-    CONSTRAINT fk_staging_record 
-        FOREIGN KEY (staging_record_id) 
-        REFERENCES t_import_staging_data(id) 
-        ON DELETE SET NULL,
-    
-    CONSTRAINT fk_import_session 
-        FOREIGN KEY (import_session_id) 
-        REFERENCES t_import_sessions(id) 
-        ON DELETE SET NULL
-);
-
-COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
-COMMENT ON COLUMN t_transaction_table.portfolio_flag IS 'Include/exclude from portfolio totals';
-COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the staging record that created this transaction';
-COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
-COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
-
--- ============================================================================
--- SECTION 6B: TRANSACTION TYPES MASTER TABLE
--- ============================================================================
-DO $$ 
-BEGIN
-    RAISE NOTICE 'Creating Transaction Types Master Table...';
-END $$;
-
--- ----------------------------------------------------------------------------
 -- TABLE: m_transaction_types
--- Description: Master data for transaction types
--- Dependencies: None
--- ----------------------------------------------------------------------------
 CREATE TABLE m_transaction_types (
     id SERIAL PRIMARY KEY,
     txn_code VARCHAR(50) UNIQUE NOT NULL,
@@ -796,6 +579,41 @@ COMMENT ON COLUMN m_transaction_types.txn_code IS 'Unique transaction code (e.g.
 COMMENT ON COLUMN m_transaction_types.txn_name IS 'Full name of transaction type';
 COMMENT ON COLUMN m_transaction_types.txn_type IS 'Addition or Deduction type for portfolio calculations';
 
+-- TABLE: t_transaction_table
+CREATE TABLE t_transaction_table (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES t_customers(id),
+    scheme_code VARCHAR(50),
+    scheme_id INTEGER REFERENCES t_scheme_details(id),
+    scheme_name VARCHAR(255),
+    folio_no VARCHAR(100),
+    txn_type_id INTEGER,
+    txn_date DATE,
+    total_amount NUMERIC(15,2),
+    units NUMERIC(15,4),
+    nav NUMERIC(10,4),
+    stamp_duty NUMERIC(10,2),
+    txn_description TEXT,
+    txn_source VARCHAR(100),
+    stt NUMERIC(15,2) DEFAULT 0,
+    tds NUMERIC(15,2) DEFAULT 0,
+    is_potential_duplicate BOOLEAN DEFAULT false,
+    portfolio_flag BOOLEAN DEFAULT true,
+    staging_record_id INTEGER REFERENCES t_import_staging_data(id) ON DELETE SET NULL,
+    import_session_id INTEGER REFERENCES t_import_sessions(id) ON DELETE SET NULL,
+    duplicate_reason TEXT,
+    tenant_id INTEGER,
+    is_live BOOLEAN,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
+COMMENT ON COLUMN t_transaction_table.portfolio_flag IS 'Include/exclude from portfolio totals';
+COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the staging record that created this transaction';
+COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
+COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
 
 -- ============================================================================
 -- SECTION 7: JTBD (JOBS TO BE DONE) TABLES
@@ -805,28 +623,19 @@ BEGIN
     RAISE NOTICE 'Creating JTBD Tables...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_jtbd_configurations
--- Description: Customer alert and reminder configurations
--- Dependencies: t_tenants, t_customers, t_users
--- ----------------------------------------------------------------------------
 CREATE TABLE t_jtbd_configurations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL DEFAULT true,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id),
-    
     jtbd_type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
-    
     is_active BOOLEAN NOT NULL DEFAULT true,
-    
     config_data JSONB NOT NULL,
-    
     next_alert_date DATE,
-    
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -836,19 +645,221 @@ COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert and reminder configura
 COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger';
 
 -- ============================================================================
--- SECTION 8: SYSTEM LOGS TABLE
+-- SECTION 8: BOOKMARK TABLES & REASON MASTERS
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Bookmark Tables...';
+END $$;
+
+-- TABLE: m_bookmark_reasons
+CREATE TABLE m_bookmark_reasons (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+    reason_code VARCHAR(50) NOT NULL,
+    reason_label VARCHAR(100) NOT NULL,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_reason_per_tenant UNIQUE (tenant_id, is_live, reason_code)
+);
+
+COMMENT ON TABLE m_bookmark_reasons IS 'Tenant-specific bookmark reason master data - managed via backend';
+COMMENT ON COLUMN m_bookmark_reasons.reason_code IS 'Unique code within tenant (e.g., VIP, FOLLOW_UP)';
+COMMENT ON COLUMN m_bookmark_reasons.reason_label IS 'Display label for UI (e.g., VIP Customer)';
+COMMENT ON COLUMN m_bookmark_reasons.display_order IS 'Sort order in dropdown (lower = higher priority)';
+
+-- TABLE: t_customer_bookmarks
+CREATE TABLE t_customer_bookmarks (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES t_users(id) ON DELETE CASCADE,
+    reason_id INTEGER REFERENCES m_bookmark_reasons(id),
+    custom_reason VARCHAR(100),
+    notes TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_bookmark_per_user_customer UNIQUE (tenant_id, is_live, customer_id, user_id),
+    CONSTRAINT check_bookmark_reason CHECK (reason_id IS NOT NULL OR custom_reason IS NOT NULL)
+);
+
+COMMENT ON TABLE t_customer_bookmarks IS 'User bookmarks for tracking important customers with reasons/tags';
+COMMENT ON COLUMN t_customer_bookmarks.reason_id IS 'FK to master reasons - preferred for predefined tags';
+COMMENT ON COLUMN t_customer_bookmarks.custom_reason IS 'Free text when user selects "Other" or custom tag';
+COMMENT ON COLUMN t_customer_bookmarks.notes IS 'Optional notes about why customer is bookmarked';
+
+-- ============================================================================
+-- SECTION 9: MARKET DATA TABLES
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Market Data Tables...';
+END $$;
+
+-- TABLE: t_market_indices
+CREATE TABLE t_market_indices (
+    id SERIAL PRIMARY KEY,
+    index_code VARCHAR(50) NOT NULL UNIQUE,
+    index_name VARCHAR(200) NOT NULL,
+    yahoo_symbol VARCHAR(50) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    priority INTEGER DEFAULT 0,
+    total_records INTEGER DEFAULT 0,
+    earliest_date DATE,
+    latest_date DATE,
+    last_download_status VARCHAR(20),
+    last_download_at TIMESTAMP,
+    last_download_error TEXT,
+    historical_data_available BOOLEAN DEFAULT false,
+    next_eod_retry_at TIMESTAMP,
+    eod_retry_count INTEGER DEFAULT 0,
+    last_successful_eod_download_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Yahoo Finance integration';
+COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
+COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
+
+-- TABLE: t_market_data_records
+CREATE TABLE t_market_data_records (
+    id SERIAL PRIMARY KEY,
+    index_id INTEGER NOT NULL REFERENCES t_market_indices(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    open NUMERIC(15,2) NOT NULL,
+    high NUMERIC(15,2) NOT NULL,
+    low NUMERIC(15,2) NOT NULL,
+    close NUMERIC(15,2) NOT NULL,
+    volume BIGINT,
+    adj_close NUMERIC(15,2),
+    data_source VARCHAR(50) DEFAULT 'yahoo_finance',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_market_data UNIQUE (index_id, date)
+);
+
+COMMENT ON TABLE t_market_data_records IS 'Historical OHLCV data for market indices';
+COMMENT ON COLUMN t_market_data_records.adj_close IS 'Adjusted close price (for splits/dividends)';
+
+-- TABLE: t_market_download_jobs
+CREATE TABLE t_market_download_jobs (
+    id SERIAL PRIMARY KEY,
+    job_type VARCHAR(20) NOT NULL,
+    index_id INTEGER NOT NULL REFERENCES t_market_indices(id) ON DELETE CASCADE,
+    start_date DATE,
+    end_date DATE,
+    status VARCHAR(20) DEFAULT 'pending',
+    error_details TEXT,
+    records_inserted INTEGER DEFAULT 0,
+    records_updated INTEGER DEFAULT 0,
+    records_skipped INTEGER DEFAULT 0,
+    execution_time_ms INTEGER,
+    triggered_by VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+COMMENT ON TABLE t_market_download_jobs IS 'Tracks download jobs for market data';
+
+-- TABLE: t_market_download_logs
+CREATE TABLE t_market_download_logs (
+    id SERIAL PRIMARY KEY,
+    index_id INTEGER REFERENCES t_market_indices(id) ON DELETE CASCADE,
+    job_id INTEGER REFERENCES t_market_download_jobs(id) ON DELETE SET NULL,
+    download_type VARCHAR(20),
+    status VARCHAR(20),
+    records_processed INTEGER DEFAULT 0,
+    date_range_start DATE,
+    date_range_end DATE,
+    error_message TEXT,
+    duration_seconds INTEGER,
+    triggered_by VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_market_download_logs IS 'Audit log for all download activities';
+
+-- TABLE: t_market_eod_scheduler
+CREATE TABLE t_market_eod_scheduler (
+    id SERIAL PRIMARY KEY,
+    is_enabled BOOLEAN DEFAULT true,
+    download_time TIME DEFAULT '20:00:00',
+    retry_interval_minutes INTEGER DEFAULT 30,
+    max_retries INTEGER DEFAULT 6,
+    retry_cutoff_time TIME DEFAULT '23:00:00',
+    last_execution_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER DEFAULT 0,
+    failure_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_market_eod_scheduler IS 'Global EOD scheduler configuration';
+
+-- ============================================================================
+-- SECTION 10: GOAL TRACKING TABLES
+-- ============================================================================
+DO $$ 
+BEGIN
+    RAISE NOTICE 'Creating Goal Tracking Tables...';
+END $$;
+
+-- TABLE: t_goal_alerts
+CREATE TABLE t_goal_alerts (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    action_required VARCHAR(100),
+    action_details JSONB,
+    is_acknowledged BOOLEAN DEFAULT false,
+    acknowledged_at TIMESTAMP,
+    acknowledged_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABLE: t_goal_progress_snapshots
+CREATE TABLE t_goal_progress_snapshots (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL,
+    current_value NUMERIC(15,2) NOT NULL,
+    monthly_contribution NUMERIC(15,2) NOT NULL,
+    projected_corpus NUMERIC(15,2),
+    projected_achievement_date DATE,
+    probability_of_success NUMERIC(5,2),
+    on_track BOOLEAN,
+    deviation_percentage NUMERIC(5,2),
+    recalculation_trigger VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_goal_snapshot UNIQUE (goal_id, snapshot_date)
+);
+
+-- ============================================================================
+-- SECTION 11: SYSTEM LOGS TABLE
 -- ============================================================================
 DO $$ 
 BEGIN
     RAISE NOTICE 'Creating System Logs Table...';
 END $$;
 
--- ----------------------------------------------------------------------------
 -- TABLE: t_system_logs
--- Description: System-wide logging for errors, warnings, and info
--- Dependencies: t_tenants, t_users (optional references)
--- NEW TABLE: Added for comprehensive system logging
--- ----------------------------------------------------------------------------
 CREATE TABLE t_system_logs (
     id BIGSERIAL PRIMARY KEY,
     level VARCHAR(10) NOT NULL CHECK (level IN ('error', 'warn', 'info')),
@@ -884,12 +895,11 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Table creation completed!';
     RAISE NOTICE 'Total tables created: %', v_table_count;
-    RAISE NOTICE 'Updates included:';
-    RAISE NOTICE '  - t_file_uploads: added updated_at';
-    RAISE NOTICE '  - t_customer_master_portfolio: added category fields';
-    RAISE NOTICE '  - t_transaction_table: added import tracking';
-    RAISE NOTICE '  - t_system_logs: new table added';
-    RAISE NOTICE '  - Removed restrictive import_type constraints';
-    RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
+    RAISE NOTICE 'All tables include:';
+    RAISE NOTICE '  - Column definitions with types';
+    RAISE NOTICE '  - Constraints and checks';
+    RAISE NOTICE '  - Foreign key relationships';
+    RAISE NOTICE '  - Comments on tables/columns';
+    RAISE NOTICE '  - Proper sequences for auto-increment';
     RAISE NOTICE '========================================';
 END $$;

@@ -72,6 +72,14 @@ export interface CustomerWithContact extends Customer {
   primary_email?: string;
   primary_mobile?: string;
   channel_count: number;
+  
+  // Bookmark fields (NEW)
+  is_bookmarked?: boolean;
+  bookmark_reason_id?: number;
+  bookmark_reason_code?: string;
+  bookmark_reason_label?: string;
+  bookmark_custom_reason?: string;
+  bookmark_notes?: string;
 }
 
 export interface CreateCustomerRequest {
@@ -159,6 +167,10 @@ export interface CustomerSearchParams {
   page_size?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+  
+  // Bookmark filters (NEW)
+  is_bookmarked?: boolean;
+  bookmark_reason?: string; // Filter by reason_code
 }
 
 export interface CustomerStats {
@@ -172,6 +184,7 @@ export interface CustomerStats {
   onboarding_pending: number;
   onboarding_completed: number;
   recent_30_days: number;
+  bookmarked?: number; // NEW
 }
 
 export interface ConvertToCustomerRequest {
@@ -226,4 +239,70 @@ export interface ImportResult {
     data: any;
   }>;
   file_id?: number;
+}
+
+// ============================================================================
+// BOOKMARK TYPES (NEW)
+// ============================================================================
+
+/**
+ * Bookmark reason master data (from m_bookmark_reasons table)
+ */
+export interface BookmarkReason {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  reason_code: string;
+  reason_label: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Customer bookmark (from t_customer_bookmarks table)
+ */
+export interface CustomerBookmark {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  customer_id: number;
+  user_id: number;
+  reason_id?: number;
+  custom_reason?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  
+  // Joined fields from m_bookmark_reasons
+  reason_code?: string;
+  reason_label?: string;
+}
+
+/**
+ * Request to create a new bookmark
+ */
+export interface CreateBookmarkRequest {
+  reason_id?: number;        // FK to m_bookmark_reasons
+  custom_reason?: string;    // Free text when reason_id is null
+  notes?: string;            // Optional notes
+}
+
+/**
+ * Request to update an existing bookmark
+ */
+export interface UpdateBookmarkRequest {
+  reason_id?: number;
+  custom_reason?: string;
+  notes?: string;
+}
+
+/**
+ * List of bookmark reasons (for dropdown)
+ */
+export interface BookmarkReasonsListResponse {
+  reasons: BookmarkReason[];
+  total: number;
 }

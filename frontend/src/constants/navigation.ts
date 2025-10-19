@@ -70,23 +70,41 @@ export const NAVIGATION_MENU: NavigationSection[] = [
   ]
 },
   {
-    id: 'data_operations',
-    name: 'Data Operations',
-    items: [
-      {
-        id: 'etl_dashboard',
-        name: 'ETL Dashboard',
-        path: '/import-dashboard',
-        icon: FileSpreadsheet
-      },
-      {
-        id: 'data_import',
-        name: 'Import Data',
-        path: '/data-import',
-        icon: Upload
-      },
-    ]
-  },
+  id: 'data_operations',
+  name: 'Data Operations',
+  items: [
+    {
+      id: 'etl_dashboard',
+      name: 'ETL Dashboard',
+      path: '/import-dashboard',
+      icon: FileSpreadsheet
+    },
+    {
+      id: 'data_import',
+      name: 'Import Data',
+      path: '/data-import',
+      icon: Upload
+    },
+    {
+      id: 'nav_history',
+      name: 'NAV History',
+      path: '/nav/history',
+      icon: Target
+    },
+    {
+      id: 'market_history',
+      name: 'Market Data',
+      path: '/nav/market-history',
+      icon: TrendingUp
+    },
+    {
+      id: 'cruise_control',
+      name: 'Cruise Control',
+      path: '/nav/cuise-control',
+      icon: Settings
+    },
+  ]
+},
   {
     id: 'portfolio_management',
     name: 'Portfolio Management',
@@ -105,9 +123,9 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         icon: Bell
       },
       {
-        id: 'portfolios',
-        name: 'Portfolios',
-        path: '/portfolios',
+        id: 'index_analysis',
+        name: 'Index Analysis',
+        path: '/market/dashboard',
         icon: TrendingUp
       },
       {

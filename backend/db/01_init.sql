@@ -5,6 +5,7 @@
 -- Execution: Run FIRST before any other migration files
 -- Author: System
 -- Date: 2025-01-08
+-- Updated: 2025-01-15 (Synced with live database schema)
 -- ============================================================================
 
 -- ============================================================================
@@ -27,8 +28,10 @@ BEGIN
     RAISE NOTICE 'Dropping all views...';
 END $$;
 
-DROP VIEW IF EXISTS v_import_staging_statistics CASCADE;
+DROP VIEW IF EXISTS v_portfolio_current CASCADE;
+DROP VIEW IF EXISTS v_tenant_customer_schemes CASCADE;
 DROP VIEW IF EXISTS v_import_staging_progress CASCADE;
+DROP VIEW IF EXISTS v_import_staging_statistics CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS t_customer_portfolio_totals CASCADE;
 
 -- ============================================================================
@@ -48,6 +51,9 @@ DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, VARCHAR, VARCHAR) CASC
 DROP FUNCTION IF EXISTS process_single_scheme_record(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS process_scheme_import_with_timing(INTEGER, INTEGER) CASCADE;
 
+-- Transaction import functions
+DROP FUNCTION IF EXISTS process_transaction_import_with_timing(INTEGER, INTEGER) CASCADE;
+
 -- Cleanup functions
 DROP FUNCTION IF EXISTS cleanup_old_staging_data(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS cleanup_session_staging_data(INTEGER, BOOLEAN) CASCADE;
@@ -56,8 +62,11 @@ DROP FUNCTION IF EXISTS get_staging_storage_stats() CASCADE;
 -- Utility functions
 DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 DROP FUNCTION IF EXISTS update_staging_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS update_market_updated_at() CASCADE;
 DROP FUNCTION IF EXISTS current_tenant_id() CASCADE;
 DROP FUNCTION IF EXISTS current_environment() CASCADE;
+DROP FUNCTION IF EXISTS refresh_portfolio_totals() CASCADE;
+DROP FUNCTION IF EXISTS seed_bookmark_reasons_for_tenant(INTEGER, BOOLEAN) CASCADE;
 
 -- ============================================================================
 -- SECTION 4: DROP ALL TABLES (In reverse dependency order)
@@ -67,8 +76,17 @@ BEGIN
     RAISE NOTICE 'Dropping all tables...';
 END $$;
 
--- Drop JTBD tables
+-- Drop goal/JTBD tables
+DROP TABLE IF EXISTS t_goal_progress_snapshots CASCADE;
+DROP TABLE IF EXISTS t_goal_alerts CASCADE;
 DROP TABLE IF EXISTS t_jtbd_configurations CASCADE;
+
+-- Drop market data tables
+DROP TABLE IF EXISTS t_market_download_logs CASCADE;
+DROP TABLE IF EXISTS t_market_download_jobs CASCADE;
+DROP TABLE IF EXISTS t_market_eod_scheduler CASCADE;
+DROP TABLE IF EXISTS t_market_data_records CASCADE;
+DROP TABLE IF EXISTS t_market_indices CASCADE;
 
 -- Drop NAV tables
 DROP TABLE IF EXISTS t_nav_schedule_executions CASCADE;
@@ -78,7 +96,6 @@ DROP TABLE IF EXISTS t_nav_data CASCADE;
 DROP TABLE IF EXISTS t_scheme_bookmarks CASCADE;
 
 -- Drop scheme tables
-DROP TABLE IF EXISTS t_scheme_staging_data CASCADE;
 DROP TABLE IF EXISTS t_scheme_details CASCADE;
 DROP TABLE IF EXISTS t_scheme_masters CASCADE;
 
@@ -96,6 +113,7 @@ DROP TABLE IF EXISTS t_import_logs CASCADE;
 DROP TABLE IF EXISTS t_file_uploads CASCADE;
 
 -- Drop customer tables
+DROP TABLE IF EXISTS t_customer_bookmarks CASCADE;
 DROP TABLE IF EXISTS t_customer_addresses CASCADE;
 DROP TABLE IF EXISTS t_customers CASCADE;
 DROP TABLE IF EXISTS t_contact_channels CASCADE;
@@ -107,6 +125,12 @@ DROP TABLE IF EXISTS t_chat_sessions CASCADE;
 
 -- Drop user tables
 DROP TABLE IF EXISTS t_users CASCADE;
+
+-- Drop bookmark reasons master
+DROP TABLE IF EXISTS m_bookmark_reasons CASCADE;
+
+-- Drop system logs
+DROP TABLE IF EXISTS t_system_logs CASCADE;
 
 -- Drop tenant table (last, as everything references it)
 DROP TABLE IF EXISTS t_tenants CASCADE;
@@ -133,7 +157,6 @@ BEGIN
             EXECUTE 'DROP INDEX IF EXISTS ' || quote_ident(r.schemaname) || '.' || quote_ident(r.indexname) || ' CASCADE';
             v_dropped_count := v_dropped_count + 1;
         EXCEPTION WHEN OTHERS THEN
-            -- Silently ignore errors and continue
             NULL;
         END;
     END LOOP;
@@ -166,7 +189,6 @@ BEGIN
                     ' ON ' || quote_ident(r.relname) || ' CASCADE';
             v_dropped_count := v_dropped_count + 1;
         EXCEPTION WHEN OTHERS THEN
-            -- Silently ignore errors
             NULL;
         END;
     END LOOP;
@@ -196,7 +218,6 @@ BEGIN
                     ' ON ' || quote_ident(r.schemaname) || '.' || quote_ident(r.tablename) || ' CASCADE';
             v_dropped_count := v_dropped_count + 1;
         EXCEPTION WHEN OTHERS THEN
-            -- Silently ignore errors
             NULL;
         END;
     END LOOP;
@@ -233,11 +254,22 @@ END $$;
 -- UUID extension for unique identifiers
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- pg_trgm for fuzzy text search (optional but useful for search features)
+-- pg_trgm for fuzzy text search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- ============================================================================
--- SECTION 9: VERIFY CLEAN STATE
+-- SECTION 9: CREATE N8N SCHEMA (for n8n integration)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating n8n schema...';
+END $$;
+
+CREATE SCHEMA IF NOT EXISTS n8n;
+ALTER SCHEMA n8n OWNER TO kewal_admin;
+
+-- ============================================================================
+-- SECTION 10: VERIFY CLEAN STATE
 -- ============================================================================
 DO $$ 
 DECLARE
@@ -314,15 +346,15 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- SECTION 10: GRANT PERMISSIONS ON EXTENSIONS
+-- SECTION 11: GRANT PERMISSIONS
 -- ============================================================================
 DO $$ 
 BEGIN
-    RAISE NOTICE 'Setting up extension permissions...';
+    RAISE NOTICE 'Setting up permissions...';
 END $$;
 
--- Grant usage on extensions
 GRANT ALL ON SCHEMA public TO kewal_admin;
+GRANT ALL ON SCHEMA n8n TO kewal_admin;
 
 -- ============================================================================
 -- COMPLETION MESSAGE

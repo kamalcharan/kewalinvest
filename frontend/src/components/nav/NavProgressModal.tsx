@@ -1,7 +1,7 @@
 // frontend/src/components/nav/NavProgressModal.tsx
-// UPDATED: Simplified for MFAPI.in - removed sequential download complexity
+// UPDATED: Added onComplete callback for automatic refresh
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { NavService } from '../../services/nav.service';
 import type { DownloadProgress } from '../../services/nav.service';
@@ -11,6 +11,7 @@ interface NavProgressModalProps {
   progress: DownloadProgress | null;
   onClose: () => void;
   onCancel?: (jobId: number) => void;
+  onComplete?: () => void;
   title?: string;
   showCancelButton?: boolean;
 }
@@ -20,15 +21,35 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
   progress,
   onClose,
   onCancel,
+  onComplete,
   title = 'Downloading NAV Data',
   showCancelButton = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Track completion to call callback only once
+  const completedRef = useRef(false);
+
+  // Effect to detect completion and trigger callback
+  useEffect(() => {
+    if (progress?.status === 'completed' && !completedRef.current) {
+      completedRef.current = true;
+      // Call onComplete after a short delay to ensure UI updates
+      setTimeout(() => {
+        onComplete?.();
+      }, 300);
+    }
+    
+    // Reset when modal closes
+    if (!isOpen) {
+      completedRef.current = false;
+    }
+  }, [progress?.status, isOpen, onComplete]);
+
   if (!isOpen || !progress) return null;
 
-  // SIMPLIFIED: Direct access to progress properties
+  // Direct access to progress properties
   const currentStatus = progress.status;
   const currentPercentage = progress.progressPercentage || 0;
   const currentStep = progress.currentStep || 'Processing...';
@@ -192,7 +213,7 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
           </div>
         )}
 
-        {/* SIMPLIFIED: Stats - Always 2 columns */}
+        {/* Stats - Always 2 columns */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
@@ -350,7 +371,6 @@ export const NavProgressModal: React.FC<NavProgressModalProps> = ({
 };
 
 // ==================== SCHEME SEARCH COMPONENT ====================
-// Note: Keeping this component as it was not mentioned in the simplification spec
 
 interface SchemeSearchProps {
   onSelectScheme?: (scheme: any) => void;
@@ -586,7 +606,6 @@ export const SchemeSearch: React.FC<SchemeSearchProps> = ({
 };
 
 // ==================== BOOKMARK LIST COMPONENT ====================
-// Note: Keeping this component as it was not mentioned in the simplification spec
 
 interface BookmarkListProps {
   onTriggerDownload?: (bookmarks: any[]) => void;

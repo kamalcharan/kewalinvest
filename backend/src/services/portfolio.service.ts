@@ -14,7 +14,7 @@ import {
   PortfolioStatistics,
   SchemePortfolioDetails,
   PortfolioPerformanceMetric,
-     DailyChange
+  DailyChange
 } from '../types/portfolio.types';
 import { PortfolioUtil } from '../utils/portfolio.util';
 
@@ -26,115 +26,253 @@ export class PortfolioService {
   }
 
   /**
-   * Get customer's complete portfolio
+   * Get customer's complete portfolio with performance history
+   * Includes: holdings, allocation, performance trends, daily changes
    */
   async getCustomerPortfolio(
-  tenantId: number,
-  isLive: boolean,
-  customerId: number
-): Promise<CustomerPortfolioResponse | null> {
-  try {
-    // Get customer name
-    const customerQuery = `
-      SELECT c.name 
-      FROM t_customers cust
-      JOIN t_contacts c ON c.id = cust.contact_id  
-      WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
-    `;
-    const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<CustomerPortfolioResponse | null> {
+    try {
+      // ========================================
+      // 1. GET CUSTOMER NAME
+      // ========================================
+      const customerQuery = `
+        SELECT c.name 
+        FROM t_customers cust
+        JOIN t_contacts c ON c.id = cust.contact_id  
+        WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3 AND cust.is_active = true
+      `;
+      const customerResult = await this.db.query(customerQuery, [customerId, tenantId, isLive]);
 
-    if (customerResult.rows.length === 0) {
-      return null;
-    }
+      if (customerResult.rows.length === 0) {
+        console.log(`Customer not found: ${customerId}`);
+        return null;
+      }
 
-    const customerName = customerResult.rows[0].name;
+      const customerName = customerResult.rows[0].name;
 
-    // Get portfolio holdings from materialized view
-    const holdingsQuery = `
-      SELECT *
-      FROM t_customer_portfolio_totals
-      WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
-      ORDER BY current_value DESC
-    `;
-    const holdingsResult = await this.db.query(holdingsQuery, [customerId, tenantId, isLive]);
+      // ========================================
+      // 2. GET PORTFOLIO HOLDINGS
+      // ========================================
+      const holdingsQuery = `
+        SELECT *
+        FROM t_customer_portfolio_totals
+        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+        ORDER BY current_value DESC
+      `;
+      const holdingsResult = await this.db.query(holdingsQuery, [customerId, tenantId, isLive]);
 
-    if (holdingsResult.rows.length === 0) {
-      return {
+      // Return empty portfolio if no holdings
+      if (holdingsResult.rows.length === 0) {
+        console.log(`No holdings found for customer: ${customerId}`);
+        return {
+          customer_id: customerId,
+          customer_name: customerName,
+          summary: {
+            customer_id: customerId,
+            customer_name: customerName,
+            total_invested: 0,
+            current_value: 0,
+            total_returns: 0,
+            return_percentage: 0,
+            total_schemes: 0,
+            day_change: 0,
+            day_change_percentage: 0
+          },
+          holdings: [],
+          allocation: [],
+          performance: []
+        };
+      }
+
+      const holdings = holdingsResult.rows;
+
+      // ========================================
+      // 3. PARSE AND VALIDATE DATA
+      // ========================================
+      const parsedHoldings = holdings.map(h => ({
+        ...h,
+        total_invested: parseFloat(h.total_invested) || 0,
+        current_value: parseFloat(h.current_value) || 0,
+        total_returns: parseFloat(h.total_returns) || 0,
+        return_percentage: parseFloat(h.return_percentage) || 0,
+        total_units: parseFloat(h.total_units) || 0,
+        latest_nav: parseFloat(h.latest_nav) || 0
+      }));
+
+      // ========================================
+      // 4. CALCULATE SUMMARY
+      // ========================================
+      const summary = PortfolioUtil.calculatePortfolioSummary(parsedHoldings);
+      const totalValue = summary.current_value;
+
+      // ========================================
+      // 5. TRANSFORM HOLDINGS WITH ALLOCATION
+      // ========================================
+      const holdingsWithAllocation: PortfolioHolding[] = parsedHoldings.map(h => ({
+        portfolio_id: h.portfolio_id,
+        scheme_code: h.scheme_code,
+        scheme_name: h.scheme_name,
+        fund_name: h.fund_name,
+        category: h.category,
+        sub_category: h.sub_category,
+        folio_no: h.folio_no,
+        total_units: h.total_units,
+        total_invested: h.total_invested,
+        latest_nav: h.latest_nav,
+        current_value: h.current_value,
+        total_returns: h.total_returns,
+        return_percentage: h.return_percentage,
+        allocation_percentage: PortfolioUtil.calculateAllocationPercentage(
+          h.current_value,
+          totalValue
+        ),
+        transaction_count: parseInt(h.transaction_count) || 0,
+        last_transaction_date: h.last_transaction_date
+      }));
+
+      // ========================================
+      // 6. CALCULATE ASSET ALLOCATION
+      // ========================================
+      const allocation = PortfolioUtil.calculateCategoryAllocation(parsedHoldings, totalValue);
+
+      // ========================================
+      // 7. GET PERFORMANCE HISTORY (FROM SNAPSHOTS)
+      // ========================================
+      let performance: PortfolioPerformanceMetric[] = [];
+      try {
+        const performanceQuery = `
+          SELECT 
+            snapshot_month_end as date,
+            total_invested as invested,
+            current_value,
+            total_returns as returns,
+            return_percentage
+          FROM t_monthly_portfolio_snapshots
+          WHERE customer_id = $1 
+            AND tenant_id = $2 
+            AND is_live = $3
+            AND snapshot_month_end >= CURRENT_DATE - INTERVAL '365 days'
+          ORDER BY snapshot_month_end ASC
+        `;
+
+        const performanceResult = await this.db.query(performanceQuery, [customerId, tenantId, isLive]);
+
+        performance = performanceResult.rows.map(row => ({
+          date: row.date instanceof Date 
+            ? row.date.toISOString().split('T')[0]
+            : row.date,
+          invested: parseFloat(row.invested) || 0,
+          current_value: parseFloat(row.current_value) || 0,
+          returns: parseFloat(row.returns) || 0,
+          return_percentage: parseFloat(row.return_percentage) || 0
+        }));
+
+        console.log(`Fetched ${performance.length} performance snapshots for customer ${customerId}`);
+      } catch (error: any) {
+        console.warn(`Failed to fetch performance history: ${error.message}`);
+        performance = [];
+      }
+
+      // ========================================
+      // 8. GET DAILY CHANGES
+      // ========================================
+      let dailyChange = { day_change: 0, day_change_percentage: 0 };
+      try {
+        dailyChange = await this.calculateDailyChanges(tenantId, isLive, customerId);
+      } catch (error: any) {
+        console.warn(`Failed to calculate daily changes: ${error.message}`);
+      }
+
+      // ========================================
+      // 9. BUILD AND RETURN RESPONSE
+      // ========================================
+      const response: CustomerPortfolioResponse = {
         customer_id: customerId,
         customer_name: customerName,
         summary: {
           customer_id: customerId,
           customer_name: customerName,
-          total_invested: 0,
-          current_value: 0,
-          total_returns: 0,
-          return_percentage: 0,
-          total_schemes: 0
+          total_invested: summary.total_invested,
+          current_value: summary.current_value,
+          total_returns: summary.total_returns,
+          return_percentage: summary.return_percentage,
+          total_schemes: summary.total_schemes,
+          day_change: dailyChange.day_change,
+          day_change_percentage: dailyChange.day_change_percentage
         },
-        holdings: [],
-        allocation: []
+        holdings: holdingsWithAllocation,
+        allocation,
+        performance
       };
+
+      console.log(`Successfully loaded portfolio for customer ${customerId}:`, {
+        totalValue: summary.current_value,
+        holdingsCount: holdingsWithAllocation.length,
+        performanceSnapshots: performance.length
+      });
+
+      return response;
+    } catch (error: any) {
+      console.error('Error getting customer portfolio:', error);
+      throw new Error(`Failed to get customer portfolio: ${error.message}`);
     }
-
-    const holdings = holdingsResult.rows;
-
-    // ✅ FIX: Parse database values BEFORE calculations
-    const parsedHoldings = holdings.map(h => ({
-      ...h,
-      total_invested: parseFloat(h.total_invested) || 0,
-      current_value: parseFloat(h.current_value) || 0,
-      total_returns: parseFloat(h.total_returns) || 0,
-      return_percentage: parseFloat(h.return_percentage) || 0,
-      total_units: parseFloat(h.total_units) || 0,
-      latest_nav: parseFloat(h.latest_nav) || 0
-    }));
-
-    // Calculate summary with parsed values
-    const summary = PortfolioUtil.calculatePortfolioSummary(parsedHoldings);
-    const totalValue = summary.current_value;
-
-    // Transform holdings with allocation percentage
-    const holdingsWithAllocation: PortfolioHolding[] = parsedHoldings.map(h => ({
-      portfolio_id: h.portfolio_id,
-      scheme_code: h.scheme_code,
-      scheme_name: h.scheme_name,
-      fund_name: h.fund_name,
-      category: h.category,
-      sub_category: h.sub_category,
-      folio_no: h.folio_no,
-      total_units: h.total_units,
-      total_invested: h.total_invested,
-      latest_nav: h.latest_nav,
-      current_value: h.current_value,
-      total_returns: h.total_returns,
-      return_percentage: h.return_percentage,
-      allocation_percentage: PortfolioUtil.calculateAllocationPercentage(
-        h.current_value,
-        totalValue
-      ),
-      transaction_count: parseInt(h.transaction_count) || 0,
-      last_transaction_date: h.last_transaction_date
-    }));
-
-    // Calculate asset allocation
-    const allocation = PortfolioUtil.calculateCategoryAllocation(parsedHoldings, totalValue);
-
-    return {
-      customer_id: customerId,
-      customer_name: customerName,
-      summary: {
-        customer_id: customerId,
-        customer_name: customerName,
-        ...summary
-      },
-      holdings: holdingsWithAllocation,
-      allocation
-    };
-  } catch (error: any) {
-    console.error('Error getting customer portfolio:', error);
-    throw new Error(`Failed to get customer portfolio: ${error.message}`);
   }
-}
+
+  /**
+   * Calculate day changes (last two months)
+   */
+  private async calculateDailyChanges(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<{ day_change: number; day_change_percentage: number }> {
+    try {
+      const query = `
+        WITH latest_months AS (
+          SELECT 
+            snapshot_month_end,
+            current_value,
+            ROW_NUMBER() OVER (ORDER BY snapshot_month_end DESC) as rn
+          FROM t_monthly_portfolio_snapshots
+          WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+          LIMIT 2
+        ),
+        current_month AS (
+          SELECT current_value FROM latest_months WHERE rn = 1
+        ),
+        previous_month AS (
+          SELECT current_value FROM latest_months WHERE rn = 2
+        )
+        SELECT 
+          COALESCE((SELECT current_value FROM current_month), 0) - COALESCE((SELECT current_value FROM previous_month), 0) as day_change,
+          CASE 
+            WHEN COALESCE((SELECT current_value FROM previous_month), 0) > 0 
+            THEN (
+              (COALESCE((SELECT current_value FROM current_month), 0) - COALESCE((SELECT current_value FROM previous_month), 0)) / 
+              (SELECT current_value FROM previous_month)
+            ) * 100
+            ELSE 0
+          END as day_change_percentage
+      `;
+
+      const result = await this.db.query(query, [customerId, tenantId, isLive]);
+
+      if (result.rows.length === 0) {
+        return { day_change: 0, day_change_percentage: 0 };
+      }
+
+      return {
+        day_change: parseFloat(result.rows[0].day_change) || 0,
+        day_change_percentage: parseFloat(result.rows[0].day_change_percentage) || 0
+      };
+    } catch (error: any) {
+      console.error('Error calculating daily changes:', error);
+      return { day_change: 0, day_change_percentage: 0 };
+    }
+  }
 
   /**
    * Get portfolio totals only (faster query)
@@ -427,8 +565,6 @@ export class PortfolioService {
     const startTime = Date.now();
 
     try {
-      // If specific customer or scheme requested, we still refresh the entire view
-      // as materialized views can't be partially refreshed
       await this.db.query('REFRESH MATERIALIZED VIEW CONCURRENTLY t_customer_portfolio_totals');
 
       // Count affected records
@@ -535,95 +671,4 @@ export class PortfolioService {
       throw new Error(`Failed to get portfolio holdings: ${error.message}`);
     }
   }
-
-  /**
- * Get daily performance data
- */
-async getPortfolioPerformanceHistory(
-  tenantId: number,
-  isLive: boolean,
-  customerId: number,
-  days: number = 365
-): Promise<PortfolioPerformanceMetric[]> {
-  try {
-    const query = `
-      SELECT 
-        snapshot_date as date,
-        total_invested,
-        current_value,
-        total_returns,
-        return_percentage
-      FROM t_daily_portfolio_snapshots
-      WHERE customer_id = $1 
-        AND tenant_id = $2 
-        AND is_live = $3
-        AND snapshot_date >= CURRENT_DATE - INTERVAL '1 day' * $4
-      ORDER BY snapshot_date ASC
-    `;
-    
-    const result = await this.db.query(query, [customerId, tenantId, isLive, days]);
-
-    return result.rows.map(row => ({
-      date: row.date.toISOString().split('T')[0], // Convert to YYYY-MM-DD string
-      invested: parseFloat(row.total_invested),
-      current_value: parseFloat(row.current_value),
-      returns: parseFloat(row.total_returns),
-      return_percentage: parseFloat(row.return_percentage)
-    }));
-  } catch (error: any) {
-    console.error('Error getting portfolio performance history:', error);
-    throw new Error(`Failed to get portfolio performance history: ${error.message}`);
-  }
-}
-
-/**
- * Calculate day changes
- */
-async calculateDailyChanges(
-  tenantId: number,
-  isLive: boolean,
-  customerId: number
-): Promise<DailyChange> {
-  try {
-    const query = `
-      WITH today_value AS (
-        SELECT current_value, total_returns
-        FROM t_daily_portfolio_snapshots
-        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
-          AND snapshot_date = CURRENT_DATE
-        LIMIT 1
-      ),
-      yesterday_value AS (
-        SELECT current_value, total_returns
-        FROM t_daily_portfolio_snapshots
-        WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
-          AND snapshot_date = CURRENT_DATE - INTERVAL '1 day'
-        LIMIT 1
-      )
-      SELECT 
-        COALESCE(tv.current_value, 0) - COALESCE(yv.current_value, 0) as day_change,
-        CASE 
-          WHEN COALESCE(yv.current_value, 0) > 0 
-          THEN ((COALESCE(tv.current_value, 0) - COALESCE(yv.current_value, 0)) / yv.current_value) * 100
-          ELSE 0
-        END as day_change_percentage
-      FROM today_value tv
-      FULL OUTER JOIN yesterday_value yv ON true
-    `;
-
-    const result = await this.db.query(query, [customerId, tenantId, isLive]);
-
-    if (result.rows.length === 0) {
-      return { day_change: 0, day_change_percentage: 0 };
-    }
-
-    return {
-      day_change: parseFloat(result.rows[0].day_change) || 0,
-      day_change_percentage: parseFloat(result.rows[0].day_change_percentage) || 0
-    };
-  } catch (error: any) {
-    console.error('Error calculating daily changes:', error);
-    throw new Error(`Failed to calculate daily changes: ${error.message}`);
-  }
-}
 }

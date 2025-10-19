@@ -4,7 +4,7 @@
 // CORE JTBD TYPES (Aligned with Backend)
 // ============================================
 
-export type JTBDType = 'portfolio_alert' | 'time_based' | 'profile_trigger';
+export type JTBDType = 'portfolio_alert' | 'time_based' | 'profile_trigger' | 'goal_tracking';
 export type JTBDPriority = 'critical' | 'high' | 'medium' | 'low';
 export type JTBDFrequency = 'daily' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly' | 'NA';
 

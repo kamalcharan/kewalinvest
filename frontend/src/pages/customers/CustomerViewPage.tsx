@@ -14,6 +14,7 @@ import PerformanceSparkline from '../../components/visualizations/PerformanceSpa
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
+import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,13 +25,11 @@ const CustomerViewPage: React.FC = () => {
   
   const customerId = id ? parseInt(id) : null;
   
-  // Get initial tab from URL or default to 'overview'
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'transactions') || 'overview';
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
 
-  // Transactions state
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
@@ -41,19 +40,16 @@ const CustomerViewPage: React.FC = () => {
     total_pages: 1
   });
 
-  // Fetch customer and portfolio data from real API
   const { data: customer, isLoading: customerLoading, error: customerError } = useCustomer(customerId || 0);
   const { portfolio, isLoading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = usePortfolioData({
     customerId: customerId || undefined,
     autoFetch: !!customerId
   });
   
-  // Fetch JTBD data
   const { data: jtbds, isLoading: jtbdLoading } = useCustomerJTBDs(customerId || undefined);
 
   const isLoading = customerLoading || portfolioLoading;
 
-  // Fetch transactions function
   const fetchTransactions = async (page: number = 1) => {
     if (!customerId) return;
     
@@ -83,19 +79,16 @@ const CustomerViewPage: React.FC = () => {
     }
   };
 
-  // Fetch transactions when tab changes to transactions
   useEffect(() => {
     if (activeTab === 'transactions' && customerId) {
       fetchTransactions();
     }
   }, [activeTab, customerId]);
 
-  // Update URL when tab changes
   useEffect(() => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
 
-  // Debug logging
   useEffect(() => {
     console.group('CustomerViewPage Debug Info');
     console.log('🔍 URL Param ID:', id);
@@ -103,25 +96,15 @@ const CustomerViewPage: React.FC = () => {
     console.log('👤 Customer Data:', customer);
     console.log('💼 Portfolio Data:', portfolio);
     console.log('🎯 JTBD Data:', jtbds);
-    console.log('⏳ Loading States:', { 
-      customerLoading, 
-      portfolioLoading,
-      jtbdLoading,
-      isLoading 
-    });
-    console.log('❌ Errors:', { 
-      customerError, 
-      portfolioError 
-    });
+    console.log('⏳ Loading States:', { customerLoading, portfolioLoading, jtbdLoading, isLoading });
+    console.log('❌ Errors:', { customerError, portfolioError });
     console.groupEnd();
   }, [id, customerId, customer, portfolio, jtbds, customerLoading, portfolioLoading, jtbdLoading, customerError, portfolioError]);
 
-  // Format functions with null safety
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
       return '₹0';
     }
-    
     if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)}Cr`;
     if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`;
     return `₹${value.toLocaleString('en-IN')}`;
@@ -131,7 +114,6 @@ const CustomerViewPage: React.FC = () => {
     if (value === null || value === undefined || isNaN(value)) {
       return '0.0%';
     }
-    
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(1)}%`;
   };
@@ -140,13 +122,11 @@ const CustomerViewPage: React.FC = () => {
     if (value === null || value === undefined || isNaN(value)) {
       return colors.utility.secondaryText;
     }
-    
     if (value > 0) return '#10B981';
     if (value < 0) return '#EF4444';
     return colors.utility.secondaryText;
   };
 
-  // Icons
   const ArrowLeftIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <line x1="19" y1="12" x2="5" y2="12" />
@@ -216,7 +196,6 @@ const CustomerViewPage: React.FC = () => {
     </svg>
   );
 
-  // Enhanced error/loading states with better UX
   const LoadingState = () => (
     <div style={{
       minHeight: '100vh',
@@ -340,7 +319,6 @@ const CustomerViewPage: React.FC = () => {
     </div>
   );
 
-  // Empty state component
   const EmptyState = ({ 
     icon, 
     title, 
@@ -411,9 +389,7 @@ const CustomerViewPage: React.FC = () => {
     </div>
   );
 
-  // Error handling with specific messages
   if (!customerId) {
-    console.error('❌ Invalid customer ID from URL params:', id);
     return <ErrorState 
       message="Invalid Customer ID" 
       details="The customer ID in the URL is invalid or missing." 
@@ -421,12 +397,10 @@ const CustomerViewPage: React.FC = () => {
   }
 
   if (isLoading) {
-    console.log('⏳ Loading customer data...');
     return <LoadingState />;
   }
 
   if (customerError) {
-    console.error('❌ Customer API Error:', customerError);
     return <ErrorState 
       message="Failed to Load Customer" 
       details={`Error fetching customer #${customerId}. Please try again.`}
@@ -434,17 +408,12 @@ const CustomerViewPage: React.FC = () => {
   }
 
   if (!customer) {
-    console.error('❌ Customer not found:', customerId);
     return <ErrorState 
       message="Customer Not Found" 
       details={`No customer found with ID: ${customerId}`}
     />;
   }
 
-  // All data loaded successfully
-  console.log('✅ Customer data loaded successfully');
-  
-  // Calculate metrics from API data with null safety
   const profitLoss = portfolio?.summary.total_returns ?? 0;
   const dayChangePercentage = portfolio?.summary.day_change_percentage ?? 0;
   const returnPercentage = portfolio?.summary.return_percentage ?? 0;
@@ -667,7 +636,6 @@ const CustomerViewPage: React.FC = () => {
               />
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-                {/* Left Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {/* Portfolio Performance Chart */}
                   <div style={{
@@ -700,17 +668,30 @@ const CustomerViewPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Performance Chart */}
                     <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {portfolio.performance && portfolio.performance.length > 1 ? (
-                        <PerformanceSparkline
-                          data={portfolio.performance.map(p => p.current_value ?? 0)}
-                          width={600}
-                          height={250}
-                          showArea={true}
-                          showDots={true}
-                          interactive={true}
-                        />
+                        <div style={{ width: '100%', height: '100%' }}>
+                          <PerformanceSparkline
+                            performanceData={portfolio.performance}
+                            data={portfolio.performance.map(p => p.current_value ?? 0)}
+                            width={600}
+                            height={250}
+                            showArea={true}
+                            showDots={true}
+                            interactive={true}
+                            timeframe={selectedTimeframe}
+                            showTimelineMarkers={true}
+                            timelineMarkerSize={5}
+                          />
+                          <div style={{
+                            fontSize: '12px',
+                            color: colors.utility.secondaryText,
+                            textAlign: 'center',
+                            marginTop: '12px'
+                          }}>
+                            Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
+                          </div>
+                        </div>
                       ) : (
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ 
@@ -778,9 +759,8 @@ const CustomerViewPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Right Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Asset Allocation - ALWAYS SHOW */}
+                  {/* Asset Allocation */}
                   <div style={{
                     backgroundColor: colors.utility.secondaryBackground,
                     borderRadius: '12px',
@@ -914,6 +894,11 @@ const CustomerViewPage: React.FC = () => {
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <CustomerPortfolioGapAlert 
+                  customerId={customerId}
+                  onRefresh={() => refetchPortfolio()}
+                />
+                
                 <PortfolioSummaryWidget portfolio={portfolio} compact={false} showSparkline={true} />
                 
                 {portfolio.holdings && portfolio.holdings.length > 0 && (

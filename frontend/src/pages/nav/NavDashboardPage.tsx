@@ -1,5 +1,5 @@
 // frontend/src/pages/nav/NavDashboardPage.tsx
-// UPDATED: Simplified for MFAPI.in - removed sequential download complexity
+// FIXED: Added automatic refresh on download completion
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,8 @@ import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard'
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
+import BookmarkGapAlert from '../../components/nav/BookmarkGapAlert';
+import UnbookmarkedSchemesModal from '../../components/nav/UnbookmarkedSchemesModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
@@ -49,6 +51,9 @@ const NavDashboardPage: React.FC = () => {
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
   const [showNavDataModal, setShowNavDataModal] = useState(false);
+  
+  // Unbookmarked schemes modal
+  const [showUnbookmarkedModal, setShowUnbookmarkedModal] = useState(false);
 
   // Debounced refresh to prevent excessive API calls
   const debouncedRefresh = useCallback(() => {
@@ -56,6 +61,35 @@ const NavDashboardPage: React.FC = () => {
     if (now - lastRefreshRef.current > refreshCooldown && isMountedRef.current) {
       lastRefreshRef.current = now;
       refetchAll();
+      
+      FrontendErrorLogger.info(
+        'Dashboard refreshed (debounced)',
+        'NavDashboardPage',
+        { cooldownMs: refreshCooldown }
+      );
+    } else {
+      FrontendErrorLogger.info(
+        'Refresh skipped (cooldown active)',
+        'NavDashboardPage',
+        { 
+          timeSinceLastRefresh: now - lastRefreshRef.current,
+          cooldownMs: refreshCooldown 
+        }
+      );
+    }
+  }, [refetchAll]);
+
+  // FIXED: Force refresh (bypasses cooldown for important updates like download completion)
+  const forceRefresh = useCallback(() => {
+    if (isMountedRef.current) {
+      lastRefreshRef.current = Date.now();
+      refetchAll();
+      
+      FrontendErrorLogger.info(
+        'Dashboard force refreshed',
+        'NavDashboardPage',
+        { reason: 'Download completion' }
+      );
     }
   }, [refetchAll]);
 
@@ -103,7 +137,12 @@ const NavDashboardPage: React.FC = () => {
         }, 1000);
       }
     } catch (error: any) {
-      console.error('Failed to toggle daily download:', error);
+      FrontendErrorLogger.error(
+        'Failed to toggle daily download',
+        'NavDashboardPage',
+        { bookmarkId, enabled, error: error.message },
+        error.stack
+      );
     }
   }, [isLoading, debouncedRefresh]);
 
@@ -132,27 +171,45 @@ const NavDashboardPage: React.FC = () => {
   const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
     setSelectedBookmark(bookmark);
     setShowHistoricalModal(true);
+    
+    FrontendErrorLogger.info(
+      'Opening Historical Download Modal',
+      'NavDashboardPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name
+      }
+    );
   }, []);
 
-  // UPDATED: Simplified historical download handler - removed sequential complexity
+  // Historical download handler
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
-    console.log('Historical download started with job ID:', jobId);
+    FrontendErrorLogger.info(
+      'Historical download started',
+      'NavDashboardPage',
+      { jobId }
+    );
     
     // Validate job ID
     if (!jobId || jobId <= 0) {
       toastService.error('Invalid download job ID received');
+      FrontendErrorLogger.error(
+        'Invalid job ID received',
+        'NavDashboardPage',
+        { jobId }
+      );
       return;
     }
 
     setShowProgressModal(true);
     setCurrentProgress(null);
 
-    // SIMPLIFIED: Single polling - no sequential complexity
+    // Single polling
     startPolling(jobId, (progressData: DownloadProgress) => {
       setCurrentProgress(progressData);
       
       FrontendErrorLogger.info(
-        'Progress update',
+        'Progress update received',
         'NavDashboardPage',
         {
           jobId,
@@ -163,7 +220,12 @@ const NavDashboardPage: React.FC = () => {
         }
       );
     }).catch((error) => {
-      console.error('Progress polling failed:', error);
+      FrontendErrorLogger.error(
+        'Progress polling failed',
+        'NavDashboardPage',
+        { jobId, error: error.message },
+        error.stack
+      );
       toastService.error('Failed to track download progress: ' + error.message);
       setShowProgressModal(false);
     });
@@ -173,23 +235,59 @@ const NavDashboardPage: React.FC = () => {
   const handleCloseHistoricalModal = useCallback(() => {
     setShowHistoricalModal(false);
     setSelectedBookmark(null);
+    
+    FrontendErrorLogger.info(
+      'Historical Download Modal closed',
+      'NavDashboardPage',
+      {}
+    );
   }, []);
 
   const handleCloseNavDataModal = useCallback(() => {
     setShowNavDataModal(false);
     setSelectedBookmark(null);
+    
+    FrontendErrorLogger.info(
+      'NAV Data Viewer Modal closed',
+      'NavDashboardPage',
+      {}
+    );
   }, []);
 
   const handleCloseProgressModal = useCallback(() => {
     setShowProgressModal(false);
     setCurrentProgress(null);
     stopPolling();
+    
+    FrontendErrorLogger.info(
+      'Progress Modal closed',
+      'NavDashboardPage',
+      {}
+    );
   }, [stopPolling]);
+
+  // FIXED: Handle download completion (called automatically by NavProgressModal)
+  const handleDownloadComplete = useCallback(() => {
+    FrontendErrorLogger.info(
+      'Download completed - triggering dashboard refresh',
+      'NavDashboardPage',
+      {}
+    );
+    
+    // Force refresh to update bookmark cards immediately
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        forceRefresh();
+        toastService.success('NAV data updated! Bookmarks refreshed.');
+      }
+    }, 500);
+  }, [forceRefresh]);
 
   // Navigation handlers
   const handleNavigateToBookmarks = useCallback(() => {
     try {
       navigate('/nav/bookmarks');
+      FrontendErrorLogger.info('Navigating to bookmarks page', 'NavDashboardPage', {});
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Navigation to NAV bookmarks failed',
@@ -203,6 +301,7 @@ const NavDashboardPage: React.FC = () => {
   const handleNavigateToSearch = useCallback(() => {
     try {
       navigate('/nav/search');
+      FrontendErrorLogger.info('Navigating to search page', 'NavDashboardPage', {});
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Navigation to NAV search failed',
@@ -216,6 +315,7 @@ const NavDashboardPage: React.FC = () => {
   const handleNavigateToScheduler = useCallback(() => {
     try {
       navigate('/nav/scheduler');
+      FrontendErrorLogger.info('Navigating to scheduler page', 'NavDashboardPage', {});
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Navigation to NAV scheduler failed',
@@ -231,6 +331,7 @@ const NavDashboardPage: React.FC = () => {
     return () => {
       isMountedRef.current = false;
       stopPolling();
+      FrontendErrorLogger.info('NavDashboardPage unmounted', 'NavDashboardPage', {});
     };
   }, [stopPolling]);
 
@@ -245,7 +346,14 @@ const NavDashboardPage: React.FC = () => {
           borderRadius: '12px',
           color: colors.semantic.error
         }}>
-          <p style={{ marginBottom: '16px' }}>Failed to load NAV dashboard</p>
+          <p style={{ marginBottom: '16px' }}>⚠️ Failed to load NAV dashboard</p>
+          <p style={{ 
+            marginBottom: '16px', 
+            fontSize: '14px',
+            color: colors.utility.secondaryText 
+          }}>
+            {error}
+          </p>
           <button
             onClick={() => {
               if (Date.now() - lastRefreshRef.current > refreshCooldown) {
@@ -261,10 +369,12 @@ const NavDashboardPage: React.FC = () => {
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
             }}
           >
-            Retry
+            🔄 Retry
           </button>
         </div>
       </div>
@@ -286,7 +396,9 @@ const NavDashboardPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '24px'
+          marginBottom: '24px',
+          flexWrap: 'wrap',
+          gap: '16px'
         }}>
           <div>
             <h1 style={{
@@ -320,8 +432,11 @@ const NavDashboardPage: React.FC = () => {
                 fontWeight: '500',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                transition: 'transform 0.2s ease'
               }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
               🔍 Search Schemes
             </button>
@@ -339,8 +454,11 @@ const NavDashboardPage: React.FC = () => {
                 fontWeight: '500',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                transition: 'transform 0.2s ease'
               }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
               ⏰ {schedulerConfig?.is_enabled ? 'Scheduler ON' : 'Setup Scheduler'}
             </button>
@@ -361,8 +479,16 @@ const NavDashboardPage: React.FC = () => {
                 fontWeight: '500',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                transition: 'transform 0.2s ease',
+                opacity: (isTriggeringDownload || bookmarks.length === 0) ? 0.6 : 1
               }}
+              onMouseEnter={(e) => {
+                if (!isTriggeringDownload && bookmarks.length > 0) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
               {isTriggeringDownload ? (
                 <>
@@ -399,7 +525,9 @@ const NavDashboardPage: React.FC = () => {
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px'
             }}>
               <div>
                 <h4 style={{
@@ -408,7 +536,7 @@ const NavDashboardPage: React.FC = () => {
                   color: colors.utility.primaryText,
                   margin: '0 0 4px 0'
                 }}>
-                  Automated Downloads {schedulerConfig.is_enabled ? 'Enabled' : 'Disabled'}
+                  {schedulerConfig.is_enabled ? '✅' : '⚠️'} Automated Downloads {schedulerConfig.is_enabled ? 'Enabled' : 'Disabled'}
                 </h4>
                 <p style={{
                   fontSize: '14px',
@@ -416,7 +544,7 @@ const NavDashboardPage: React.FC = () => {
                   margin: 0
                 }}>
                   {schedulerConfig.is_enabled 
-                    ? `Daily downloads scheduled at ${schedulerConfig.download_time} • Next run: ${schedulerStatus?.next_run ? new Date(schedulerStatus.next_run).toLocaleString() : 'Calculating...'}`
+                    ? `Daily downloads scheduled at ${schedulerConfig.download_time} • Next run: ${schedulerStatus?.next_run ? new Date(schedulerStatus.next_run).toLocaleString('en-IN') : 'Calculating...'}`
                     : 'Enable automated downloads to get daily NAV data automatically'
                   }
                 </p>
@@ -432,7 +560,16 @@ const NavDashboardPage: React.FC = () => {
                   borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  fontWeight: '500'
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = schedulerConfig.is_enabled 
+                    ? colors.semantic.success + '10' 
+                    : colors.semantic.warning + '10';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 {schedulerConfig.is_enabled ? 'Manage' : 'Setup'}
@@ -440,6 +577,11 @@ const NavDashboardPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Bookmark Gap Alert */}
+        <BookmarkGapAlert
+          onViewAll={() => setShowUnbookmarkedModal(true)}
+        />
 
         {/* Statistics Cards */}
         <div style={{
@@ -451,7 +593,17 @@ const NavDashboardPage: React.FC = () => {
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
-            padding: '20px'
+            padding: '20px',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
           }}>
             <div style={{
               fontSize: '32px',
@@ -489,7 +641,17 @@ const NavDashboardPage: React.FC = () => {
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
-            padding: '20px'
+            padding: '20px',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
           }}>
             <div style={{
               fontSize: '32px',
@@ -506,7 +668,7 @@ const NavDashboardPage: React.FC = () => {
             }}>
               Auto-Download Enabled
             </div>
-            {!schedulerConfig && (
+            {!schedulerConfig && (statistics?.total_schemes_tracked || 0) > 0 && (
               <button
                 onClick={handleNavigateToScheduler}
                 style={{
@@ -527,7 +689,17 @@ const NavDashboardPage: React.FC = () => {
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
-            padding: '20px'
+            padding: '20px',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
           }}>
             <div style={{
               fontSize: '28px',
@@ -548,7 +720,17 @@ const NavDashboardPage: React.FC = () => {
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
-            padding: '20px'
+            padding: '20px',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
           }}>
             <div style={{
               fontSize: '32px',
@@ -576,7 +758,8 @@ const NavDashboardPage: React.FC = () => {
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: isTriggeringDownload ? 'not-allowed' : 'pointer'
+                  cursor: isTriggeringDownload ? 'not-allowed' : 'pointer',
+                  opacity: isTriggeringDownload ? 0.6 : 1
                 }}
               >
                 Download Now
@@ -597,8 +780,18 @@ const NavDashboardPage: React.FC = () => {
               fontSize: '18px',
               fontWeight: '600',
               color: colors.utility.primaryText,
-              marginBottom: '16px'
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
             }}>
+              <span style={{
+                width: '12px',
+                height: '12px',
+                backgroundColor: colors.brand.primary,
+                borderRadius: '50%',
+                animation: 'pulse 2s ease-in-out infinite'
+              }} />
               Active Downloads ({activeDownloads.length})
             </h3>
             
@@ -607,7 +800,8 @@ const NavDashboardPage: React.FC = () => {
                 padding: '16px',
                 backgroundColor: colors.utility.primaryBackground,
                 borderRadius: '8px',
-                marginBottom: '12px'
+                marginBottom: '12px',
+                border: `1px solid ${colors.brand.primary}20`
               }}>
                 <div style={{
                   display: 'flex',
@@ -686,7 +880,14 @@ const NavDashboardPage: React.FC = () => {
                 border: `1px solid ${colors.brand.primary}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '14px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               View All
@@ -740,8 +941,11 @@ const NavDashboardPage: React.FC = () => {
                   borderRadius: '8px',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  fontWeight: '500'
+                  fontWeight: '500',
+                  transition: 'transform 0.2s ease'
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
               >
                 🔍 Search & Bookmark Schemes
               </button>
@@ -776,8 +980,11 @@ const NavDashboardPage: React.FC = () => {
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '14px',
-                      fontWeight: '500'
+                      fontWeight: '500',
+                      transition: 'transform 0.2s ease'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
                     View All {bookmarks.length} Bookmarks →
                   </button>
@@ -804,20 +1011,32 @@ const NavDashboardPage: React.FC = () => {
         onClose={handleCloseNavDataModal}
       />
 
-      {/* UPDATED: Simplified Progress Modal - removed sequential props */}
+      {/* Progress Modal with automatic refresh on completion - FIXED */}
       <NavProgressModal
         isOpen={showProgressModal}
         progress={currentProgress}
         onClose={handleCloseProgressModal}
+        onComplete={handleDownloadComplete}
         title="Downloading Historical NAV Data"
         showCancelButton={true}
       />
 
-      {/* CSS Animation */}
+      {/* Unbookmarked Schemes Modal */}
+      <UnbookmarkedSchemesModal
+        isOpen={showUnbookmarkedModal}
+        onClose={() => setShowUnbookmarkedModal(false)}
+      />
+
+      {/* CSS Animations */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
     </div>

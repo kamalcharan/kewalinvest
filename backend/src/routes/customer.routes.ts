@@ -15,11 +15,20 @@ router.use(environmentMiddleware);
 // Customer routes
 router.get('/', customerController.getCustomers);
 router.get('/stats', customerController.getCustomerStats);
+
+// Bookmark routes (NEW - MUST be before /:id route)
+router.get('/bookmark-reasons', customerController.getBookmarkReasons);
+
 router.post('/', customerController.createCustomer);
 router.get('/:id', customerController.getCustomer);
 router.put('/:id', customerController.updateCustomer);
 router.delete('/:id', customerController.deleteCustomer);
 router.put('/:id/activate', customerController.activateCustomer);
+
+// Bookmark routes for specific customer (NEW)
+router.post('/:id/bookmark', customerController.addBookmark);
+router.patch('/:id/bookmark', customerController.updateBookmark);
+router.delete('/:id/bookmark', customerController.removeBookmark);
 
 // Address routes
 router.post('/:id/addresses', customerController.addAddress);

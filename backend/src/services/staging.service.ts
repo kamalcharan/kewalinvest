@@ -1,7 +1,5 @@
 // backend/src/services/staging.service.ts
 
-// backend/src/services/staging.service.ts
-
 import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/database';
 import { FileParserService } from './fileParser.service';
@@ -248,6 +246,30 @@ export class StagingService {
           const cleanedAmount = value.replace(/,/g, '');
           const parsedAmount = parseFloat(cleanedAmount);
           value = isNaN(parsedAmount) ? 0 : parsedAmount;
+        } else if (['total_amount', 'units', 'nav', 'stamp_duty', 'stt', 'tds'].includes(mapping.targetField)) {
+          // CRITICAL FIX: Handle numeric fields - convert empty strings to null
+          if (value === '' || value === null || value === undefined) {
+            // For required fields like total_amount, units, nav - keep empty string for validation to catch
+            // For optional fields like stamp_duty, stt, tds - set to null
+            value = ['stamp_duty', 'stt', 'tds'].includes(mapping.targetField) ? null : '';
+          } else {
+            // Clean and parse the numeric value
+            const cleanedNumber = String(value)
+              .replace(/,/g, '')           // Remove commas: 10,000 → 10000
+              .replace(/\s/g, '')          // Remove spaces: 10 000 → 10000
+              .replace(/[₹$€£¥]/g, '')     // Remove currency symbols
+              .replace(/[()]/g, '')        // Remove parentheses
+              .trim();
+            
+            const parsedNumber = parseFloat(cleanedNumber);
+            
+            if (isNaN(parsedNumber)) {
+              // If parsing fails, set optional fields to null, required fields to empty for validation
+              value = ['stamp_duty', 'stt', 'tds'].includes(mapping.targetField) ? null : '';
+            } else {
+              value = parsedNumber;
+            }
+          }
         } else if ((mapping.targetField === 'isin_div_payout' || 
                    mapping.targetField === 'isin_growth' || 
                    mapping.targetField === 'isin_div_reinvestment') && value !== '') {

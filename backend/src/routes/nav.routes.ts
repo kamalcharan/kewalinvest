@@ -3,12 +3,14 @@
 
 import { Router } from 'express';
 import { NavController } from '../controllers/nav.controller';
+import { BookmarkGapController } from '../controllers/bookmarkGap.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { environmentMiddleware } from '../middleware/environment.middleware';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
 const navController = new NavController();
+const bookmarkGapController = new BookmarkGapController();
 
 // Apply authentication and environment middleware to all routes
 router.use(authMiddleware);
@@ -179,6 +181,80 @@ router.get('/bookmarks/:id/stats', navController.getBookmarkStats);
  * but can be used by admin interfaces for manual status updates
  */
 router.put('/bookmarks/:id/download-status', navController.updateBookmarkDownloadStatus);
+
+// ==================== BOOKMARK GAP DETECTION ROUTES ====================
+
+/**
+ * Get all unbookmarked schemes from customer portfolios (tenant-wide)
+ * GET /api/nav/bookmark-gaps
+ * 
+ * Returns: {
+ *   alert_type: 'critical' | 'warning',
+ *   message: string,
+ *   unbookmarked_schemes: [
+ *     {
+ *       scheme_code: string,
+ *       scheme_name: string,
+ *       customer_count: number,
+ *       transaction_count: number,
+ *       total_invested: number,
+ *       last_transaction_date: Date,
+ *       scheme_id: number | null,
+ *       amc_name: string | null,
+ *       exists_in_master: boolean
+ *     }
+ *   ],
+ *   summary: {
+ *     total_unbookmarked: number,
+ *     total_customers_affected: number,
+ *     total_investment_at_risk: number,
+ *     schemes_not_in_master: number,
+ *     schemes_not_bookmarked: number,
+ *     last_checked: Date
+ *   }
+ * }
+ * 
+ * Use this to detect schemes in customer transactions that aren't being tracked
+ * Critical: Schemes not in master data (need to be added to t_scheme_details)
+ * Warning: Schemes exist but not bookmarked (need to bookmark for NAV tracking)
+ */
+router.get('/bookmark-gaps', bookmarkGapController.getUnbookmarkedSchemes);
+
+/**
+ * Get unbookmarked schemes for a specific customer
+ * GET /api/nav/bookmark-gaps/customer/:customerId
+ * 
+ * Returns unbookmarked schemes from a single customer's portfolio
+ * Useful for customer dashboard alerts or customer-specific portfolio analysis
+ * 
+ * Returns: {
+ *   customer_id: number,
+ *   unbookmarked_schemes: [...],
+ *   total_unbookmarked: number,
+ *   critical_count: number,
+ *   warning_count: number
+ * }
+ */
+router.get('/bookmark-gaps/customer/:customerId', bookmarkGapController.getCustomerUnbookmarkedSchemes);
+
+/**
+ * Get bookmark gap summary statistics (lightweight)
+ * GET /api/nav/bookmark-gaps/summary
+ * 
+ * Returns only the summary without full scheme details
+ * Useful for dashboard widgets or quick status checks
+ * Much faster than full gap detection
+ * 
+ * Returns: {
+ *   total_unbookmarked: number,
+ *   total_customers_affected: number,
+ *   total_investment_at_risk: number,
+ *   schemes_not_in_master: number,
+ *   schemes_not_bookmarked: number,
+ *   last_checked: Date
+ * }
+ */
+router.get('/bookmark-gaps/summary', bookmarkGapController.getGapSummary);
 
 // ==================== NAV DATA ROUTES ====================
 
@@ -616,6 +692,23 @@ router.get('/docs', (req, res) => {
           method: 'PUT', 
           path: '/bookmarks/:id/download-status',
           description: 'Update bookmark download status (internal)'
+        }
+      },
+      bookmark_gaps: {
+        tenant_wide: {
+          method: 'GET',
+          path: '/bookmark-gaps',
+          description: 'Get all unbookmarked schemes from customer portfolios'
+        },
+        customer_specific: {
+          method: 'GET',
+          path: '/bookmark-gaps/customer/:customerId',
+          description: 'Get unbookmarked schemes for a specific customer'
+        },
+        summary: {
+          method: 'GET',
+          path: '/bookmark-gaps/summary',
+          description: 'Get bookmark gap summary statistics (lightweight)'
         }
       },
       nav_data: {

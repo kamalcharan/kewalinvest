@@ -1,5 +1,5 @@
 // backend/src/services/navDownload.service.ts
-// UPDATED: Fixed historical download status update to properly mark as completed
+// UPDATED: Fixed to use global scheme NAV status tracking
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -56,7 +56,7 @@ export class NavDownloadService {
   // ==================== PUBLIC DOWNLOAD METHODS ====================
 
   /**
-   * Trigger daily NAV download (idempotent) - UNCHANGED
+   * Trigger daily NAV download (idempotent)
    */
   async triggerDailyDownload(
     tenantId: number,
@@ -90,7 +90,6 @@ export class NavDownloadService {
       const schemeIds = bookmarks.bookmarks.map(b => b.scheme_id);
 
       const existingData = await this.navService.checkNavDataExists(
-        tenantId,
         isLive,
         schemeIds,
         new Date()
@@ -169,8 +168,7 @@ export class NavDownloadService {
   }
 
   /**
-   * UPDATED: Trigger historical NAV download using MFAPI.in (scheme-by-scheme)
-   * No date chunking needed - MFAPI provides complete history per scheme
+   * Trigger historical NAV download using MFAPI.in (scheme-by-scheme)
    */
   async triggerHistoricalDownload(
     tenantId: number,
@@ -212,8 +210,6 @@ export class NavDownloadService {
         const existingLock = this.downloadLocks.get(lockKey)!;
         throw new Error(`Historical download already in progress (Job ID: ${existingLock.jobId})`);
       }
-
-      // REMOVED: Check for historical_download_completed - allow re-downloads for earlier data
 
       // Create download job
       const downloadJob = await this.navService.createDownloadJob(
@@ -320,26 +316,25 @@ export class NavDownloadService {
         message: `Historical download started for ${request.scheme_ids.length} schemes using MFAPI.in`
       };
     } catch (error: any) {
-  this.downloadLocks.delete(lockKey);
-  
-  SimpleLogger.error('NavDownload', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
-    tenantId, userId, request, error: error.message
-  }, userId, tenantId, error.stack);
-  
-  // FIXED: Preserve existingData property when re-throwing DATE_RANGE_OVERLAP error
-  if (error.message === 'DATE_RANGE_OVERLAP' && error.existingData) {
-    const preservedError = new Error(error.message);
-    (preservedError as any).existingData = error.existingData;
-    throw preservedError;
-  }
-  
-  throw error;
-}
+      this.downloadLocks.delete(lockKey);
+      
+      SimpleLogger.error('NavDownload', 'Failed to trigger historical download', 'triggerHistoricalDownload', {
+        tenantId, userId, request, error: error.message
+      }, userId, tenantId, error.stack);
+      
+      // Preserve existingData property when re-throwing DATE_RANGE_OVERLAP error
+      if (error.message === 'DATE_RANGE_OVERLAP' && error.existingData) {
+        const preservedError = new Error(error.message);
+        (preservedError as any).existingData = error.existingData;
+        throw preservedError;
+      }
+      
+      throw error;
+    }
   }
 
   /**
-   * FIXED: Execute historical download scheme-by-scheme using MFAPI.in
-   * Now properly updates bookmark status to 'success' after completion
+   * Execute historical download scheme-by-scheme using MFAPI.in
    */
   private async executeHistoricalDownload(
     jobId: number,
@@ -368,7 +363,7 @@ export class NavDownloadService {
       });
 
       // Get scheme codes upfront
-      const schemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, schemeIds);
+      const schemeCodes = await this.getSchemeCodesByIds(schemeIds);
       
       if (schemeCodes.length !== schemeIds.length) {
         throw new Error('Could not fetch all scheme codes');
@@ -398,6 +393,18 @@ export class NavDownloadService {
             jobId, schemeId, schemeCode
           });
           
+          // Update scheme status to in_progress
+          try {
+            await this.navService.updateSchemeNavStatus(schemeId, {
+              last_download_status: 'in_progress',
+              last_download_date: new Date()
+            });
+          } catch (statusError: any) {
+            SimpleLogger.error('NavDownload', 'Failed to update scheme status to in_progress', 'executeHistoricalDownload', {
+              jobId, schemeId, error: statusError.message
+            });
+          }
+          
           // Call MFAPI.in for this scheme with date range filtering
           const mfapiResponse = await this.amfiService.downloadFromMFAPI(
             schemeCode,
@@ -410,8 +417,13 @@ export class NavDownloadService {
             }
           );
           
-          if (!mfapiResponse.success || !mfapiResponse.data || mfapiResponse.data.length === 0) {
-            throw new Error(mfapiResponse.error || 'No data returned from MFAPI.in');
+          // VALIDATION 1: Check if MFAPI returned data
+          if (!mfapiResponse.success) {
+            throw new Error(mfapiResponse.error || 'MFAPI.in request failed');
+          }
+          
+          if (!mfapiResponse.data || mfapiResponse.data.length === 0) {
+            throw new Error('No data found with data provider (MFAPI.in) for the requested date range');
           }
           
           SimpleLogger.info('NavDownload', `Received ${mfapiResponse.data.length} NAV records from MFAPI.in`, 'executeHistoricalDownload', {
@@ -425,31 +437,50 @@ export class NavDownloadService {
             mfapiResponse.data
           );
           
+          // VALIDATION 2: Check if any records were actually inserted/updated
+          if (upsertResult.inserted === 0 && upsertResult.updated === 0) {
+            const errorSummary = upsertResult.errors.length > 0
+              ? `Database insert failed for all records. Sample errors: ${upsertResult.errors.slice(0, 3).map(e => e.error).join('; ')}`
+              : 'No records were inserted or updated for unknown reasons';
+            
+            throw new Error(errorSummary);
+          }
+          
           totalRecordsInserted += upsertResult.inserted;
           totalRecordsUpdated += upsertResult.updated;
           processedSchemes++;
           
           SimpleLogger.info('NavDownload', `Upserted NAV data for scheme`, 'executeHistoricalDownload', {
-            jobId, schemeCode, inserted: upsertResult.inserted, updated: upsertResult.updated
+            jobId, 
+            schemeCode, 
+            inserted: upsertResult.inserted, 
+            updated: upsertResult.updated,
+            errors: upsertResult.errors.length
           });
           
-          // ADDED: Update bookmark status to success for this scheme
+          // Log warnings if some records failed
+          if (upsertResult.errors.length > 0) {
+            SimpleLogger.warn('NavDownload', `Some records failed to insert for scheme ${schemeCode}`, 'executeHistoricalDownload', {
+              jobId, 
+              schemeCode,
+              totalRecords: mfapiResponse.data.length,
+              successfulRecords: upsertResult.inserted + upsertResult.updated,
+              failedRecords: upsertResult.errors.length,
+              sampleErrors: upsertResult.errors.slice(0, 3)
+            });
+          }
+          
+          // Update scheme status to success
           try {
-            await this.navService.updateBookmarkDownloadStatus(
-              tenantId,
-              isLive,
-              userId,
-              schemeId,
-              {
-                last_download_status: 'success',
-                last_download_attempt: new Date()
-              }
-            );
-            SimpleLogger.info('NavDownload', `Updated bookmark status to success for scheme ${schemeCode}`, 'executeHistoricalDownload', {
+            await this.navService.updateSchemeNavStatus(schemeId, {
+              last_download_status: 'success',
+              last_download_date: new Date()
+            });
+            SimpleLogger.info('NavDownload', `Updated scheme status to success for scheme ${schemeCode}`, 'executeHistoricalDownload', {
               jobId, schemeId, schemeCode
             });
           } catch (statusError: any) {
-            SimpleLogger.error('NavDownload', 'Failed to update bookmark status but continuing', 'executeHistoricalDownload', {
+            SimpleLogger.error('NavDownload', 'Failed to update scheme status but continuing', 'executeHistoricalDownload', {
               jobId, schemeId, schemeCode, error: statusError.message
             });
           }
@@ -475,21 +506,15 @@ export class NavDownloadService {
             error: schemeError.message || 'Unknown error'
           });
           
-          // ADDED: Update bookmark status to failed for this scheme
+          // Update scheme status to failed
           try {
-            await this.navService.updateBookmarkDownloadStatus(
-              tenantId,
-              isLive,
-              userId,
-              schemeId,
-              {
-                last_download_status: 'failed',
-                last_download_error: schemeError.message,
-                last_download_attempt: new Date()
-              }
-            );
+            await this.navService.updateSchemeNavStatus(schemeId, {
+              last_download_status: 'failed',
+              last_download_error: schemeError.message,
+              last_download_date: new Date()
+            });
           } catch (statusError: any) {
-            SimpleLogger.error('NavDownload', 'Failed to update bookmark status to failed', 'executeHistoricalDownload', {
+            SimpleLogger.error('NavDownload', 'Failed to update scheme status to failed', 'executeHistoricalDownload', {
               jobId, schemeId, schemeCode, error: statusError.message
             });
           }
@@ -536,7 +561,7 @@ export class NavDownloadService {
         errors: schemeErrors
       });
 
-      // FIXED: Mark historical download complete only if all schemes succeeded
+      // Mark historical download complete only if all schemes succeeded
       if (schemeErrors.length === 0) {
         try {
           await this.markHistoricalDownloadCompleted(tenantId, isLive, userId, schemeIds);
@@ -583,20 +608,14 @@ export class NavDownloadService {
           progressPercentage: 0
         });
 
-        // ADDED: Update all schemes to failed status
+        // Update all schemes to failed status
         for (const schemeId of schemeIds) {
           try {
-            await this.navService.updateBookmarkDownloadStatus(
-              tenantId,
-              isLive,
-              userId,
-              schemeId,
-              {
-                last_download_status: 'failed',
-                last_download_error: errorMessage,
-                last_download_attempt: new Date()
-              }
-            );
+            await this.navService.updateSchemeNavStatus(schemeId, {
+              last_download_status: 'failed',
+              last_download_error: errorMessage,
+              last_download_date: new Date()
+            });
           } catch (statusError: any) {
             // Continue even if status update fails
           }
@@ -614,7 +633,7 @@ export class NavDownloadService {
   }
 
   /**
-   * Trigger weekly NAV download - UNCHANGED
+   * Trigger weekly NAV download
    */
   async triggerWeeklyDownload(
     tenantId: number,
@@ -694,8 +713,7 @@ export class NavDownloadService {
   // ==================== DOWNLOAD EXECUTION (DAILY/WEEKLY) ====================
 
   /**
-   * Execute download job - UPDATED to handle only daily/weekly
-   * Historical downloads now use executeHistoricalDownload() instead
+   * Execute download job - handles daily/weekly downloads
    */
   private async executeDownload(
     jobId: number,
@@ -744,7 +762,6 @@ export class NavDownloadService {
             requestId: `${job.job_type}_${jobId}_${Date.now()}`
           });
         } else if (job.job_type === 'historical') {
-          // Historical downloads should use executeHistoricalDownload() method
           throw new Error('Historical downloads should use executeHistoricalDownload() method');
         }
       } catch (amfiError: any) {
@@ -768,7 +785,7 @@ export class NavDownloadService {
         progressPercentage: 35
       });
 
-      const trackedSchemeCodes = await this.getSchemeCodesByIds(tenantId, isLive, job.schemes.map(s => s.scheme_id));
+      const trackedSchemeCodes = await this.getSchemeCodesByIds(job.schemes.map(s => s.scheme_id));
       const schemeCodeSet = new Set(trackedSchemeCodes);
       
       const filteredNavData = navData.filter(record => 
@@ -817,7 +834,7 @@ export class NavDownloadService {
         }, userId, tenantId);
 
         const errorSchemeCodes = upsertResult.errors.map(e => e.scheme_code);
-        const schemeIdMap = await this.getSchemeIdsByCodesMap(tenantId, isLive, errorSchemeCodes);
+        const schemeIdMap = await this.getSchemeIdsByCodesMap(errorSchemeCodes);
         
         schemesWithErrors = upsertResult.errors.map(error => {
           const schemeId = schemeIdMap[error.scheme_code];
@@ -904,9 +921,10 @@ export class NavDownloadService {
 
   // ==================== UTILITY METHODS ====================
 
+  /**
+   * Get scheme IDs by scheme codes (global query - no tenant filter)
+   */
   private async getSchemeIdsByCodesMap(
-    tenantId: number,
-    isLive: boolean,
     schemeCodes: string[]
   ): Promise<{ [code: string]: number }> {
     try {
@@ -915,13 +933,11 @@ export class NavDownloadService {
       const query = `
         SELECT id, scheme_code 
         FROM t_scheme_details
-        WHERE tenant_id = $1 
-          AND is_live = $2 
-          AND scheme_code = ANY($3) 
+        WHERE scheme_code = ANY($1) 
           AND is_active = true
       `;
       
-      const result = await this.db.query(query, [tenantId, isLive, schemeCodes]);
+      const result = await this.db.query(query, [schemeCodes]);
       
       const schemeMap: { [code: string]: number } = {};
       result.rows.forEach(row => {
@@ -931,32 +947,35 @@ export class NavDownloadService {
       return schemeMap;
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to get scheme IDs by codes', 'getSchemeIdsByCodesMap', {
-        tenantId, schemeCodes, error: error.message
-      }, undefined, tenantId, error.stack);
+        schemeCodes, error: error.message
+      }, undefined, undefined, error.stack);
       return {};
     }
   }
 
+  /**
+   * Get scheme codes by IDs (global query - no tenant filter)
+   */
   private async getSchemeCodesByIds(
-    tenantId: number,
-    isLive: boolean,
     schemeIds: number[]
   ): Promise<string[]> {
     try {
       if (schemeIds.length === 0) return [];
 
       const query = `
-        SELECT scheme_code FROM t_scheme_details
-        WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
-        ORDER BY ARRAY_POSITION($3, id)
+        SELECT scheme_code 
+        FROM t_scheme_details
+        WHERE id = ANY($1) 
+          AND is_active = true
+        ORDER BY ARRAY_POSITION($1, id)
       `;
       
-      const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
+      const result = await this.db.query(query, [schemeIds]);
       return result.rows.map(row => row.scheme_code);
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to get scheme codes', 'getSchemeCodesByIds', {
-        tenantId, schemeIds, error: error.message
-      });
+        schemeIds, error: error.message
+      }, undefined, undefined, error.stack);
       return [];
     }
   }
@@ -1056,7 +1075,7 @@ export class NavDownloadService {
       const query = `
         SELECT sd.id 
         FROM t_scheme_details sd
-        WHERE sd.tenant_id = $1 AND sd.is_live = $2 AND sd.is_active = true
+        WHERE sd.is_active = true
         AND NOT EXISTS (
           SELECT 1 FROM t_scheme_bookmarks sb 
           WHERE sb.scheme_id = sd.id 
@@ -1073,7 +1092,7 @@ export class NavDownloadService {
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to get untracked schemes', 'getUntrackedSchemesForWeeklyDownload', {
         tenantId, limit, error: error.message
-      });
+      }, undefined, tenantId, error.stack);
       return [];
     }
   }
@@ -1088,10 +1107,10 @@ export class NavDownloadService {
       const query = `
         UPDATE t_scheme_bookmarks
         SET historical_download_completed = true, updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND scheme_id = ANY($4) AND is_active = true
+        WHERE tenant_id = $1 AND is_live = $2 AND scheme_id = ANY($3) AND is_active = true
       `;
       
-      await this.db.query(query, [tenantId, isLive, userId, schemeIds]);
+      await this.db.query(query, [tenantId, isLive, schemeIds]);
       
       SimpleLogger.info('NavDownload', 'Historical download marked as completed', 'markHistoricalDownloadCompleted', {
         tenantId, userId, schemeIds
@@ -1099,7 +1118,7 @@ export class NavDownloadService {
     } catch (error: any) {
       SimpleLogger.error('NavDownload', 'Failed to mark historical download completed', 'markHistoricalDownloadCompleted', {
         tenantId, userId, schemeIds, error: error.message
-      });
+      }, undefined, tenantId, error.stack);
     }
   }
 

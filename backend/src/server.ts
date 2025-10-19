@@ -17,6 +17,9 @@ import navRoutes from './routes/nav.routes';
 import transactionRoutes from './routes/transaction.routes';
 import portfolioRoutes from './routes/portfolio.routes';
 import jtbdRoutes from './routes/jtbd.routes';
+import marketRoutes from './routes/market.routes';
+import marketAnalysisRoutes from './routes/marketAnalysis.routes';
+import goalRoutes from './routes/goal.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -65,7 +68,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // Limit each IP to 100 requests per windowMs
+  max: 10000, // Limit each IP to 10000 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
 
@@ -87,6 +90,8 @@ app.get('/health', (_req: Request, res: Response) => {
     features: {
       contacts: true,
       customers: true,
+      customer_bookmarks: true,
+      customer_activation: true,
       schemes: true,
       transactions: true,
       portfolio: true,
@@ -95,9 +100,17 @@ app.get('/health', (_req: Request, res: Response) => {
       logs: true,
       nav: true,
       nav_enhanced_bookmarks: true,
+      nav_bookmark_gaps: true,
       nav_scheduler: !!navScheduler,
+      market_data: true,
+      market_indices: true,
+      market_downloads: true,
+      market_analysis: true,
       jtbd: true,
-      jtbd_dashboard: true, // NEW: JTBD Dashboard features
+      jtbd_dashboard: true,
+      goals: true,
+      goal_recalculation: true,
+      goal_history: true,
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -129,7 +142,10 @@ app.get('/api', (_req: Request, res: Response) => {
       import: '/api/import',
       logs: '/api/logs',
       nav: '/api/nav',
-      jtbd: '/api/jtbd'
+      market: '/api/market',
+      market_analysis: '/api/market-analysis',
+      jtbd: '/api/jtbd',
+      goals: '/api/goals'
     }
   });
 });
@@ -143,7 +159,10 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
+app.use('/api/market', marketRoutes);
+app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/jtbd', jtbdRoutes);
+app.use('/api/goals', goalRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -188,9 +207,14 @@ app.use((_req: Request, res: Response) => {
       'GET /api/customers',
       'POST /api/customers',
       'GET /api/customers/stats',
+      'GET /api/customers/bookmark-reasons',
       'GET /api/customers/:id',
       'PUT /api/customers/:id',
       'DELETE /api/customers/:id',
+      'PUT /api/customers/:id/activate',
+      'POST /api/customers/:id/bookmark',
+      'PATCH /api/customers/:id/bookmark',
+      'DELETE /api/customers/:id/bookmark',
       'POST /api/customers/:id/addresses',
       'PUT /api/customers/:id/addresses/:addressId',
       'DELETE /api/customers/:id/addresses/:addressId',
@@ -251,12 +275,12 @@ app.use((_req: Request, res: Response) => {
       'POST /api/nav/bookmarks',
       'PUT /api/nav/bookmarks/:id',
       'DELETE /api/nav/bookmarks/:id',
-      
-      // ENHANCED: New bookmark endpoints
       'GET /api/nav/bookmarks/:id/nav-data',
       'GET /api/nav/bookmarks/:id/stats',
       'PUT /api/nav/bookmarks/:id/download-status',
-      
+      'GET /api/nav/bookmark-gaps',
+      'GET /api/nav/bookmark-gaps/customer/:customerId',
+      'GET /api/nav/bookmark-gaps/summary',
       'GET /api/nav/data',
       'GET /api/nav/schemes/:id/latest',
       'POST /api/nav/download/daily',
@@ -279,6 +303,23 @@ app.use((_req: Request, res: Response) => {
       'POST /api/nav/scheduler/trigger',
       'GET /api/nav/scheduler/all-active',
       
+      // Market Data endpoints
+      'GET /api/market/indices',
+      'GET /api/market/indices/:id',
+      'GET /api/market/data/:indexId',
+      'GET /api/market/data/:indexId/latest',
+      'DELETE /api/market/data/:indexId',
+      'POST /api/market/download/historical',
+      'POST /api/market/download/eod',
+      'POST /api/market/download/eod-all',
+      'GET /api/market/statistics',
+      'GET /api/market/health',
+      
+      // Market Analysis endpoints
+      'GET /api/market-analysis/health',
+      'POST /api/market-analysis/calculate-metrics/:indexId',
+      'GET /api/market-analysis/metrics/:indexId',
+      
       // JTBD endpoints
       'POST /api/jtbd',
       'GET /api/jtbd/customer/:customerId',
@@ -295,6 +336,17 @@ app.use((_req: Request, res: Response) => {
       'GET /api/jtbd/schemes/:customerId',
       'GET /api/jtbd/transaction-types',
       'GET /api/jtbd/:id/occurrences',
+      
+      // Goal endpoints
+      'POST /api/goals',
+      'GET /api/goals/customer/:customerId',
+      'GET /api/goals/:id',
+      'PUT /api/goals/:id',
+      'DELETE /api/goals/:id',
+      'POST /api/goals/:id/recalculate',
+      'POST /api/goals/customer/:customerId/recalculate',
+      'GET /api/goals/customer/:customerId/summary',
+      'GET /api/goals/:id/history',
       
       // System logs endpoints
       'GET /api/logs',
@@ -399,9 +451,9 @@ app.listen(PORT, async () => {
 ║                                        ║
 ╠════════════════════════════════════════╣
 ║  Status: ✅ Running                    ║
-║  Port: ${PORT}                            ║
-║  Environment: ${process.env.NODE_ENV || 'development'}          ║
-║  Time: ${new Date().toLocaleString()}         ║
+║  Port: ${PORT.toString().padEnd(29)}║
+║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(21)}║
+║  Time: ${new Date().toLocaleString().padEnd(25)}║
 ║                                        ║
 ║  📋 Available Routes:                  ║
 ║  • GET  /health                        ║
@@ -428,10 +480,17 @@ app.listen(PORT, async () => {
 ║  • GET  /api/customers                 ║
 ║  • POST /api/customers                 ║
 ║  • GET  /api/customers/stats           ║
+║  • GET  /api/customers/bookmark-reasons║
 ║  • GET  /api/customers/:id             ║
 ║  • PUT  /api/customers/:id             ║
 ║  • DELETE /api/customers/:id           ║
+║  • PUT  /api/customers/:id/activate    ║
+║  • POST /api/customers/:id/bookmark    ║
+║  • PATCH /api/customers/:id/bookmark   ║
+║  • DELETE /api/customers/:id/bookmark  ║
 ║  • POST /api/customers/:id/addresses   ║
+║  • PUT  /api/customers/:id/addresses/..║
+║  • DELETE /api/customers/:id/addresses/║
 ║                                        ║
 ║  Schemes:                              ║
 ║  • GET  /api/schemes                   ║
@@ -442,7 +501,7 @@ app.listen(PORT, async () => {
 ║  • POST /api/schemes                   ║
 ║  • PUT  /api/schemes/:schemeCode       ║
 ║                                        ║
-║  Transactions (NEW):                   ║
+║  Transactions:                         ║
 ║  • GET  /api/transactions              ║
 ║  • GET  /api/transactions/summary      ║
 ║  • GET  /api/transactions/:id          ║
@@ -451,7 +510,7 @@ app.listen(PORT, async () => {
 ║  • PATCH /api/transactions/:id/...     ║
 ║  • DELETE /api/transactions/:id        ║
 ║                                        ║
-║  Portfolio (NEW):                      ║
+║  Portfolio:                            ║
 ║  • GET  /api/portfolio/holdings        ║
 ║  • GET  /api/portfolio/statistics      ║
 ║  • POST /api/portfolio/refresh         ║
@@ -469,16 +528,37 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/download/progress/:id ║
 ║  • GET  /api/nav/statistics            ║
 ║                                        ║
-║  📋 Enhanced Bookmarks (NEW):          ║
+║  📋 Enhanced Bookmarks:                ║
 ║  • GET  /api/nav/bookmarks/:id/nav-data║
 ║  • GET  /api/nav/bookmarks/:id/stats   ║
 ║  • PUT  /api/nav/bookmarks/:id/download║
+║                                        ║
+║  🔍 Bookmark Gap Detection:            ║
+║  • GET  /api/nav/bookmark-gaps         ║
+║  • GET  /api/nav/bookmark-gaps/cust/:id║
+║  • GET  /api/nav/bookmark-gaps/summary ║
 ║                                        ║
 ║  📅 NAV Scheduler:                     ║
 ║  • GET  /api/nav/scheduler/config      ║
 ║  • POST /api/nav/scheduler/config      ║
 ║  • GET  /api/nav/scheduler/status      ║
 ║  • POST /api/nav/scheduler/trigger     ║
+║                                        ║
+║  📊 Market Data:                       ║
+║  • GET  /api/market/indices            ║
+║  • GET  /api/market/indices/:id        ║
+║  • GET  /api/market/data/:indexId      ║
+║  • GET  /api/market/data/:id/latest    ║
+║  • DELETE /api/market/data/:indexId    ║
+║  • POST /api/market/download/historical║
+║  • POST /api/market/download/eod       ║
+║  • POST /api/market/download/eod-all   ║
+║  • GET  /api/market/statistics         ║
+║  • GET  /api/market/health             ║
+║                                        ║
+║  📈 Market Analysis:                   ║
+║  • POST /api/market-analysis/calc-metrics║
+║  • GET  /api/market-analysis/metrics   ║
 ║                                        ║
 ║  🎯 JTBD:                              ║
 ║  • POST /api/jtbd                      ║
@@ -488,7 +568,7 @@ app.listen(PORT, async () => {
 ║  • DELETE /api/jtbd/:id                ║
 ║  • PATCH /api/jtbd/:id/toggle          ║
 ║                                        ║
-║  📊 JTBD Dashboard (NEW):              ║
+║  📊 JTBD Dashboard:                    ║
 ║  • GET  /api/jtbd/dashboard/overview   ║
 ║  • GET  /api/jtbd/dashboard/customers..║
 ║  • GET  /api/jtbd/dashboard/upcoming.. ║
@@ -498,6 +578,23 @@ app.listen(PORT, async () => {
 ║  • GET  /api/jtbd/schemes/:customerId  ║
 ║  • GET  /api/jtbd/transaction-types    ║
 ║  • GET  /api/jtbd/:id/occurrences      ║
+║                                        ║
+║  🎯 Goals:                             ║
+║  • POST /api/goals                     ║
+║  • GET  /api/goals/customer/:id        ║
+║  • GET  /api/goals/:id                 ║
+║  • PUT  /api/goals/:id                 ║
+║  • DELETE /api/goals/:id               ║
+║  • POST /api/goals/:id/recalculate     ║
+║  • POST /api/goals/customer/:id/recalc ║
+║  • GET  /api/goals/customer/:id/summary║
+║  • GET  /api/goals/:id/history         ║
+║                                        ║
+║  🔖 Customer Bookmarks:                ║
+║  • GET  /api/customers/bookmark-reasons║
+║  • POST /api/customers/:id/bookmark    ║
+║  • PATCH /api/customers/:id/bookmark   ║
+║  • DELETE /api/customers/:id/bookmark  ║
 ║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
@@ -532,13 +629,23 @@ app.listen(PORT, async () => {
     console.log('✅ Database connected successfully');
     console.log('✅ Contact management endpoints ready');
     console.log('✅ Customer management endpoints ready');
+    console.log('✅ Customer bookmark system ready');
+    console.log('✅ Customer activation feature ready');
     console.log('✅ Scheme management endpoints ready');
     console.log('✅ Transaction management endpoints ready');
     console.log('✅ Portfolio tracking endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
     console.log('✅ Enhanced bookmark endpoints ready');
+    console.log('✅ Bookmark gap detection ready');
+    console.log('✅ Market data endpoints ready');
+    console.log('✅ Market indices management ready');
+    console.log('✅ Market data downloads ready');
+    console.log('✅ Market analysis endpoints ready');
     console.log('✅ JTBD endpoints ready');
-    console.log('✅ JTBD Dashboard endpoints ready'); // NEW
+    console.log('✅ JTBD Dashboard endpoints ready');
+    console.log('✅ Goal management endpoints ready');
+    console.log('✅ Goal recalculation ready');
+    console.log('✅ Goal history tracking ready');
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
@@ -608,8 +715,18 @@ app.listen(PORT, async () => {
 ║  Portfolio: ✅ Ready                   ║
 ║  NAV Routes: ✅ Ready                  ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
+║  Bookmark Gap Detection: ✅ Ready      ║
+║  Customer Bookmarks: ✅ Ready          ║
+║  Customer Activation: ✅ Ready         ║
+║  Market Data: ✅ Ready                 ║
+║  Market Indices: ✅ Ready              ║
+║  Market Downloads: ✅ Ready            ║
+║  Market Analysis: ✅ Ready             ║
 ║  JTBD: ✅ Ready                        ║
 ║  JTBD Dashboard: ✅ Ready              ║
+║  Goals: ✅ Ready                       ║
+║  Goal Recalculation: ✅ Ready          ║
+║  Goal History: ✅ Ready                ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

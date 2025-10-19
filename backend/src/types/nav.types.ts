@@ -1,5 +1,9 @@
 // backend/src/types/nav.types.ts
-// UPDATED: Removed sequential download types (chunking no longer needed with MFAPI.in)
+// UPDATED: 
+// 1. Removed tenant_id from NavData (global NAV repository)
+// 2. Added alias_name to SchemeBookmark (tenant custom naming)
+// 3. Added bookmark gap detection types
+// 4. Added data_source to ParsedNavRecord
 
 export interface SchemeBookmark {
   id: number;
@@ -9,6 +13,7 @@ export interface SchemeBookmark {
   scheme_code: string;
   scheme_name: string;
   amc_name: string;
+  alias_name?: string; // ADDED: Custom scheme name for tenant
   is_live: boolean;
   is_active: boolean;
   daily_download_enabled: boolean;
@@ -30,11 +35,13 @@ export interface SchemeBookmark {
 
 export interface CreateSchemeBookmarkRequest {
   scheme_id: number;
+  alias_name?: string; // ADDED: Optional custom name during creation
   daily_download_enabled?: boolean;
   download_time?: string;
 }
 
 export interface UpdateSchemeBookmarkRequest {
+  alias_name?: string; // ADDED: Update custom name
   daily_download_enabled?: boolean;
   download_time?: string;
   historical_download_completed?: boolean;
@@ -86,7 +93,7 @@ export interface UpdateBookmarkDownloadStatus {
 
 export interface NavData {
   id: number;
-  tenant_id: number;
+  // REMOVED: tenant_id - NAV data is now global across all tenants
   scheme_id: number;
   scheme_code: string;
   nav_date: Date;
@@ -199,6 +206,69 @@ export interface NavDownloadJobWithSchemes extends NavDownloadJob {
   }>;
 }
 
+// ==================== BOOKMARK GAP DETECTION TYPES (NEW) ====================
+
+export interface UnbookmarkedScheme {
+  scheme_code: string;
+  scheme_name: string;
+  customer_count: number;
+  transaction_count: number;
+  total_invested: number;
+  last_transaction_date: Date;
+  first_transaction_date: Date;
+  scheme_id: number | null; // null if scheme doesn't exist in t_scheme_details
+  amc_name: string | null;
+  exists_in_master: boolean; // true if found in t_scheme_details
+}
+
+export interface BookmarkGapSummary {
+  total_unbookmarked: number;
+  total_customers_affected: number;
+  total_investment_at_risk: number;
+  schemes_not_in_master: number; // Critical: schemes in transactions but not in master
+  schemes_not_bookmarked: number; // Warning: schemes in master but not bookmarked
+  last_checked: Date;
+}
+
+export interface BookmarkGapAlert {
+  alert_type: 'critical' | 'warning';
+  message: string;
+  unbookmarked_schemes: UnbookmarkedScheme[];
+  summary: BookmarkGapSummary;
+}
+
+export interface CustomerUnbookmarkedScheme {
+  customer_id: number;
+  customer_name: string;
+  scheme_code: string;
+  scheme_name: string;
+  folio_no: string;
+  total_invested: number;
+  transaction_count: number;
+  last_transaction_date: Date;
+  scheme_id: number | null;
+  exists_in_master: boolean;
+}
+
+export interface BulkBookmarkRequest {
+  scheme_codes: string[];
+  daily_download_enabled?: boolean;
+  download_time?: string;
+}
+
+export interface BulkBookmarkResult {
+  success_count: number;
+  failed_count: number;
+  skipped_count: number; // Already bookmarked
+  results: Array<{
+    scheme_code: string;
+    scheme_name: string;
+    status: 'success' | 'failed' | 'skipped';
+    error?: string;
+    bookmark_id?: number;
+  }>;
+}
+
 // ==================== AMFI DATA SOURCE TYPES ====================
 
 export interface AmfiNavRecord {
@@ -219,6 +289,7 @@ export interface ParsedNavRecord {
   nav_date: Date | null;
   isin_div_payout_growth?: string;
   isin_div_reinvestment?: string;
+  data_source?: 'daily' | 'historical' | 'weekly'; // ADDED: Track data source
 }
 
 // ==================== N8N INTEGRATION TYPES ====================
@@ -294,7 +365,8 @@ export const NAV_ERROR_CODES = {
   N8N_EXECUTION_FAILED: 'N8N_EXECUTION_FAILED',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   INVALID_NAV_FORMAT: 'INVALID_NAV_FORMAT',
-  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND'
+  DOWNLOAD_JOB_NOT_FOUND: 'DOWNLOAD_JOB_NOT_FOUND',
+  DATE_RANGE_OVERLAP: 'DATE_RANGE_OVERLAP' // ADDED: For historical download overlap detection
 } as const;
 
 // ==================== FRONTEND-SPECIFIC TYPES ====================
@@ -303,6 +375,7 @@ export interface NavDashboardData {
   statistics: NavStatistics;
   recent_downloads: NavDownloadJob[];
   bookmarked_schemes: SchemeBookmarkWithStats[];
+  bookmark_gap_alert?: BookmarkGapAlert; // ADDED: Gap detection alert
   alerts: Array<{
     type: 'info' | 'warning' | 'error';
     message: string;

@@ -50,6 +50,7 @@ export interface Customer {
 }
 
 // Customer with contact info - channels come from backend as simple types
+// UPDATED: Added bookmark fields
 export interface CustomerWithContact extends Customer {
   channels?: Array<{
     id: number;
@@ -63,6 +64,14 @@ export interface CustomerWithContact extends Customer {
   primary_email?: string;
   primary_mobile?: string;
   address_count?: number;
+  
+  // Bookmark fields (NEW)
+  is_bookmarked?: boolean;
+  bookmark_reason_id?: number;
+  bookmark_reason_code?: string;
+  bookmark_reason_label?: string;
+  bookmark_custom_reason?: string;
+  bookmark_notes?: string;
 }
 
 // Address interface
@@ -221,6 +230,7 @@ export interface UpdateAddressRequest {
 }
 
 // Search/List interfaces
+// UPDATED: Added bookmark filters
 export interface CustomerSearchParams {
   page?: number;
   page_size?: number;
@@ -231,9 +241,13 @@ export interface CustomerSearchParams {
   onboarding_status?: OnboardingStatus;
   has_address?: boolean;
   has_pan?: boolean;
-  is_active?: boolean;  // ✅ ADDED
+  is_active?: boolean;
   birthday_month?: number;
   anniversary_month?: number;
+  
+  // Bookmark filters (NEW)
+  is_bookmarked?: boolean;
+  bookmark_reason?: string;
 }
 
 export interface CustomerListResponse {
@@ -246,18 +260,19 @@ export interface CustomerListResponse {
   has_prev: boolean;
 }
 
-// Statistics interface - UPDATED to match backend
+// Statistics interface - UPDATED to include bookmarked count
 export interface CustomerStats {
   total: number;
   active: number;
   inactive: number;
-  alive: number;              // ✅ ADDED
-  deceased: number;           // ✅ ADDED
+  alive: number;
+  deceased: number;
   with_addresses: number;
   with_pan: number;
-  onboarding_pending: number;    // ✅ ADDED
-  onboarding_completed: number;  // ✅ ADDED
-  recent_30_days: number;        // ✅ ADDED
+  onboarding_pending: number;
+  onboarding_completed: number;
+  recent_30_days: number;
+  bookmarked?: number;  // NEW
   birthdays_this_month?: number;
   anniversaries_this_month?: number;
 }
@@ -288,4 +303,83 @@ export interface CustomerExportData extends CustomerImportData {
   updated_at: string;
   survival_status: string;
   onboarding_status: string;
+}
+
+// ============================================================================
+// BOOKMARK TYPES (NEW)
+// ============================================================================
+
+/**
+ * Bookmark reason master data
+ */
+export interface BookmarkReason {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  reason_code: string;
+  reason_label: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Customer bookmark
+ */
+export interface CustomerBookmark {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  customer_id: number;
+  user_id: number;
+  reason_id?: number;
+  custom_reason?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  
+  // Joined fields from m_bookmark_reasons
+  reason_code?: string;
+  reason_label?: string;
+}
+
+/**
+ * Request to create a new bookmark
+ */
+export interface CreateBookmarkRequest {
+  reason_id?: number;
+  custom_reason?: string;
+  notes?: string;
+}
+
+/**
+ * Request to update an existing bookmark
+ */
+export interface UpdateBookmarkRequest {
+  reason_id?: number;
+  custom_reason?: string;
+  notes?: string;
+}
+
+/**
+ * Response for bookmark reasons list
+ */
+export interface BookmarkReasonsResponse {
+  success: boolean;
+  data: {
+    reasons: BookmarkReason[];
+    total: number;
+  };
+}
+
+/**
+ * Response for bookmark operations
+ */
+export interface BookmarkResponse {
+  success: boolean;
+  data?: CustomerBookmark;  
+  message: string;
+  error?: string;  
 }

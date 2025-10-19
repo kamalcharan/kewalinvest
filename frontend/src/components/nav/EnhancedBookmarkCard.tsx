@@ -1,10 +1,11 @@
 // frontend/src/components/nav/EnhancedBookmarkCard.tsx
-// UPDATED: Simplified tooltips and terminology for MFAPI.in approach
+// UPDATED: Added mode prop for NAV History page with Dashboard button
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookmarks } from '../../hooks/useNavData';
 import { toastService } from '../../services/toast.service';
+import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark } from '../../services/nav.service';
 
 interface EnhancedBookmarkCardProps {
@@ -13,6 +14,10 @@ interface EnhancedBookmarkCardProps {
   onViewNavData?: (bookmark: SchemeBookmark) => void;
   onHistoricalDownload?: (bookmark: SchemeBookmark) => void;
   showActions?: boolean;
+  
+  // NEW: For NAV History page
+  mode?: 'default' | 'history';
+  onDashboardClick?: (bookmark: SchemeBookmark) => void;
 }
 
 export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
@@ -20,7 +25,9 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   onToggleDaily,
   onViewNavData,
   onHistoricalDownload,
-  showActions = true
+  showActions = true,
+  mode = 'default',
+  onDashboardClick
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -28,7 +35,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   
   const [isToggling, setIsToggling] = useState(false);
 
-  // FIXED: Safe number conversion for NAV value
+  // Safe number conversion for NAV value
   const formatNavValue = (value: any): string => {
     if (value === null || value === undefined) return 'N/A';
     
@@ -49,9 +56,28 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
       });
       
       onToggleDaily?.(bookmark.id, enabled);
-      toastService.success(`Daily download ${enabled ? 'enabled' : 'disabled'}`);
+      toastService.success(`Daily download ${enabled ? 'enabled' : 'disabled'} for ${bookmark.scheme_name}`);
+      
+      FrontendErrorLogger.info(
+        'Daily download toggled',
+        'EnhancedBookmarkCard',
+        {
+          bookmarkId: bookmark.id,
+          schemeName: bookmark.scheme_name,
+          enabled
+        }
+      );
     } catch (error: any) {
-      toastService.error('Failed to update bookmark');
+      FrontendErrorLogger.error(
+        'Failed to toggle daily download',
+        'EnhancedBookmarkCard',
+        {
+          bookmarkId: bookmark.id,
+          error: error.message
+        },
+        error.stack
+      );
+      toastService.error('Failed to update daily download setting');
     } finally {
       setIsToggling(false);
     }
@@ -64,10 +90,18 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
     }
     
     const startDate = bookmark.earliest_nav_date 
-      ? new Date(bookmark.earliest_nav_date).toLocaleDateString() 
+      ? new Date(bookmark.earliest_nav_date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })
       : 'Unknown';
     const endDate = bookmark.latest_nav_date 
-      ? new Date(bookmark.latest_nav_date).toLocaleDateString() 
+      ? new Date(bookmark.latest_nav_date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })
       : 'Unknown';
     
     return `${startDate} → ${endDate}`;
@@ -76,22 +110,21 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   // Get status indicator color and message
   const getStatusIndicator = () => {
     const hasNavData = (bookmark.nav_records_count || 0) > 0;
-    const status = bookmark.last_download_status;
     
     if (!hasNavData) {
-      return { color: colors.utility.secondaryText, message: 'No data', icon: '⚪' };
+      return { 
+        color: colors.utility.secondaryText, 
+        message: 'No data', 
+        icon: '⚪' 
+      };
     }
     
-    switch (status) {
-      case 'success':
-        return { color: colors.semantic.success, message: 'Downloaded', icon: '🟢' };
-      case 'failed':
-        return { color: colors.semantic.error, message: 'Failed', icon: '🔴' };
-      case 'pending':
-        return { color: colors.semantic.warning, message: 'Pending', icon: '🟡' };
-      default:
-        return { color: colors.semantic.success, message: 'Available', icon: '🟢' };
-    }
+    // If we have NAV data, show success
+    return { 
+      color: colors.semantic.success, 
+      message: 'Data available', 
+      icon: '🟢' 
+    };
   };
 
   const statusIndicator = getStatusIndicator();
@@ -134,7 +167,12 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
         }}>
           <span><strong>Code:</strong> {bookmark.scheme_code}</span>
           <span><strong>AMC:</strong> {bookmark.amc_name}</span>
-          <span style={{ color: statusIndicator.color }}>
+          <span style={{ 
+            color: statusIndicator.color,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
             {statusIndicator.icon} {statusIndicator.message}
           </span>
         </div>
@@ -149,10 +187,14 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           flexWrap: 'wrap'
         }}>
           <span><strong>Data Range:</strong> {getDateRangeDisplay()}</span>
-          <span><strong>Records:</strong> {bookmark.nav_records_count || 0}</span>
+          <span><strong>Records:</strong> {(bookmark.nav_records_count || 0).toLocaleString()}</span>
           {bookmark.latest_nav_value && (
-            <span style={{ color: colors.brand.primary, fontWeight: '500' }}>
-              <strong>Latest:</strong> ₹{formatNavValue(bookmark.latest_nav_value)}
+            <span style={{ 
+              color: colors.brand.primary, 
+              fontWeight: '600',
+              fontFamily: 'monospace'
+            }}>
+              <strong>Latest NAV:</strong> ₹{formatNavValue(bookmark.latest_nav_value)}
             </span>
           )}
         </div>
@@ -169,137 +211,206 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           flexShrink: 0
         }}>
           
-          {/* DAILY DOWNLOAD TOGGLE */}
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '12px',
-            cursor: isToggling ? 'not-allowed' : 'pointer',
-            color: colors.utility.primaryText,
-            userSelect: 'none'
-          }}>
-            <span>Daily Download</span>
-            <div 
-              title={bookmark.daily_download_enabled 
-                ? `Daily downloads enabled at ${bookmark.download_time}` 
-                : 'Enable automatic daily NAV downloads'}
-              style={{
-                position: 'relative',
-                width: '36px',
-                height: '18px',
-                backgroundColor: bookmark.daily_download_enabled 
-                  ? colors.semantic.success 
-                  : colors.utility.secondaryText,
-                borderRadius: '9px',
-                transition: 'background-color 0.2s ease',
-                cursor: isToggling ? 'not-allowed' : 'pointer'
-              }}>
-              <input
-                type="checkbox"
-                checked={bookmark.daily_download_enabled}
-                onChange={(e) => handleToggleDaily(e.target.checked)}
-                disabled={isToggling}
-                style={{
-                  opacity: 0,
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  cursor: isToggling ? 'not-allowed' : 'pointer',
-                  margin: 0,
-                  padding: 0
-                }}
-              />
-              <div style={{
-                position: 'absolute',
-                top: '2px',
-                left: bookmark.daily_download_enabled ? '20px' : '2px',
-                width: '14px',
-                height: '14px',
-                backgroundColor: 'white',
-                borderRadius: '50%',
-                transition: 'left 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                pointerEvents: 'none'
-              }} />
-            </div>
-          </label>
-
-          {/* Action Buttons */}
-          <div style={{
-            display: 'flex',
-            gap: '6px'
-          }}>
-            {/* VIEW NAV DATA BUTTON */}
+          {/* HISTORY MODE: Show only Dashboard button */}
+          {mode === 'history' ? (
             <button
-              onClick={() => onViewNavData?.(bookmark)}
-              disabled={(bookmark.nav_records_count || 0) === 0}
-              title={(bookmark.nav_records_count || 0) === 0 
-                ? 'No NAV data available. Download historical data first.' 
-                : `View ${bookmark.nav_records_count} NAV records`}
+              onClick={() => {
+                onDashboardClick?.(bookmark);
+                FrontendErrorLogger.info(
+                  'Dashboard clicked from history mode',
+                  'EnhancedBookmarkCard',
+                  {
+                    bookmarkId: bookmark.id,
+                    schemeId: bookmark.scheme_id,
+                    schemeName: bookmark.scheme_name
+                  }
+                );
+              }}
+              title={`View dashboard for ${bookmark.scheme_name}`}
               style={{
-                padding: '4px 8px',
-                fontSize: '11px',
-                backgroundColor: (bookmark.nav_records_count || 0) === 0 
-                  ? colors.utility.secondaryBackground 
-                  : colors.brand.secondary,
-                color: (bookmark.nav_records_count || 0) === 0 
-                  ? colors.utility.secondaryText 
-                  : 'white',
+                padding: '8px 16px',
+                fontSize: '13px',
+                backgroundColor: colors.brand.primary,
+                color: 'white',
                 border: 'none',
-                borderRadius: '4px',
-                cursor: (bookmark.nav_records_count || 0) === 0 ? 'not-allowed' : 'pointer',
-                fontWeight: '500',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600',
                 transition: 'all 0.2s ease',
                 whiteSpace: 'nowrap',
-                lineHeight: '1.2'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
             >
-              📊 View Data
+              📊 Dashboard
             </button>
+          ) : (
+            <>
+              {/* DEFAULT MODE: Show all controls */}
+              
+              {/* DAILY DOWNLOAD TOGGLE */}
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                cursor: isToggling ? 'not-allowed' : 'pointer',
+                color: colors.utility.primaryText,
+                userSelect: 'none'
+              }}>
+                <span>Daily Download</span>
+                <div 
+                  title={bookmark.daily_download_enabled 
+                    ? `Daily downloads enabled at ${bookmark.download_time}` 
+                    : 'Enable automatic daily NAV downloads'}
+                  style={{
+                    position: 'relative',
+                    width: '36px',
+                    height: '18px',
+                    backgroundColor: bookmark.daily_download_enabled 
+                      ? colors.semantic.success 
+                      : colors.utility.secondaryText,
+                    borderRadius: '9px',
+                    transition: 'background-color 0.2s ease',
+                    cursor: isToggling ? 'not-allowed' : 'pointer'
+                  }}>
+                  <input
+                    type="checkbox"
+                    checked={bookmark.daily_download_enabled}
+                    onChange={(e) => handleToggleDaily(e.target.checked)}
+                    disabled={isToggling}
+                    style={{
+                      opacity: 0,
+                      position: 'absolute',
+                      width: '100%',
+                      height: '100%',
+                      cursor: isToggling ? 'not-allowed' : 'pointer',
+                      margin: 0,
+                      padding: 0
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: bookmark.daily_download_enabled ? '20px' : '2px',
+                    width: '14px',
+                    height: '14px',
+                    backgroundColor: 'white',
+                    borderRadius: '50%',
+                    transition: 'left 0.2s ease',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    pointerEvents: 'none'
+                  }} />
+                </div>
+              </label>
 
-            {/* UPDATED: Historical Download Button with improved tooltip */}
-            <button
-  onClick={() => onHistoricalDownload?.(bookmark)}
-  disabled={false} // CHANGED: Never disable, always allow historical downloads
-  title={bookmark.historical_download_completed 
-    ? "Download additional historical NAV data" 
-    : "Download complete historical NAV data using MFAPI.in"}
-  style={{
-    padding: '4px 8px',
-    fontSize: '11px',
-    backgroundColor: bookmark.historical_download_completed 
-      ? colors.semantic.success 
-      : colors.brand.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer', // CHANGED: Always allow clicking
-    fontWeight: '500',
-    transition: 'all 0.2s ease',
-    whiteSpace: 'nowrap',
-    lineHeight: '1.2'
-  }}
->
-  {bookmark.historical_download_completed ? '✓ Download More' : '📥 Historical'}
-</button>
-          </div>
+              {/* Action Buttons */}
+              <div style={{
+                display: 'flex',
+                gap: '6px'
+              }}>
+                {/* VIEW NAV DATA BUTTON */}
+                <button
+                  onClick={() => {
+                    if ((bookmark.nav_records_count || 0) > 0) {
+                      onViewNavData?.(bookmark);
+                      FrontendErrorLogger.info(
+                        'View NAV Data clicked',
+                        'EnhancedBookmarkCard',
+                        {
+                          bookmarkId: bookmark.id,
+                          recordCount: bookmark.nav_records_count
+                        }
+                      );
+                    }
+                  }}
+                  disabled={(bookmark.nav_records_count || 0) === 0}
+                  title={(bookmark.nav_records_count || 0) === 0 
+                    ? 'No NAV data available. Download historical data first.' 
+                    : `View ${(bookmark.nav_records_count || 0).toLocaleString()} NAV records`}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '11px',
+                    backgroundColor: (bookmark.nav_records_count || 0) === 0 
+                      ? colors.utility.secondaryBackground 
+                      : colors.brand.secondary,
+                    color: (bookmark.nav_records_count || 0) === 0 
+                      ? colors.utility.secondaryText 
+                      : 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: (bookmark.nav_records_count || 0) === 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    lineHeight: '1.2',
+                    opacity: (bookmark.nav_records_count || 0) === 0 ? 0.6 : 1
+                  }}
+                >
+                  📊 View Data
+                </button>
 
-          {/* Download Time Display */}
-          {bookmark.daily_download_enabled && (
-            <div style={{
-              fontSize: '10px',
-              color: colors.utility.secondaryText,
-              textAlign: 'right'
-            }}>
-              Download at {bookmark.download_time}
-            </div>
+                {/* HISTORICAL DOWNLOAD BUTTON */}
+                <button
+                  onClick={() => {
+                    onHistoricalDownload?.(bookmark);
+                    FrontendErrorLogger.info(
+                      'Historical Download clicked',
+                      'EnhancedBookmarkCard',
+                      {
+                        bookmarkId: bookmark.id,
+                        schemeName: bookmark.scheme_name,
+                        currentRecordCount: bookmark.nav_records_count
+                      }
+                    );
+                  }}
+                  title={
+                    (bookmark.nav_records_count || 0) > 0
+                      ? `Download additional historical NAV data. Current: ${(bookmark.nav_records_count || 0).toLocaleString()} records`
+                      : 'Download complete historical NAV data from MFAPI.in'
+                  }
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '11px',
+                    backgroundColor: (bookmark.nav_records_count || 0) > 0
+                      ? colors.semantic.success 
+                      : colors.brand.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    lineHeight: '1.2'
+                  }}
+                >
+                  {(bookmark.nav_records_count || 0) > 0 ? '✓ Download More' : '📥 Historical'}
+                </button>
+              </div>
+
+              {/* Download Time Display */}
+              {bookmark.daily_download_enabled && (
+                <div style={{
+                  fontSize: '10px',
+                  color: colors.utility.secondaryText,
+                  textAlign: 'right'
+                }}>
+                  ⏰ Download at {bookmark.download_time}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
 
-      {/* CSS for hover effect */}
+      {/* CSS for hover effects */}
       <style>{`
+        .enhanced-bookmark-card {
+          position: relative;
+        }
+        
         .enhanced-bookmark-card:hover {
           border-color: ${colors.brand.primary}30 !important;
           box-shadow: 0 2px 8px ${colors.brand.primary}10;
@@ -308,7 +419,12 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
         
         .enhanced-bookmark-card button:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+          filter: brightness(1.05);
+        }
+        
+        .enhanced-bookmark-card button:active:not(:disabled) {
+          transform: translateY(0);
         }
       `}</style>
     </div>

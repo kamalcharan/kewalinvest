@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { CustomerWithContact } from '../../types/customer.types';
 import { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import { useCustomerJTBDSummary } from '../../hooks/useJTBD';
+import { useBookmarkCustomer, useUnbookmarkCustomer, useBookmarkReasons } from '../../hooks/useCustomers';
 import { useTheme } from '../../contexts/ThemeContext';
 import JTBDStatusBadge from '../jtbd/JTBDStatusBadge';
 import PerformanceSparkline from '../visualizations/PerformanceSparkline';
@@ -40,9 +41,19 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+  
+  // Bookmark state (NEW)
+  const [showBookmarkModal, setShowBookmarkModal] = useState(false);
+  const [selectedReasonId, setSelectedReasonId] = useState<number | null>(null);
+  const [bookmarkNotes, setBookmarkNotes] = useState('');
 
   // Fetch JTBD summary for this customer
   const { data: jtbdSummary } = useCustomerJTBDSummary(customer.id);
+  
+  // Bookmark hooks (NEW)
+  const { data: bookmarkReasons } = useBookmarkReasons();
+  const { mutate: bookmarkCustomer, isPending: isBookmarking } = useBookmarkCustomer();
+  const { mutate: unbookmarkCustomer, isPending: isUnbookmarking } = useUnbookmarkCustomer();
 
   const handleActionClick = (action: 'activate' | 'deactivate') => {
     setConfirmAction(action);
@@ -62,6 +73,45 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
   const handleCancelAction = () => {
     setShowConfirmModal(false);
     setConfirmAction(null);
+  };
+
+  // Bookmark handlers (NEW)
+  const handleBookmarkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (customer.is_bookmarked) {
+      // Remove bookmark
+      unbookmarkCustomer(customer.id);
+    } else {
+      // Show modal to select reason
+      setShowBookmarkModal(true);
+      setSelectedReasonId(null);
+      setBookmarkNotes('');
+    }
+  };
+
+  const handleBookmarkConfirm = () => {
+    if (!selectedReasonId) {
+      return;
+    }
+
+    bookmarkCustomer({
+      customerId: customer.id,
+      data: {
+        reason_id: selectedReasonId,
+        notes: bookmarkNotes.trim() || undefined
+      }
+    });
+
+    setShowBookmarkModal(false);
+    setSelectedReasonId(null);
+    setBookmarkNotes('');
+  };
+
+  const handleBookmarkCancel = () => {
+    setShowBookmarkModal(false);
+    setSelectedReasonId(null);
+    setBookmarkNotes('');
   };
 
   // Calculate age from date of birth
@@ -169,6 +219,20 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
     </svg>
   );
 
+  // Star Icon (NEW)
+  const StarIcon = ({ filled = false }: { filled?: boolean }) => (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill={filled ? '#FFD700' : 'none'} 
+      stroke={filled ? '#FFD700' : 'currentColor'} 
+      strokeWidth="2"
+    >
+      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+    </svg>
+  );
+
   return (
     <>
       <div
@@ -233,6 +297,28 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   {customer.prefix} {customer.name}
                 </span>
                 
+                {/* Bookmark indicator (NEW) */}
+                {customer.is_bookmarked && (
+                  <div 
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px',
+                      fontWeight: '500',
+                      backgroundColor: '#FFD70020',
+                      color: '#FFD700',
+                      cursor: 'help'
+                    }}
+                    title={`Bookmarked: ${customer.bookmark_reason_label || customer.bookmark_custom_reason || 'No reason'}`}
+                  >
+                    <StarIcon filled={true} />
+                    <span>{customer.bookmark_reason_label || customer.bookmark_custom_reason}</span>
+                  </div>
+                )}
+                
                 {/* Status badges */}
                 <div style={{
                   display: 'inline-flex',
@@ -246,18 +332,18 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   {customer.is_active ? 'Active' : 'Inactive'}
                 </div>
                 
-                {/* JTBD Status Badge - NEW */}
+                {/* JTBD Status Badge */}
                 {jtbdSummary && (
-  <JTBDStatusBadge
-    jtbdCount={jtbdSummary.jtbd_count}
-    nextAlertDate={jtbdSummary.next_alert_date}
-    criticalCount={jtbdSummary.critical_count}
-    onClick={() => {
-      onView(); // Navigate to customer view, Goals tab will be handled there
-    }}
-    size="small"
-  />
-)}
+                  <JTBDStatusBadge
+                    jtbdCount={jtbdSummary.jtbd_count}
+                    nextAlertDate={jtbdSummary.next_alert_date}
+                    criticalCount={jtbdSummary.critical_count}
+                    onClick={() => {
+                      onView(); // Navigate to customer view, Goals tab will be handled there
+                    }}
+                    size="small"
+                  />
+                )}
               </div>
               
               {/* Contact and Details */}
@@ -348,6 +434,30 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
 
           {/* Right side - Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Bookmark Button (NEW) */}
+            <button
+              onClick={handleBookmarkClick}
+              disabled={isBookmarking || isUnbookmarking}
+              style={{
+                backgroundColor: customer.is_bookmarked ? '#FFD70020' : 'transparent',
+                color: customer.is_bookmarked ? '#FFD700' : colors.utility.secondaryText,
+                border: `1px solid ${customer.is_bookmarked ? '#FFD700' : colors.utility.secondaryText}40`,
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                cursor: isBookmarking || isUnbookmarking ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                opacity: isBookmarking || isUnbookmarking ? 0.5 : 1,
+                transition: 'all 0.2s ease'
+              }}
+              title={customer.is_bookmarked ? 'Remove bookmark' : 'Bookmark customer'}
+            >
+              <StarIcon filled={customer.is_bookmarked} />
+              {customer.is_bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </button>
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -445,6 +555,194 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Bookmark Reason Modal (NEW) */}
+      {showBookmarkModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={handleBookmarkCancel}
+        >
+          <div 
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '480px',
+              width: '90%',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              border: `1px solid ${colors.utility.primaryText}10`,
+              animation: 'modalSlideIn 0.2s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                backgroundColor: '#FFD70015',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FFD700'
+              }}>
+                <StarIcon filled={true} />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 style={{
+              margin: '0 0 12px 0',
+              fontSize: '24px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              textAlign: 'center'
+            }}>
+              Bookmark Customer
+            </h2>
+
+            {/* Message */}
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '15px',
+              color: colors.utility.secondaryText,
+              textAlign: 'center',
+              lineHeight: '1.6'
+            }}>
+              Select a reason for bookmarking <strong>{customer.name}</strong>
+            </p>
+
+            {/* Reason Selection */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText
+              }}>
+                Bookmark Reason *
+              </label>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '8px'
+              }}>
+                {bookmarkReasons?.map((reason) => (
+                  <button
+                    key={reason.id}
+                    onClick={() => setSelectedReasonId(reason.id)}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: `2px solid ${selectedReasonId === reason.id ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                      backgroundColor: selectedReasonId === reason.id ? colors.brand.primary + '10' : 'transparent',
+                      color: selectedReasonId === reason.id ? colors.brand.primary : colors.utility.primaryText,
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {reason.reason_label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText
+              }}>
+                Notes (Optional)
+              </label>
+              <textarea
+                value={bookmarkNotes}
+                onChange={(e) => setBookmarkNotes(e.target.value)}
+                placeholder="Add any notes about this bookmark..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  minHeight: '80px'
+                }}
+              />
+            </div>
+
+            {/* Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={handleBookmarkCancel}
+                style={{
+                  backgroundColor: 'transparent',
+                  color: colors.utility.secondaryText,
+                  border: `1px solid ${colors.utility.secondaryText}40`,
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  minWidth: '120px'
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleBookmarkConfirm}
+                disabled={!selectedReasonId || isBookmarking}
+                style={{
+                  backgroundColor: selectedReasonId ? '#FFD700' : colors.utility.secondaryText + '40',
+                  color: selectedReasonId ? '#000' : colors.utility.secondaryText,
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: selectedReasonId && !isBookmarking ? 'pointer' : 'not-allowed',
+                  minWidth: '120px',
+                  opacity: isBookmarking ? 0.5 : 1
+                }}
+              >
+                {isBookmarking ? 'Saving...' : 'Bookmark'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showConfirmModal && (

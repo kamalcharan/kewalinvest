@@ -50,6 +50,10 @@ export const API_ENDPOINTS = {
       `${API_BASE}/customers/${customerId}/addresses/${addressId}`,
     DELETE_ADDRESS: (customerId: number, addressId: number) => 
       `${API_BASE}/customers/${customerId}/addresses/${addressId}`,
+    
+    // Bookmark endpoints (NEW)
+    BOOKMARK_REASONS: `${API_BASE}/customers/bookmark-reasons`,
+    BOOKMARK: (id: number) => `${API_BASE}/customers/${id}/bookmark`,
   },
   
   // Scheme management endpoints
@@ -105,6 +109,19 @@ export const API_ENDPOINTS = {
     OCCURRENCES: (id: number) => `${API_BASE}/jtbd/${id}/occurrences`,
   },
   
+  // Goal Management endpoints
+  GOALS: {
+    CREATE: `${API_BASE}/goals`,
+    GET_CUSTOMER_GOALS: (customerId: number) => `${API_BASE}/goals/customer/${customerId}`,
+    GET: (id: number) => `${API_BASE}/goals/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/goals/${id}`,
+    DELETE: (id: number) => `${API_BASE}/goals/${id}`,
+    RECALCULATE: (id: number) => `${API_BASE}/goals/${id}/recalculate`,
+    RECALCULATE_CUSTOMER: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/recalculate`,
+    CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/summary`,
+    HISTORY: (id: number) => `${API_BASE}/goals/${id}/history`,
+  },
+  
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
@@ -132,6 +149,13 @@ export const API_ENDPOINTS = {
     BOOKMARK_NAV_DATA: (id: number) => `${API_BASE}/nav/bookmarks/${id}/nav-data`,
     BOOKMARK_STATS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/stats`,
     BOOKMARK_DOWNLOAD_STATUS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/download-status`,
+    
+    // Bookmark Gap Detection endpoints (NEW)
+    BOOKMARK_GAPS: `${API_BASE}/nav/bookmark-gaps`,
+    BOOKMARK_GAPS_CUSTOMER: (customerId: number) => `${API_BASE}/nav/bookmark-gaps/customer/${customerId}`,
+    BOOKMARK_GAPS_SUMMARY: `${API_BASE}/nav/bookmark-gaps/summary`,
+    BULK_BOOKMARK_SCHEMES: `${API_BASE}/nav/bookmarks/bulk`, 
+    
     NAV_DATA: `${API_BASE}/nav/data`,
     LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
     DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
@@ -149,6 +173,34 @@ export const API_ENDPOINTS = {
     SCHEDULER_STATUS: `${API_BASE}/nav/scheduler/status`,
     SCHEDULER_TRIGGER: `${API_BASE}/nav/scheduler/trigger`,
     SCHEDULER_ALL_ACTIVE: `${API_BASE}/nav/scheduler/all-active`,
+  },
+  
+  // Market Data endpoints
+  MARKET: {
+    // Index endpoints
+    INDICES: `${API_BASE}/market/indices`,
+    GET_INDEX: (id: number) => `${API_BASE}/market/indices/${id}`,
+    
+    // Data endpoints
+    DATA: (indexId: number) => `${API_BASE}/market/data/${indexId}`,
+    LATEST_DATA: (indexId: number) => `${API_BASE}/market/data/${indexId}/latest`,
+    DELETE_DATA: (indexId: number) => `${API_BASE}/market/data/${indexId}`,
+    
+    // Download endpoints
+    DOWNLOAD_HISTORICAL: `${API_BASE}/market/download/historical`,
+    DOWNLOAD_EOD: `${API_BASE}/market/download/eod`,
+    DOWNLOAD_EOD_ALL: `${API_BASE}/market/download/eod-all`,
+    
+    // Statistics & Health
+    STATISTICS: `${API_BASE}/market/statistics`,
+    HEALTH: `${API_BASE}/market/health`,
+  },
+  
+  // Market Analysis endpoints
+  MARKET_ANALYSIS: {
+    HEALTH: `${API_BASE}/market-analysis/health`,
+    CALCULATE_METRICS: (indexId: number) => `${API_BASE}/market-analysis/calculate-metrics/${indexId}`,
+    GET_METRICS: (indexId: number) => `${API_BASE}/market-analysis/metrics/${indexId}`,
   },
   
   // File management endpoints (for future sprints)
@@ -197,8 +249,11 @@ export type SchemeEndpoints = typeof API_ENDPOINTS.SCHEMES;
 export type TransactionEndpoints = typeof API_ENDPOINTS.TRANSACTIONS;
 export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
 export type JTBDEndpoints = typeof API_ENDPOINTS.JTBD;
+export type GoalEndpoints = typeof API_ENDPOINTS.GOALS;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
+export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
+export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -286,123 +341,125 @@ export const API_CONFIG = {
 
 // Transaction-specific URL helpers
 export const TRANSACTION_URLS = {
-  // Get transaction list with query parameters
   getTransactionList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.TRANSACTIONS.LIST}${buildQueryParams(params || {}, environment)}`,
   
-  // Get transaction summary
   getTransactionSummary: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.SUMMARY}${buildQueryParams({}, environment)}`,
   
-  // Get transaction by ID
   getTransaction: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.GET(id)}${buildQueryParams({}, environment)}`,
   
-  // Create transaction
   createTransaction: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.CREATE}${buildQueryParams({}, environment)}`,
   
-  // Update transaction
   updateTransaction: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.UPDATE(id)}${buildQueryParams({}, environment)}`,
   
-  // Update portfolio flag
   updatePortfolioFlag: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.UPDATE_PORTFOLIO_FLAG(id)}${buildQueryParams({}, environment)}`,
   
-  // Delete transaction
   deleteTransaction: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.TRANSACTIONS.DELETE(id)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Portfolio-specific URL helpers
 export const PORTFOLIO_URLS = {
-  // Get portfolio holdings
   getHoldings: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.PORTFOLIO.HOLDINGS}${buildQueryParams(params || {}, environment)}`,
   
-  // Get portfolio statistics
   getStatistics: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.PORTFOLIO.STATISTICS}${buildQueryParams({}, environment)}`,
   
-  // Refresh portfolio totals
   refreshPortfolio: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.PORTFOLIO.REFRESH}${buildQueryParams({}, environment)}`,
   
-  // Get customer portfolio
   getCustomerPortfolio: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.PORTFOLIO.CUSTOMER_PORTFOLIO(customerId)}${buildQueryParams({}, environment)}`,
   
-  // Get customer portfolio totals
   getCustomerTotals: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.PORTFOLIO.CUSTOMER_TOTALS(customerId)}${buildQueryParams({}, environment)}`,
   
-  // Get scheme portfolio details
   getSchemeDetails: (customerId: number, schemeCode: string, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.PORTFOLIO.SCHEME_DETAILS(customerId, schemeCode)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // JTBD-specific URL helpers
 export const JTBD_URLS = {
-  // Create JTBD
   createJTBD: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CREATE}${buildQueryParams({}, environment)}`,
   
-  // Get customer JTBDs
   getCustomerJTBDs: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.GET_CUSTOMER_JTBDS(customerId)}${buildQueryParams(params || {}, environment)}`,
   
-  // Get JTBD by ID
   getJTBD: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.GET(id)}${buildQueryParams({}, environment)}`,
   
-  // Update JTBD
   updateJTBD: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.UPDATE(id)}${buildQueryParams({}, environment)}`,
   
-  // Delete JTBD
   deleteJTBD: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.DELETE(id)}${buildQueryParams({}, environment)}`,
   
-  // Toggle JTBD active status
   toggleJTBD: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.TOGGLE(id)}${buildQueryParams({}, environment)}`,
   
-  // Get dashboard overview
   getDashboardOverview: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.DASHBOARD_OVERVIEW}${buildQueryParams(params || {}, environment)}`,
   
-  // Get customers without JTBD
   getCustomersWithoutJTBD: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CUSTOMERS_WITHOUT_JTBD}${buildQueryParams(params || {}, environment)}`,
   
-  // Get upcoming alerts
   getUpcomingAlerts: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.UPCOMING_ALERTS}${buildQueryParams(params || {}, environment)}`,
   
-  // Get alerts by date
   getAlertsByDate: (startDate: string, endDate: string, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.ALERTS_BY_DATE}${buildQueryParams({ start_date: startDate, end_date: endDate, ...params }, environment)}`,
   
-  // Get communication queue
   getCommunicationQueue: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.COMMUNICATION_QUEUE}${buildQueryParams(params || {}, environment)}`,
   
-  // Get customer summary
   getCustomerSummary: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CUSTOMER_SUMMARY(customerId)}${buildQueryParams({}, environment)}`,
   
-  // Get customer schemes
   getCustomerSchemes: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.CUSTOMER_SCHEMES(customerId)}${buildQueryParams({}, environment)}`,
   
-  // Get transaction types
   getTransactionTypes: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.TRANSACTION_TYPES}${buildQueryParams({}, environment)}`,
   
-  // Get portfolio occurrences
   getOccurrences: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.OCCURRENCES(id)}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
+// Goal-specific URL helpers
+export const GOAL_URLS = {
+  createGoal: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.CREATE}${buildQueryParams({}, environment)}`,
+  
+  getCustomerGoals: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.GET_CUSTOMER_GOALS(customerId)}${buildQueryParams(params || {}, environment)}`,
+  
+  getGoal: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.GET(id)}${buildQueryParams({}, environment)}`,
+  
+  updateGoal: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.UPDATE(id)}${buildQueryParams({}, environment)}`,
+  
+  deleteGoal: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.DELETE(id)}${buildQueryParams({}, environment)}`,
+  
+  recalculateGoal: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.RECALCULATE(id)}${buildQueryParams({}, environment)}`,
+  
+  recalculateCustomerGoals: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.RECALCULATE_CUSTOMER(customerId)}${buildQueryParams({}, environment)}`,
+  
+  getCustomerSummary: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.CUSTOMER_SUMMARY(customerId)}${buildQueryParams({}, environment)}`,
+  
+  getGoalHistory: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.HISTORY(id)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
 // Contact-specific URL helpers
@@ -429,6 +486,16 @@ export const CUSTOMER_URLS = {
     `${API_ENDPOINTS.CUSTOMERS.STATS}${buildQueryParams({}, environment)}`,
   getCustomerWithAddresses: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.GET(customerId)}${buildQueryParams({}, environment)}`,
+  
+  // Bookmark URL helpers (NEW)
+  getBookmarkReasons: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CUSTOMERS.BOOKMARK_REASONS}${buildQueryParams({}, environment)}`,
+  addBookmark: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CUSTOMERS.BOOKMARK(customerId)}${buildQueryParams({}, environment)}`,
+  updateBookmark: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CUSTOMERS.BOOKMARK(customerId)}${buildQueryParams({}, environment)}`,
+  removeBookmark: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CUSTOMERS.BOOKMARK(customerId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Import-specific URL helpers
@@ -483,6 +550,17 @@ export const NAV_URLS = {
     `${API_ENDPOINTS.NAV.BOOKMARK_STATS(id)}${buildQueryParams({}, environment)}`,
   updateBookmarkDownloadStatus: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_DOWNLOAD_STATUS(id)}${buildQueryParams({}, environment)}`,
+  
+  // Bookmark Gap Detection URL helpers (NEW)
+  getBookmarkGaps: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_GAPS}${buildQueryParams(params || {}, environment)}`,
+  getCustomerBookmarkGaps: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_GAPS_CUSTOMER(customerId)}${buildQueryParams(params || {}, environment)}`,
+  getBookmarkGapsSummary: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.BOOKMARK_GAPS_SUMMARY}${buildQueryParams({}, environment)}`,
+  bulkBookmarkSchemes: (environment?: 'live' | 'test') =>  
+    `${API_ENDPOINTS.NAV.BULK_BOOKMARK_SCHEMES}${buildQueryParams({}, environment)}`, 
+  
   getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') => 
     `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
   getLatestNav: (schemeId: number, environment?: 'live' | 'test') =>
@@ -523,6 +601,51 @@ export const NAV_URLS = {
     `${API_ENDPOINTS.NAV.SCHEDULER_ALL_ACTIVE}${buildQueryParams({}, environment)}`,
 } as const;
 
+// Market Data-specific URL helpers
+export const MARKET_URLS = {
+  getAllIndices: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+    `${API_ENDPOINTS.MARKET.INDICES}${buildQueryParams(params || {}, environment)}`,
+  
+  getIndex: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.GET_INDEX(id)}${buildQueryParams({}, environment)}`,
+  
+  getMarketData: (indexId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.DATA(indexId)}${buildQueryParams(params || {}, environment)}`,
+  
+  getLatestData: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.LATEST_DATA(indexId)}${buildQueryParams({}, environment)}`,
+  
+  deleteAllData: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.DELETE_DATA(indexId)}${buildQueryParams({}, environment)}`,
+  
+  downloadHistorical: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.DOWNLOAD_HISTORICAL}${buildQueryParams({}, environment)}`,
+  
+  downloadEOD: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.DOWNLOAD_EOD}${buildQueryParams({}, environment)}`,
+  
+  downloadEODAll: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.DOWNLOAD_EOD_ALL}${buildQueryParams({}, environment)}`,
+  
+  getStatistics: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.STATISTICS}${buildQueryParams({}, environment)}`,
+  
+  getHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET.HEALTH}${buildQueryParams({}, environment)}`,
+} as const;
+
+// Market Analysis-specific URL helpers
+export const MARKET_ANALYSIS_URLS = {
+  getHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
+  
+  calculateMetrics: (indexId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.CALCULATE_METRICS(indexId)}${buildQueryParams(params || {}, environment)}`,
+  
+  getLatestMetrics: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.GET_METRICS(indexId)}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Development logging
 if (process.env.NODE_ENV === 'development') {
   console.log('🔗 API Base URL:', API_BASE);
@@ -534,8 +657,11 @@ if (process.env.NODE_ENV === 'development') {
     Transactions: Object.keys(API_ENDPOINTS.TRANSACTIONS).length,
     Portfolio: Object.keys(API_ENDPOINTS.PORTFOLIO).length,
     JTBD: Object.keys(API_ENDPOINTS.JTBD).length,
+    Goals: Object.keys(API_ENDPOINTS.GOALS).length,
     Import: Object.keys(API_ENDPOINTS.IMPORT).length,
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
+    Market: Object.keys(API_ENDPOINTS.MARKET).length,
+    MarketAnalysis: Object.keys(API_ENDPOINTS.MARKET_ANALYSIS).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
@@ -558,6 +684,30 @@ if (process.env.NODE_ENV === 'development') {
     ALERTS_BY_DATE: API_ENDPOINTS.JTBD.ALERTS_BY_DATE,
     COMMUNICATION_QUEUE: API_ENDPOINTS.JTBD.COMMUNICATION_QUEUE,
     TRANSACTION_TYPES: API_ENDPOINTS.JTBD.TRANSACTION_TYPES,
+  });
+  
+  console.log('🎯 Goal Management Endpoints:', {
+    CREATE: API_ENDPOINTS.GOALS.CREATE,
+    RECALCULATE_CUSTOMER: API_ENDPOINTS.GOALS.RECALCULATE_CUSTOMER,
+  });
+  
+  console.log('🔍 NAV Bookmark Gap Detection:', {
+    BOOKMARK_GAPS: API_ENDPOINTS.NAV.BOOKMARK_GAPS,
+    BOOKMARK_GAPS_SUMMARY: API_ENDPOINTS.NAV.BOOKMARK_GAPS_SUMMARY,
+  });
+  
+  console.log('📈 Market Data Endpoints:', {
+    INDICES: API_ENDPOINTS.MARKET.INDICES,
+    DOWNLOAD_HISTORICAL: API_ENDPOINTS.MARKET.DOWNLOAD_HISTORICAL,
+    DOWNLOAD_EOD: API_ENDPOINTS.MARKET.DOWNLOAD_EOD,
+    STATISTICS: API_ENDPOINTS.MARKET.STATISTICS,
+    HEALTH: API_ENDPOINTS.MARKET.HEALTH,
+  });
+  
+  console.log('📊 Market Analysis Endpoints:', {
+    HEALTH: API_ENDPOINTS.MARKET_ANALYSIS.HEALTH,
+    CALCULATE_METRICS: 'POST /api/market-analysis/calculate-metrics/:indexId',
+    GET_METRICS: 'GET /api/market-analysis/metrics/:indexId',
   });
 }
 

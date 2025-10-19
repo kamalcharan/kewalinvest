@@ -148,20 +148,20 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
     }
     
     // TransactionData fields (25+ fields)
-    if (type === 'TransactionData') {
-      return [
-        // Core Transaction Fields
-        { field: 'iwell_code', label: 'IWell Code', type: 'text', required: true, description: 'Customer IWell code for lookup', group: 'Customer Identification' },
-        { field: 'txn_date', label: 'Transaction Date', type: 'date', required: true, description: 'Date of transaction', group: 'Transaction Core' },
-        { field: 'txn_code', label: 'Transaction Type Code', type: 'text', required: true, description: 'SIP, PURCHASE, REDEMPTION, etc.', group: 'Transaction Core' },
-        { field: 'total_amount', label: 'Total Amount', type: 'number', required: true, description: 'Total transaction amount', group: 'Transaction Core' },
-        { field: 'units', label: 'Units', type: 'number', required: true, description: 'Number of units', group: 'Transaction Core' },
-        { field: 'nav', label: 'NAV', type: 'number', required: true, description: 'Net Asset Value', group: 'Transaction Core' },
-        
-        // Scheme Identification
-        { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier', group: 'Scheme Info' },
-        { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full scheme name', group: 'Scheme Info' },
-        { field: 'folio_no', label: 'Folio Number', type: 'text', required: false, description: 'Fund folio number', group: 'Scheme Info' },
+    // TransactionData fields (25+ fields)
+if (type === 'TransactionData') {
+  return [
+    // Core Transaction Fields
+    { field: 'iwell_code', label: 'IWell Code', type: 'text', required: true, description: 'Customer IWell code for lookup', group: 'Customer Identification' },
+    { field: 'txn_date', label: 'Transaction Date', type: 'date', required: true, description: 'Date of transaction', group: 'Transaction Core' },
+    { field: 'txn_code', label: 'Transaction Type Code', type: 'text', required: true, description: 'SIP, PURCHASE, REDEMPTION, etc.', group: 'Transaction Core' },
+    { field: 'total_amount', label: 'Total Amount', type: 'number', required: true, description: 'Total transaction amount', group: 'Transaction Core' },
+    { field: 'units', label: 'Units', type: 'number', required: true, description: 'Number of units', group: 'Transaction Core' },
+    { field: 'nav', label: 'NAV', type: 'number', required: true, description: 'Net Asset Value', group: 'Transaction Core' },
+    
+    // Scheme Identification (CRITICAL: scheme_name is REQUIRED for lookup)
+    { field: 'scheme_name', label: 'Scheme Name (Required for Lookup)', type: 'text', required: true, description: 'Matched against bookmark aliases to resolve scheme code', group: 'Scheme Info' },
+    { field: 'scheme_code', label: 'Scheme Code (Auto-Resolved)', type: 'text', required: false, description: 'AUTO-POPULATED via bookmarks - Do NOT map unless overriding', group: 'Scheme Info' },    { field: 'folio_no', label: 'Folio Number', type: 'text', required: false, description: 'Fund folio number', group: 'Scheme Info' },
         { field: 'fund_name', label: 'Fund Name', type: 'text', required: false, description: 'AMC/Fund house name', group: 'Scheme Info' },
         
         // Scheme Classification

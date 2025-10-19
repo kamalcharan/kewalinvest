@@ -1,5 +1,6 @@
 // frontend/src/services/nav.service.ts
 // UPDATED: Enhanced 409 error handling with existing_data details and improved toast messages
+// UPDATED: Corrected bookmark gap detection method names and added bulk bookmark functionality
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
 import { toastService } from './toast.service';
@@ -63,6 +64,7 @@ export interface SchemeBookmark {
   scheme_code: string;
   scheme_name: string;
   amc_name: string;
+  alias_name?: string;
   daily_download_enabled: boolean;
   download_time: string;
   historical_download_completed: boolean;
@@ -88,11 +90,13 @@ export interface BookmarkSearchParams {
 
 export interface CreateBookmarkRequest {
   scheme_id: number;
+  alias_name?: string;
   daily_download_enabled?: boolean;
   download_time?: string;
 }
 
 export interface UpdateBookmarkRequest {
+  alias_name?: string;
   daily_download_enabled?: boolean;
   download_time?: string;
   historical_download_completed?: boolean;
@@ -221,6 +225,41 @@ export interface NavStatistics {
   failed_downloads_today: number;
 }
 
+export interface UnbookmarkedScheme {
+  scheme_code: string;
+  scheme_name: string;
+  customer_count: number;
+  transaction_count: number;
+  total_invested: number;
+  last_transaction_date: string;
+  first_transaction_date: string;
+  scheme_id: number | null;
+  amc_name: string | null;
+  exists_in_master: boolean;
+}
+
+export interface BookmarkGapSummary {
+  total_unbookmarked: number;
+  total_customers_affected: number;
+  total_investment_at_risk: number;
+  schemes_not_in_master: number;
+  schemes_not_bookmarked: number;
+  last_checked: string;
+}
+
+export interface CustomerUnbookmarkedScheme {
+  customer_id: number;
+  customer_name: string;
+  scheme_code: string;
+  scheme_name: string;
+  folio_no: string;
+  total_invested: number;
+  transaction_count: number;
+  last_transaction_date: string;
+  scheme_id: number | null;
+  exists_in_master: boolean;
+}
+
 export interface SchedulerConfig {
   id?: number;
   schedule_type: 'daily' | 'weekly' | 'custom';
@@ -279,80 +318,81 @@ export class NavService {
   }
 
   private async handleRequest<T>(
-  url: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T> | PaginatedResponse<T>> {
-  try {
-    console.log('🌐 NavService handleRequest:');
-    console.log('🌐 - URL:', url);
-    
-    const headers = this.getAuthHeaders();
-    console.log('🌐 - Headers:', headers);
-    
-    const response = await fetch(url, {
-      headers,
-      ...options
-    });
+    url: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T> | PaginatedResponse<T>> {
+    try {
+      console.log('🌐 NavService handleRequest:');
+      console.log('🌐 - URL:', url);
+      
+      const headers = this.getAuthHeaders();
+      console.log('🌐 - Headers:', headers);
+      
+      const response = await fetch(url, {
+        headers,
+        ...options
+      });
 
-    console.log('🌐 - Response status:', response.status);
-    console.log('🌐 - Response ok:', response.ok);
+      console.log('🌐 - Response status:', response.status);
+      console.log('🌐 - Response ok:', response.ok);
 
-    if (!response.ok) {
-      console.error('🌐 - Response not ok, status:', response.status);
-      const errorText = await response.text();
-      console.error('🌐 - Error response text:', errorText);
-      
-      let errorData: any = {};
-      try {
-        errorData = errorText ? JSON.parse(errorText) : {};
-      } catch (parseError) {
-        errorData = { error: errorText };
-      }
-      
-      // Handle 429 with actual backend error message
-      if (response.status === 429) {
-        return {
-          success: false,
-          error: errorData.error || 'Too many requests. Please wait a moment before trying again.'
-        };
-      }
-      
-      // Enhanced 409 handling with existing_data extraction
-      if (response.status === 409) {
-        const errorMsg = errorData.error || '';
-        const existingData = errorData.existing_data;
+      if (!response.ok) {
+        console.error('🌐 - Response not ok, status:', response.status);
+        const errorText = await response.text();
+        console.error('🌐 - Error response text:', errorText);
         
-        // Check if this is a date range overlap error with details
-        if (existingData) {
+        let errorData: any = {};
+        try {
+          errorData = errorText ? JSON.parse(errorText) : {};
+        } catch (parseError) {
+          errorData = { error: errorText };
+        }
+        
+        // Handle 429 with actual backend error message
+        if (response.status === 429) {
           return {
             success: false,
-            error: errorMsg,
-            existing_data: existingData
+            error: errorData.error || 'Too many requests. Please wait a moment before trying again.'
           };
         }
         
-        // Other 409 conflicts
-        return {
-          success: false,
-          error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
-        };
+        // Enhanced 409 handling with existing_data extraction
+        if (response.status === 409) {
+          const errorMsg = errorData.error || '';
+          const existingData = errorData.existing_data;
+          
+          // Check if this is a date range overlap error with details
+          if (existingData) {
+            return {
+              success: false,
+              error: errorMsg,
+              existing_data: existingData
+            };
+          }
+          
+          // Other 409 conflicts
+          return {
+            success: false,
+            error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
+          };
+        }
+        
+        throw new Error(getAPIErrorMessage(errorData));
       }
-      
-      throw new Error(getAPIErrorMessage(errorData));
-    }
 
-    const data = await response.json();
-    console.log('🌐 - Success response data:', data);
-    return data;
-  } catch (error: any) {
-    console.error('🌐 NavService Error:', error);
-    console.error('🌐 URL was:', url);
-    return {
-      success: false,
-      error: error.message || 'An unexpected error occurred'
-    };
+      const data = await response.json();
+      console.log('🌐 - Success response data:', data);
+      return data;
+    } catch (error: any) {
+      console.error('🌐 NavService Error:', error);
+      console.error('🌐 URL was:', url);
+      return {
+        success: false,
+        error: error.message || 'An unexpected error occurred'
+      };
+    }
   }
-}
+
   // ==================== SCHEME SEARCH OPERATIONS ====================
 
   async searchSchemes(params: SchemeSearchParams): Promise<PaginatedResponse<{ schemes: SchemeSearchResult[] }>> {
@@ -428,22 +468,22 @@ export class NavService {
   // ==================== ENHANCED BOOKMARK METHODS ====================
 
   async getBookmarkNavData(params: BookmarkNavDataParams): Promise<PaginatedResponse<{ nav_data: NavData[] }>> {
-  const url = NAV_URLS.getBookmarkNavData(params.bookmark_id, {
-    start_date: params.start_date,
-    end_date: params.end_date,
-    page: params.page,
-    page_size: params.page_size,
-    granularity: params.granularity // ADD THIS LINE
-  }, this.getEnvironment());
-  
-  const response = await this.handleRequest<{ nav_data: NavData[] }>(url);
-  
-  if (!response.success) {
-    toastService.error(response.error || 'Failed to load bookmark NAV data');
+    const url = NAV_URLS.getBookmarkNavData(params.bookmark_id, {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      page: params.page,
+      page_size: params.page_size,
+      granularity: params.granularity
+    }, this.getEnvironment());
+    
+    const response = await this.handleRequest<{ nav_data: NavData[] }>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load bookmark NAV data');
+    }
+    
+    return response as PaginatedResponse<{ nav_data: NavData[] }>;
   }
-  
-  return response as PaginatedResponse<{ nav_data: NavData[] }>;
-}
 
   async getBookmarkStats(bookmarkId: number): Promise<ApiResponse<BookmarkStats>> {
     const url = NAV_URLS.getBookmarkStats(bookmarkId, this.getEnvironment());
@@ -619,7 +659,7 @@ export class NavService {
       const schemeCount = response.data?.total_schemes || request.scheme_ids.length;
       toastService.success(`Historical download started for ${schemeCount} scheme${schemeCount > 1 ? 's' : ''}`);
     } else {
-      // FIXED: Show detailed toast for date range overlap errors
+      // Show detailed toast for date range overlap errors
       if ((response as any).existing_data) {
         const existingData = (response as any).existing_data;
         toastService.error(
@@ -731,6 +771,106 @@ export class NavService {
       schemes_missing_data: number;
       data_available: boolean;
       message: string;
+    }>;
+  }
+
+  // ==================== BOOKMARK GAP DETECTION ====================
+
+  async getBookmarkGapsSummary(): Promise<ApiResponse<BookmarkGapSummary>> {
+    const url = NAV_URLS.getBookmarkGapsSummary(this.getEnvironment());
+    
+    const response = await this.handleRequest<BookmarkGapSummary>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load bookmark gap summary');
+    }
+    
+    return response as ApiResponse<BookmarkGapSummary>;
+  }
+
+  async getBookmarkGaps(params?: {
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_order?: string;
+  }): Promise<ApiResponse<UnbookmarkedScheme[]>> {
+    const url = NAV_URLS.getBookmarkGaps(params || {}, this.getEnvironment());
+    
+    const response = await this.handleRequest<UnbookmarkedScheme[]>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load unbookmarked schemes');
+    }
+    
+    return response as ApiResponse<UnbookmarkedScheme[]>;
+  }
+
+  async getCustomerBookmarkGaps(customerId: number): Promise<ApiResponse<CustomerUnbookmarkedScheme[]>> {
+    const url = NAV_URLS.getCustomerBookmarkGaps(customerId, {}, this.getEnvironment());
+    
+    const response = await this.handleRequest<CustomerUnbookmarkedScheme[]>(url);
+    
+    if (!response.success) {
+      toastService.error(response.error || 'Failed to load customer unbookmarked schemes');
+    }
+    
+    return response as ApiResponse<CustomerUnbookmarkedScheme[]>;
+  }
+
+  async bulkBookmarkSchemes(schemeCodes: string[]): Promise<ApiResponse<{
+    success_count: number;
+    failed_count: number;
+    skipped_count: number;
+    results: Array<{
+      scheme_code: string;
+      scheme_name: string;
+      status: 'success' | 'failed' | 'skipped';
+      error?: string;
+      bookmark_id?: number;
+    }>;
+  }>> {
+    const url = NAV_URLS.bulkBookmarkSchemes(this.getEnvironment());
+    
+    const response = await this.handleRequest<{
+      success_count: number;
+      failed_count: number;
+      skipped_count: number;
+      results: Array<{
+        scheme_code: string;
+        scheme_name: string;
+        status: 'success' | 'failed' | 'skipped';
+        error?: string;
+        bookmark_id?: number;
+      }>;
+    }>(url, {
+      method: 'POST',
+      body: JSON.stringify({ scheme_codes: schemeCodes })
+    });
+    
+    if (response.success) {
+      const data = response.data;
+      if (data) {
+        toastService.success(
+          `Successfully bookmarked ${data.success_count} scheme(s). ` +
+          `${data.skipped_count > 0 ? `Skipped ${data.skipped_count} (already bookmarked). ` : ''}` +
+          `${data.failed_count > 0 ? `Failed ${data.failed_count}.` : ''}`
+        );
+      }
+    } else {
+      toastService.error(response.error || 'Failed to bulk bookmark schemes');
+    }
+    
+    return response as ApiResponse<{
+      success_count: number;
+      failed_count: number;
+      skipped_count: number;
+      results: Array<{
+        scheme_code: string;
+        scheme_name: string;
+        status: 'success' | 'failed' | 'skipped';
+        error?: string;
+        bookmark_id?: number;
+      }>;
     }>;
   }
 

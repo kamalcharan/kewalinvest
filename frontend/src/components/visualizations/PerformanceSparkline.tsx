@@ -2,9 +2,11 @@
 
 import React, { useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { PortfolioPerformanceMetric } from '../../types/portfolio.types';
 
 interface PerformanceSparklineProps {
-  data: number[];
+  performanceData?: PortfolioPerformanceMetric[];  // Raw performance data with dates
+  data: number[];                                   // Array of values
   width?: number;
   height?: number;
   showArea?: boolean;
@@ -14,9 +16,13 @@ interface PerformanceSparklineProps {
   gradientColor?: string;
   interactive?: boolean;
   showTooltip?: boolean;
+  timeframe?: '1M' | '3M' | '6M' | '1Y' | 'ALL';  // Component handles filtering
+  showTimelineMarkers?: boolean;                   // Enable/disable timeline markers
+  timelineMarkerSize?: number;
 }
 
 const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
+  performanceData,
   data,
   width = 120,
   height = 40,
@@ -26,7 +32,10 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   color,
   gradientColor,
   interactive = true,
-  showTooltip = true
+  showTooltip = true,
+  timeframe = 'ALL',
+  showTimelineMarkers = true,
+  timelineMarkerSize = 5
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -34,17 +43,87 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
   const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 });
 
-  // Calculate if overall trend is positive
+  // ============================================
+  // TIMELINE LOGIC - INTERNAL TO COMPONENT
+  // ============================================
+
+  const filterPerformanceByTimeframe = (
+    performanceData: PortfolioPerformanceMetric[],
+    timeframe: '1M' | '3M' | '6M' | '1Y' | 'ALL'
+  ): PortfolioPerformanceMetric[] => {
+    if (!performanceData || performanceData.length === 0) return [];
+    
+    const now = new Date();
+    let cutoffDate: Date;
+
+    switch (timeframe) {
+      case '1M':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      case '3M':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+        break;
+      case '6M':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+        break;
+      case '1Y':
+        cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        break;
+      case 'ALL':
+        return performanceData;
+      default:
+        return performanceData;
+    }
+
+    return performanceData.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= cutoffDate;
+    });
+  };
+
+  // Get timeline marker indices
+  const getTimelineMarkers = useMemo(() => {
+    if (!performanceData || !showTimelineMarkers) return [];
+
+    const filteredData = filterPerformanceByTimeframe(performanceData, timeframe);
+    if (filteredData.length === 0) return [];
+
+    const monthlyIndices: number[] = [];
+    let lastMonth = -1;
+
+    filteredData.forEach((item) => {
+      const date = new Date(item.date);
+      const month = date.getMonth();
+      
+      if (month !== lastMonth) {
+        monthlyIndices.push(performanceData.indexOf(item));
+        lastMonth = month;
+      }
+    });
+
+    // Always include the last point
+    if (filteredData.length > 0) {
+      const lastIndex = performanceData.indexOf(filteredData[filteredData.length - 1]);
+      if (!monthlyIndices.includes(lastIndex)) {
+        monthlyIndices.push(lastIndex);
+      }
+    }
+
+    return monthlyIndices;
+  }, [performanceData, timeframe, showTimelineMarkers]);
+
+  // ============================================
+  // EXISTING CHART LOGIC
+  // ============================================
+
   const isPositive = useMemo(() => {
     if (data.length < 2) return true;
     return data[data.length - 1] >= data[0];
   }, [data]);
 
-  // Determine line color
   const lineColor = color || (isPositive ? '#10B981' : '#EF4444');
   const areaGradientColor = gradientColor || lineColor;
 
-  // Calculate points
   const points = useMemo(() => {
     if (!data || data.length === 0) return [];
     
@@ -62,13 +141,11 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
     }));
   }, [data, width, height]);
 
-  // Create SVG path
   const linePath = useMemo(() => {
     if (points.length === 0) return '';
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
   }, [points]);
 
-  // Create area path
   const areaPath = useMemo(() => {
     if (points.length === 0 || !showArea) return '';
     const baseline = showBaseline && data[0] ? 
@@ -78,7 +155,6 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
     return `${linePath} L ${points[points.length - 1].x},${baseline} L ${points[0].x},${baseline} Z`;
   }, [points, linePath, showArea, showBaseline, data, height]);
 
-  // Calculate baseline Y position
   const baselineY = useMemo(() => {
     if (!showBaseline || !data[0] || data.length < 2) return null;
     const min = Math.min(...data);
@@ -87,15 +163,12 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
     return height - ((data[0] - min) / range * (height - 4) + 2);
   }, [data, height, showBaseline]);
 
-  // Handle mouse events
   const handleMouseMove = (e: React.MouseEvent<SVGElement>) => {
     if (!interactive) return;
     
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
     
-    // Find nearest point
     let nearestIndex = 0;
     let minDistance = Infinity;
     
@@ -119,7 +192,6 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
     setHoveredIndex(null);
   };
 
-  // Format value for tooltip
   const formatValue = (value: number): string => {
     if (value >= 10000000) {
       return `₹${(value / 10000000).toFixed(2)}Cr`;
@@ -129,7 +201,6 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
     return `₹${value.toLocaleString('en-IN')}`;
   };
 
-  // Month names for tooltip
   const getMonthName = (index: number): string => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentMonth = new Date().getMonth();
@@ -191,22 +262,32 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
           }}
         />
 
-        {/* Dots */}
-        {(showDots || hoveredIndex !== null) && points.map((point, index) => (
-          <circle
-            key={index}
-            cx={point.x}
-            cy={point.y}
-            r={hoveredIndex === index ? 4 : (showDots ? 2 : 0)}
-            fill={lineColor}
-            stroke="white"
-            strokeWidth={hoveredIndex === index ? 2 : 0}
-            style={{
-              transition: 'all 0.2s ease',
-              opacity: hoveredIndex === index ? 1 : (showDots ? 0.7 : 0)
-            }}
-          />
-        ))}
+        {/* Dots - with timeline marker logic */}
+        {(showDots || hoveredIndex !== null) && points.map((point, index) => {
+          const isTimelineMarker = getTimelineMarkers.includes(index);
+          const dotRadius = hoveredIndex === index 
+            ? 5 
+            : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
+          
+          return (
+            <circle
+              key={index}
+              cx={point.x}
+              cy={point.y}
+              r={dotRadius}
+              fill={lineColor}
+              stroke="white"
+              strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
+              style={{
+                transition: 'all 0.2s ease',
+                opacity: hoveredIndex === index 
+                  ? 1 
+                  : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
+                filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
+              }}
+            />
+          );
+        })}
 
         {/* Interactive overlay */}
         {interactive && (

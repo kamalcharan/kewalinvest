@@ -1,5 +1,6 @@
 // backend/src/services/nav.service.ts
-// UPDATED: Date range overlap detection for historical downloads
+// FIXED: Removed broken updateBookmarkDownloadStatus(), using updateSchemeNavStatus() instead
+// ADDED: Bookmark gaps methods for identifying unbookmarked schemes
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
@@ -13,7 +14,6 @@ import {
   SchemeBookmarkListResponse,
   SchemeBookmarkWithStats,
   BookmarkNavDataParams,
-  UpdateBookmarkDownloadStatus,
   NavData,
   NavDataSearchParams,
   NavDataListResponse,
@@ -28,6 +28,9 @@ import {
   N8nWebhookPayload,
   NavStatistics,
   SchemeNavSummary,
+  UnbookmarkedScheme,
+  BookmarkGapSummary,
+  CustomerUnbookmarkedScheme,
   NAV_ERROR_CODES
 } from '../types/nav.types';
 
@@ -44,6 +47,7 @@ export class NavService {
 
   /**
    * Get user's bookmarked schemes with NAV statistics
+   * FIXED: Use t_scheme_details for NAV tracking, removed conflicting subqueries
    */
   async getUserBookmarks(
     tenantId: number,
@@ -55,19 +59,20 @@ export class NavService {
       const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
       const offset = (page - 1) * page_size;
 
+      // FIXED: Simplified base query with proper JOIN
       let baseQuery = `
         FROM t_scheme_bookmarks sb
+        JOIN t_scheme_details sd ON sb.scheme_id = sd.id
         WHERE sb.tenant_id = $1 
           AND sb.is_live = $2 
-          AND sb.user_id = $3 
           AND sb.is_active = true
       `;
 
-      const queryParams: any[] = [tenantId, isLive, userId];
-      let paramIndex = 4;
+      const queryParams: any[] = [tenantId, isLive];
+      let paramIndex = 3;
 
       if (search) {
-        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex})`;
+        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
         queryParams.push(`%${search}%`);
         paramIndex++;
       }
@@ -99,30 +104,38 @@ export class NavService {
         };
       }
 
+      // FIXED: Get all fields from both tables, use scheme_details for NAV tracking
       const dataQuery = `
         SELECT 
-          sb.*,
-          COALESCE(
-            (SELECT COUNT(*) FROM t_nav_data nd 
-             WHERE nd.scheme_id = sb.scheme_id 
-             AND nd.tenant_id = $1 
-             AND nd.is_live = $2), 0
-          ) as nav_records_count,
-          (SELECT MAX(nav_date) FROM t_nav_data nd 
+          sb.id,
+          sb.tenant_id,
+          sb.user_id,
+          sb.scheme_id,
+          sb.scheme_code,
+          sb.scheme_name,
+          sb.amc_name,
+          sb.alias_name,
+          sb.is_live,
+          sb.is_active,
+          sb.daily_download_enabled,
+          sb.download_time,
+          sb.historical_download_completed,
+          sb.created_at,
+          sb.updated_at,
+          sd.launch_date,
+          sd.last_nav_download_date,
+          sd.last_nav_download_status,
+          sd.last_nav_download_error,
+          sd.historical_data_available,
+          sd.earliest_nav_date,
+          sd.latest_nav_date,
+          sd.total_nav_records as nav_records_count,
+          (SELECT nav_value 
+           FROM t_nav_data nd 
            WHERE nd.scheme_id = sb.scheme_id 
-           AND nd.tenant_id = $1 
-           AND nd.is_live = $2
-          ) as latest_nav_date,
-          (SELECT MIN(nav_date) FROM t_nav_data nd 
-           WHERE nd.scheme_id = sb.scheme_id 
-           AND nd.tenant_id = $1 
-           AND nd.is_live = $2
-          ) as earliest_nav_date,
-          (SELECT nav_value FROM t_nav_data nd 
-           WHERE nd.scheme_id = sb.scheme_id 
-           AND nd.tenant_id = $1 
-           AND nd.is_live = $2
-           ORDER BY nav_date DESC LIMIT 1
+             AND nd.is_live = $2
+           ORDER BY nav_date DESC 
+           LIMIT 1
           ) as latest_nav_value
         ${baseQuery}
         ORDER BY sb.created_at DESC 
@@ -132,6 +145,15 @@ export class NavService {
       queryParams.push(page_size, offset);
       const result = await this.db.query(dataQuery, queryParams);
       const total_pages = Math.ceil(total / page_size);
+
+      SimpleLogger.info('NavService', 'User bookmarks retrieved successfully', 'getUserBookmarks', {
+        tenantId, 
+        userId, 
+        total, 
+        page, 
+        bookmarksReturned: result.rows.length,
+        sampleNavRecords: result.rows.length > 0 ? result.rows[0].nav_records_count : null
+      });
 
       return {
         bookmarks: result.rows || [],
@@ -161,229 +183,288 @@ export class NavService {
   }
 
   /**
-   * Update bookmark download status after download operations
+   * Update global scheme NAV download status in t_scheme_details
+   * This is the correct method to use for updating NAV download status
+   */
+  async updateSchemeNavStatus(
+    schemeId: number,
+    status: {
+      last_download_status: 'success' | 'failed' | 'in_progress' | 'pending';
+      last_download_error?: string;
+      last_download_date?: Date;
+    }
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_scheme_details
+        SET 
+          last_nav_download_status = $2,
+          last_nav_download_error = $3,
+          last_nav_download_date = $4,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `;
+
+      await this.db.query(query, [
+        schemeId,
+        status.last_download_status,
+        status.last_download_error || null,
+        status.last_download_date || new Date()
+      ]);
+
+      SimpleLogger.info('NavService', 'Scheme NAV status updated', 'updateSchemeNavStatus', {
+        schemeId, status: status.last_download_status
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to update scheme NAV status', 'updateSchemeNavStatus', {
+        schemeId, status, error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * DEPRECATED: This method is kept for backward compatibility but redirects to updateSchemeNavStatus
+   * Will be removed in future versions
    */
   async updateBookmarkDownloadStatus(
     tenantId: number,
     isLive: boolean,
     userId: number,
     schemeId: number,
-    status: UpdateBookmarkDownloadStatus
+    status: {
+      last_download_status: 'success' | 'failed' | 'pending' | 'in_progress';
+      last_download_error?: string;
+      last_download_attempt?: Date;
+    }
   ): Promise<void> {
+    SimpleLogger.info('NavService', 'updateBookmarkDownloadStatus called (deprecated, redirecting to updateSchemeNavStatus)', 'updateBookmarkDownloadStatus', {
+      tenantId, userId, schemeId
+    }, userId, tenantId);
+    
+    // Redirect to the correct method
+    return this.updateSchemeNavStatus(schemeId, {
+      last_download_status: status.last_download_status,
+      last_download_error: status.last_download_error,
+      last_download_date: status.last_download_attempt
+    });
+  }
+
+  /**
+   * Update NAV statistics in t_scheme_details after data insertion
+   * This should be called after upserting NAV data
+   */
+  async updateSchemeNavStatistics(schemeId: number, isLive: boolean): Promise<void> {
     try {
-      const query = `
-        UPDATE t_scheme_bookmarks
-        SET 
-          last_download_status = $5,
-          last_download_error = $6,
-          last_download_attempt = $7,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = $1 
-          AND is_live = $2 
-          AND user_id = $3 
-          AND scheme_id = $4 
-          AND is_active = true
+      const statsQuery = `
+        SELECT 
+          MIN(nav_date) as earliest_date,
+          MAX(nav_date) as latest_date,
+          COUNT(*) as total_records
+        FROM t_nav_data
+        WHERE scheme_id = $1 AND is_live = $2
       `;
+      
+      const result = await this.db.query(statsQuery, [schemeId, isLive]);
+      
+      if (result.rows.length > 0 && result.rows[0].total_records > 0) {
+        const stats = result.rows[0];
+        
+        const updateQuery = `
+          UPDATE t_scheme_details
+          SET 
+            earliest_nav_date = $2,
+            latest_nav_date = $3,
+            total_nav_records = $4,
+            historical_data_available = true,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `;
+        
+        await this.db.query(updateQuery, [
+          schemeId,
+          stats.earliest_date,
+          stats.latest_date,
+          parseInt(stats.total_records)
+        ]);
+        
+        SimpleLogger.info('NavService', 'Scheme NAV statistics updated', 'updateSchemeNavStatistics', {
+          schemeId, totalRecords: stats.total_records
+        });
+      }
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to update scheme NAV statistics', 'updateSchemeNavStatistics', {
+        schemeId, error: error.message
+      }, undefined, undefined, error.stack);
+      // Don't throw - this is a secondary operation
+    }
+  }
 
-      await this.db.query(query, [
-        tenantId,
-        isLive,
-        userId,
-        schemeId,
-        status.last_download_status,
-        status.last_download_error || null,
-        status.last_download_attempt || new Date()
-      ]);
+  /**
+   * Get NAV data for a specific bookmark
+   */
+  async getBookmarkNavData(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    params: BookmarkNavDataParams
+  ): Promise<NavDataListResponse> {
+    try {
+      const bookmarkQuery = `
+        SELECT scheme_id FROM t_scheme_bookmarks
+        WHERE tenant_id = $1 AND is_live = $2 AND id = $3 AND is_active = true
+      `;
+      const bookmarkResult = await this.db.query(bookmarkQuery, [tenantId, isLive, params.bookmark_id]);
+      
+      if (bookmarkResult.rows.length === 0) {
+        throw new Error('Bookmark not found or access denied');
+      }
 
-      SimpleLogger.error('NavService', 'Bookmark download status updated', 'updateBookmarkDownloadStatus', {
-        tenantId, userId, schemeId, status: status.last_download_status
-      }, userId, tenantId);
+      const schemeId = bookmarkResult.rows[0].scheme_id;
+
+      if (params.granularity === 'monthly') {
+        return await this.getMonthlyNavData(
+          isLive,
+          schemeId,
+          params
+        );
+      }
+
+      const navParams: NavDataSearchParams = {
+        scheme_id: schemeId,
+        start_date: params.start_date ? new Date(params.start_date) : undefined,
+        end_date: params.end_date ? new Date(params.end_date) : undefined,
+        page: params.page || 1,
+        page_size: params.page_size || 50
+      };
+
+      return await this.getNavData(isLive, navParams);
 
     } catch (error: any) {
-      SimpleLogger.error('NavService', 'Failed to update bookmark download status', 'updateBookmarkDownloadStatus', {
-        tenantId, userId, schemeId, status, error: error.message
+      SimpleLogger.error('NavService', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+        tenantId, userId, params, error: error.message
       }, userId, tenantId, error.stack);
       throw error;
     }
   }
 
   /**
- * Get NAV data for a specific bookmark
- * UPDATED: Support for monthly granularity
- */
-async getBookmarkNavData(
-  tenantId: number,
-  isLive: boolean,
-  userId: number,
-  params: BookmarkNavDataParams
-): Promise<NavDataListResponse> {
-  try {
-    const bookmarkQuery = `
-      SELECT scheme_id FROM t_scheme_bookmarks
-      WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
-    `;
-    const bookmarkResult = await this.db.query(bookmarkQuery, [tenantId, isLive, userId, params.bookmark_id]);
-    
-    if (bookmarkResult.rows.length === 0) {
-      throw new Error('Bookmark not found or access denied');
-    }
+   * Get monthly closing NAV data (last trading day of each month)
+   */
+  private async getMonthlyNavData(
+    isLive: boolean,
+    schemeId: number,
+    params: BookmarkNavDataParams
+  ): Promise<NavDataListResponse> {
+    try {
+      const { start_date, end_date, page = 1, page_size = 50 } = params;
+      const offset = (page - 1) * page_size;
 
-    const schemeId = bookmarkResult.rows[0].scheme_id;
+      let baseQuery = `
+        FROM (
+          SELECT DISTINCT ON (DATE_TRUNC('month', nav_date))
+            nd.id,
+            nd.scheme_id,
+            nd.scheme_code,
+            nd.nav_date,
+            nd.nav_value,
+            nd.repurchase_price,
+            nd.sale_price,
+            nd.is_live,
+            nd.data_source,
+            nd.created_at,
+            nd.updated_at,
+            sd.scheme_name,
+            sd.amc_name,
+            DATE_TRUNC('month', nav_date) as month_key
+          FROM t_nav_data nd
+          JOIN t_scheme_details sd ON nd.scheme_id = sd.id
+          WHERE nd.is_live = $1 
+            AND nd.scheme_id = $2
+      `;
 
-    // NEW: Handle monthly granularity
-    if (params.granularity === 'monthly') {
-      return await this.getMonthlyNavData(
-        tenantId,
-        isLive,
-        schemeId,
-        params
-      );
-    }
+      const queryParams: any[] = [isLive, schemeId];
+      let paramIndex = 3;
 
-    // Existing daily logic
-    const navParams: NavDataSearchParams = {
-      scheme_id: schemeId,
-      start_date: params.start_date ? new Date(params.start_date) : undefined,
-      end_date: params.end_date ? new Date(params.end_date) : undefined,
-      page: params.page || 1,
-      page_size: params.page_size || 50
-    };
+      if (start_date) {
+        baseQuery += ` AND nd.nav_date >= $${paramIndex}`;
+        queryParams.push(new Date(start_date));
+        paramIndex++;
+      }
 
-    return await this.getNavData(tenantId, isLive, navParams);
+      if (end_date) {
+        baseQuery += ` AND nd.nav_date <= $${paramIndex}`;
+        queryParams.push(new Date(end_date));
+        paramIndex++;
+      }
 
-  } catch (error: any) {
-    SimpleLogger.error('NavService', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
-      tenantId, userId, params, error: error.message
-    }, userId, tenantId, error.stack);
-    throw error;
-  }
-}
+      baseQuery += `
+          ORDER BY DATE_TRUNC('month', nav_date) DESC, nav_date DESC
+        ) monthly_data
+      `;
 
-/**
- * NEW: Get monthly closing NAV data (last trading day of each month)
- * This returns one NAV entry per month - the NAV from the last available date in that month
- */
-private async getMonthlyNavData(
-  tenantId: number,
-  isLive: boolean,
-  schemeId: number,
-  params: BookmarkNavDataParams
-): Promise<NavDataListResponse> {
-  try {
-    const { start_date, end_date, page = 1, page_size = 50 } = params;
-    const offset = (page - 1) * page_size;
+      const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+      const countResult = await this.db.query(countQuery, queryParams);
+      const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
+        parseInt(countResult.rows[0].total) : 0;
 
-    // Build base query for monthly closing NAV (last trading day of each month)
-    // Uses DISTINCT ON to get the latest date within each month
-    let baseQuery = `
-      FROM (
-        SELECT DISTINCT ON (DATE_TRUNC('month', nav_date))
-          nd.id,
-          nd.tenant_id,
-          nd.scheme_id,
-          nd.scheme_code,
-          nd.nav_date,
-          nd.nav_value,
-          nd.repurchase_price,
-          nd.sale_price,
-          nd.is_live,
-          nd.data_source,
-          nd.created_at,
-          nd.updated_at,
-          sd.scheme_name,
-          sd.amc_name,
-          DATE_TRUNC('month', nav_date) as month_key
-        FROM t_nav_data nd
-        JOIN t_scheme_details sd ON nd.scheme_id = sd.id
-        WHERE nd.tenant_id = $1 
-          AND nd.is_live = $2 
-          AND nd.scheme_id = $3
-    `;
+      if (total === 0) {
+        return {
+          nav_data: [],
+          total: 0,
+          page,
+          page_size,
+          total_pages: 0,
+          has_next: false,
+          has_prev: false
+        };
+      }
 
-    const queryParams: any[] = [tenantId, isLive, schemeId];
-    let paramIndex = 4;
+      const dataQuery = `
+        SELECT 
+          id,
+          scheme_id,
+          scheme_code,
+          nav_date,
+          nav_value,
+          repurchase_price,
+          sale_price,
+          is_live,
+          data_source,
+          created_at,
+          updated_at,
+          scheme_name,
+          amc_name
+        ${baseQuery}
+        ORDER BY nav_date DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
 
-    if (start_date) {
-      baseQuery += ` AND nd.nav_date >= $${paramIndex}`;
-      queryParams.push(new Date(start_date));
-      paramIndex++;
-    }
+      queryParams.push(page_size, offset);
+      const result = await this.db.query(dataQuery, queryParams);
+      const total_pages = Math.ceil(total / page_size);
 
-    if (end_date) {
-      baseQuery += ` AND nd.nav_date <= $${paramIndex}`;
-      queryParams.push(new Date(end_date));
-      paramIndex++;
-    }
+      SimpleLogger.info('NavService', 'Monthly NAV data retrieved successfully', 'getMonthlyNavData', {
+        schemeId, totalMonths: total, page, page_size
+      });
 
-    baseQuery += `
-        ORDER BY DATE_TRUNC('month', nav_date) DESC, nav_date DESC
-      ) monthly_data
-    `;
-
-    // Count query
-    const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
-    const countResult = await this.db.query(countQuery, queryParams);
-    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
-      parseInt(countResult.rows[0].total) : 0;
-
-    if (total === 0) {
       return {
-        nav_data: [],
-        total: 0,
+        nav_data: result.rows || [],
+        total,
         page,
         page_size,
-        total_pages: 0,
-        has_next: false,
-        has_prev: false
+        total_pages,
+        has_next: page < total_pages,
+        has_prev: page > 1
       };
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get monthly NAV data', 'getMonthlyNavData', {
+        schemeId, params, error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
     }
-
-    // Data query with pagination
-    const dataQuery = `
-      SELECT 
-        id,
-        tenant_id,
-        scheme_id,
-        scheme_code,
-        nav_date,
-        nav_value,
-        repurchase_price,
-        sale_price,
-        is_live,
-        data_source,
-        created_at,
-        updated_at,
-        scheme_name,
-        amc_name
-      ${baseQuery}
-      ORDER BY nav_date DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    queryParams.push(page_size, offset);
-    const result = await this.db.query(dataQuery, queryParams);
-    const total_pages = Math.ceil(total / page_size);
-
-    SimpleLogger.error('NavService', 'Monthly NAV data retrieved successfully', 'getMonthlyNavData', {
-      tenantId, schemeId, totalMonths: total, page, page_size
-    }, undefined, tenantId);
-
-    return {
-      nav_data: result.rows || [],
-      total,
-      page,
-      page_size,
-      total_pages,
-      has_next: page < total_pages,
-      has_prev: page > 1
-    };
-  } catch (error: any) {
-    SimpleLogger.error('NavService', 'Failed to get monthly NAV data', 'getMonthlyNavData', {
-      tenantId, schemeId, params, error: error.message
-    }, undefined, tenantId, error.stack);
-    throw error;
   }
-}
 
   /**
    * Add scheme to user's bookmarks with denormalized scheme data
@@ -410,9 +491,9 @@ private async getMonthlyNavData(
 
       const existingQuery = `
         SELECT id FROM t_scheme_bookmarks
-        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND scheme_id = $4 AND is_active = true
+        WHERE tenant_id = $1 AND is_live = $2 AND scheme_id = $3 AND is_active = true
       `;
-      const existing = await client.query(existingQuery, [tenantId, isLive, userId, request.scheme_id]);
+      const existing = await client.query(existingQuery, [tenantId, isLive, request.scheme_id]);
 
       if (existing.rows.length > 0) {
         throw new Error(NAV_ERROR_CODES.SCHEME_ALREADY_BOOKMARKED);
@@ -420,9 +501,9 @@ private async getMonthlyNavData(
 
       const insertQuery = `
         INSERT INTO t_scheme_bookmarks (
-          tenant_id, user_id, scheme_id, scheme_code, scheme_name, amc_name,
+          tenant_id, user_id, scheme_id, scheme_code, scheme_name, amc_name, alias_name,
           is_live, daily_download_enabled, download_time
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
       `;
 
@@ -433,6 +514,7 @@ private async getMonthlyNavData(
         scheme.scheme_code,
         scheme.scheme_name,
         scheme.amc_name || null,
+        request.alias_name || null,
         isLive,
         request.daily_download_enabled || false,
         request.download_time || '22:00'
@@ -440,8 +522,8 @@ private async getMonthlyNavData(
 
       await client.query('COMMIT');
 
-      SimpleLogger.error('NavService', 'Scheme bookmarked successfully', 'addBookmark', {
-        tenantId, userId, schemeId: request.scheme_id, schemeCode: scheme.scheme_code
+      SimpleLogger.info('NavService', 'Scheme bookmarked successfully', 'addBookmark', {
+        tenantId, userId, schemeId: request.scheme_id, schemeCode: scheme.scheme_code, aliasName: request.alias_name
       }, userId, tenantId);
 
       return result.rows[0];
@@ -468,8 +550,8 @@ private async getMonthlyNavData(
   ): Promise<SchemeBookmark> {
     try {
       const updateFields: string[] = [];
-      const queryParams: any[] = [tenantId, isLive, userId, bookmarkId];
-      let paramIndex = 5;
+      const queryParams: any[] = [tenantId, isLive, bookmarkId];
+      let paramIndex = 4;
 
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -489,7 +571,7 @@ private async getMonthlyNavData(
       const query = `
         UPDATE t_scheme_bookmarks
         SET ${updateFields.join(', ')}
-        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4 AND is_active = true
+        WHERE tenant_id = $1 AND is_live = $2 AND id = $3 AND is_active = true
         RETURNING *
       `;
 
@@ -499,7 +581,7 @@ private async getMonthlyNavData(
         throw new Error(NAV_ERROR_CODES.BOOKMARK_NOT_FOUND);
       }
 
-      SimpleLogger.error('NavService', 'Bookmark updated successfully', 'updateBookmark', {
+      SimpleLogger.info('NavService', 'Bookmark updated successfully', 'updateBookmark', {
         tenantId, userId, bookmarkId, updates
       }, userId, tenantId);
 
@@ -525,16 +607,16 @@ private async getMonthlyNavData(
       const query = `
         UPDATE t_scheme_bookmarks
         SET is_active = false, updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND id = $4
+        WHERE tenant_id = $1 AND is_live = $2 AND id = $3
       `;
 
-      const result = await this.db.query(query, [tenantId, isLive, userId, bookmarkId]);
+      const result = await this.db.query(query, [tenantId, isLive, bookmarkId]);
       
       if (result.rowCount === 0) {
         throw new Error(NAV_ERROR_CODES.BOOKMARK_NOT_FOUND);
       }
 
-      SimpleLogger.error('NavService', 'Bookmark removed successfully', 'removeBookmark', {
+      SimpleLogger.info('NavService', 'Bookmark removed successfully', 'removeBookmark', {
         tenantId, userId, bookmarkId
       }, userId, tenantId);
     } catch (error: any) {
@@ -545,13 +627,215 @@ private async getMonthlyNavData(
     }
   }
 
+  // ==================== BOOKMARK GAPS ====================
+
+  /**
+   * Get all unbookmarked schemes across system (global view)
+   * Uses existing v_tenant_customer_schemes view + JOIN with bookmarks
+   */
+  async getBookmarkGaps(
+    tenantId: number,
+    isLive: boolean,
+    params?: {
+      page?: number;
+      page_size?: number;
+      sort_by?: string;
+      sort_order?: string;
+    }
+  ): Promise<UnbookmarkedScheme[]> {
+    try {
+      const { page = 1, page_size = 50, sort_by = 'customer_count', sort_order = 'desc' } = params || {};
+      const offset = (page - 1) * page_size;
+
+      // Query: Use existing view to find schemes NOT bookmarked
+      const query = `
+        SELECT 
+          vcs.scheme_code,
+          vcs.scheme_name,
+          vcs.customer_count,
+          vcs.transaction_count,
+          vcs.total_invested,
+          vcs.last_transaction_date,
+          vcs.first_transaction_date,
+          sd.id as scheme_id,
+          sd.amc_name,
+          CASE WHEN sd.id IS NOT NULL THEN true ELSE false END as exists_in_master
+        FROM v_tenant_customer_schemes vcs
+        LEFT JOIN t_scheme_details sd ON vcs.scheme_code = sd.scheme_code
+        WHERE vcs.tenant_id = $1 
+          AND vcs.is_live = $2
+          AND vcs.scheme_code NOT IN (
+            SELECT DISTINCT scheme_code FROM t_scheme_bookmarks 
+            WHERE tenant_id = $1 AND is_live = $2 AND is_active = true
+          )
+        ORDER BY 
+          ${sort_by === 'customer_count' ? 'vcs.customer_count' : 'vcs.total_invested'} 
+          ${sort_order === 'asc' ? 'ASC' : 'DESC'}
+        LIMIT $3 OFFSET $4
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive, page_size, offset]);
+
+      SimpleLogger.info('NavService', 'Bookmark gaps retrieved successfully', 'getBookmarkGaps', {
+        tenantId,
+        totalGaps: result.rows.length,
+        page,
+        sort_by
+      });
+
+      // Convert date strings to Date objects
+      return (result.rows || []).map(row => ({
+        ...row,
+        last_transaction_date: row.last_transaction_date ? new Date(row.last_transaction_date) : new Date(),
+        first_transaction_date: row.first_transaction_date ? new Date(row.first_transaction_date) : new Date()
+      }));
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get bookmark gaps', 'getBookmarkGaps', {
+        tenantId, params, error: error.message
+      }, undefined, tenantId, error.stack);
+      return [];
+    }
+  }
+
+  /**
+   * Get bookmark gaps summary (aggregated statistics)
+   * Shows overall impact of unbookmarked schemes
+   */
+  async getBookmarkGapsSummary(
+    tenantId: number,
+    isLive: boolean
+  ): Promise<BookmarkGapSummary> {
+    try {
+      const query = `
+        SELECT 
+          COUNT(DISTINCT vcs.scheme_code) as total_unbookmarked,
+          COUNT(DISTINCT vcs.customer_code) as total_customers_affected,
+          COALESCE(SUM(vcs.total_invested), 0) as total_investment_at_risk,
+          COUNT(DISTINCT CASE 
+            WHEN sd.id IS NULL THEN vcs.scheme_code 
+          END) as schemes_not_in_master,
+          COUNT(DISTINCT CASE 
+            WHEN sd.id IS NOT NULL THEN vcs.scheme_code 
+          END) as schemes_not_bookmarked,
+          NOW() as last_checked
+        FROM v_tenant_customer_schemes vcs
+        LEFT JOIN t_scheme_details sd ON vcs.scheme_code = sd.scheme_code
+        WHERE vcs.tenant_id = $1 
+          AND vcs.is_live = $2
+          AND vcs.scheme_code NOT IN (
+            SELECT DISTINCT scheme_code FROM t_scheme_bookmarks 
+            WHERE tenant_id = $1 AND is_live = $2 AND is_active = true
+          )
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      const summary = result.rows[0] || {};
+
+      SimpleLogger.info('NavService', 'Bookmark gap summary retrieved', 'getBookmarkGapsSummary', {
+        tenantId,
+        totalUnbookmarked: summary.total_unbookmarked,
+        customersAffected: summary.total_customers_affected
+      });
+
+      return {
+        total_unbookmarked: parseInt(summary.total_unbookmarked) || 0,
+        total_customers_affected: parseInt(summary.total_customers_affected) || 0,
+        total_investment_at_risk: parseFloat(summary.total_investment_at_risk) || 0,
+        schemes_not_in_master: parseInt(summary.schemes_not_in_master) || 0,
+        schemes_not_bookmarked: parseInt(summary.schemes_not_bookmarked) || 0,
+        last_checked: new Date(summary.last_checked)
+      };
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get bookmark gaps summary', 'getBookmarkGapsSummary', {
+        tenantId, error: error.message
+      }, undefined, tenantId, error.stack);
+
+      return {
+        total_unbookmarked: 0,
+        total_customers_affected: 0,
+        total_investment_at_risk: 0,
+        schemes_not_in_master: 0,
+        schemes_not_bookmarked: 0,
+        last_checked: new Date()
+      };
+    }
+  }
+
+  /**
+   * Get customer-specific unbookmarked schemes
+   * Get all schemes for ONE customer from transaction history, check against bookmarks
+   */
+  async getCustomerBookmarkGaps(
+    customerId: number
+  ): Promise<CustomerUnbookmarkedScheme[]> {
+    try {
+      if (!customerId || customerId <= 0) {
+        throw new Error('Valid customer ID is required');
+      }
+
+      // Query: Get all schemes for this customer from transactions
+      // Then check which ones are NOT bookmarked
+      const query = `
+        SELECT 
+          tt.customer_id,
+          c.prefix || ' ' || c.name as customer_name,
+          tt.scheme_code,
+          tt.scheme_name,
+          cmp.folio_no,
+          COALESCE(SUM(CASE WHEN tt.portfolio_flag = true THEN tt.total_amount ELSE 0 END), 0) as total_invested,
+          COUNT(DISTINCT tt.id) as transaction_count,
+          MAX(tt.txn_date) as last_transaction_date,
+          sd.id as scheme_id,
+          CASE WHEN sd.id IS NOT NULL THEN true ELSE false END as exists_in_master
+        FROM t_transaction_table tt
+        LEFT JOIN t_customers c ON tt.customer_id = c.id
+        LEFT JOIN t_customer_master_portfolio cmp ON tt.customer_id = cmp.customer_id 
+          AND tt.scheme_code = cmp.scheme_code
+        LEFT JOIN t_scheme_details sd ON tt.scheme_code = sd.scheme_code
+        WHERE tt.customer_id = $1
+          AND tt.is_active = true
+          AND tt.scheme_code NOT IN (
+            SELECT DISTINCT scheme_code FROM t_scheme_bookmarks 
+            WHERE is_active = true
+          )
+        GROUP BY 
+          tt.customer_id,
+          c.prefix,
+          c.name,
+          tt.scheme_code, 
+          tt.scheme_name,
+          cmp.folio_no,
+          sd.id
+        ORDER BY tt.scheme_name ASC
+      `;
+
+      const result = await this.db.query(query, [customerId]);
+
+      SimpleLogger.info('NavService', 'Customer bookmark gaps retrieved', 'getCustomerBookmarkGaps', {
+        customerId,
+        gapsFound: result.rows.length
+      });
+
+      // Convert date strings to Date objects and ensure we always return an array
+      return (Array.isArray(result.rows) ? result.rows : []).map(row => ({
+        ...row,
+        last_transaction_date: row.last_transaction_date ? new Date(row.last_transaction_date) : new Date()
+      }));
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get customer bookmark gaps', 'getCustomerBookmarkGaps', {
+        customerId, error: error.message
+      }, undefined, undefined, error.stack);
+      
+      return [];
+    }
+  }
+
   // ==================== NAV DATA OPERATIONS ====================
 
   /**
    * Get NAV data for schemes with filtering and pagination
    */
   async getNavData(
-    tenantId: number,
     isLive: boolean,
     params: NavDataSearchParams = {}
   ): Promise<NavDataListResponse> {
@@ -562,11 +846,11 @@ private async getMonthlyNavData(
       let baseQuery = `
         FROM t_nav_data nd
         JOIN t_scheme_details sd ON nd.scheme_id = sd.id
-        WHERE nd.tenant_id = $1 AND nd.is_live = $2
+        WHERE nd.is_live = $1
       `;
 
-      const queryParams: any[] = [tenantId, isLive];
-      let paramIndex = 3;
+      const queryParams: any[] = [isLive];
+      let paramIndex = 2;
 
       if (scheme_id) {
         baseQuery += ` AND nd.scheme_id = $${paramIndex}`;
@@ -634,8 +918,8 @@ private async getMonthlyNavData(
       };
     } catch (error: any) {
       SimpleLogger.error('NavService', 'Failed to get NAV data', 'getNavData', {
-        tenantId, params, error: error.message
-      }, undefined, tenantId, error.stack);
+        params, error: error.message
+      }, undefined, undefined, error.stack);
       
       return {
         nav_data: [],
@@ -653,7 +937,6 @@ private async getMonthlyNavData(
    * Get latest NAV for a specific scheme
    */
   async getLatestNav(
-    tenantId: number,
     isLive: boolean,
     schemeId: number
   ): Promise<NavData | null> {
@@ -665,17 +948,17 @@ private async getMonthlyNavData(
           sd.amc_name
         FROM t_nav_data nd
         JOIN t_scheme_details sd ON nd.scheme_id = sd.id
-        WHERE nd.tenant_id = $1 AND nd.is_live = $2 AND nd.scheme_id = $3
+        WHERE nd.is_live = $1 AND nd.scheme_id = $2
         ORDER BY nd.nav_date DESC
         LIMIT 1
       `;
 
-      const result = await this.db.query(query, [tenantId, isLive, schemeId]);
+      const result = await this.db.query(query, [isLive, schemeId]);
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error: any) {
       SimpleLogger.error('NavService', 'Failed to get latest NAV', 'getLatestNav', {
-        tenantId, schemeId, error: error.message
-      }, undefined, tenantId, error.stack);
+        schemeId, error: error.message
+      }, undefined, undefined, error.stack);
       return null;
     }
   }
@@ -684,7 +967,6 @@ private async getMonthlyNavData(
    * Check if NAV data exists for specific schemes on a date
    */
   async checkNavDataExists(
-    tenantId: number,
     isLive: boolean,
     schemeIds: number[],
     navDate: Date
@@ -697,10 +979,10 @@ private async getMonthlyNavData(
       const query = `
         SELECT DISTINCT scheme_id
         FROM t_nav_data
-        WHERE tenant_id = $1 AND is_live = $2 AND scheme_id = ANY($3) AND nav_date = $4
+        WHERE is_live = $1 AND scheme_id = ANY($2) AND nav_date = $3
       `;
 
-      const result = await this.db.query(query, [tenantId, isLive, schemeIds, navDate]);
+      const result = await this.db.query(query, [isLive, schemeIds, navDate]);
       const existingSchemes = new Set((result.rows || []).map(row => row.scheme_id));
 
       return schemeIds.reduce((acc, schemeId) => {
@@ -709,8 +991,8 @@ private async getMonthlyNavData(
       }, {} as { [schemeId: number]: boolean });
     } catch (error: any) {
       SimpleLogger.error('NavService', 'Failed to check NAV data existence', 'checkNavDataExists', {
-        tenantId, schemeIds, navDate, error: error.message
-      }, undefined, tenantId, error.stack);
+        schemeIds, navDate, error: error.message
+      }, undefined, undefined, error.stack);
       
       return schemeIds.reduce((acc, schemeId) => {
         acc[schemeId] = false;
@@ -728,17 +1010,17 @@ private async getMonthlyNavData(
     try {
       const statsQuery = `
         SELECT 
-          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND is_active = true), 0) as total_schemes_tracked,
-          COALESCE((SELECT COUNT(*) FROM t_nav_data WHERE tenant_id = $1 AND is_live = $2), 0) as total_nav_records,
-          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
-          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND user_id = $3 AND is_active = true AND historical_download_completed = true), 0) as schemes_with_historical_data,
-          (SELECT MAX(nav_date) FROM t_nav_data WHERE tenant_id = $1 AND is_live = $2) as latest_nav_date,
-          (SELECT MIN(nav_date) FROM t_nav_data WHERE tenant_id = $1 AND is_live = $2) as oldest_nav_date,
+          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
+          COALESCE((SELECT COUNT(*) FROM t_nav_data WHERE is_live = $2), 0) as total_nav_records,
+          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
+          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND historical_download_completed = true), 0) as schemes_with_historical_data,
+          (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
+          (SELECT MIN(nav_date) FROM t_nav_data WHERE is_live = $2) as oldest_nav_date,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE), 0) as download_jobs_today,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE AND status = 'failed'), 0) as failed_downloads_today
       `;
 
-      const result = await this.db.query(statsQuery, [tenantId, isLive, userId]);
+      const result = await this.db.query(statsQuery, [tenantId, isLive]);
       const stats = result.rows.length > 0 ? result.rows[0] : {};
 
       return {
@@ -771,6 +1053,7 @@ private async getMonthlyNavData(
 
   /**
    * Bulk insert/update NAV data (upsert by scheme_id + nav_date)
+   * FIXED: Also updates t_scheme_details statistics after successful upsert
    */
   async upsertNavData(
     tenantId: number,
@@ -782,70 +1065,155 @@ private async getMonthlyNavData(
     try {
       await client.query('BEGIN');
       
+      if (!navRecords || navRecords.length === 0) {
+        throw new Error('No NAV records provided for upsert');
+      }
+
       let insertCount = 0;
       let updateCount = 0;
       const errors: Array<{ scheme_code: string; error: string }> = [];
+      const processedSchemeIds = new Set<number>();
 
-      for (const record of navRecords) {
-        try {
-          const scheme = await this.schemeService.getSchemeByCode(tenantId, isLive, record.scheme_code);
-          if (!scheme) {
-            errors.push({ scheme_code: record.scheme_code, error: 'Scheme not found' });
-            continue;
+      SimpleLogger.info('NavService', 'Starting NAV data upsert', 'upsertNavData', {
+        tenantId, totalRecords: navRecords.length
+      }, undefined, tenantId);
+
+      const BATCH_SIZE = 100;
+      for (let batchStart = 0; batchStart < navRecords.length; batchStart += BATCH_SIZE) {
+        const batch = navRecords.slice(batchStart, Math.min(batchStart + BATCH_SIZE, navRecords.length));
+        
+        for (let i = 0; i < batch.length; i++) {
+          const record = batch[i];
+          const savepointName = `sp_${batchStart + i}`;
+          
+          try {
+            await client.query(`SAVEPOINT ${savepointName}`);
+            
+            if (!record.scheme_code || !record.nav_date || record.nav_value === undefined || record.nav_value === null) {
+              throw new Error('Missing required fields (scheme_code, nav_date, or nav_value)');
+            }
+
+            const schemeQuery = `
+              SELECT id, scheme_code, scheme_name
+              FROM t_scheme_details 
+              WHERE scheme_code = $1 AND is_active = true
+            `;
+            const schemeResult = await client.query(schemeQuery, [record.scheme_code]);
+            
+            if (schemeResult.rows.length === 0) {
+              throw new Error('Scheme not found in global master database');
+            }
+
+            const scheme = schemeResult.rows[0];
+            processedSchemeIds.add(scheme.id);
+
+            const upsertQuery = `
+              INSERT INTO t_nav_data (
+                scheme_id, scheme_code, nav_date, nav_value, 
+                repurchase_price, sale_price, is_live, data_source
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (scheme_id, nav_date, is_live)
+              DO UPDATE SET
+                nav_value = EXCLUDED.nav_value,
+                repurchase_price = EXCLUDED.repurchase_price,
+                sale_price = EXCLUDED.sale_price,
+                data_source = EXCLUDED.data_source,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING (xmax = 0) as was_inserted
+            `;
+
+            const result = await client.query(upsertQuery, [
+              scheme.id,
+              record.scheme_code,
+              record.nav_date,
+              record.nav_value,
+              record.repurchase_price || null,
+              record.sale_price || null,
+              isLive,
+              record.data_source || 'historical'
+            ]);
+
+            if (result.rows[0].was_inserted) {
+              insertCount++;
+            } else {
+              updateCount++;
+            }
+            
+            await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+            
+          } catch (recordError: any) {
+            try {
+              await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+            } catch (rollbackError) {
+              SimpleLogger.error('NavService', 'Failed to rollback to savepoint', 'upsertNavData-rollback', {
+                savepointName, error: rollbackError
+              }, undefined, tenantId);
+            }
+            
+            errors.push({ 
+              scheme_code: record.scheme_code || 'UNKNOWN', 
+              error: recordError.message || 'Unknown database error' 
+            });
+            
+            if (errors.length <= 5) {
+              SimpleLogger.error('NavService', 'Failed to upsert individual NAV record', 'upsertNavData-record', {
+                tenantId, schemeCode: record.scheme_code, error: recordError.message
+              }, undefined, tenantId, recordError.stack);
+            }
           }
-
-          const upsertQuery = `
-            INSERT INTO t_nav_data (
-              tenant_id, scheme_id, scheme_code, nav_date, nav_value, 
-              repurchase_price, sale_price, is_live, data_source
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (tenant_id, scheme_id, nav_date, is_live)
-            DO UPDATE SET
-              nav_value = EXCLUDED.nav_value,
-              repurchase_price = EXCLUDED.repurchase_price,
-              sale_price = EXCLUDED.sale_price,
-              data_source = EXCLUDED.data_source,
-              updated_at = CURRENT_TIMESTAMP
-            RETURNING (xmax = 0) as was_inserted
-          `;
-
-          const result = await client.query(upsertQuery, [
-            tenantId,
-            scheme.id,
-            record.scheme_code,
-            record.nav_date,
-            record.nav_value,
-            record.repurchase_price || null,
-            record.sale_price || null,
-            isLive,
-            'daily'
-          ]);
-
-          if (result.rows[0].was_inserted) {
-            insertCount++;
-          } else {
-            updateCount++;
-          }
-        } catch (recordError: any) {
-          errors.push({ 
-            scheme_code: record.scheme_code, 
-            error: recordError.message || 'Unknown error' 
-          });
         }
+      }
+
+      if (insertCount === 0 && updateCount === 0) {
+        await client.query('ROLLBACK');
+        
+        const errorSummary = errors.length > 0 
+          ? `All ${navRecords.length} records failed. Sample errors: ${errors.slice(0, 3).map(e => `${e.scheme_code}: ${e.error}`).join('; ')}`
+          : 'No records were inserted or updated for unknown reasons';
+        
+        SimpleLogger.error('NavService', 'NAV data upsert failed - no records processed', 'upsertNavData', {
+          tenantId, 
+          totalRecords: navRecords.length, 
+          errorCount: errors.length,
+          sampleErrors: errors.slice(0, 5)
+        }, undefined, tenantId);
+        
+        throw new Error(`NAV upsert failed: ${errorSummary}`);
       }
 
       await client.query('COMMIT');
 
-      SimpleLogger.error('NavService', 'NAV data upserted successfully', 'upsertNavData', {
-        tenantId, totalRecords: navRecords.length, inserted: insertCount, updated: updateCount, errors: errors.length
+      SimpleLogger.info('NavService', 'NAV data upserted successfully', 'upsertNavData', {
+        tenantId, 
+        totalRecords: navRecords.length, 
+        inserted: insertCount, 
+        updated: updateCount, 
+        errors: errors.length,
+        successRate: `${Math.round(((insertCount + updateCount) / navRecords.length) * 100)}%`,
+        affectedSchemes: processedSchemeIds.size
       }, undefined, tenantId);
 
+      // FIXED: Update t_scheme_details statistics for all processed schemes
+      for (const schemeId of processedSchemeIds) {
+        try {
+          await this.updateSchemeNavStatistics(schemeId, isLive);
+        } catch (statsError: any) {
+          SimpleLogger.error('NavService', 'Failed to update scheme statistics after upsert', 'upsertNavData-stats', {
+            schemeId, error: statsError.message
+          }, undefined, tenantId);
+          // Don't fail the whole operation for stats update failure
+        }
+      }
+
       return { inserted: insertCount, updated: updateCount, errors };
+      
     } catch (error: any) {
       await client.query('ROLLBACK');
+      
       SimpleLogger.error('NavService', 'Failed to upsert NAV data', 'upsertNavData', {
         tenantId, recordCount: navRecords.length, error: error.message
       }, undefined, tenantId, error.stack);
+      
       throw error;
     } finally {
       client.release();
@@ -855,7 +1223,7 @@ private async getMonthlyNavData(
   // ==================== DOWNLOAD JOB OPERATIONS ====================
 
   /**
-   * UPDATED: Create download job with date range overlap detection
+   * Create download job with date range overlap detection
    */
   async createDownloadJob(
     tenantId: number,
@@ -868,13 +1236,11 @@ private async getMonthlyNavData(
     try {
       await client.query('BEGIN');
 
-      // UPDATED: Validate historical download with actual date range checking
       if (request.job_type === 'historical') {
         if (!request.start_date || !request.end_date) {
           throw new Error('Historical downloads require start_date and end_date');
         }
 
-        // Check for actual date overlap in NAV data for each scheme
         for (const schemeId of request.scheme_ids) {
           const overlapQuery = `
             SELECT 
@@ -882,11 +1248,10 @@ private async getMonthlyNavData(
               MAX(nav_date) as latest_date,
               COUNT(*) as record_count
             FROM t_nav_data 
-            WHERE tenant_id = $1 
-              AND is_live = $2 
-              AND scheme_id = $3
+            WHERE is_live = $1 
+              AND scheme_id = $2
           `;
-          const overlapResult = await client.query(overlapQuery, [tenantId, isLive, schemeId]);
+          const overlapResult = await client.query(overlapQuery, [isLive, schemeId]);
           
           if (overlapResult.rows.length > 0 && overlapResult.rows[0].record_count > 0) {
             const existingData = overlapResult.rows[0];
@@ -895,11 +1260,9 @@ private async getMonthlyNavData(
             const requestedStart = new Date(request.start_date);
             const requestedEnd = new Date(request.end_date);
             
-            // Check if requested range overlaps with existing data
             const hasOverlap = !(requestedEnd < existingStart || requestedStart > existingEnd);
             
             if (hasOverlap) {
-              // Get scheme name for better error message
               const schemeQuery = `SELECT scheme_name FROM t_scheme_details WHERE id = $1`;
               const schemeResult = await client.query(schemeQuery, [schemeId]);
               const schemeName = schemeResult.rows[0]?.scheme_name || 'Unknown Scheme';
@@ -941,7 +1304,7 @@ private async getMonthlyNavData(
 
       const job = result.rows[0];
 
-      SimpleLogger.error('NavService', 'Download job created successfully', 'createDownloadJob', {
+      SimpleLogger.info('NavService', 'Download job created successfully', 'createDownloadJob', {
         tenantId, userId, jobId: job.id, jobType: request.job_type, schemeCount: request.scheme_ids.length
       }, userId, tenantId);
 
@@ -1004,7 +1367,7 @@ private async getMonthlyNavData(
         throw new Error(NAV_ERROR_CODES.DOWNLOAD_JOB_NOT_FOUND);
       }
 
-      SimpleLogger.error('NavService', 'Download job updated successfully', 'updateDownloadJob', {
+      SimpleLogger.info('NavService', 'Download job updated successfully', 'updateDownloadJob', {
         tenantId, jobId, updates
       }, undefined, tenantId);
 
@@ -1092,7 +1455,7 @@ private async getMonthlyNavData(
       const jobsWithSchemes: NavDownloadJobWithSchemes[] = [];
       for (const job of jobs) {
         try {
-          const schemes = await this.getSchemesByIds(tenantId, isLive, job.scheme_ids || []);
+          const schemes = await this.getSchemesByIds(job.scheme_ids || []);
           jobsWithSchemes.push({
             ...job,
             schemes: schemes.map(s => ({
@@ -1183,7 +1546,7 @@ private async getMonthlyNavData(
   /**
    * Get schemes by IDs (helper method)
    */
-  private async getSchemesByIds(tenantId: number, isLive: boolean, schemeIds: number[]): Promise<SchemeDetail[]> {
+  private async getSchemesByIds(schemeIds: number[]): Promise<SchemeDetail[]> {
     try {
       if (!schemeIds || schemeIds.length === 0) {
         return [];
@@ -1191,11 +1554,11 @@ private async getMonthlyNavData(
 
       const query = `
         SELECT * FROM t_scheme_details
-        WHERE tenant_id = $1 AND is_live = $2 AND id = ANY($3) AND is_active = true
+        WHERE id = ANY($1) AND is_active = true
         ORDER BY scheme_name
       `;
 
-      const result = await this.db.query(query, [tenantId, isLive, schemeIds]);
+      const result = await this.db.query(query, [schemeIds]);
       return result.rows || [];
     } catch (error) {
       console.error('Error getting schemes by IDs:', error);

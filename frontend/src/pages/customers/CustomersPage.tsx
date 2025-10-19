@@ -217,6 +217,13 @@ const CustomersPage: React.FC = () => {
     </svg>
   );
 
+  // Star Icon (NEW)
+  const StarIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="2">
+      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+    </svg>
+  );
+
   // Error handling with logging
   if (error) {
     FrontendErrorLogger.error(
@@ -368,6 +375,7 @@ const CustomersPage: React.FC = () => {
         </div>
 
         {/* Stats Cards - Using Real Portfolio API */}
+        {/* UPDATED: Added Bookmarked stat card */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -413,6 +421,48 @@ const CustomersPage: React.FC = () => {
               color: colors.utility.secondaryText
             }}>
               Active
+            </div>
+          </div>
+
+          {/* Bookmarked Stat Card (NEW) */}
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '8px',
+            padding: '20px',
+            cursor: stats?.bookmarked ? 'pointer' : 'default',
+            transition: 'transform 0.2s ease'
+          }}
+          onClick={() => {
+            if (stats?.bookmarked) {
+              setSearchParams(prev => ({ ...prev, is_bookmarked: true, page: 1 }));
+            }
+          }}
+          onMouseEnter={(e) => {
+            if (stats?.bookmarked) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+          >
+            <div style={{
+              fontSize: '32px',
+              fontWeight: '700',
+              color: '#FFD700',
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <StarIcon />
+              {stats?.bookmarked || 0}
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText
+            }}>
+              Bookmarked
             </div>
           </div>
 

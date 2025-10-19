@@ -23,6 +23,10 @@ interface ImportSession {
   processing_started_at?: string;
   processing_completed_at?: string;
   error_summary?: string;
+  processing_metadata?: {
+    orphan_records?: number;
+    orphan_percentage?: number;
+  };
 }
 
 interface ImportRecord {
@@ -242,9 +246,6 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           ...prev,
           [recordId]: !currentFlag
         }));
-        
-        // Optionally refresh results to get updated counts
-        // fetchResults();
       } else {
         onError(result.error || 'Failed to update portfolio flag');
       }
@@ -269,6 +270,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
       success: colors.semantic.success,
       failed: colors.semantic.error,
       duplicate: colors.semantic.warning,
+      orphan: '#8B7355', // Brown color for orphans
       skipped: colors.utility.secondaryText
     };
     return statusColors[status as keyof typeof statusColors] || colors.utility.secondaryText;
@@ -297,6 +299,14 @@ const ImportResults: React.FC<ImportResultsProps> = ({
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
         );
+      case 'orphan':
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        );
       case 'skipped':
         return (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -310,6 +320,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   };
 
   const isTransactionImport = resultsData?.session?.import_type === 'TransactionData';
+  const orphanCount = resultsData?.session?.processing_metadata?.orphan_records || 0;
 
   if (isLoading && !resultsData) {
     return (
@@ -426,6 +437,52 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                 {resultsData.summary.duplicateRows} potential duplicate transaction(s) have been flagged. 
                 These are currently <strong>included</strong> in portfolio totals. You can exclude duplicates 
                 from calculations by toggling the "Include in Portfolio" switch below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Orphan Records Notice */}
+      {isTransactionImport && orphanCount > 0 && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          backgroundColor: '#8B7355' + '10',
+          border: `1px solid #8B735530`,
+          borderRadius: '8px'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px'
+          }}>
+            <div style={{ color: '#8B7355', flexShrink: 0, marginTop: '2px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <div>
+              <h4 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '8px',
+                margin: 0
+              }}>
+                Orphan Records Detected
+              </h4>
+              <p style={{
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                margin: 0,
+                lineHeight: '1.5'
+              }}>
+                {orphanCount} transaction(s) could not be matched to any scheme in your bookmarks. 
+                These records were <strong>not imported</strong>. Please add the missing schemes to your 
+                bookmarks and re-import these transactions.
               </p>
             </div>
           </div>
@@ -574,6 +631,39 @@ const ImportResults: React.FC<ImportResultsProps> = ({
             {isTransactionImport ? 'Review & toggle below' : 'Skipped existing records'}
           </div>
         </div>
+
+        {/* Orphan Records Card (only show for transaction imports) */}
+        {isTransactionImport && (
+          <div style={{
+            padding: '20px',
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '12px',
+            border: `1px solid #8B735530`,
+            textAlign: 'center' as const
+          }}>
+            <div style={{
+              fontSize: '32px',
+              fontWeight: '700',
+              color: '#8B7355',
+              marginBottom: '8px'
+            }}>
+              {orphanCount}
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              marginBottom: '4px'
+            }}>
+              Orphan Records
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: colors.utility.secondaryText
+            }}>
+              Scheme not found in bookmarks
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filters and Controls */}
@@ -617,6 +707,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
             <option value="success">Successful Only</option>
             <option value="failed">Failed Only</option>
             <option value="duplicate">Duplicates Only</option>
+            {isTransactionImport && <option value="orphan">Orphan Only</option>}
             <option value="skipped">Skipped Only</option>
           </select>
         </div>
@@ -746,7 +837,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                         ).join(' • ') : 
                         'No data'}
                       {record.raw_data && typeof record.raw_data === 'object' && 
-                       Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
+                      Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
                     </div>
                   </div>
 

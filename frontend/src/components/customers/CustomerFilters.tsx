@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { CustomerSearchParams, SurvivalStatus, OnboardingStatus } from '../../types/customer.types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useBookmarkReasons } from '../../hooks/useCustomers';
 
 interface CustomerFiltersProps {
   onFiltersChange: (filters: CustomerSearchParams) => void;
@@ -19,6 +20,9 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Fetch bookmark reasons (NEW)
+  const { data: bookmarkReasons } = useBookmarkReasons();
+
   // Use ref to avoid dependency issues
   const onFiltersChangeRef = useRef(onFiltersChange);
   onFiltersChangeRef.current = onFiltersChange;
@@ -33,6 +37,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   const debouncedSearch = useDebounce(searchInput, 500);
 
   // Advanced filters state (local, not sent to API until "Apply" is clicked)
+  // UPDATED: Added bookmark filters
   const [localFilters, setLocalFilters] = useState<CustomerSearchParams>({
     search: '',
     sort_by: 'c.name',
@@ -44,6 +49,8 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
     is_active: undefined,
     birthday_month: undefined,
     anniversary_month: undefined,
+    is_bookmarked: undefined,
+    bookmark_reason: undefined,
     page: 1,
     page_size: 20,
     ...initialFilters
@@ -100,6 +107,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   }, [localFilters, debouncedSearch]);
 
   // Clear all filters
+  // UPDATED: Clear bookmark filters
   const clearFilters = useCallback(() => {
     const clearedFilters = {
       search: '',
@@ -112,6 +120,8 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       is_active: undefined,
       birthday_month: undefined,
       anniversary_month: undefined,
+      is_bookmarked: undefined,
+      bookmark_reason: undefined,
       page: 1,
       page_size: 20
     };
@@ -123,6 +133,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   }, []);
 
   // Check if any advanced filters are active (excluding search and sort)
+  // UPDATED: Include bookmark filters
   const hasActiveAdvancedFilters = () => {
     return !!(
       appliedFilters.survival_status ||
@@ -131,11 +142,14 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       appliedFilters.has_pan !== undefined ||
       appliedFilters.is_active !== undefined ||
       appliedFilters.birthday_month ||
-      appliedFilters.anniversary_month
+      appliedFilters.anniversary_month ||
+      appliedFilters.is_bookmarked !== undefined ||
+      appliedFilters.bookmark_reason
     );
   };
 
   // Check if there are pending filter changes
+  // UPDATED: Include bookmark filters
   const hasPendingChanges = () => {
     return (
       localFilters.survival_status !== appliedFilters.survival_status ||
@@ -144,11 +158,14 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       localFilters.has_pan !== appliedFilters.has_pan ||
       localFilters.is_active !== appliedFilters.is_active ||
       localFilters.birthday_month !== appliedFilters.birthday_month ||
-      localFilters.anniversary_month !== appliedFilters.anniversary_month
+      localFilters.anniversary_month !== appliedFilters.anniversary_month ||
+      localFilters.is_bookmarked !== appliedFilters.is_bookmarked ||
+      localFilters.bookmark_reason !== appliedFilters.bookmark_reason
     );
   };
 
   // Count active filters
+  // UPDATED: Include bookmark filters
   const activeFilterCount = () => {
     let count = 0;
     if (appliedFilters.search) count++;
@@ -159,6 +176,8 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
     if (appliedFilters.is_active !== undefined) count++;
     if (appliedFilters.birthday_month) count++;
     if (appliedFilters.anniversary_month) count++;
+    if (appliedFilters.is_bookmarked !== undefined) count++;
+    if (appliedFilters.bookmark_reason) count++;
     return count;
   };
 
@@ -225,6 +244,13 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   const CheckIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="20,6 9,17 4,12" />
+    </svg>
+  );
+
+  // Star Icon (NEW)
+  const StarIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
     </svg>
   );
 
@@ -597,6 +623,81 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
                 <option value="">All Customers</option>
                 <option value="true">With PAN</option>
                 <option value="false">Without PAN</option>
+              </select>
+            </div>
+
+            {/* Bookmarked Filter (NEW) */}
+            <div>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginBottom: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText
+              }}>
+                <StarIcon />
+                Bookmarked
+              </label>
+              <select
+                value={localFilters.is_bookmarked === undefined ? '' : localFilters.is_bookmarked.toString()}
+                onChange={(e) => handleLocalFilterChange('is_bookmarked', e.target.value === '' ? undefined : e.target.value === 'true')}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '6px',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  fontSize: '14px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Customers</option>
+                <option value="true">Bookmarked Only</option>
+                <option value="false">Not Bookmarked</option>
+              </select>
+            </div>
+
+            {/* Bookmark Reason Filter (NEW) */}
+            <div>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginBottom: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText
+              }}>
+                <StarIcon />
+                Bookmark Reason
+              </label>
+              <select
+                value={localFilters.bookmark_reason || ''}
+                onChange={(e) => handleLocalFilterChange('bookmark_reason', e.target.value)}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '6px',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  fontSize: '14px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Reasons</option>
+                {bookmarkReasons?.map((reason) => (
+                  <option key={reason.id} value={reason.reason_code}>
+                    {reason.reason_label}
+                  </option>
+                ))}
               </select>
             </div>
 

@@ -7,7 +7,9 @@ import {
   CreateCustomerRequest,
   UpdateCustomerRequest,
   CustomerSearchParams,
-  CreateAddressRequest
+  CreateAddressRequest,
+  CreateBookmarkRequest,
+  UpdateBookmarkRequest
 } from '../types/customer.types';
 
 interface AuthenticatedRequest extends Request {
@@ -27,6 +29,7 @@ export class CustomerController {
 
   /**
    * Get all customers with pagination
+   * UPDATED: Now passes userId for bookmark data
    */
   getCustomers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -37,7 +40,8 @@ export class CustomerController {
       const result = await this.customerService.getCustomers(
         user!.tenant_id,
         isLive,
-        params
+        params,
+        user!.user_id  // NEW: Pass userId
       );
 
       res.json({
@@ -55,6 +59,7 @@ export class CustomerController {
 
   /**
    * Get customer statistics
+   * UPDATED: Now passes userId for bookmark stats
    */
   getCustomerStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -63,7 +68,8 @@ export class CustomerController {
 
       const stats = await this.customerService.getCustomerStats(
         user!.tenant_id,
-        isLive
+        isLive,
+        user!.user_id  // NEW: Pass userId
       );
 
       res.json({
@@ -81,6 +87,7 @@ export class CustomerController {
 
   /**
    * Get single customer by ID
+   * UPDATED: Now passes userId for bookmark data
    */
   getCustomer = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -99,7 +106,8 @@ export class CustomerController {
       const customer = await this.customerService.getCustomer(
         user!.tenant_id,
         isLive,
-        customerId
+        customerId,
+        user!.user_id  // NEW: Pass userId
       );
 
       if (!customer) {
@@ -269,7 +277,8 @@ export class CustomerController {
       const updatedCustomer = await this.customerService.getCustomer(
         user!.tenant_id,
         isLive,
-        customerId
+        customerId,
+        user!.user_id  // NEW: Pass userId
       );
 
       res.json({
@@ -585,6 +594,167 @@ export class CustomerController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get customer JTBD summary'
+      });
+    }
+  };
+
+  // ==================== BOOKMARK ENDPOINTS (NEW) ====================
+
+  /**
+   * Get bookmark reasons for tenant
+   * GET /api/customers/bookmark-reasons
+   */
+  getBookmarkReasons = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const reasons = await this.customerService.getBookmarkReasons(
+        user!.tenant_id,
+        isLive
+      );
+
+      res.json({
+        success: true,
+        data: {
+          reasons,
+          total: reasons.length
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting bookmark reasons:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get bookmark reasons'
+      });
+    }
+  };
+
+  /**
+   * Add bookmark to customer
+   * POST /api/customers/:id/bookmark
+   */
+  addBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+      const data = req.body as CreateBookmarkRequest;
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      // Validate that either reason_id or custom_reason is provided
+      if (!data.reason_id && !data.custom_reason) {
+        res.status(400).json({
+          success: false,
+          error: 'Either reason_id or custom_reason must be provided'
+        });
+        return;
+      }
+
+      const bookmark = await this.customerService.addBookmark(
+        user!.tenant_id,
+        isLive,
+        customerId,
+        user!.user_id,
+        data
+      );
+
+      res.status(201).json({
+        success: true,
+        data: bookmark,
+        message: 'Customer bookmarked successfully'
+      });
+    } catch (error: any) {
+      console.error('Error adding bookmark:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to add bookmark'
+      });
+    }
+  };
+
+  /**
+   * Remove bookmark from customer
+   * DELETE /api/customers/:id/bookmark
+   */
+  removeBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      await this.customerService.removeBookmark(
+        user!.tenant_id,
+        isLive,
+        customerId,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        message: 'Bookmark removed successfully'
+      });
+    } catch (error: any) {
+      console.error('Error removing bookmark:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to remove bookmark'
+      });
+    }
+  };
+
+  /**
+   * Update bookmark
+   * PATCH /api/customers/:id/bookmark
+   */
+  updateBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.id);
+      const data = req.body as UpdateBookmarkRequest;
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const bookmark = await this.customerService.updateBookmark(
+        user!.tenant_id,
+        isLive,
+        customerId,
+        user!.user_id,
+        data
+      );
+
+      res.json({
+        success: true,
+        data: bookmark,
+        message: 'Bookmark updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Error updating bookmark:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update bookmark'
       });
     }
   };

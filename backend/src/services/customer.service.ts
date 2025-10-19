@@ -11,7 +11,11 @@ import {
   CustomerSearchParams,
   CustomerListResponse,
   CustomerStats,
-  ConvertToCustomerRequest
+  ConvertToCustomerRequest,
+  BookmarkReason,
+  CustomerBookmark,
+  CreateBookmarkRequest,
+  UpdateBookmarkRequest
 } from '../types/customer.types';
 
 export class CustomerService {
@@ -23,11 +27,13 @@ export class CustomerService {
 
   /**
    * Get customers with filtering and pagination
+   * UPDATED: Added bookmark LEFT JOIN and filters
    */
   async getCustomers(
     tenantId: number,
     isLive: boolean,
-    params: CustomerSearchParams
+    params: CustomerSearchParams,
+    userId?: number  // NEW: Optional userId for bookmark filtering
   ): Promise<CustomerListResponse> {
     try {
       const {
@@ -36,6 +42,8 @@ export class CustomerService {
         onboarding_status,
         has_address,
         is_active,
+        is_bookmarked,      // NEW
+        bookmark_reason,    // NEW
         page = 1,
         page_size = 20,
         sort_by = 'c.name',
@@ -97,8 +105,51 @@ export class CustomerService {
         }
       }
 
+      // NEW: Bookmark filters
+      if (is_bookmarked !== undefined && userId) {
+        if (is_bookmarked) {
+          whereConditions.push(`EXISTS (
+            SELECT 1 FROM t_customer_bookmarks bm
+            WHERE bm.customer_id = cust.id
+            AND bm.user_id = $${paramIndex}
+            AND bm.tenant_id = $1
+            AND bm.is_live = $2
+            AND bm.is_active = true
+          )`);
+          queryParams.push(userId);
+          paramIndex++;
+        } else {
+          whereConditions.push(`NOT EXISTS (
+            SELECT 1 FROM t_customer_bookmarks bm
+            WHERE bm.customer_id = cust.id
+            AND bm.user_id = $${paramIndex}
+            AND bm.tenant_id = $1
+            AND bm.is_live = $2
+            AND bm.is_active = true
+          )`);
+          queryParams.push(userId);
+          paramIndex++;
+        }
+      }
+
+      if (bookmark_reason && userId) {
+        whereConditions.push(`EXISTS (
+          SELECT 1 FROM t_customer_bookmarks bm
+          JOIN m_bookmark_reasons br ON br.id = bm.reason_id
+          WHERE bm.customer_id = cust.id
+          AND bm.user_id = $${paramIndex}
+          AND bm.tenant_id = $1
+          AND bm.is_live = $2
+          AND bm.is_active = true
+          AND br.reason_code = $${paramIndex + 1}
+        )`);
+        queryParams.push(userId, bookmark_reason);
+        paramIndex += 2;
+      }
+
       const offset = (page - 1) * page_size;
 
+      // UPDATED: Added bookmark LEFT JOIN
       const query = `
         SELECT 
           cust.*,
@@ -117,15 +168,28 @@ export class CustomerService {
             WHEN cust.date_of_birth IS NOT NULL 
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, cust.date_of_birth))
             ELSE NULL 
-          END as age
+          END as age,
+          bm.id as bookmark_id,
+          bm.reason_id as bookmark_reason_id,
+          bm.custom_reason as bookmark_custom_reason,
+          bm.notes as bookmark_notes,
+          br.reason_code as bookmark_reason_code,
+          br.reason_label as bookmark_reason_label,
+          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked
         FROM t_customers cust
         JOIN t_contacts c ON c.id = cust.contact_id
+        LEFT JOIN t_customer_bookmarks bm ON bm.customer_id = cust.id 
+          AND bm.user_id = $${paramIndex}
+          AND bm.tenant_id = $1
+          AND bm.is_live = $2
+          AND bm.is_active = true
+        LEFT JOIN m_bookmark_reasons br ON br.id = bm.reason_id
         WHERE ${whereConditions.join(' AND ')}
         ORDER BY ${sort_by} ${sort_order}
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}
       `;
 
-      queryParams.push(page_size, offset);
+      queryParams.push(userId || null, page_size, offset);
       const result = await this.db.query(query, queryParams);
       
       const customers = await this.processCustomerRows(result.rows, isLive);
@@ -149,11 +213,13 @@ export class CustomerService {
 
   /**
    * Get single customer by ID
+   * UPDATED: Added bookmark LEFT JOIN
    */
   async getCustomer(
     tenantId: number,
     isLive: boolean,
-    customerId: number
+    customerId: number,
+    userId?: number  // NEW: Optional userId for bookmark data
   ): Promise<CustomerWithContact | null> {
     try {
       const query = `
@@ -166,13 +232,26 @@ export class CustomerService {
             WHEN cust.date_of_birth IS NOT NULL 
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, cust.date_of_birth))
             ELSE NULL 
-          END as age
+          END as age,
+          bm.id as bookmark_id,
+          bm.reason_id as bookmark_reason_id,
+          bm.custom_reason as bookmark_custom_reason,
+          bm.notes as bookmark_notes,
+          br.reason_code as bookmark_reason_code,
+          br.reason_label as bookmark_reason_label,
+          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked
         FROM t_customers cust
         JOIN t_contacts c ON c.id = cust.contact_id
+        LEFT JOIN t_customer_bookmarks bm ON bm.customer_id = cust.id 
+          AND bm.user_id = $4
+          AND bm.tenant_id = $2
+          AND bm.is_live = $3
+          AND bm.is_active = true
+        LEFT JOIN m_bookmark_reasons br ON br.id = bm.reason_id
         WHERE cust.id = $1 AND cust.tenant_id = $2 AND cust.is_live = $3
       `;
 
-      const result = await this.db.query(query, [customerId, tenantId, isLive]);
+      const result = await this.db.query(query, [customerId, tenantId, isLive, userId || null]);
       
       if (result.rows.length === 0) {
         return null;
@@ -642,8 +721,13 @@ export class CustomerService {
 
   /**
    * Get customer statistics
+   * UPDATED: Added bookmarked count
    */
-  async getCustomerStats(tenantId: number, isLive: boolean): Promise<CustomerStats> {
+  async getCustomerStats(
+    tenantId: number,
+    isLive: boolean,
+    userId?: number  // NEW: Optional userId for bookmark stats
+  ): Promise<CustomerStats> {
     try {
       const query = `
         SELECT 
@@ -661,12 +745,20 @@ export class CustomerService {
           )) as with_addresses,
           COUNT(*) FILTER (WHERE onboarding_status = 'pending') as onboarding_pending,
           COUNT(*) FILTER (WHERE onboarding_status = 'completed') as onboarding_completed,
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as recent_30_days
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as recent_30_days,
+          COUNT(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM t_customer_bookmarks bm
+            WHERE bm.customer_id = cust.id
+            AND bm.user_id = $3
+            AND bm.tenant_id = $1
+            AND bm.is_live = $2
+            AND bm.is_active = true
+          )) as bookmarked
         FROM t_customers cust
         WHERE cust.tenant_id = $1 AND cust.is_live = $2
       `;
 
-      const result = await this.db.query(query, [tenantId, isLive]);
+      const result = await this.db.query(query, [tenantId, isLive, userId || null]);
       const stats = result.rows[0];
 
       return {
@@ -679,10 +771,173 @@ export class CustomerService {
         with_addresses: parseInt(stats.with_addresses),
         onboarding_pending: parseInt(stats.onboarding_pending),
         onboarding_completed: parseInt(stats.onboarding_completed),
-        recent_30_days: parseInt(stats.recent_30_days)
+        recent_30_days: parseInt(stats.recent_30_days),
+        bookmarked: parseInt(stats.bookmarked || 0)  // NEW
       };
     } catch (error) {
       console.error('Error getting customer stats:', error);
+      throw error;
+    }
+  }
+
+  // ==================== BOOKMARK METHODS (NEW) ====================
+
+  /**
+   * Get bookmark reasons for tenant
+   */
+  async getBookmarkReasons(
+    tenantId: number,
+    isLive: boolean
+  ): Promise<BookmarkReason[]> {
+    try {
+      const query = `
+        SELECT * FROM m_bookmark_reasons
+        WHERE tenant_id = $1 AND is_live = $2 AND is_active = true
+        ORDER BY display_order, reason_label
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting bookmark reasons:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add bookmark to customer
+   */
+  async addBookmark(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number,
+    userId: number,
+    data: CreateBookmarkRequest
+  ): Promise<CustomerBookmark> {
+    try {
+      // Check if customer exists
+      const customerCheck = await this.db.query(
+        'SELECT id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+        [customerId, tenantId, isLive]
+      );
+
+      if (customerCheck.rows.length === 0) {
+        throw new Error('Customer not found');
+      }
+
+      // Validate that either reason_id or custom_reason is provided
+      if (!data.reason_id && !data.custom_reason) {
+        throw new Error('Either reason_id or custom_reason must be provided');
+      }
+
+      // Insert or update bookmark (upsert)
+      const query = `
+        INSERT INTO t_customer_bookmarks (
+          tenant_id, is_live, customer_id, user_id, 
+          reason_id, custom_reason, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (tenant_id, is_live, customer_id, user_id)
+        DO UPDATE SET
+          reason_id = EXCLUDED.reason_id,
+          custom_reason = EXCLUDED.custom_reason,
+          notes = EXCLUDED.notes,
+          is_active = true,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `;
+
+      const result = await this.db.query(query, [
+        tenantId,
+        isLive,
+        customerId,
+        userId,
+        data.reason_id || null,
+        data.custom_reason || null,
+        data.notes || null
+      ]);
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error adding bookmark:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove bookmark from customer (soft delete)
+   */
+  async removeBookmark(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number,
+    userId: number
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_customer_bookmarks
+        SET is_active = false, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = $1 AND is_live = $2 
+          AND customer_id = $3 AND user_id = $4
+      `;
+
+      await this.db.query(query, [tenantId, isLive, customerId, userId]);
+    } catch (error) {
+      console.error('Error removing bookmark:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update bookmark
+   */
+  async updateBookmark(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number,
+    userId: number,
+    data: UpdateBookmarkRequest
+  ): Promise<CustomerBookmark> {
+    try {
+      const updateFields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+      const queryParams: any[] = [tenantId, isLive, customerId, userId];
+      let paramIndex = 5;
+
+      if (data.reason_id !== undefined) {
+        updateFields.push(`reason_id = $${paramIndex}`);
+        queryParams.push(data.reason_id);
+        paramIndex++;
+      }
+
+      if (data.custom_reason !== undefined) {
+        updateFields.push(`custom_reason = $${paramIndex}`);
+        queryParams.push(data.custom_reason);
+        paramIndex++;
+      }
+
+      if (data.notes !== undefined) {
+        updateFields.push(`notes = $${paramIndex}`);
+        queryParams.push(data.notes);
+        paramIndex++;
+      }
+
+      const query = `
+        UPDATE t_customer_bookmarks
+        SET ${updateFields.join(', ')}
+        WHERE tenant_id = $1 AND is_live = $2 
+          AND customer_id = $3 AND user_id = $4
+          AND is_active = true
+        RETURNING *
+      `;
+
+      const result = await this.db.query(query, queryParams);
+
+      if (result.rows.length === 0) {
+        throw new Error('Bookmark not found');
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error updating bookmark:', error);
       throw error;
     }
   }
@@ -741,7 +996,14 @@ export class CustomerService {
         channels,
         primary_email: channels.find((ch: any) => ch.channel_type === 'email' && ch.is_primary)?.channel_value,
         primary_mobile: channels.find((ch: any) => ch.channel_type === 'mobile' && ch.is_primary)?.channel_value,
-        channel_count: channels.length
+        channel_count: channels.length,
+        // Bookmark fields (already in row from LEFT JOIN)
+        is_bookmarked: row.is_bookmarked || false,
+        bookmark_reason_id: row.bookmark_reason_id || null,
+        bookmark_reason_code: row.bookmark_reason_code || null,
+        bookmark_reason_label: row.bookmark_reason_label || null,
+        bookmark_custom_reason: row.bookmark_custom_reason || null,
+        bookmark_notes: row.bookmark_notes || null
       };
     });
   }
