@@ -3,23 +3,22 @@
 
 import { Router } from 'express';
 import { MarketAnalysisController } from '../controllers/marketAnalysisController';
-import { authenticate } from '../middleware/auth.middleware';
+import { authMiddleware } from '../middleware/auth.middleware';
 import { environmentMiddleware } from '../middleware/environment.middleware';
 
 const router = Router();
 const marketAnalysisController = new MarketAnalysisController();
 
-// Apply authentication and environment middleware to all routes
-router.use(authenticate);
+// Apply middleware to all routes
+router.use(authMiddleware);
 router.use(environmentMiddleware);
 
-// ============================================
-// SPECIFIC ROUTES FIRST (no parameters in first segment)
-// ============================================
+// ==================== SPECIFIC ROUTES FIRST (no parameters in first segment) ====================
 
 /**
- * GET /api/market-analysis/health
- * Check if market analysis service is operational
+ * @route   GET /api/market-analysis/health
+ * @desc    Check if market analysis service is operational
+ * @access  Private
  */
 router.get('/health', async (req, res) => {
   res.json({
@@ -31,8 +30,10 @@ router.get('/health', async (req, res) => {
 });
 
 /**
- * GET /api/market-analysis/dashboard-statistics
- * Get aggregated dashboard statistics across all indices
+ * @route   GET /api/market-analysis/dashboard-statistics
+ * @desc    Get aggregated dashboard statistics across all indices
+ * @query   time_period - '1m', '3m', '6m', or '1y' (default: '1y')
+ * @access  Private
  * 
  * Query parameters:
  *   - time_period (optional): '1m', '3m', '6m', or '1y' - default: '1y'
@@ -61,8 +62,10 @@ router.get(
 );
 
 /**
- * GET /api/market-analysis/index-returns
- * Get time-series returns data for an index
+ * @route   GET /api/market-analysis/index-returns
+ * @desc    Get time-series returns data for an index
+ * @query   index_id (required), periods, start_date, end_date, granularity
+ * @access  Private
  * 
  * Query parameters:
  *   - index_id (required): Index ID
@@ -103,14 +106,14 @@ router.get(
   marketAnalysisController.getIndexReturnsTimeSeries
 );
 
-// ============================================
-// PARAMETERIZED ROUTES AFTER SPECIFIC ROUTES
-// ============================================
+// ==================== PARAMETERIZED ROUTES AFTER SPECIFIC ROUTES ====================
 
 /**
- * POST /api/market-analysis/calculate-metrics/:indexId
- * Calculate metrics for an index on demand
- * Called when user clicks "Calculate" button in IndexDetailPage
+ * @route   POST /api/market-analysis/calculate-metrics/:indexId
+ * @desc    Calculate metrics for an index on demand (called when user clicks "Calculate" button)
+ * @param   indexId - Index ID
+ * @body    { recalculate?: boolean, as_of_date?: string }
+ * @access  Private
  * 
  * Request body:
  * {
@@ -135,8 +138,10 @@ router.post(
 );
 
 /**
- * GET /api/market-analysis/metrics/:indexId
- * Get latest calculated metrics for an index
+ * @route   GET /api/market-analysis/metrics/:indexId
+ * @desc    Get latest calculated metrics for an index
+ * @param   indexId - Index ID
+ * @access  Private
  * 
  * Response:
  * {
@@ -153,11 +158,11 @@ router.get(
 );
 
 /**
- * GET /api/market-analysis/index-volatility/:indexId
- * Get time-series volatility data for an index
- * 
- * Path parameters:
- *   - indexId (required): Index ID
+ * @route   GET /api/market-analysis/index-volatility/:indexId
+ * @desc    Get time-series volatility data for an index
+ * @param   indexId - Index ID
+ * @query   start_date, end_date, granularity
+ * @access  Private
  * 
  * Query parameters:
  *   - start_date (optional): ISO date format (YYYY-MM-DD)

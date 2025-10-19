@@ -3,9 +3,15 @@
 
 import { Router } from 'express';
 import { MarketController } from '../controllers/market.controller';
+import { authMiddleware } from '../middleware/auth.middleware';
+import { environmentMiddleware } from '../middleware/environment.middleware';
 
 const router = Router();
 const marketController = new MarketController();
+
+// Apply middleware (FIXED - was missing)
+router.use(authMiddleware);
+router.use(environmentMiddleware);
 
 // ==================== INDEX ROUTES ====================
 
@@ -13,7 +19,7 @@ const marketController = new MarketController();
  * @route   GET /api/market/indices
  * @desc    Get all market indices with filtering
  * @query   search, category, download_status, page, page_size
- * @access  Public/Private (based on your auth setup)
+ * @access  Private
  */
 router.get('/indices', marketController.getAllIndices);
 
@@ -21,7 +27,7 @@ router.get('/indices', marketController.getAllIndices);
  * @route   GET /api/market/indices/:id
  * @desc    Get specific index details
  * @param   id - Index ID
- * @access  Public/Private
+ * @access  Private
  */
 router.get('/indices/:id', marketController.getIndexById);
 
@@ -32,7 +38,7 @@ router.get('/indices/:id', marketController.getIndexById);
  * @desc    Get market data for an index with date range filtering
  * @param   indexId - Index ID
  * @query   start_date, end_date, page, page_size
- * @access  Public/Private
+ * @access  Private
  */
 router.get('/data/:indexId', marketController.getMarketData);
 
@@ -40,7 +46,7 @@ router.get('/data/:indexId', marketController.getMarketData);
  * @route   GET /api/market/data/:indexId/latest
  * @desc    Get latest market data for an index
  * @param   indexId - Index ID
- * @access  Public/Private
+ * @access  Private
  */
 router.get('/data/:indexId/latest', marketController.getLatestData);
 
@@ -48,7 +54,7 @@ router.get('/data/:indexId/latest', marketController.getLatestData);
  * @route   DELETE /api/market/data/:indexId
  * @desc    Delete all data for an index
  * @param   indexId - Index ID
- * @access  Private (requires authentication)
+ * @access  Private
  */
 router.delete('/data/:indexId', marketController.deleteAllData);
 
@@ -73,7 +79,7 @@ router.post('/download/eod', marketController.downloadEOD);
 /**
  * @route   POST /api/market/download/eod-all
  * @desc    Trigger EOD download for all indices (scheduler)
- * @access  Private/Internal
+ * @access  Private
  */
 router.post('/download/eod-all', marketController.downloadEODAll);
 
@@ -82,14 +88,14 @@ router.post('/download/eod-all', marketController.downloadEODAll);
 /**
  * @route   GET /api/market/statistics
  * @desc    Get market data statistics
- * @access  Public/Private
+ * @access  Private
  */
 router.get('/statistics', marketController.getStatistics);
 
 /**
  * @route   GET /api/market/health
  * @desc    Health check and Yahoo Finance connection test
- * @access  Public
+ * @access  Private
  */
 router.get('/health', marketController.healthCheck);
 
