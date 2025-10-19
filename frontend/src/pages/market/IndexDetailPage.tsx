@@ -1,6 +1,6 @@
 // frontend/src/pages/market/IndexDetailPage.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,13 +8,20 @@ import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import {
   useCalculateMetrics,
   useIndexMetrics,
-  useIndexReturns,
-  useIndexVolatility,
+  useIndexReturnsTimeSeries,
+  useIndexVolatilityTimeSeries,
   MARKET_ANALYSIS_QUERY_KEYS
 } from '../../hooks/useMarketMetrics';
 import type { IndexMetrics } from '../../types/marketAnalysis.types';
 
 type ActiveTab = 'chart' | 'returns' | 'volatility' | 'statistics';
+type TimePeriod = '1m' | '3m' | '6m' | '1y';
+type Granularity = 'daily' | 'monthly';
+
+interface TimeSeriesPoint {
+  date: string;
+  [key: string]: any;
+}
 
 const IndexDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,20 +33,29 @@ const IndexDetailPage: React.FC = () => {
   
   const indexId = parseInt(idParam || '0', 10);
   const [activeTab, setActiveTab] = useState<ActiveTab>('chart');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('1y');
+  const [granularity, setGranularity] = useState<Granularity>('daily');
 
   // Hooks for data fetching and mutations
   const metricsQuery = useIndexMetrics(indexId);
-  const returnsQuery = useIndexReturns(indexId);
-  const volatilityQuery = useIndexVolatility(indexId);
+  const returnsTimeSeriesQuery = useIndexReturnsTimeSeries(
+    indexId,
+    ['1m', '3m', '6m', '1y', 'ytd', 'all'],
+    granularity
+  );
+  const volatilityTimeSeriesQuery = useIndexVolatilityTimeSeries(
+    indexId,
+    granularity
+  );
   const calculateMetricsMutation = useCalculateMetrics();
 
   // Extract data
   const metrics = metricsQuery.data as IndexMetrics | null;
-  const returns = returnsQuery.data;
-  const volatility = volatilityQuery.data;
+  const returnsTimeSeries = returnsTimeSeriesQuery.data || [];
+  const volatilityTimeSeries = volatilityTimeSeriesQuery.data || [];
 
   // Loading and error states
-  const isLoading = metricsQuery.isLoading || returnsQuery.isLoading || volatilityQuery.isLoading;
+  const isLoading = metricsQuery.isLoading || returnsTimeSeriesQuery.isLoading || volatilityTimeSeriesQuery.isLoading;
   const isCalculating = calculateMetricsMutation.isPending;
   const hasMetrics = !!metrics && metrics.id !== undefined;
   const calculationError = calculateMetricsMutation.error?.message;
@@ -74,6 +90,32 @@ const IndexDetailPage: React.FC = () => {
     }
   };
 
+  const handleTimePeriodChange = (period: TimePeriod) => {
+    try {
+      setTimePeriod(period);
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Time period change failed',
+        'IndexDetailPage',
+        { period, error: error.message },
+        error.stack
+      );
+    }
+  };
+
+  const handleGranularityChange = (gran: Granularity) => {
+    try {
+      setGranularity(gran);
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Granularity change failed',
+        'IndexDetailPage',
+        { granularity: gran, error: error.message },
+        error.stack
+      );
+    }
+  };
+
   // Utility functions
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -88,23 +130,36 @@ const IndexDetailPage: React.FC = () => {
     }
   };
 
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case 'broad':
-        return 'Broad Market';
-      case 'sectoral':
-        return 'Sectoral';
-      case 'thematic':
-        return 'Thematic';
-      default:
-        return category;
-    }
-  };
-
   const formatMetricValue = (value: number | null, decimals: number = 2): string => {
     if (value === null || value === undefined) return '--';
     return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`;
   };
+
+  // Memoized latest values from time-series data
+  const latestReturns = useMemo(() => {
+    if (returnsTimeSeries.length === 0) return {};
+    const latest = returnsTimeSeries[returnsTimeSeries.length - 1];
+    return {
+      return_1m: latest.return_1m,
+      return_3m: latest.return_3m,
+      return_6m: latest.return_6m,
+      return_1y: latest.return_1y,
+      return_ytd: latest.return_ytd,
+      return_all: latest.return_all
+    };
+  }, [returnsTimeSeries]);
+
+  const latestVolatility = useMemo(() => {
+    if (volatilityTimeSeries.length === 0) return {};
+    const latest = volatilityTimeSeries[volatilityTimeSeries.length - 1];
+    return {
+      volatility_7d: latest.sd_7d,
+      volatility_14d: latest.sd_14d,
+      volatility_30d: latest.sd_21d,
+      volatility_60d: latest.sd_42d,
+      volatility_90d: latest.sd_3m
+    };
+  }, [volatilityTimeSeries]);
 
   // Tab definitions
   const tabs = [
@@ -220,7 +275,7 @@ const IndexDetailPage: React.FC = () => {
               color: colors.utility.secondaryText,
               marginBottom: '8px'
             }}>
-              Last Updated: {hasMetrics && metrics?.updated_at ? new Date(metrics.updated_at).toLocaleString('en-IN') : 'Not available'}
+              Last Updated: {hasMetrics && metrics?.metrics_calculated_at ? new Date(metrics.metrics_calculated_at).toLocaleString('en-IN') : 'Not available'}
             </div>
           </div>
 
@@ -354,7 +409,7 @@ const IndexDetailPage: React.FC = () => {
               color: colors.utility.secondaryText,
               marginTop: '4px'
             }}>
-              Last calculated: {metrics?.calculated_at ? new Date(metrics.calculated_at).toLocaleString('en-IN') : 'Recently'}
+              Last calculated: {metrics?.metrics_calculated_at ? new Date(metrics.metrics_calculated_at).toLocaleString('en-IN') : 'Recently'}
             </div>
           </div>
         )}
@@ -531,90 +586,174 @@ const IndexDetailPage: React.FC = () => {
               )}
 
               {activeTab === 'returns' && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '16px'
-                }}>
-                  {[
-                    { key: 'return_1m', label: '1M' },
-                    { key: 'return_3m', label: '3M' },
-                    { key: 'return_6m', label: '6M' },
-                    { key: 'return_1y', label: '1Y' },
-                    { key: 'return_ytd', label: 'YTD' },
-                    { key: 'return_all', label: 'All-Time' }
-                  ].map(period => (
-                    <div
-                      key={period.key}
-                      style={{
-                        padding: '20px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '8px',
-                        border: `1px solid ${colors.utility.primaryText}10`,
-                        textAlign: 'center'
-                      }}
-                    >
-                      <div style={{
-                        fontSize: '12px',
-                        color: colors.utility.secondaryText,
-                        marginBottom: '8px',
-                        fontWeight: '500',
-                        textTransform: 'uppercase'
-                      }}>
-                        {period.label}
-                      </div>
-                      <div style={{
-                        fontSize: '28px',
-                        fontWeight: '700',
-                        color: colors.utility.secondaryText
-                      }}>
-                        {formatMetricValue(returns?.[period.key] as number || null)}
-                      </div>
+                <div>
+                  <div style={{
+                    marginBottom: '20px',
+                    display: 'flex',
+                    gap: '10px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText }}>Granularity:</span>
+                      {(['daily', 'monthly'] as Granularity[]).map(gran => (
+                        <button
+                          key={gran}
+                          onClick={() => handleGranularityChange(gran)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: granularity === gran ? colors.brand.primary : colors.utility.primaryBackground,
+                            color: granularity === gran ? 'white' : colors.utility.primaryText,
+                            border: `1px solid ${colors.utility.primaryText}20`,
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {gran.charAt(0).toUpperCase() + gran.slice(1)}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+
+                  {returnsTimeSeriesQuery.isLoading ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                      <p>Loading returns data...</p>
+                    </div>
+                  ) : returnsTimeSeries.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                      <p>No returns data available</p>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '16px'
+                    }}>
+                      {[
+                        { key: 'return_1m', label: '1M' },
+                        { key: 'return_3m', label: '3M' },
+                        { key: 'return_6m', label: '6M' },
+                        { key: 'return_1y', label: '1Y' },
+                        { key: 'return_ytd', label: 'YTD' },
+                        { key: 'return_all', label: 'All-Time' }
+                      ].map(period => (
+                        <div
+                          key={period.key}
+                          style={{
+                            padding: '20px',
+                            backgroundColor: colors.utility.primaryBackground,
+                            borderRadius: '8px',
+                            border: `1px solid ${colors.utility.primaryText}10`,
+                            textAlign: 'center'
+                          }}
+                        >
+                          <div style={{
+                            fontSize: '12px',
+                            color: colors.utility.secondaryText,
+                            marginBottom: '8px',
+                            fontWeight: '500',
+                            textTransform: 'uppercase'
+                          }}>
+                            {period.label}
+                          </div>
+                          <div style={{
+                            fontSize: '28px',
+                            fontWeight: '700',
+                            color: colors.utility.secondaryText
+                          }}>
+                            {formatMetricValue((latestReturns as any)[period.key] || null)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'volatility' && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '16px'
-                }}>
-                  {[
-                    { key: 'volatility_7d', label: '7D Volatility' },
-                    { key: 'volatility_14d', label: '14D Volatility' },
-                    { key: 'volatility_30d', label: '30D Volatility' },
-                    { key: 'volatility_60d', label: '60D Volatility' },
-                    { key: 'volatility_90d', label: '90D Volatility' }
-                  ].map(vol => (
-                    <div
-                      key={vol.key}
-                      style={{
-                        padding: '20px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '8px',
-                        border: `1px solid ${colors.utility.primaryText}10`,
-                        textAlign: 'center'
-                      }}
-                    >
-                      <div style={{
-                        fontSize: '12px',
-                        color: colors.utility.secondaryText,
-                        marginBottom: '8px',
-                        fontWeight: '500'
-                      }}>
-                        {vol.label}
-                      </div>
-                      <div style={{
-                        fontSize: '28px',
-                        fontWeight: '700',
-                        color: colors.utility.secondaryText
-                      }}>
-                        {formatMetricValue(volatility?.[vol.key] as number || null)}
-                      </div>
+                <div>
+                  <div style={{
+                    marginBottom: '20px',
+                    display: 'flex',
+                    gap: '10px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText }}>Granularity:</span>
+                      {(['daily', 'monthly'] as Granularity[]).map(gran => (
+                        <button
+                          key={gran}
+                          onClick={() => handleGranularityChange(gran)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: granularity === gran ? colors.brand.primary : colors.utility.primaryBackground,
+                            color: granularity === gran ? 'white' : colors.utility.primaryText,
+                            border: `1px solid ${colors.utility.primaryText}20`,
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {gran.charAt(0).toUpperCase() + gran.slice(1)}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+
+                  {volatilityTimeSeriesQuery.isLoading ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                      <p>Loading volatility data...</p>
+                    </div>
+                  ) : volatilityTimeSeries.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                      <p>No volatility data available</p>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '16px'
+                    }}>
+                      {[
+                        { key: 'volatility_7d', label: '7D Volatility' },
+                        { key: 'volatility_14d', label: '14D Volatility' },
+                        { key: 'volatility_30d', label: '30D Volatility' },
+                        { key: 'volatility_60d', label: '60D Volatility' },
+                        { key: 'volatility_90d', label: '90D Volatility' }
+                      ].map(vol => (
+                        <div
+                          key={vol.key}
+                          style={{
+                            padding: '20px',
+                            backgroundColor: colors.utility.primaryBackground,
+                            borderRadius: '8px',
+                            border: `1px solid ${colors.utility.primaryText}10`,
+                            textAlign: 'center'
+                          }}
+                        >
+                          <div style={{
+                            fontSize: '12px',
+                            color: colors.utility.secondaryText,
+                            marginBottom: '8px',
+                            fontWeight: '500'
+                          }}>
+                            {vol.label}
+                          </div>
+                          <div style={{
+                            fontSize: '28px',
+                            fontWeight: '700',
+                            color: colors.utility.secondaryText
+                          }}>
+                            {formatMetricValue((latestVolatility as any)[vol.key] || null)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -655,8 +794,13 @@ const IndexDetailPage: React.FC = () => {
                         { label: 'Sharpe Ratio', value: metrics?.sharpe_ratio },
                         { label: 'Max Drawdown', value: metrics?.max_drawdown },
                         { label: 'Total Risk', value: metrics?.total_risk },
-                        { label: 'Volatility (30D)', value: volatility?.volatility_30d },
-                        { label: 'Volatility (60D)', value: volatility?.volatility_60d }
+                        { label: '1W Return', value: metrics?.return_1w },
+                        { label: '1M Return', value: metrics?.return_1m },
+                        { label: '3M Return', value: metrics?.return_3m },
+                        { label: '6M Return', value: metrics?.return_6m },
+                        { label: '1Y Return', value: metrics?.return_1y },
+                        { label: 'YTD Return', value: metrics?.return_ytd },
+                        { label: 'All-Time Return', value: metrics?.return_all }
                       ].map((metric, idx) => (
                         <tr
                           key={metric.label}

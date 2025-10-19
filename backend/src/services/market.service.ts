@@ -131,6 +131,56 @@ export interface IndexSearchParams {
   page_size?: number;
 }
 
+// ==================== NEW INTERFACES FOR TIME-SERIES ====================
+
+export interface ReturnTimeSeriesData {
+  date: string;
+  daily_return?: number | null;
+  return_1w?: number | null;
+  return_1m?: number | null;
+  return_3m?: number | null;
+  return_6m?: number | null;
+  return_1y?: number | null;
+  return_ytd?: number | null;
+  return_all?: number | null;
+}
+
+export interface VolatilityTimeSeriesData {
+  date: string;
+  sd_7d?: number | null;
+  sd_14d?: number | null;
+  sd_21d?: number | null;
+  sd_42d?: number | null;
+  sd_3m?: number | null;
+  sd_6m?: number | null;
+}
+
+export interface DashboardStatisticsResponse {
+  best_performer: {
+    index_id: number;
+    index_name: string;
+    index_code: string;
+    return_value: number;
+  } | null;
+  most_volatile: {
+    index_id: number;
+    index_name: string;
+    index_code: string;
+    volatility_value: number;
+  } | null;
+  market_breadth: number;
+  total_indices_analyzed: number;
+  indices_up: number;
+  indices_down: number;
+  heatmap: Array<{
+    index_id: number;
+    index_name: string;
+    index_code: string;
+    return_value: number | null;
+    volatility_value: number | null;
+  }>;
+}
+
 // ==================== MAIN SERVICE CLASS ====================
 
 export class MarketService {
@@ -741,6 +791,460 @@ export class MarketService {
     }
   }
 
+  // ==================== TIME-SERIES DATA OPERATIONS ====================
+
+  /**
+   * Get time-series returns data for an index
+   * @param indexId Database ID of index
+   * @param periods Array of return periods to fetch (e.g., ['1m', '3m', '6m', '1y', 'ytd', 'all'])
+   * @param startDate Start date for time series
+   * @param endDate End date for time series
+   * @param granularity 'daily' or 'monthly'
+   * @returns Time-series array of returns data
+   */
+  async getIndexReturnsTimeSeries(
+    indexId: number,
+    periods: string[] = ['1m', '3m', '6m', '1y', 'ytd', 'all'],
+    startDate?: Date,
+    endDate?: Date,
+    granularity: 'daily' | 'monthly' = 'daily'
+  ): Promise<ReturnTimeSeriesData[]> {
+    try {
+      if (!indexId || indexId <= 0) {
+        throw new Error('Invalid index ID');
+      }
+
+      if (!periods || periods.length === 0) {
+        throw new Error('At least one period must be specified');
+      }
+
+      // Validate index exists
+      const index = await this.getIndexById(indexId);
+      if (!index) {
+        throw new Error(`Index not found: ${indexId}`);
+      }
+
+      let whereConditions = ['index_id = $1'];
+      const queryParams: any[] = [indexId];
+      let paramIndex = 2;
+
+      if (startDate) {
+        whereConditions.push(`date >= $${paramIndex}`);
+        queryParams.push(startDate);
+        paramIndex++;
+      }
+
+      if (endDate) {
+        whereConditions.push(`date <= $${paramIndex}`);
+        queryParams.push(endDate);
+        paramIndex++;
+      }
+
+      // Only fetch records that have metrics calculated
+      whereConditions.push('metrics_calculated_at IS NOT NULL');
+
+      const whereClause = whereConditions.join(' AND ');
+
+      // Build SELECT clause with only requested periods
+      const selectFields = ['date'];
+      const periodMap: { [key: string]: string } = {
+        'daily': 'daily_return',
+        '1w': 'return_1w',
+        '1m': 'return_1m',
+        '3m': 'return_3m',
+        '6m': 'return_6m',
+        '1y': 'return_1y',
+        'ytd': 'return_ytd',
+        'all': 'return_all'
+      };
+
+      for (const period of periods) {
+        const dbField = periodMap[period];
+        if (dbField) {
+          selectFields.push(dbField);
+        }
+      }
+
+      const query = `
+        SELECT ${selectFields.join(', ')}
+        FROM t_market_data_records
+        WHERE ${whereClause}
+        ORDER BY date ASC
+      `;
+
+      const result = await this.db.query(query, queryParams);
+
+      if (result.rows.length === 0) {
+        SimpleLogger.warn('MarketService', 'No time-series returns data found', 'getIndexReturnsTimeSeries', {
+          indexId,
+          periods,
+          dateRange: { startDate, endDate }
+        });
+        return [];
+      }
+
+      // Transform data to time-series format
+      let timeSeriesData = result.rows.map((row: any) => {
+        const data: ReturnTimeSeriesData = {
+          date: new Date(row.date).toISOString().split('T')[0]
+        };
+
+        if (periods.includes('daily') && row.daily_return !== undefined) {
+          data.daily_return = row.daily_return;
+        }
+        if (periods.includes('1w') && row.return_1w !== undefined) {
+          data.return_1w = row.return_1w;
+        }
+        if (periods.includes('1m') && row.return_1m !== undefined) {
+          data.return_1m = row.return_1m;
+        }
+        if (periods.includes('3m') && row.return_3m !== undefined) {
+          data.return_3m = row.return_3m;
+        }
+        if (periods.includes('6m') && row.return_6m !== undefined) {
+          data.return_6m = row.return_6m;
+        }
+        if (periods.includes('1y') && row.return_1y !== undefined) {
+          data.return_1y = row.return_1y;
+        }
+        if (periods.includes('ytd') && row.return_ytd !== undefined) {
+          data.return_ytd = row.return_ytd;
+        }
+        if (periods.includes('all') && row.return_all !== undefined) {
+          data.return_all = row.return_all;
+        }
+
+        return data;
+      });
+
+      // Aggregate by granularity if needed
+      if (granularity === 'monthly') {
+        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, 'monthly') as ReturnTimeSeriesData[];
+      }
+
+      SimpleLogger.info('MarketService', 'Retrieved returns time-series data', 'getIndexReturnsTimeSeries', {
+        indexId,
+        periods: periods.join(','),
+        granularity,
+        dataPoints: timeSeriesData.length
+      });
+
+      return timeSeriesData;
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to get returns time-series', 'getIndexReturnsTimeSeries', {
+        indexId,
+        periods: periods.join(','),
+        error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get time-series volatility data for an index
+   * @param indexId Database ID of index
+   * @param startDate Start date for time series
+   * @param endDate End date for time series
+   * @param granularity 'daily' or 'monthly'
+   * @returns Time-series array of volatility data
+   */
+  async getIndexVolatilityTimeSeries(
+    indexId: number,
+    startDate?: Date,
+    endDate?: Date,
+    granularity: 'daily' | 'monthly' = 'daily'
+  ): Promise<VolatilityTimeSeriesData[]> {
+    try {
+      if (!indexId || indexId <= 0) {
+        throw new Error('Invalid index ID');
+      }
+
+      // Validate index exists
+      const index = await this.getIndexById(indexId);
+      if (!index) {
+        throw new Error(`Index not found: ${indexId}`);
+      }
+
+      let whereConditions = ['index_id = $1'];
+      const queryParams: any[] = [indexId];
+      let paramIndex = 2;
+
+      if (startDate) {
+        whereConditions.push(`date >= $${paramIndex}`);
+        queryParams.push(startDate);
+        paramIndex++;
+      }
+
+      if (endDate) {
+        whereConditions.push(`date <= $${paramIndex}`);
+        queryParams.push(endDate);
+        paramIndex++;
+      }
+
+      // Only fetch records that have metrics calculated
+      whereConditions.push('metrics_calculated_at IS NOT NULL');
+
+      const whereClause = whereConditions.join(' AND ');
+
+      const query = `
+        SELECT date, sd_7d, sd_14d, sd_21d, sd_42d, sd_3m, sd_6m
+        FROM t_market_data_records
+        WHERE ${whereClause}
+        ORDER BY date ASC
+      `;
+
+      const result = await this.db.query(query, queryParams);
+
+      if (result.rows.length === 0) {
+        SimpleLogger.warn('MarketService', 'No time-series volatility data found', 'getIndexVolatilityTimeSeries', {
+          indexId,
+          dateRange: { startDate, endDate }
+        });
+        return [];
+      }
+
+      // Transform data to time-series format
+      let timeSeriesData: VolatilityTimeSeriesData[] = result.rows.map((row: any) => ({
+        date: new Date(row.date).toISOString().split('T')[0],
+        sd_7d: row.sd_7d,
+        sd_14d: row.sd_14d,
+        sd_21d: row.sd_21d,
+        sd_42d: row.sd_42d,
+        sd_3m: row.sd_3m,
+        sd_6m: row.sd_6m
+      }));
+
+      // Aggregate by granularity if needed
+      if (granularity === 'monthly') {
+        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, 'monthly') as VolatilityTimeSeriesData[];
+      }
+
+      SimpleLogger.info('MarketService', 'Retrieved volatility time-series data', 'getIndexVolatilityTimeSeries', {
+        indexId,
+        granularity,
+        dataPoints: timeSeriesData.length
+      });
+
+      return timeSeriesData;
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to get volatility time-series', 'getIndexVolatilityTimeSeries', {
+        indexId,
+        error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get aggregated dashboard statistics across all indices
+   * @param timePeriod Time period for analysis ('1m', '3m', '6m', '1y')
+   * @returns Dashboard statistics including best performer, most volatile, market breadth, heatmap
+   */
+  async getDashboardAggregateStats(timePeriod: '1m' | '3m' | '6m' | '1y' = '1y'): Promise<DashboardStatisticsResponse> {
+    try {
+      // Get all active indices with latest data
+      const { indices } = await this.getAllIndices({
+        page: 1,
+        page_size: 1000
+      });
+
+      if (indices.length === 0) {
+        return {
+          best_performer: null,
+          most_volatile: null,
+          market_breadth: 0,
+          total_indices_analyzed: 0,
+          indices_up: 0,
+          indices_down: 0,
+          heatmap: []
+        };
+      }
+
+      const returnFieldMap: { [key: string]: keyof MarketDataRecord } = {
+        '1m': 'return_1m',
+        '3m': 'return_3m',
+        '6m': 'return_6m',
+        '1y': 'return_1y'
+      };
+
+      const returnField = returnFieldMap[timePeriod] as keyof MarketDataRecord;
+
+      let bestPerformer: DashboardStatisticsResponse['best_performer'] = null;
+      let mostVolatile: DashboardStatisticsResponse['most_volatile'] = null;
+      let indicesUp = 0;
+      let indicesDown = 0;
+      const heatmapData: DashboardStatisticsResponse['heatmap'] = [];
+
+      let maxReturn = -Infinity;
+      let maxVolatility = -Infinity;
+
+      // Fetch latest data for each index
+      for (const index of indices) {
+        try {
+          const latestData = await this.getLatestData(index.id);
+
+          if (latestData && latestData.metrics_calculated_at) {
+            const returnValue = (latestData[returnField] as number) || null;
+            const volatilityValue = (latestData.sd_3m as number) || null;
+
+            // Track best performer
+            if (returnValue !== null && returnValue > maxReturn) {
+              maxReturn = returnValue;
+              bestPerformer = {
+                index_id: index.id,
+                index_name: index.index_name,
+                index_code: index.index_code,
+                return_value: returnValue
+              };
+            }
+
+            // Track most volatile
+            if (volatilityValue !== null && volatilityValue > maxVolatility) {
+              maxVolatility = volatilityValue;
+              mostVolatile = {
+                index_id: index.id,
+                index_name: index.index_name,
+                index_code: index.index_code,
+                volatility_value: volatilityValue
+              };
+            }
+
+            // Track market breadth
+            if (returnValue !== null) {
+              if (returnValue > 0) {
+                indicesUp++;
+              } else if (returnValue < 0) {
+                indicesDown++;
+              }
+            }
+
+            // Add to heatmap
+            heatmapData.push({
+              index_id: index.id,
+              index_name: index.index_name,
+              index_code: index.index_code,
+              return_value: returnValue,
+              volatility_value: volatilityValue
+            });
+          }
+        } catch (indexError: any) {
+          SimpleLogger.warn('MarketService', 'Failed to fetch latest data for index in dashboard stats', 'getDashboardAggregateStats', {
+            indexId: index.id,
+            error: indexError.message
+          });
+          // Continue with other indices
+        }
+      }
+
+      const totalAnalyzed = heatmapData.length;
+      const marketBreadth = totalAnalyzed > 0 
+        ? Math.round((indicesUp / totalAnalyzed) * 100)
+        : 0;
+
+      SimpleLogger.info('MarketService', 'Retrieved dashboard aggregate statistics', 'getDashboardAggregateStats', {
+        timePeriod,
+        totalIndices: indices.length,
+        analyzedIndices: totalAnalyzed,
+        bestPerformer: bestPerformer?.index_name,
+        mostVolatile: mostVolatile?.index_name,
+        marketBreadth
+      });
+
+      return {
+        best_performer: bestPerformer,
+        most_volatile: mostVolatile,
+        market_breadth: marketBreadth,
+        total_indices_analyzed: totalAnalyzed,
+        indices_up: indicesUp,
+        indices_down: indicesDown,
+        heatmap: heatmapData
+      };
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to get dashboard aggregate statistics', 'getDashboardAggregateStats', {
+        timePeriod,
+        error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to aggregate data by granularity
+   * @param data Time-series data array
+   * @param granularity 'daily' or 'monthly'
+   * @returns Aggregated data
+   */
+  private aggregateDataByGranularity(
+    data: (ReturnTimeSeriesData | VolatilityTimeSeriesData)[],
+    granularity: 'daily' | 'monthly'
+  ): (ReturnTimeSeriesData | VolatilityTimeSeriesData)[] {
+    try {
+      if (granularity === 'daily' || !data || data.length === 0) {
+        return data;
+      }
+
+      if (granularity === 'monthly') {
+        const monthlyMap: { [key: string]: any } = {};
+
+        for (const record of data) {
+          const dateObj = new Date(record.date);
+          const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!monthlyMap[monthKey]) {
+            monthlyMap[monthKey] = {
+              date: `${monthKey}-01`,
+              count: 0,
+              ...Object.keys(record)
+                .filter(key => key !== 'date')
+                .reduce((acc: any, key: any) => {
+                  acc[key] = 0;
+                  return acc;
+                }, {})
+            };
+          }
+
+          monthlyMap[monthKey].count++;
+          
+          // Average all numeric fields
+          for (const key of Object.keys(record)) {
+            if (key !== 'date') {
+              const value = record[key as keyof typeof record];
+              
+              // Only process numeric values
+              if (typeof value === 'number' && !isNaN(value)) {
+                monthlyMap[monthKey][key] = 
+                  ((monthlyMap[monthKey][key] * (monthlyMap[monthKey].count - 1)) + value) / 
+                  monthlyMap[monthKey].count;
+              } else if (value === null || value === undefined) {
+                // For null/undefined, keep the existing value
+                monthlyMap[monthKey][key] = monthlyMap[monthKey][key];
+              }
+            }
+          }
+        }
+
+        const aggregated = Object.values(monthlyMap).map((record: any) => {
+          const { count, ...rest } = record;
+          return rest;
+        });
+
+        return aggregated;
+      }
+
+      return data;
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to aggregate data by granularity', 'aggregateDataByGranularity', {
+        dataLength: data?.length || 0,
+        granularity,
+        error: error.message
+      });
+      throw error;
+    }
+  }
   // ==================== JOB MANAGEMENT ====================
 
   /**

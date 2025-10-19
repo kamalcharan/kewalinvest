@@ -3,7 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { toastService } from '../services/toast.service';
-import { marketAnalysisService } from '../services/marketAnalysis.service';
+import { marketAnalysisService, ReturnTimeSeriesResponse, VolatilityTimeSeriesResponse, DashboardStatisticsApiResponse } from '../services/marketAnalysis.service';
+import { MARKET_ANALYSIS_URLS } from '../services/serviceURLs';
 import {
   IndexMetrics,
   ChartDataPoint,
@@ -26,6 +27,16 @@ export const MARKET_ANALYSIS_QUERY_KEYS = {
   chart: (indexId: number, granularity: string, timePeriod: string, startDate?: string, endDate?: string) => 
     [...MARKET_ANALYSIS_QUERY_KEYS.charts(), { indexId, granularity, timePeriod, startDate, endDate }] as const,
   
+  // Returns time-series
+  returns: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'returns'] as const,
+  indexReturns: (indexId: number, periods?: string[], granularity?: string, startDate?: string, endDate?: string) =>
+    [...MARKET_ANALYSIS_QUERY_KEYS.returns(), { indexId, periods, granularity, startDate, endDate }] as const,
+  
+  // Volatility time-series
+  volatility: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'volatility'] as const,
+  indexVolatility: (indexId: number, granularity?: string, startDate?: string, endDate?: string) =>
+    [...MARKET_ANALYSIS_QUERY_KEYS.volatility(), { indexId, granularity, startDate, endDate }] as const,
+  
   // Dashboard
   dashboard: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'dashboard'] as const,
   dashboardStats: (timePeriod: string) => [...MARKET_ANALYSIS_QUERY_KEYS.dashboard(), 'stats', timePeriod] as const,
@@ -34,14 +45,6 @@ export const MARKET_ANALYSIS_QUERY_KEYS = {
   indices: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'indices'] as const,
   indicesList: (params: any) => [...MARKET_ANALYSIS_QUERY_KEYS.indices(), params] as const,
   indexDetail: (indexId: number) => [...MARKET_ANALYSIS_QUERY_KEYS.indices(), 'detail', indexId] as const,
-  
-  // Returns
-  returns: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'returns'] as const,
-  indexReturns: (indexId: number) => [...MARKET_ANALYSIS_QUERY_KEYS.returns(), indexId] as const,
-  
-  // Volatility
-  volatility: () => [...MARKET_ANALYSIS_QUERY_KEYS.all, 'volatility'] as const,
-  indexVolatility: (indexId: number) => [...MARKET_ANALYSIS_QUERY_KEYS.volatility(), indexId] as const,
 } as const;
 
 // Enhanced error handling
@@ -84,41 +87,75 @@ export function useIndexMetrics(indexId: number) {
 }
 
 /**
- * Hook to fetch chart data with filtering
+ * Hook to fetch time-series returns data for an index
  */
-export function useChartData(request: GetChartDataRequest) {
+export function useIndexReturnsTimeSeries(
+  indexId: number,
+  periods: string[] = ['1m', '3m', '6m', '1y', 'ytd', 'all'],
+  granularity: 'daily' | 'monthly' = 'daily',
+  startDate?: string,
+  endDate?: string
+) {
   const { user } = useAuth();
 
-  return useQuery<any, Error>({
-    queryKey: MARKET_ANALYSIS_QUERY_KEYS.chart(
-      request.index_id,
-      request.granularity,
-      request.time_period,
-      request.start_date,
-      request.end_date
-    ),
-    queryFn: async () => {
+  return useQuery<ReturnTimeSeriesResponse['data'], Error>({
+    queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexReturns(indexId, periods, granularity, startDate, endDate),
+    queryFn: async (): Promise<ReturnTimeSeriesResponse['data']> => {
       if (!user) {
         throw new Error('Authentication required');
       }
 
       try {
-        const response = await marketAnalysisService.getChartData(request);
-        
-        if (!response.success) {
-          throw new Error(response.error || 'Failed to fetch chart data');
-        }
-
-        return {
-          data: response.data || [],
-          pagination: response.pagination
-        };
+        return await marketAnalysisService.getIndexReturnsTimeSeries(
+          indexId,
+          periods,
+          granularity,
+          startDate,
+          endDate
+        );
       } catch (error) {
-        throw handleAPIError(error, 'Failed to load chart data');
+        throw handleAPIError(error, 'Failed to load returns data');
       }
     },
-    enabled: !!user && !!request.index_id && request.index_id > 0,
-    staleTime: 3 * 60 * 1000,
+    enabled: !!user && !!indexId && indexId > 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Hook to fetch time-series volatility data for an index
+ */
+export function useIndexVolatilityTimeSeries(
+  indexId: number,
+  granularity: 'daily' | 'monthly' = 'daily',
+  startDate?: string,
+  endDate?: string
+) {
+  const { user } = useAuth();
+
+  return useQuery<VolatilityTimeSeriesResponse['data'], Error>({
+    queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexVolatility(indexId, granularity, startDate, endDate),
+    queryFn: async (): Promise<VolatilityTimeSeriesResponse['data']> => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        return await marketAnalysisService.getIndexVolatilityTimeSeries(
+          indexId,
+          granularity,
+          startDate,
+          endDate
+        );
+      } catch (error) {
+        throw handleAPIError(error, 'Failed to load volatility data');
+      }
+    },
+    enabled: !!user && !!indexId && indexId > 0,
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 2,
     refetchOnWindowFocus: false,
@@ -128,12 +165,12 @@ export function useChartData(request: GetChartDataRequest) {
 /**
  * Hook to fetch dashboard statistics
  */
-export function useDashboardStatistics(timePeriod: '1m' | '3m' | '6m' | '1y' = '3m') {
+export function useDashboardStatistics(timePeriod: '1m' | '3m' | '6m' | '1y' = '1y') {
   const { user } = useAuth();
 
-  return useQuery<DashboardStatistics | null, Error>({
+  return useQuery<DashboardStatisticsApiResponse['data'], Error>({
     queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats(timePeriod),
-    queryFn: async (): Promise<DashboardStatistics | null> => {
+    queryFn: async (): Promise<DashboardStatisticsApiResponse['data']> => {
       if (!user) {
         throw new Error('Authentication required');
       }
@@ -206,7 +243,8 @@ export function useIndexDetail(indexId: number) {
 }
 
 /**
- * Hook to fetch index returns for multiple periods
+ * Legacy hook - fetch index returns for multiple periods (returns latest values)
+ * @deprecated Use useIndexReturnsTimeSeries instead
  */
 export function useIndexReturns(indexId: number) {
   const { user } = useAuth();
@@ -235,7 +273,8 @@ export function useIndexReturns(indexId: number) {
 }
 
 /**
- * Hook to fetch index volatility metrics
+ * Legacy hook - fetch index volatility metrics (returns latest values)
+ * @deprecated Use useIndexVolatilityTimeSeries instead
  */
 export function useIndexVolatility(indexId: number) {
   const { user } = useAuth();
@@ -283,17 +322,20 @@ export function useCalculateMetrics() {
           throw new Error(response.error || 'Calculation failed');
         }
 
-        return response.data;
+        return response;
       } catch (error) {
         throw handleAPIError(error, 'Failed to calculate metrics');
       }
     },
     onSuccess: (_, indexId) => {
+      // Invalidate related queries so they refetch with new data
       queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.metric(indexId) });
       queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('1m') });
       queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('3m') });
       queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('6m') });
       queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('1y') });
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.returns() });
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.volatility() });
       
       toastService.success('Metrics calculated successfully');
     },
@@ -351,9 +393,15 @@ export const marketAnalysisQueryHelpers = {
     return queryClient.getQueryData(MARKET_ANALYSIS_QUERY_KEYS.metric(indexId));
   },
 
-  getCachedChartData: (queryClient: any, indexId: number, granularity: string, timePeriod: string) => {
+  getCachedReturnsTimeSeries: (queryClient: any, indexId: number, periods?: string[], granularity?: string, startDate?: string, endDate?: string) => {
     return queryClient.getQueryData(
-      MARKET_ANALYSIS_QUERY_KEYS.chart(indexId, granularity, timePeriod)
+      MARKET_ANALYSIS_QUERY_KEYS.indexReturns(indexId, periods, granularity, startDate, endDate)
+    );
+  },
+
+  getCachedVolatilityTimeSeries: (queryClient: any, indexId: number, granularity?: string, startDate?: string, endDate?: string) => {
+    return queryClient.getQueryData(
+      MARKET_ANALYSIS_QUERY_KEYS.indexVolatility(indexId, granularity, startDate, endDate)
     );
   },
 
@@ -376,16 +424,17 @@ export const marketAnalysisQueryHelpers = {
     });
   },
 
-  prefetchChartData: async (queryClient: any, request: GetChartDataRequest) => {
+  prefetchReturnsTimeSeries: async (queryClient: any, indexId: number, periods?: string[], granularity?: string, startDate?: string, endDate?: string) => {
     await queryClient.prefetchQuery({
-      queryKey: MARKET_ANALYSIS_QUERY_KEYS.chart(
-        request.index_id,
-        request.granularity,
-        request.time_period,
-        request.start_date,
-        request.end_date
-      ),
-      staleTime: 3 * 60 * 1000
+      queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexReturns(indexId, periods, granularity, startDate, endDate),
+      staleTime: 5 * 60 * 1000
+    });
+  },
+
+  prefetchVolatilityTimeSeries: async (queryClient: any, indexId: number, granularity?: string, startDate?: string, endDate?: string) => {
+    await queryClient.prefetchQuery({
+      queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexVolatility(indexId, granularity, startDate, endDate),
+      staleTime: 5 * 60 * 1000
     });
   },
 
@@ -400,11 +449,31 @@ export const marketAnalysisQueryHelpers = {
     queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.metric(indexId) });
   },
 
+  invalidateReturnsTimeSeries: (queryClient: any, indexId?: number) => {
+    if (indexId) {
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexReturns(indexId) });
+    } else {
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.returns() });
+    }
+  },
+
+  invalidateVolatilityTimeSeries: (queryClient: any, indexId?: number) => {
+    if (indexId) {
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexVolatility(indexId) });
+    } else {
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.volatility() });
+    }
+  },
+
   invalidateAllDashboard: (queryClient: any) => {
     queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboard() });
   },
 
-  invalidateAllCharts: (queryClient: any) => {
-    queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.charts() });
+  invalidateAllMetrics: (queryClient: any) => {
+    queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.metrics() });
+  },
+
+  invalidateAll: (queryClient: any) => {
+    queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.all });
   }
 };

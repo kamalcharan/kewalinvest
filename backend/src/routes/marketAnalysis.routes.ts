@@ -30,6 +30,79 @@ router.get('/health', async (req, res) => {
   });
 });
 
+/**
+ * GET /api/market-analysis/dashboard-statistics
+ * Get aggregated dashboard statistics across all indices
+ * 
+ * Query parameters:
+ *   - time_period (optional): '1m', '3m', '6m', or '1y' - default: '1y'
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   time_period: string,
+ *   data: {
+ *     best_performer: { index_id, index_name, index_code, return_value } | null,
+ *     most_volatile: { index_id, index_name, index_code, volatility_value } | null,
+ *     market_breadth: number,
+ *     total_indices_analyzed: number,
+ *     indices_up: number,
+ *     indices_down: number,
+ *     heatmap: Array<{
+ *       index_id, index_name, index_code, return_value, volatility_value
+ *     }>
+ *   },
+ *   execution_time_ms: number
+ * }
+ */
+router.get(
+  '/dashboard-statistics',
+  marketAnalysisController.getDashboardStatistics
+);
+
+/**
+ * GET /api/market-analysis/index-returns
+ * Get time-series returns data for an index
+ * 
+ * Query parameters:
+ *   - index_id (required): Index ID
+ *   - periods (optional): Comma-separated list of periods 
+ *                        Valid: daily, 1w, 1m, 3m, 6m, 1y, ytd, all
+ *                        Default: 1m,3m,6m,1y,ytd,all
+ *   - start_date (optional): ISO date format (YYYY-MM-DD)
+ *   - end_date (optional): ISO date format (YYYY-MM-DD)
+ *   - granularity (optional): 'daily' or 'monthly' - default: 'daily'
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   index_id: number,
+ *   periods: string[],
+ *   granularity: string,
+ *   date_range: {
+ *     start_date: string,
+ *     end_date: string
+ *   },
+ *   data: Array<{
+ *     date: string (ISO format),
+ *     daily_return?: number | null,
+ *     return_1w?: number | null,
+ *     return_1m?: number | null,
+ *     return_3m?: number | null,
+ *     return_6m?: number | null,
+ *     return_1y?: number | null,
+ *     return_ytd?: number | null,
+ *     return_all?: number | null
+ *   }>,
+ *   total_records: number,
+ *   execution_time_ms: number
+ * }
+ */
+router.get(
+  '/index-returns',
+  marketAnalysisController.getIndexReturnsTimeSeries
+);
+
 // ============================================
 // PARAMETERIZED ROUTES AFTER SPECIFIC ROUTES
 // ============================================
@@ -77,6 +150,45 @@ router.post(
 router.get(
   '/metrics/:indexId',
   marketAnalysisController.getLatestMetrics
+);
+
+/**
+ * GET /api/market-analysis/index-volatility/:indexId
+ * Get time-series volatility data for an index
+ * 
+ * Path parameters:
+ *   - indexId (required): Index ID
+ * 
+ * Query parameters:
+ *   - start_date (optional): ISO date format (YYYY-MM-DD)
+ *   - end_date (optional): ISO date format (YYYY-MM-DD)
+ *   - granularity (optional): 'daily' or 'monthly' - default: 'daily'
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   index_id: number,
+ *   granularity: string,
+ *   date_range: {
+ *     start_date: string,
+ *     end_date: string
+ *   },
+ *   data: Array<{
+ *     date: string (ISO format),
+ *     sd_7d?: number | null,
+ *     sd_14d?: number | null,
+ *     sd_21d?: number | null,
+ *     sd_42d?: number | null,
+ *     sd_3m?: number | null,
+ *     sd_6m?: number | null
+ *   }>,
+ *   total_records: number,
+ *   execution_time_ms: number
+ * }
+ */
+router.get(
+  '/index-volatility/:indexId',
+  marketAnalysisController.getIndexVolatilityTimeSeries
 );
 
 export default router;

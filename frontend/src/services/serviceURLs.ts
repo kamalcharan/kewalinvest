@@ -196,11 +196,14 @@ export const API_ENDPOINTS = {
     HEALTH: `${API_BASE}/market/health`,
   },
   
-  // Market Analysis endpoints
+  // Market Analysis endpoints (UPDATED)
   MARKET_ANALYSIS: {
     HEALTH: `${API_BASE}/market-analysis/health`,
     CALCULATE_METRICS: (indexId: number) => `${API_BASE}/market-analysis/calculate-metrics/${indexId}`,
     GET_METRICS: (indexId: number) => `${API_BASE}/market-analysis/metrics/${indexId}`,
+    DASHBOARD_STATISTICS: `${API_BASE}/market-analysis/dashboard-statistics`,
+    INDEX_RETURNS: `${API_BASE}/market-analysis/index-returns`,
+    INDEX_VOLATILITY: (indexId: number) => `${API_BASE}/market-analysis/index-volatility/${indexId}`,
   },
   
   // File management endpoints (for future sprints)
@@ -634,7 +637,7 @@ export const MARKET_URLS = {
     `${API_ENDPOINTS.MARKET.HEALTH}${buildQueryParams({}, environment)}`,
 } as const;
 
-// Market Analysis-specific URL helpers
+// Market Analysis-specific URL helpers (UPDATED)
 export const MARKET_ANALYSIS_URLS = {
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
@@ -644,6 +647,15 @@ export const MARKET_ANALYSIS_URLS = {
   
   getLatestMetrics: (indexId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.GET_METRICS(indexId)}${buildQueryParams({}, environment)}`,
+  
+  getDashboardStatistics: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.DASHBOARD_STATISTICS}${buildQueryParams(params || {}, environment)}`,
+  
+  getIndexReturns: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.INDEX_RETURNS}${buildQueryParams(params || {}, environment)}`,
+  
+  getIndexVolatility: (indexId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.INDEX_VOLATILITY(indexId)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
 // Development logging
@@ -708,6 +720,9 @@ if (process.env.NODE_ENV === 'development') {
     HEALTH: API_ENDPOINTS.MARKET_ANALYSIS.HEALTH,
     CALCULATE_METRICS: 'POST /api/market-analysis/calculate-metrics/:indexId',
     GET_METRICS: 'GET /api/market-analysis/metrics/:indexId',
+    DASHBOARD_STATISTICS: API_ENDPOINTS.MARKET_ANALYSIS.DASHBOARD_STATISTICS,
+    INDEX_RETURNS: API_ENDPOINTS.MARKET_ANALYSIS.INDEX_RETURNS,
+    INDEX_VOLATILITY: 'GET /api/market-analysis/index-volatility/:indexId',
   });
 }
 

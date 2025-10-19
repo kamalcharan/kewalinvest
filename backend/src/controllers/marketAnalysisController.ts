@@ -1,8 +1,8 @@
 // backend/src/controllers/marketAnalysisController.ts
-// Market Analysis API Controller - Metrics Calculation
+// Market Analysis API Controller - Metrics Calculation & Time-Series Data
 
 import { Request, Response } from 'express';
-import { MarketService } from '../services/market.service';
+import { MarketService, ReturnTimeSeriesData, VolatilityTimeSeriesData, DashboardStatisticsResponse } from '../services/market.service';
 import { marketMetricsCalculator } from '../services/marketMetricsCalculator.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
 import { CalculateMetricsRequest, CalculateMetricsResponse } from '../types/market.types';
@@ -238,6 +238,445 @@ export class MarketAnalysisController {
   };
 
   /**
+   * GET /api/market-analysis/metrics/:indexId
+   * Get latest calculated metrics for an index
+   */
+  getLatestMetrics = async (req: Request, res: Response): Promise<void> => {
+    const indexId = parseInt(req.params.indexId);
+
+    try {
+      if (isNaN(indexId) || indexId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid index ID'
+        });
+        return;
+      }
+
+      // Get latest data with metrics
+      const latestData = await this.marketService.getLatestData(indexId);
+
+      if (!latestData) {
+        res.status(404).json({
+          success: false,
+          error: `No data found for index ${indexId}`
+        });
+        return;
+      }
+
+      if (!latestData.metrics_calculated_at) {
+        res.status(404).json({
+          success: false,
+          error: `No calculated metrics available for index ${indexId}. Please run calculations first.`
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        index_id: indexId,
+        date: latestData.date,
+        metrics: {
+          daily_return: latestData.daily_return,
+          return_1w: latestData.return_1w,
+          return_1m: latestData.return_1m,
+          return_3m: latestData.return_3m,
+          return_6m: latestData.return_6m,
+          return_1y: latestData.return_1y,
+          return_ytd: latestData.return_ytd,
+          return_all: latestData.return_all,
+          sd_7d: latestData.sd_7d,
+          sd_14d: latestData.sd_14d,
+          sd_21d: latestData.sd_21d,
+          sd_42d: latestData.sd_42d,
+          sd_3m: latestData.sd_3m,
+          sd_6m: latestData.sd_6m,
+          count_3m: latestData.count_3m,
+          count_42d: latestData.count_42d,
+          sharpe_ratio: latestData.sharpe_ratio,
+          max_drawdown: latestData.max_drawdown,
+          total_risk: latestData.total_risk,
+          cagr: latestData.cagr
+        },
+        metrics_calculated_at: latestData.metrics_calculated_at
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to get latest metrics',
+        'getLatestMetrics',
+        { indexId, error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve metrics'
+      });
+    }
+  };
+
+  /**
+   * GET /api/market-analysis/index-returns
+   * Get time-series returns data for an index
+   * Query params:
+   *   - index_id (required): Index ID
+   *   - periods (optional): Comma-separated list of periods (1m,3m,6m,1y,ytd,all,daily,1w) - default: all
+   *   - start_date (optional): ISO date format (YYYY-MM-DD)
+   *   - end_date (optional): ISO date format (YYYY-MM-DD)
+   *   - granularity (optional): 'daily' or 'monthly' - default: 'daily'
+   */
+  getIndexReturnsTimeSeries = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      // Extract and validate parameters
+      const indexIdParam = req.query.index_id as string;
+      const periodsParam = req.query.periods as string | undefined;
+      const startDateParam = req.query.start_date as string | undefined;
+      const endDateParam = req.query.end_date as string | undefined;
+      const granularityParam = (req.query.granularity as string | undefined) || 'daily';
+
+      // Validate index ID
+      if (!indexIdParam) {
+        res.status(400).json({
+          success: false,
+          error: 'index_id query parameter is required'
+        });
+        return;
+      }
+
+      const indexId = parseInt(indexIdParam);
+      if (isNaN(indexId) || indexId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid index ID'
+        });
+        return;
+      }
+
+      // Validate granularity
+      if (granularityParam !== 'daily' && granularityParam !== 'monthly') {
+        res.status(400).json({
+          success: false,
+          error: 'granularity must be either "daily" or "monthly"'
+        });
+        return;
+      }
+
+      // Parse periods
+      const defaultPeriods = ['1m', '3m', '6m', '1y', 'ytd', 'all'];
+      const periods = periodsParam 
+        ? periodsParam.split(',').map(p => p.trim())
+        : defaultPeriods;
+
+      // Validate periods
+      const validPeriods = ['daily', '1w', '1m', '3m', '6m', '1y', 'ytd', 'all'];
+      const invalidPeriods = periods.filter(p => !validPeriods.includes(p));
+      if (invalidPeriods.length > 0) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid periods: ${invalidPeriods.join(', ')}. Valid periods: ${validPeriods.join(', ')}`
+        });
+        return;
+      }
+
+      // Parse dates
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      if (startDateParam) {
+        startDate = new Date(startDateParam);
+        if (isNaN(startDate.getTime())) {
+          res.status(400).json({
+            success: false,
+            error: 'start_date must be a valid ISO date (YYYY-MM-DD)'
+          });
+          return;
+        }
+      }
+
+      if (endDateParam) {
+        endDate = new Date(endDateParam);
+        if (isNaN(endDate.getTime())) {
+          res.status(400).json({
+            success: false,
+            error: 'end_date must be a valid ISO date (YYYY-MM-DD)'
+          });
+          return;
+        }
+      }
+
+      // Ensure end_date is after start_date
+      if (startDate && endDate && startDate >= endDate) {
+        res.status(400).json({
+          success: false,
+          error: 'start_date must be before end_date'
+        });
+        return;
+      }
+
+      SimpleLogger.info('MarketAnalysisController', 'Fetching returns time-series', 'getIndexReturnsTimeSeries', {
+        indexId,
+        periods: periods.join(','),
+        granularity: granularityParam,
+        startDate: startDate?.toISOString().split('T')[0],
+        endDate: endDate?.toISOString().split('T')[0]
+      });
+
+      // Call service method
+      const timeSeries: ReturnTimeSeriesData[] = await this.marketService.getIndexReturnsTimeSeries(
+        indexId,
+        periods,
+        startDate,
+        endDate,
+        granularityParam as 'daily' | 'monthly'
+      );
+
+      SimpleLogger.info('MarketAnalysisController', 'Returns time-series retrieved successfully', 'getIndexReturnsTimeSeries', {
+        indexId,
+        dataPoints: timeSeries.length,
+        executionTimeMs: Date.now() - startTime
+      });
+
+      res.json({
+        success: true,
+        index_id: indexId,
+        periods: periods,
+        granularity: granularityParam,
+        date_range: {
+          start_date: startDate?.toISOString().split('T')[0] || 'earliest',
+          end_date: endDate?.toISOString().split('T')[0] || 'latest'
+        },
+        data: timeSeries,
+        total_records: timeSeries.length,
+        execution_time_ms: Date.now() - startTime
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to get returns time-series',
+        'getIndexReturnsTimeSeries',
+        {
+          indexId: req.query.index_id,
+          error: error.message
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve returns time-series data'
+      });
+    }
+  };
+
+  /**
+   * GET /api/market-analysis/index-volatility/:indexId
+   * Get time-series volatility data for an index
+   * Query params:
+   *   - start_date (optional): ISO date format (YYYY-MM-DD)
+   *   - end_date (optional): ISO date format (YYYY-MM-DD)
+   *   - granularity (optional): 'daily' or 'monthly' - default: 'daily'
+   */
+  getIndexVolatilityTimeSeries = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      // Extract and validate parameters
+      const indexId = parseInt(req.params.indexId);
+      const startDateParam = req.query.start_date as string | undefined;
+      const endDateParam = req.query.end_date as string | undefined;
+      const granularityParam = (req.query.granularity as string | undefined) || 'daily';
+
+      // Validate index ID
+      if (isNaN(indexId) || indexId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid index ID'
+        });
+        return;
+      }
+
+      // Validate granularity
+      if (granularityParam !== 'daily' && granularityParam !== 'monthly') {
+        res.status(400).json({
+          success: false,
+          error: 'granularity must be either "daily" or "monthly"'
+        });
+        return;
+      }
+
+      // Parse dates
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      if (startDateParam) {
+        startDate = new Date(startDateParam);
+        if (isNaN(startDate.getTime())) {
+          res.status(400).json({
+            success: false,
+            error: 'start_date must be a valid ISO date (YYYY-MM-DD)'
+          });
+          return;
+        }
+      }
+
+      if (endDateParam) {
+        endDate = new Date(endDateParam);
+        if (isNaN(endDate.getTime())) {
+          res.status(400).json({
+            success: false,
+            error: 'end_date must be a valid ISO date (YYYY-MM-DD)'
+          });
+          return;
+        }
+      }
+
+      // Ensure end_date is after start_date
+      if (startDate && endDate && startDate >= endDate) {
+        res.status(400).json({
+          success: false,
+          error: 'start_date must be before end_date'
+        });
+        return;
+      }
+
+      SimpleLogger.info('MarketAnalysisController', 'Fetching volatility time-series', 'getIndexVolatilityTimeSeries', {
+        indexId,
+        granularity: granularityParam,
+        startDate: startDate?.toISOString().split('T')[0],
+        endDate: endDate?.toISOString().split('T')[0]
+      });
+
+      // Call service method
+      const timeSeries: VolatilityTimeSeriesData[] = await this.marketService.getIndexVolatilityTimeSeries(
+        indexId,
+        startDate,
+        endDate,
+        granularityParam as 'daily' | 'monthly'
+      );
+
+      SimpleLogger.info('MarketAnalysisController', 'Volatility time-series retrieved successfully', 'getIndexVolatilityTimeSeries', {
+        indexId,
+        dataPoints: timeSeries.length,
+        executionTimeMs: Date.now() - startTime
+      });
+
+      res.json({
+        success: true,
+        index_id: indexId,
+        granularity: granularityParam,
+        date_range: {
+          start_date: startDate?.toISOString().split('T')[0] || 'earliest',
+          end_date: endDate?.toISOString().split('T')[0] || 'latest'
+        },
+        data: timeSeries,
+        total_records: timeSeries.length,
+        execution_time_ms: Date.now() - startTime
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to get volatility time-series',
+        'getIndexVolatilityTimeSeries',
+        {
+          indexId: req.params.indexId,
+          error: error.message
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve volatility time-series data'
+      });
+    }
+  };
+
+  /**
+   * GET /api/market-analysis/dashboard-statistics
+   * Get aggregated dashboard statistics across all indices
+   * Query params:
+   *   - time_period (optional): '1m', '3m', '6m', or '1y' - default: '1y'
+   */
+  getDashboardStatistics = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      // Extract and validate parameters
+      const timePeriodParam = (req.query.time_period as string | undefined) || '1y';
+
+      // Validate time period
+      const validTimePeriods = ['1m', '3m', '6m', '1y'];
+      if (!validTimePeriods.includes(timePeriodParam)) {
+        res.status(400).json({
+          success: false,
+          error: `time_period must be one of: ${validTimePeriods.join(', ')}`
+        });
+        return;
+      }
+
+      SimpleLogger.info('MarketAnalysisController', 'Fetching dashboard statistics', 'getDashboardStatistics', {
+        timePeriod: timePeriodParam
+      });
+
+      // Call service method
+      const stats: DashboardStatisticsResponse = await this.marketService.getDashboardAggregateStats(
+        timePeriodParam as '1m' | '3m' | '6m' | '1y'
+      );
+
+      SimpleLogger.info('MarketAnalysisController', 'Dashboard statistics retrieved successfully', 'getDashboardStatistics', {
+        timePeriod: timePeriodParam,
+        analyzedIndices: stats.total_indices_analyzed,
+        executionTimeMs: Date.now() - startTime
+      });
+
+      res.json({
+        success: true,
+        time_period: timePeriodParam,
+        data: {
+          best_performer: stats.best_performer,
+          most_volatile: stats.most_volatile,
+          market_breadth: stats.market_breadth,
+          total_indices_analyzed: stats.total_indices_analyzed,
+          indices_up: stats.indices_up,
+          indices_down: stats.indices_down,
+          heatmap: stats.heatmap
+        },
+        execution_time_ms: Date.now() - startTime
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Failed to get dashboard statistics',
+        'getDashboardStatistics',
+        {
+          error: error.message
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve dashboard statistics'
+      });
+    }
+  };
+
+  /**
    * Private method to update metrics in database
    */
   private async updateMetricsInDatabase(
@@ -326,88 +765,6 @@ export class MarketAnalysisController {
       throw error;
     }
   }
-
-  /**
-   * GET /api/market-analysis/metrics/:indexId
-   * Get latest calculated metrics for an index
-   */
-  getLatestMetrics = async (req: Request, res: Response): Promise<void> => {
-    const indexId = parseInt(req.params.indexId);
-
-    try {
-      if (isNaN(indexId) || indexId <= 0) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid index ID'
-        });
-        return;
-      }
-
-      // Get latest data with metrics
-      const latestData = await this.marketService.getLatestData(indexId);
-
-      if (!latestData) {
-        res.status(404).json({
-          success: false,
-          error: `No data found for index ${indexId}`
-        });
-        return;
-      }
-
-      if (!latestData.metrics_calculated_at) {
-        res.status(404).json({
-          success: false,
-          error: `No calculated metrics available for index ${indexId}. Please run calculations first.`
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        index_id: indexId,
-        date: latestData.date,
-        metrics: {
-          daily_return: latestData.daily_return,
-          return_1w: latestData.return_1w,
-          return_1m: latestData.return_1m,
-          return_3m: latestData.return_3m,
-          return_6m: latestData.return_6m,
-          return_1y: latestData.return_1y,
-          return_ytd: latestData.return_ytd,
-          return_all: latestData.return_all,
-          sd_7d: latestData.sd_7d,
-          sd_14d: latestData.sd_14d,
-          sd_21d: latestData.sd_21d,
-          sd_42d: latestData.sd_42d,
-          sd_3m: latestData.sd_3m,
-          sd_6m: latestData.sd_6m,
-          count_3m: latestData.count_3m,
-          count_42d: latestData.count_42d,
-          sharpe_ratio: latestData.sharpe_ratio,
-          max_drawdown: latestData.max_drawdown,
-          total_risk: latestData.total_risk,
-          cagr: latestData.cagr
-        },
-        metrics_calculated_at: latestData.metrics_calculated_at
-      });
-
-    } catch (error: any) {
-      SimpleLogger.error(
-        'MarketAnalysisController',
-        'Failed to get latest metrics',
-        'getLatestMetrics',
-        { indexId, error: error.message },
-        undefined,
-        undefined,
-        error.stack
-      );
-
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to retrieve metrics'
-      });
-    }
-  };
 }
 
 export const marketAnalysisController = new MarketAnalysisController();

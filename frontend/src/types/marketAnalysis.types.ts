@@ -38,40 +38,47 @@ export interface IndexDetail {
 export interface IndexMetrics {
   id: number;
   index_id: number;
+  date?: string | null;
   
   // Price data
   last_price: number | null;
-  price_date: Date | null;
+  price_date?: Date | string | null;
   
-  // Returns
+  // Returns (various periods)
   daily_return: number | null;         // daily%
-  return_3m: number | null;            // 3M%
-  return_6m: number | null;            // 6M%
-  return_abs: number | null;           // AbsReturns (from start)
+  return_1w: number | null;            // 1 Week%
+  return_1m: number | null;            // 1 Month%
+  return_3m: number | null;            // 3 Month%
+  return_6m: number | null;            // 6 Month%
+  return_1y: number | null;            // 1 Year%
+  return_ytd: number | null;           // Year to Date%
+  return_all: number | null;           // All-time% (from start)
+  return_abs?: number | null;          // Legacy: Absolute Returns (from start)
   cagr: number | null;                 // Compound Annual Growth Rate
   
   // Standard Deviations (Rolling Windows)
-  sd_7d: number | null;                // 7dSD
-  sd_14d: number | null;               // 14dSD
-  sd_21d: number | null;               // 21dSD
-  sd_42d: number | null;               // 42dSD
-  sd_3m: number | null;                // 3mSD
-  sd_6m: number | null;                // 6mSD
+  sd_7d: number | null;                // 7 day SD
+  sd_14d: number | null;               // 14 day SD
+  sd_21d: number | null;               // 21 day SD
+  sd_42d: number | null;               // 42 day SD
+  sd_3m: number | null;                // 3 month SD
+  sd_6m: number | null;                // 6 month SD
   
   // Counts (Data points in window)
-  count_3m: number | null;             // 3MCount
-  count_42d: number | null;            // 42dayCount
+  count_3m: number | null;             // 3 month count
+  count_42d: number | null;            // 42 day count
   
   // Risk metrics
   sharpe_ratio: number | null;
   max_drawdown: number | null;
   total_risk: number | null;
   
-  // Metadata
-  calculated_at: Date | null;
-  calculated_by: string | null;
-  created_at: Date;
-  updated_at: Date;
+  // Metadata - IMPORTANT: Use both names for compatibility
+  metrics_calculated_at?: Date | string | null;   // From backend response
+  calculated_at?: Date | string | null;            // Legacy field name
+  calculated_by?: string | null;
+  created_at?: Date | string;
+  updated_at?: Date | string | null;
 }
 
 export interface IndexPerformance {
@@ -124,14 +131,39 @@ export interface UserChartPreference {
 export interface CalculateMetricsRequest {
   index_id: number;
   recalculate?: boolean;
+  as_of_date?: string;
 }
 
 export interface CalculateMetricsResponse {
   success: boolean;
-  data?: IndexMetrics;
-  error?: string;
+  index_id?: number;
+  date?: string;
+  metrics?: {
+    daily_return: number | null;
+    return_1w: number | null;
+    return_1m: number | null;
+    return_3m: number | null;
+    return_6m: number | null;
+    return_1y: number | null;
+    return_ytd: number | null;
+    return_all: number | null;
+    sd_7d: number | null;
+    sd_14d: number | null;
+    sd_21d: number | null;
+    sd_42d: number | null;
+    sd_3m: number | null;
+    sd_6m: number | null;
+    count_3m: number;
+    count_42d: number;
+    sharpe_ratio: number | null;
+    max_drawdown: number | null;
+    total_risk: number | null;
+    cagr: number | null;
+  };
+  records_processed?: number;
+  calculation_time_ms?: number;
   message?: string;
-  execution_time_ms?: number;
+  error?: string;
 }
 
 export interface GetChartDataRequest {
@@ -158,13 +190,63 @@ export interface GetChartDataResponse {
 
 export interface GetIndexMetricsResponse {
   success: boolean;
+  index_id?: number;
+  date?: string;
+  metrics?: {
+    daily_return: number | null;
+    return_1w: number | null;
+    return_1m: number | null;
+    return_3m: number | null;
+    return_6m: number | null;
+    return_1y: number | null;
+    return_ytd: number | null;
+    return_all: number | null;
+    sd_7d: number | null;
+    sd_14d: number | null;
+    sd_21d: number | null;
+    sd_42d: number | null;
+    sd_3m: number | null;
+    sd_6m: number | null;
+    count_3m: number;
+    count_42d: number;
+    sharpe_ratio: number | null;
+    max_drawdown: number | null;
+    total_risk: number | null;
+    cagr: number | null;
+  };
+  metrics_calculated_at?: Date | string | null;
   data?: IndexMetrics;
   error?: string;
 }
 
 export interface GetDashboardStatisticsResponse {
   success: boolean;
-  data?: DashboardStatistics;
+  time_period?: '1m' | '3m' | '6m' | '1y';
+  data?: {
+    best_performer: {
+      index_id: number;
+      index_name: string;
+      index_code: string;
+      return_value: number;
+    } | null;
+    most_volatile: {
+      index_id: number;
+      index_name: string;
+      index_code: string;
+      volatility_value: number;
+    } | null;
+    market_breadth: number;
+    total_indices_analyzed: number;
+    indices_up: number;
+    indices_down: number;
+    heatmap: Array<{
+      index_id: number;
+      index_name: string;
+      index_code: string;
+      return_value: number | null;
+      volatility_value: number | null;
+    }>;
+  };
   error?: string;
 }
 
@@ -310,12 +392,8 @@ export interface MarketDataRecord {
   total_risk: number | null;
   cagr: number | null;
   
+  // Timestamps
+  metrics_calculated_at?: Date | string | null;
   created_at: Date;
   updated_at: Date;
-}
-
-export interface CalculateMetricsRequest {
-  index_id: number;
-  recalculate?: boolean;       
-  as_of_date?: string;         
 }

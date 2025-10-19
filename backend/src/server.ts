@@ -106,6 +106,10 @@ app.get('/health', (_req: Request, res: Response) => {
       market_indices: true,
       market_downloads: true,
       market_analysis: true,
+      market_analysis_metrics: true,
+      market_analysis_dashboard: true,
+      market_analysis_returns: true,
+      market_analysis_volatility: true,
       jtbd: true,
       jtbd_dashboard: true,
       goals: true,
@@ -319,6 +323,9 @@ app.use((_req: Request, res: Response) => {
       'GET /api/market-analysis/health',
       'POST /api/market-analysis/calculate-metrics/:indexId',
       'GET /api/market-analysis/metrics/:indexId',
+      'GET /api/market-analysis/dashboard-statistics',
+      'GET /api/market-analysis/index-returns',
+      'GET /api/market-analysis/index-volatility/:indexId',
       
       // JTBD endpoints
       'POST /api/jtbd',
@@ -557,8 +564,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/market/health             ║
 ║                                        ║
 ║  📈 Market Analysis:                   ║
-║  • POST /api/market-analysis/calc-metrics║
+║  • GET  /api/market-analysis/health    ║
+║  • POST /api/market-analysis/calc      ║
 ║  • GET  /api/market-analysis/metrics   ║
+║  • GET  /api/market-analysis/dashboard ║
+║  • GET  /api/market-analysis/returns   ║
+║  • GET  /api/market-analysis/volatility║
 ║                                        ║
 ║  🎯 JTBD:                              ║
 ║  • POST /api/jtbd                      ║
@@ -641,6 +652,10 @@ app.listen(PORT, async () => {
     console.log('✅ Market indices management ready');
     console.log('✅ Market data downloads ready');
     console.log('✅ Market analysis endpoints ready');
+    console.log('✅ Market analysis metrics endpoints ready');
+    console.log('✅ Market analysis dashboard endpoints ready');
+    console.log('✅ Market analysis returns endpoints ready');
+    console.log('✅ Market analysis volatility endpoints ready');
     console.log('✅ JTBD endpoints ready');
     console.log('✅ JTBD Dashboard endpoints ready');
     console.log('✅ Goal management endpoints ready');
@@ -722,6 +737,10 @@ app.listen(PORT, async () => {
 ║  Market Indices: ✅ Ready              ║
 ║  Market Downloads: ✅ Ready            ║
 ║  Market Analysis: ✅ Ready             ║
+║  Market Analysis Metrics: ✅ Ready     ║
+║  Market Analysis Dashboard: ✅ Ready   ║
+║  Market Analysis Returns: ✅ Ready     ║
+║  Market Analysis Volatility: ✅ Ready  ║
 ║  JTBD: ✅ Ready                        ║
 ║  JTBD Dashboard: ✅ Ready              ║
 ║  Goals: ✅ Ready                       ║
