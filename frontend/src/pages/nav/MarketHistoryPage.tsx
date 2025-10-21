@@ -12,7 +12,7 @@ import DateRangePicker from '../../components/market/DateRangePicker';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
-import { marketService } from '../../services/market.service';
+import MarketService from '../../services/market.service';
 import type { MarketIndex } from '../../types/market.types';
 
 const MarketHistoryPage: React.FC = () => {
@@ -210,7 +210,7 @@ const MarketHistoryPage: React.FC = () => {
     );
 
     try {
-      const isConnected = await marketService.testConnection();
+      const isConnected = await MarketService.testConnection();
       
       setConnectionStatus(isConnected ? 'ok' : 'failed');
       

@@ -382,6 +382,7 @@ export interface UseBookmarksReturn {
     hasPrev: boolean;
   } | null;
   downloadStatus: { [bookmarkId: number]: any };
+  isAdminView: boolean;
 }
 
 export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarksReturn => {
@@ -389,6 +390,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseBookmarksReturn['pagination']>(null);
+  const [isAdminView, setIsAdminView] = useState(false);
   const lastParamsRef = useRef<BookmarkSearchParams>(initialParams || {});
   const hasInitializedRef = useRef(false);
 
@@ -410,10 +412,19 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
           hasNext: response.data.has_next || false,
           hasPrev: response.data.has_prev || false,
         });
+
+        setIsAdminView((response as any).meta?.is_admin_view || false);
+
+         // ADD THIS: Console log for debugging
+        console.log('🔍 Admin View Status:', (response as any).meta?.is_admin_view);
+        console.log('📊 Total Bookmarks:', response.data.total);
+        // console.log('📋 First Bookmark Tenant ID:', response.data.bookmarks?.[0]?.tenant_id);
+
       } else {
         console.warn('Bookmarks API error:', response.error);
         setError(response.error || 'Failed to fetch bookmarks');
         setBookmarks([]);
+        setIsAdminView(false);
         setPagination({
           total: 0,
           page: params.page || 1,
@@ -427,6 +438,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
       console.error('Fetch bookmarks error:', err);
       setError(err.message || 'Failed to fetch bookmarks');
       setBookmarks([]);
+      setIsAdminView(false);
       setPagination({
         total: 0,
         page: params.page || 1,
@@ -531,6 +543,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     refetch,
     pagination,
     downloadStatus: statusMap,
+     isAdminView,
   };
 };
 

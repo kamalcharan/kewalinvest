@@ -17,6 +17,10 @@ import {
   Bell
 } from 'lucide-react';
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
 export interface NavigationItem {
   id: string;
   name: string;
@@ -24,6 +28,7 @@ export interface NavigationItem {
   icon: any;
   badge?: string | number;
   children?: NavigationItem[];
+  adminOnly?: boolean; // NEW: Flag for admin-only menu items
 }
 
 export interface NavigationSection {
@@ -31,6 +36,10 @@ export interface NavigationSection {
   name: string;
   items: NavigationItem[];
 }
+
+// ============================================================================
+// NAVIGATION MENU STRUCTURE
+// ============================================================================
 
 export const NAVIGATION_MENU: NavigationSection[] = [
   {
@@ -46,70 +55,71 @@ export const NAVIGATION_MENU: NavigationSection[] = [
     ]
   },
   {
-  id: 'contacts',
-  name: 'Contacts',
-  items: [
-    {
-      id: 'contacts',
-      name: 'Contacts',
-      path: '/contacts',
-      icon: Users
-    },
-    {
-      id: 'customers',
-      name: 'Customers',
-      path: '/customers',
-      icon: Crown
-    },
-    {
-      id: 'transactions',
-      name: 'Transactions',
-      path: '/transactions',
-      icon: FileText
-    }
-  ]
-},
+    id: 'contacts',
+    name: 'Contacts',
+    items: [
+      {
+        id: 'contacts',
+        name: 'Contacts',
+        path: '/contacts',
+        icon: Users
+      },
+      {
+        id: 'customers',
+        name: 'Customers',
+        path: '/customers',
+        icon: Crown
+      },
+      {
+        id: 'transactions',
+        name: 'Transactions',
+        path: '/transactions',
+        icon: FileText
+      }
+    ]
+  },
   {
-  id: 'data_operations',
-  name: 'Data Operations',
-  items: [
-    {
-      id: 'etl_dashboard',
-      name: 'ETL Dashboard',
-      path: '/import-dashboard',
-      icon: FileSpreadsheet
-    },
-    {
-      id: 'data_import',
-      name: 'Import Data',
-      path: '/data-import',
-      icon: Upload
-    },
-    {
-      id: 'nav_history',
-      name: 'NAV History',
-      path: '/nav/history',
-      icon: Target
-    },
-    {
-      id: 'market_history',
-      name: 'Market Data',
-      path: '/nav/market-history',
-      icon: TrendingUp
-    },
-    {
-      id: 'cruise_control',
-      name: 'Cruise Control',
-      path: '/nav/cuise-control',
-      icon: Settings
-    },
-  ]
-},
+    id: 'data_operations',
+    name: 'Data Operations',
+    items: [
+      {
+        id: 'etl_dashboard',
+        name: 'ETL Dashboard',
+        path: '/import-dashboard',
+        icon: FileSpreadsheet
+      },
+      {
+        id: 'data_import',
+        name: 'Import Data',
+        path: '/data-import',
+        icon: Upload
+      },
+      {
+        id: 'nav_history',
+        name: 'NAV History',
+        path: '/nav/history',
+        icon: Target,
+        adminOnly: true // ADMIN ONLY
+      },
+      {
+        id: 'market_history',
+        name: 'Market Data',
+        path: '/nav/market-history',
+        icon: TrendingUp,
+        adminOnly: true // ADMIN ONLY
+      },
+      {
+        id: 'cruise_control',
+        name: 'Cruise Control',
+        path: '/nav/cuise-control',
+        icon: Settings
+      },
+    ]
+  },
   {
     id: 'portfolio_management',
     name: 'Portfolio Management',
     items: [
-      // Removed portfolio_contacts and portfolio_customers as requested
       {
         id: 'nav_tracking',
         name: 'NAV Tracking',
@@ -142,12 +152,10 @@ export const NAVIGATION_MENU: NavigationSection[] = [
       }
     ]
   },
-  
   {
     id: 'system',
     name: 'System',
     items: [
-     
       {
         id: 'system_logs',
         name: 'System Logs',
@@ -158,7 +166,10 @@ export const NAVIGATION_MENU: NavigationSection[] = [
   }
 ];
 
-// Quick access items for mobile or compact view
+// ============================================================================
+// QUICK ACCESS ITEMS
+// ============================================================================
+
 export const QUICK_ACCESS_ITEMS: NavigationItem[] = [
   {
     id: 'dashboard',
@@ -198,7 +209,13 @@ export const QUICK_ACCESS_ITEMS: NavigationItem[] = [
   }
 ];
 
-// Navigation utility functions
+// ============================================================================
+// NAVIGATION UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Find a navigation item by path
+ */
 export const findNavigationItem = (path: string): NavigationItem | null => {
   for (const section of NAVIGATION_MENU) {
     for (const item of section.items) {
@@ -212,6 +229,9 @@ export const findNavigationItem = (path: string): NavigationItem | null => {
   return null;
 };
 
+/**
+ * Check if a route is active
+ */
 export const isActiveRoute = (currentPath: string, itemPath: string): boolean => {
   if (itemPath === '/dashboard') {
     return currentPath === '/dashboard';
@@ -249,6 +269,9 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
   return currentPath.startsWith(itemPath);
 };
 
+/**
+ * Get breadcrumbs for current path
+ */
 export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
   const breadcrumbs: NavigationItem[] = [];
   
@@ -354,7 +377,10 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
   return breadcrumbs;
 };
 
-// Feature flags for menu items
+// ============================================================================
+// FEATURE FLAGS
+// ============================================================================
+
 export const FEATURE_FLAGS = {
   portfolios: true,        // Portfolio management features
   analytics: true,         // Analytics and reporting
@@ -367,12 +393,22 @@ export const FEATURE_FLAGS = {
   system_logs: true        // System logs feature
 };
 
-// Filter menu based on feature flags
-export const getFilteredNavigationMenu = (): NavigationSection[] => {
+// ============================================================================
+// FILTERED NAVIGATION MENU - UPDATED WITH ADMIN SUPPORT
+// ============================================================================
+
+/**
+ * Get filtered navigation menu based on feature flags and admin status
+ * @param isSuperAdmin - Whether the current user's tenant is a super admin
+ * @returns Filtered navigation sections
+ */
+export const getFilteredNavigationMenu = (isSuperAdmin: boolean = false): NavigationSection[] => {
+  console.log('🔍 NAVIGATION: Filtering menu for isSuperAdmin:', isSuperAdmin);
+  
   return NAVIGATION_MENU.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      // Apply feature flag filtering logic here
+      // Filter by feature flags
       if (item.id === 'portfolios' && !FEATURE_FLAGS.portfolios) return false;
       if (item.id === 'portfolio_analysis' && !FEATURE_FLAGS.analytics) return false;
       if (item.id === 'market_data' && !FEATURE_FLAGS.market_data) return false;
@@ -380,6 +416,13 @@ export const getFilteredNavigationMenu = (): NavigationSection[] => {
       if ((item.id === 'etl_dashboard' || item.id === 'etl_upload') && !FEATURE_FLAGS.etl_system) return false;
       if (item.id === 'data_management' && !FEATURE_FLAGS.import_export) return false;
       if (item.id === 'system_logs' && !FEATURE_FLAGS.system_logs) return false;
+      
+      // NEW: Filter by admin status
+      if (item.adminOnly && !isSuperAdmin) {
+        console.log(`🚫 NAVIGATION: Hiding admin-only item: ${item.name}`);
+        return false;
+      }
+      
       return true;
     })
   })).filter(section => section.items.length > 0);

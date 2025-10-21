@@ -7,6 +7,7 @@ import toastService from '../../services/toast.service';
 import { ButtonLoader } from '../../components/common/Loader';
 
 interface RegisterFormData {
+  business_name: string; // NEW
   email: string;
   password: string;
   confirmPassword: string;
@@ -19,6 +20,7 @@ const Register: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   
   const [formData, setFormData] = useState<RegisterFormData>({
+    business_name: '', // NEW
     email: '',
     password: '',
     confirmPassword: '',
@@ -37,6 +39,15 @@ const Register: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
+
+    // Business name validation - NEW
+    if (!formData.business_name) {
+      newErrors.business_name = 'Business name is required';
+    } else if (formData.business_name.trim().length < 2) {
+      newErrors.business_name = 'Business name must be at least 2 characters';
+    } else if (formData.business_name.trim().length > 100) {
+      newErrors.business_name = 'Business name must be less than 100 characters';
+    }
 
     // Email validation
     if (!formData.email) {
@@ -92,7 +103,11 @@ const Register: React.FC = () => {
     setIsLoading(true);
     
     try {
+      console.log('📝 REGISTER: Submitting registration...');
+      console.log('🏢 REGISTER: Business name:', formData.business_name);
+      
       await register({
+        business_name: formData.business_name, // NEW
         email: formData.email,
         password: formData.password
       });
@@ -113,6 +128,8 @@ const Register: React.FC = () => {
           errorMessage = 'An account with this email already exists. Please try logging in instead.';
         } else if (err.message.includes('Invalid email')) {
           errorMessage = 'Please enter a valid email address.';
+        } else if (err.message.includes('Business name')) {
+          errorMessage = err.message;
         } else {
           errorMessage = err.message;
         }
@@ -151,6 +168,22 @@ const Register: React.FC = () => {
   const passwordStrength = getPasswordStrength(formData.password);
 
   // Icons
+  const BuildingIcon = () => ( // NEW ICON
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+      <path d="M9 22v-4h6v4" />
+      <path d="M8 6h.01" />
+      <path d="M16 6h.01" />
+      <path d="M12 6h.01" />
+      <path d="M12 10h.01" />
+      <path d="M12 14h.01" />
+      <path d="M16 10h.01" />
+      <path d="M16 14h.01" />
+      <path d="M8 10h.01" />
+      <path d="M8 14h.01" />
+    </svg>
+  );
+
   const MailIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -423,6 +456,77 @@ const Register: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit}>
+              {/* Business Name Field - NEW */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  marginBottom: '8px',
+                  color: colors.utility.primaryText
+                }}>
+                  Business Name
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: colors.utility.secondaryText
+                  }}>
+                    <BuildingIcon />
+                  </div>
+                  <input
+                    id="business_name"
+                    name="business_name"
+                    type="text"
+                    autoComplete="organization"
+                    required
+                    value={formData.business_name}
+                    onChange={(e) => handleInputChange('business_name', e.target.value)}
+                    disabled={isLoading}
+                    placeholder="Enter your business name"
+                    style={{
+                      width: '100%',
+                      paddingLeft: '40px',
+                      paddingRight: '12px',
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      border: `1px solid ${errors.business_name ? colors.semantic.error : colors.utility.secondaryText + '40'}`,
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'all 0.2s',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.business_name) {
+                        e.target.style.borderColor = colors.brand.primary;
+                        e.target.style.boxShadow = `0 0 0 3px ${colors.brand.primary}20`;
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.business_name) {
+                        e.target.style.borderColor = `${colors.utility.secondaryText}40`;
+                        e.target.style.boxShadow = 'none';
+                      }
+                    }}
+                  />
+                </div>
+                {errors.business_name && (
+                  <p style={{
+                    fontSize: '12px',
+                    marginTop: '4px',
+                    color: colors.semantic.error
+                  }}>
+                    {errors.business_name}
+                  </p>
+                )}
+              </div>
+
               {/* Email Field */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{

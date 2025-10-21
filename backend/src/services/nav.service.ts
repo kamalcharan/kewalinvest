@@ -46,43 +46,41 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
-   * Get user's bookmarked schemes with NAV statistics
-   * FIXED: Use t_scheme_details for NAV tracking, removed conflicting subqueries
-   */
-  async getUserBookmarks(
-    tenantId: number,
-    isLive: boolean,
-    userId: number,
-    params: SchemeBookmarkSearchParams = {}
-  ): Promise<SchemeBookmarkListResponse> {
-    try {
-      const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
-      const offset = (page - 1) * page_size;
+ * Get user's bookmarked schemes with NAV statistics
+ * ADMIN MODE: Returns ALL schemes from master database
+ * USER MODE: Returns only user's bookmarked schemes
+ */
+async getUserBookmarks(
+  tenantId: number,
+  isLive: boolean,
+  userId: number,
+  params: SchemeBookmarkSearchParams = {},
+  isAdmin: boolean = false
+): Promise<SchemeBookmarkListResponse> {
+  try {
+    const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
+    const offset = (page - 1) * page_size;
 
-      // FIXED: Simplified base query with proper JOIN
+    // ====================================================================
+    // ADMIN MODE: Query ALL schemes from master database
+    // ====================================================================
+    if (isAdmin) {
       let baseQuery = `
-        FROM t_scheme_bookmarks sb
-        JOIN t_scheme_details sd ON sb.scheme_id = sd.id
-        WHERE sb.tenant_id = $1 
-          AND sb.is_live = $2 
-          AND sb.is_active = true
+        FROM t_scheme_details sd
+        WHERE sd.is_active = true
       `;
 
-      const queryParams: any[] = [tenantId, isLive];
-      let paramIndex = 3;
+      const queryParams: any[] = [];
+      let paramIndex = 1;
 
       if (search) {
-        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
+        baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.amc_name ILIKE $${paramIndex})`;
         queryParams.push(`%${search}%`);
         paramIndex++;
       }
 
-      if (daily_download_only) {
-        baseQuery += ` AND sb.daily_download_enabled = true`;
-      }
-
       if (amc_name) {
-        baseQuery += ` AND sb.amc_name = $${paramIndex}`;
+        baseQuery += ` AND sd.amc_name = $${paramIndex}`;
         queryParams.push(amc_name);
         paramIndex++;
       }
@@ -104,24 +102,23 @@ export class NavService {
         };
       }
 
-      // FIXED: Get all fields from both tables, use scheme_details for NAV tracking
       const dataQuery = `
         SELECT 
-          sb.id,
-          sb.tenant_id,
-          sb.user_id,
-          sb.scheme_id,
-          sb.scheme_code,
-          sb.scheme_name,
-          sb.amc_name,
-          sb.alias_name,
-          sb.is_live,
-          sb.is_active,
-          sb.daily_download_enabled,
-          sb.download_time,
-          sb.historical_download_completed,
-          sb.created_at,
-          sb.updated_at,
+          sd.id,
+          0 as tenant_id,
+          0 as user_id,
+          sd.id as scheme_id,
+          sd.scheme_code,
+          sd.scheme_name,
+          sd.amc_name,
+          NULL as alias_name,
+          true as is_live,
+          true as is_active,
+          false as daily_download_enabled,
+          '22:00' as download_time,
+          false as historical_download_completed,
+          sd.created_at,
+          sd.updated_at,
           sd.launch_date,
           sd.last_nav_download_date,
           sd.last_nav_download_status,
@@ -132,13 +129,13 @@ export class NavService {
           sd.total_nav_records as nav_records_count,
           (SELECT nav_value 
            FROM t_nav_data nd 
-           WHERE nd.scheme_id = sb.scheme_id 
-             AND nd.is_live = $2
+           WHERE nd.scheme_id = sd.id 
+             AND nd.is_live = true
            ORDER BY nav_date DESC 
            LIMIT 1
           ) as latest_nav_value
         ${baseQuery}
-        ORDER BY sb.created_at DESC 
+        ORDER BY sd.scheme_name ASC 
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `;
 
@@ -146,13 +143,13 @@ export class NavService {
       const result = await this.db.query(dataQuery, queryParams);
       const total_pages = Math.ceil(total / page_size);
 
-      SimpleLogger.info('NavService', 'User bookmarks retrieved successfully', 'getUserBookmarks', {
+      SimpleLogger.info('NavService', 'Admin - All schemes retrieved successfully', 'getUserBookmarks', {
         tenantId, 
         userId, 
+        isAdmin: true,
         total, 
         page, 
-        bookmarksReturned: result.rows.length,
-        sampleNavRecords: result.rows.length > 0 ? result.rows[0].nav_records_count : null
+        schemesReturned: result.rows.length
       });
 
       return {
@@ -164,23 +161,131 @@ export class NavService {
         has_next: page < total_pages,
         has_prev: page > 1
       };
+    }
 
-    } catch (error: any) {
-      SimpleLogger.error('NavService', 'Failed to get user bookmarks', 'getUserBookmarks', {
-        tenantId, userId, params, error: error.message
-      }, userId, tenantId, error.stack);
-      
+    // ====================================================================
+    // USER MODE: Query only user's bookmarked schemes
+    // ====================================================================
+    let baseQuery = `
+      FROM t_scheme_bookmarks sb
+      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
+      WHERE sb.tenant_id = $1 
+        AND sb.is_live = $2 
+        AND sb.is_active = true
+    `;
+
+    const queryParams: any[] = [tenantId, isLive];
+    let paramIndex = 3;
+
+    if (search) {
+      baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (daily_download_only) {
+      baseQuery += ` AND sb.daily_download_enabled = true`;
+    }
+
+    if (amc_name) {
+      baseQuery += ` AND sb.amc_name = $${paramIndex}`;
+      queryParams.push(amc_name);
+      paramIndex++;
+    }
+
+    const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+    const countResult = await this.db.query(countQuery, queryParams);
+    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
+      parseInt(countResult.rows[0].total) : 0;
+
+    if (total === 0) {
       return {
         bookmarks: [],
         total: 0,
-        page: params.page || 1,
-        page_size: params.page_size || 20,
+        page,
+        page_size,
         total_pages: 0,
         has_next: false,
         has_prev: false
       };
     }
+
+    const dataQuery = `
+      SELECT 
+        sb.id,
+        sb.tenant_id,
+        sb.user_id,
+        sb.scheme_id,
+        sb.scheme_code,
+        sb.scheme_name,
+        sb.amc_name,
+        sb.alias_name,
+        sb.is_live,
+        sb.is_active,
+        sb.daily_download_enabled,
+        sb.download_time,
+        sb.historical_download_completed,
+        sb.created_at,
+        sb.updated_at,
+        sd.launch_date,
+        sd.last_nav_download_date,
+        sd.last_nav_download_status,
+        sd.last_nav_download_error,
+        sd.historical_data_available,
+        sd.earliest_nav_date,
+        sd.latest_nav_date,
+        sd.total_nav_records as nav_records_count,
+        (SELECT nav_value 
+         FROM t_nav_data nd 
+         WHERE nd.scheme_id = sb.scheme_id 
+           AND nd.is_live = $2
+         ORDER BY nav_date DESC 
+         LIMIT 1
+        ) as latest_nav_value
+      ${baseQuery}
+      ORDER BY sb.created_at DESC 
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(page_size, offset);
+    const result = await this.db.query(dataQuery, queryParams);
+    const total_pages = Math.ceil(total / page_size);
+
+    SimpleLogger.info('NavService', 'User bookmarks retrieved successfully', 'getUserBookmarks', {
+      tenantId, 
+      userId, 
+      isAdmin: false,
+      total, 
+      page, 
+      bookmarksReturned: result.rows.length
+    });
+
+    return {
+      bookmarks: result.rows || [],
+      total,
+      page,
+      page_size,
+      total_pages,
+      has_next: page < total_pages,
+      has_prev: page > 1
+    };
+
+  } catch (error: any) {
+    SimpleLogger.error('NavService', 'Failed to get user bookmarks', 'getUserBookmarks', {
+      tenantId, userId, isAdmin, params, error: error.message
+    }, userId, tenantId, error.stack);
+    
+    return {
+      bookmarks: [],
+      total: 0,
+      page: params.page || 1,
+      page_size: params.page_size || 20,
+      total_pages: 0,
+      has_next: false,
+      has_prev: false
+    };
   }
+}
 
   /**
    * Update global scheme NAV download status in t_scheme_details

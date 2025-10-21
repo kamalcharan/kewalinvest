@@ -174,7 +174,7 @@ const NavSection: React.FC<NavSectionProps> = ({ section, collapsed }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Show all items - no admin filtering
+  // Show all items - filtering is done at the menu level
   const filteredItems = section.items;
 
   if (filteredItems.length === 0) return null;
@@ -223,11 +223,24 @@ interface SideNavigationProps {
 const SideNavigation: React.FC<SideNavigationProps> = ({ isOpen, onToggle }) => {
   const collapsed = !isOpen;
   const { theme, isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth(); // NEW: Get isSuperAdmin from AuthContext
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Get filtered navigation menu based on feature flags
-  const navigationSections = getFilteredNavigationMenu();
+  // NEW: Get filtered navigation menu based on admin status
+  const navigationSections = getFilteredNavigationMenu(isSuperAdmin);
+
+  // Debug logging
+  React.useEffect(() => {
+    if (user) {
+      console.log('🔧 SIDE NAVIGATION: User loaded');
+      console.log('   User ID:', user.id);
+      console.log('   Tenant:', user.tenant.tenant_name);
+      console.log('   Tenant Code:', user.tenant.tenant_code);
+      console.log('   Is Super Admin:', isSuperAdmin);
+      console.log('   Menu Sections:', navigationSections.length);
+      console.log('   Total Menu Items:', navigationSections.reduce((sum, s) => sum + s.items.length, 0));
+    }
+  }, [user, isSuperAdmin, navigationSections]);
 
   return (
     <aside style={{
@@ -263,17 +276,39 @@ const SideNavigation: React.FC<SideNavigationProps> = ({ isOpen, onToggle }) => 
             KI
           </div>
         ) : (
-          <h2 style={{
-            margin: 0,
-            fontSize: '20px',
-            fontWeight: 'bold',
-            background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            KewalInvest
-          </h2>
+          <div>
+            <h2 style={{
+              margin: 0,
+              fontSize: '20px',
+              fontWeight: 'bold',
+              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              KewalInvest
+            </h2>
+            {/* NEW: Show admin badge if super admin */}
+            {isSuperAdmin && (
+              <div style={{
+                fontSize: '10px',
+                fontWeight: '600',
+                color: colors.semantic.warning,
+                marginTop: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: colors.semantic.warning
+                }} />
+                SUPER ADMIN
+              </div>
+            )}
+          </div>
         )}
       </div>
 

@@ -21,6 +21,7 @@ import marketRoutes from './routes/market.routes';
 import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
+import schemeAnalysisRoutes from './routes/schemeAnalysis.routes'; // NEW
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -111,6 +112,9 @@ app.get('/health', (_req: Request, res: Response) => {
       market_analysis_dashboard: true,
       market_analysis_returns: true,
       market_analysis_volatility: true,
+      scheme_analysis: true, // NEW
+      scheme_analysis_metrics: true, // NEW
+      scheme_analysis_batch: true, // NEW
       jtbd: true,
       jtbd_dashboard: true,
       goals: true,
@@ -151,6 +155,7 @@ app.get('/api', (_req: Request, res: Response) => {
       nav: '/api/nav',
       market: '/api/market',
       market_analysis: '/api/market-analysis',
+      scheme_analysis: '/api/scheme-analysis', // NEW
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences'
@@ -169,6 +174,7 @@ app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
+app.use('/api/scheme-analysis', schemeAnalysisRoutes); // NEW
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
@@ -331,6 +337,12 @@ app.use((_req: Request, res: Response) => {
       'GET /api/market-analysis/dashboard-statistics',
       'GET /api/market-analysis/index-returns',
       'GET /api/market-analysis/index-volatility/:indexId',
+      
+      // Scheme Analysis endpoints (NEW)
+      'GET /api/scheme-analysis/health',
+      'POST /api/scheme-analysis/calculate-metrics/:schemeId',
+      'GET /api/scheme-analysis/metrics/:schemeId',
+      'POST /api/scheme-analysis/batch-calculate',
       
       // JTBD endpoints
       'POST /api/jtbd',
@@ -582,6 +594,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/market-analysis/returns   ║
 ║  • GET  /api/market-analysis/volatility║
 ║                                        ║
+║  📊 Scheme Analysis:                   ║
+║  • GET  /api/scheme-analysis/health    ║
+║  • POST /api/scheme-analysis/calc/:id  ║
+║  • GET  /api/scheme-analysis/metrics/:i║
+║  • POST /api/scheme-analysis/batch-calc║
+║                                        ║
 ║  🎯 JTBD:                              ║
 ║  • POST /api/jtbd                      ║
 ║  • GET  /api/jtbd/customer/:customerId ║
@@ -673,6 +691,9 @@ app.listen(PORT, async () => {
     console.log('✅ Market analysis dashboard endpoints ready');
     console.log('✅ Market analysis returns endpoints ready');
     console.log('✅ Market analysis volatility endpoints ready');
+    console.log('✅ Scheme analysis endpoints ready'); // NEW
+    console.log('✅ Scheme analysis metrics calculation ready'); // NEW
+    console.log('✅ Scheme analysis batch processing ready'); // NEW
     console.log('✅ JTBD endpoints ready');
     console.log('✅ JTBD Dashboard endpoints ready');
     console.log('✅ Goal management endpoints ready');
@@ -760,6 +781,9 @@ app.listen(PORT, async () => {
 ║  Market Analysis Dashboard: ✅ Ready   ║
 ║  Market Analysis Returns: ✅ Ready     ║
 ║  Market Analysis Volatility: ✅ Ready  ║
+║  Scheme Analysis: ✅ Ready             ║
+║  Scheme Analysis Metrics: ✅ Ready     ║
+║  Scheme Analysis Batch: ✅ Ready       ║
 ║  JTBD: ✅ Ready                        ║
 ║  JTBD Dashboard: ✅ Ready              ║
 ║  Goals: ✅ Ready                       ║

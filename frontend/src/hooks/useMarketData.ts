@@ -2,7 +2,7 @@
 // CORRECTED VERSION - Replace entire file
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { marketService } from '../services/market.service';
+import MarketService from '../services/market.service';  // ✅ FIXED: Changed from { marketService }
 import { toastService } from '../services/toast.service';
 import { FrontendErrorLogger } from '../services/errorLogger.service';
 import type {
@@ -55,7 +55,7 @@ export const useMarketIndices = (initialParams?: GetIndicesParams): UseMarketInd
     lastParamsRef.current = params;
 
     try {
-      const response = await marketService.getAllIndices(params);
+      const response = await MarketService.getAllIndices(params);  // ✅ FIXED
       
       if (response.success && response.data) {
         setIndices(response.data.indices || []);
@@ -162,7 +162,7 @@ export const useMarketStatistics = (): UseMarketStatisticsReturn => {
     setError(null);
 
     try {
-      const response = await marketService.getStatistics();
+      const response = await MarketService.getStatistics();  // ✅ FIXED
       
       if (response.success && response.data) {
         setStatistics(response.data);
@@ -284,7 +284,7 @@ export const useMarketDownload = (
         skip_existing: true
       };
 
-      const response = await marketService.downloadHistorical(request);
+      const response = await MarketService.downloadHistorical(request);  // ✅ FIXED
       
       if (response.success && response.data) {
         toastService.success(
@@ -303,7 +303,7 @@ export const useMarketDownload = (
         // Trigger success callback (to refetch data)
         onSuccess?.();
       } else {
-        const errorMsg = marketService.parseError(response.error);
+        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
         setError(errorMsg);
         toastService.error(`Download failed: ${errorMsg}`);
 
@@ -318,7 +318,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Download historical error:', err);
-      const errorMsg = marketService.parseError(err.message);
+      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
       setError(errorMsg);
       toastService.error(`Download failed: ${errorMsg}`);
 
@@ -356,7 +356,7 @@ export const useMarketDownload = (
         index_id: indexId
       };
 
-      const response = await marketService.downloadEOD(request);
+      const response = await MarketService.downloadEOD(request);  // ✅ FIXED
       
       if (response.success && response.data) {
         toastService.success(
@@ -375,7 +375,7 @@ export const useMarketDownload = (
         // Trigger success callback
         onSuccess?.();
       } else {
-        const errorMsg = marketService.parseError(response.error);
+        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
         setError(errorMsg);
         toastService.error(`EOD download failed: ${errorMsg}`);
 
@@ -390,7 +390,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Download EOD error:', err);
-      const errorMsg = marketService.parseError(err.message);
+      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
       setError(errorMsg);
       toastService.error(`EOD download failed: ${errorMsg}`);
 
@@ -424,7 +424,7 @@ export const useMarketDownload = (
         { indexId }
       );
 
-      const response = await marketService.deleteAllData(indexId);
+      const response = await MarketService.deleteAllData(indexId);  // ✅ FIXED
       
       if (response.success && response.data) {
         const deletedCount = response.data.deleted_count || 0;
@@ -444,7 +444,7 @@ export const useMarketDownload = (
         // Trigger success callback
         onSuccess?.();
       } else {
-        const errorMsg = marketService.parseError(response.error);
+        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
         setError(errorMsg);
         toastService.error(`Delete failed: ${errorMsg}`);
 
@@ -459,7 +459,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Delete data error:', err);
-      const errorMsg = marketService.parseError(err.message);
+      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
       setError(errorMsg);
       toastService.error(`Delete failed: ${errorMsg}`);
 

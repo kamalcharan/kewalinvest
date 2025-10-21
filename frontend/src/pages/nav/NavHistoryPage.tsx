@@ -1,15 +1,22 @@
 // frontend/src/pages/nav/NavHistoryPage.tsx
-// NAV History page showing bulk download status and actions
+// UPDATED: Added bulk metrics calculation functionality
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useBookmarks, useBulkDownload } from '../../hooks/useNavData';
+import { useBookmarks, useBulkDownload, useDownloadProgress } from '../../hooks/useNavData';
+import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { BulkDownloadProgress } from '../../components/nav/BulkDownloadProgress';
+import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
+import { NavProgressModal } from '../../components/nav/NavProgressModal';
+import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
+import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
+import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
-import type { SchemeBookmark } from '../../services/nav.service';
+import type { SchemeBookmark } from '../../types/nav.types';
+import type { DownloadProgress } from '../../services/nav.service';
 
 type FilterType = 'all' | 'success' | 'failed';
 
@@ -18,20 +25,74 @@ const NavHistoryPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Hooks
+  // Refs
+  const hasInitializedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  // Hooks - NAV Downloads
   const { 
     bookmarks, 
     isLoading, 
     error, 
+    isAdminView,
     fetchBookmarks,
-    refetch 
-  } = useBookmarks({ page: 1, page_size: 1000 });
+    refetch,
+    pagination
+  } = useBookmarks({ page: 1, page_size: 100 });
 
   const bulkDownload = useBulkDownload();
+  const { startPolling, stopPolling } = useDownloadProgress();
 
-  // Local state
+  // Hooks - Metrics Calculation
+  const bulkMetrics = useBulkMetricsCalculation({
+    onComplete: (result) => {
+      FrontendErrorLogger.info(
+        'Bulk metrics calculation completed',
+        'NavHistoryPage',
+        {
+          successful: result.successful,
+          failed: result.failed,
+          total: result.total_schemes,
+        }
+      );
+      
+      // Refresh bookmarks after calculation
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          refetch();
+        }
+      }, 1000);
+    }
+  });
+
+  // Local state - Filters
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Modal state - NAV Downloads
+  const [showHistoricalModal, setShowHistoricalModal] = useState(false);
+  const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [currentProgress, setCurrentProgress] = useState<DownloadProgress | null>(null);
+
+  // Modal state - Metrics Calculation
+  const [showMetricsCalculationModal, setShowMetricsCalculationModal] = useState(false);
+  const [showMetricsPreCheckModal, setShowMetricsPreCheckModal] = useState(false);
+  const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
+
+  // Prevent multiple fetches on mount
+  useEffect(() => {
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      FrontendErrorLogger.info('NavHistoryPage initialized', 'NavHistoryPage', {});
+    }
+    
+    return () => {
+      isMountedRef.current = false;
+      stopPolling();
+      FrontendErrorLogger.info('NavHistoryPage unmounted', 'NavHistoryPage', {});
+    };
+  }, [stopPolling]);
 
   // Filter bookmarks based on active filter and search
   const filteredBookmarks = useCallback(() => {
@@ -39,13 +100,13 @@ const NavHistoryPage: React.FC = () => {
 
     // Apply status filter
     if (activeFilter === 'success') {
-  filtered = filtered.filter(b => (b.nav_records_count || 0) > 0);
-} else if (activeFilter === 'failed') {
-  filtered = filtered.filter(b => 
-    b.last_download_status === 'failed' || 
-    ((b.nav_records_count || 0) === 0)
-  );
-}
+      filtered = filtered.filter(b => (b.nav_records_count || 0) > 0);
+    } else if (activeFilter === 'failed') {
+      filtered = filtered.filter(b => 
+        b.last_download_status === 'failed' || 
+        ((b.nav_records_count || 0) === 0)
+      );
+    }
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -61,49 +122,43 @@ const NavHistoryPage: React.FC = () => {
   const displayedBookmarks = filteredBookmarks();
 
   // Calculate statistics
- const statistics = useCallback(() => {
-  const total = bookmarks.length;
-  const historyAvailable = bookmarks.filter(b => (b.nav_records_count || 0) > 0).length;
-  const failed = bookmarks.filter(b => b.last_download_status === 'failed').length;
+  const statistics = useCallback(() => {
+    const total = pagination?.total || bookmarks.length;
+    const historyAvailable = bookmarks.filter(b => (b.nav_records_count || 0) > 0).length;
+    const failed = bookmarks.filter(b => 
+      b.last_download_status === 'failed' || 
+      ((b.nav_records_count || 0) === 0)
+    ).length;
 
-  return { total, historyAvailable, failed };
-}, [bookmarks]);
+    return { total, historyAvailable, failed };
+  }, [bookmarks, pagination]);
 
   const stats = statistics();
 
-  // Handle Download All
-const handleDownloadAll = useCallback(async () => {
-  // Filter schemes that don't have historical data
-  const schemesToDownload = bookmarks.filter(b => (b.nav_records_count || 0) === 0);
+  // ==================== NAV DOWNLOAD HANDLERS ====================
 
-  if (schemesToDownload.length === 0) {
-    toastService.info('All schemes already have historical data available');
-    return;
-  }
+  // Handle Download All (current page only)
+  const handleDownloadAll = useCallback(async () => {
+    const schemesToDownload = bookmarks.filter(b => (b.nav_records_count || 0) === 0);
+
+    if (schemesToDownload.length === 0) {
+      toastService.info('All schemes on this page already have historical data');
+      return;
+    }
 
     FrontendErrorLogger.info(
-      'Starting Download All',
+      'Starting Download All (current page)',
       'NavHistoryPage',
-      { totalSchemes: schemesToDownload.length }
+      { totalSchemes: schemesToDownload.length, page: pagination?.page }
     );
 
     try {
       const result = await bulkDownload.processSchemes(schemesToDownload);
       
-      FrontendErrorLogger.info(
-        'Download All completed',
-        'NavHistoryPage',
-        {
-          totalAttempted: result.totalAttempted,
-          successful: result.successful,
-          failed: result.failed,
-          skipped: result.skipped
-        }
-      );
-
-      // Refresh bookmarks after completion
       setTimeout(() => {
-        refetch();
+        if (isMountedRef.current) {
+          refetch();
+        }
       }, 2000);
 
     } catch (error: any) {
@@ -115,41 +170,33 @@ const handleDownloadAll = useCallback(async () => {
       );
       toastService.error('Bulk download failed: ' + error.message);
     }
-  }, [bookmarks, bulkDownload, refetch]);
+  }, [bookmarks, bulkDownload, refetch, pagination]);
 
-  // Handle Retry Failed
-const handleRetryFailed = useCallback(async () => {
-  // Filter schemes with failed status
-  const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed');
+  // Handle Retry Failed (current page only)
+  const handleRetryFailed = useCallback(async () => {
+    const failedSchemes = bookmarks.filter(b => 
+      b.last_download_status === 'failed' || 
+      ((b.nav_records_count || 0) === 0)
+    );
 
-  if (failedSchemes.length === 0) {
-    toastService.info('No failed downloads to retry');
-    return;
-  }
+    if (failedSchemes.length === 0) {
+      toastService.info('No failed downloads on this page');
+      return;
+    }
 
     FrontendErrorLogger.info(
-      'Starting Retry Failed',
+      'Starting Retry Failed (current page)',
       'NavHistoryPage',
-      { totalSchemes: failedSchemes.length }
+      { totalSchemes: failedSchemes.length, page: pagination?.page }
     );
 
     try {
       const result = await bulkDownload.processSchemes(failedSchemes);
       
-      FrontendErrorLogger.info(
-        'Retry Failed completed',
-        'NavHistoryPage',
-        {
-          totalAttempted: result.totalAttempted,
-          successful: result.successful,
-          failed: result.failed,
-          skipped: result.skipped
-        }
-      );
-
-      // Refresh bookmarks after completion
       setTimeout(() => {
-        refetch();
+        if (isMountedRef.current) {
+          refetch();
+        }
       }, 2000);
 
     } catch (error: any) {
@@ -161,7 +208,162 @@ const handleRetryFailed = useCallback(async () => {
       );
       toastService.error('Retry operation failed: ' + error.message);
     }
-  }, [bookmarks, bulkDownload, refetch]);
+  }, [bookmarks, bulkDownload, refetch, pagination]);
+
+  // Handle per-scheme historical download
+  const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowHistoricalModal(true);
+    
+    FrontendErrorLogger.info(
+      'Opening Historical Download Modal',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  // Handle download started from modal
+  const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
+    FrontendErrorLogger.info(
+      'Historical download started',
+      'NavHistoryPage',
+      { jobId }
+    );
+    
+    if (!jobId || jobId <= 0) {
+      toastService.error('Invalid download job ID received');
+      return;
+    }
+
+    setShowProgressModal(true);
+    setCurrentProgress(null);
+
+    startPolling(jobId, (progressData: DownloadProgress) => {
+      setCurrentProgress(progressData);
+    }).catch((error) => {
+      FrontendErrorLogger.error(
+        'Progress polling failed',
+        'NavHistoryPage',
+        { jobId, error: error.message },
+        error.stack
+      );
+      toastService.error('Failed to track download progress: ' + error.message);
+      setShowProgressModal(false);
+    });
+  }, [startPolling]);
+
+  // Handle download completion
+  const handleDownloadComplete = useCallback(() => {
+    FrontendErrorLogger.info(
+      'Download completed - refreshing page',
+      'NavHistoryPage',
+      {}
+    );
+    
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        refetch();
+        toastService.success('NAV data updated!');
+      }
+    }, 500);
+  }, [refetch]);
+
+  // ==================== METRICS CALCULATION HANDLERS ====================
+
+  // Handle bulk metrics calculation (current page)
+  const handleBulkCalculateMetrics = useCallback(() => {
+    const schemesWithData = displayedBookmarks.filter(b => (b.nav_records_count || 0) > 0);
+
+    if (schemesWithData.length === 0) {
+      toastService.warning('No schemes with NAV data on this page. Download NAV data first.');
+      return;
+    }
+
+    FrontendErrorLogger.info(
+      'Opening Bulk Metrics Pre-Check Modal',
+      'NavHistoryPage',
+      { totalSchemes: schemesWithData.length }
+    );
+
+    // Open pre-check modal
+    setShowMetricsPreCheckModal(true);
+  }, [displayedBookmarks]);
+
+  // Handle proceed from pre-check modal
+  const handleProceedWithCalculation = useCallback(async (schemeIds: number[]) => {
+    // Close pre-check modal
+    setShowMetricsPreCheckModal(false);
+
+    FrontendErrorLogger.info(
+      'Starting bulk metrics calculation',
+      'NavHistoryPage',
+      { totalSchemes: schemeIds.length }
+    );
+
+    // Get bookmarks for selected scheme IDs
+    const schemesToProcess = bookmarks.filter(b => schemeIds.includes(b.scheme_id));
+
+    // Start bulk calculation
+    try {
+      await bulkMetrics.processBatch(schemesToProcess);
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Bulk metrics calculation failed',
+        'NavHistoryPage',
+        { error: error.message },
+        error.stack
+      );
+    }
+  }, [bookmarks, bulkMetrics]);
+
+  // Handle single scheme metrics calculation
+  const handleCalculateMetrics = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowMetricsCalculationModal(true);
+    
+    FrontendErrorLogger.info(
+      'Opening Metrics Calculation Modal',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  // Handle calculation started
+  const handleCalculationStarted = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(schemeId);
+    
+    FrontendErrorLogger.info(
+      'Metrics calculation started',
+      'NavHistoryPage',
+      { schemeId }
+    );
+  }, []);
+
+  // Handle calculation complete
+  const handleCalculationComplete = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(null);
+    
+    FrontendErrorLogger.info(
+      'Metrics calculation completed',
+      'NavHistoryPage',
+      { schemeId }
+    );
+
+    // Refresh bookmarks
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        refetch();
+      }
+    }, 500);
+  }, [refetch]);
+
+  // ==================== OTHER HANDLERS ====================
 
   // Handle Dashboard click
   const handleDashboardClick = useCallback((bookmark: SchemeBookmark) => {
@@ -181,7 +383,7 @@ const handleRetryFailed = useCallback(async () => {
   // Handle filter change
   const handleFilterChange = useCallback((filter: FilterType) => {
     setActiveFilter(filter);
-    setSearchQuery(''); // Reset search when changing filter
+    setSearchQuery('');
     
     FrontendErrorLogger.info(
       'Filter changed',
@@ -195,17 +397,45 @@ const handleRetryFailed = useCallback(async () => {
     setSearchQuery(query);
   }, []);
 
-  // Initial load
-  useEffect(() => {
+  // Handle pagination
+  const handlePageChange = useCallback((newPage: number) => {
+    if (!pagination) return;
+    
+    fetchBookmarks({ 
+      page: newPage, 
+      page_size: pagination.pageSize 
+    });
+    
     FrontendErrorLogger.info(
-      'NavHistoryPage mounted',
+      'Page changed',
       'NavHistoryPage',
-      {}
+      { newPage, pageSize: pagination.pageSize }
     );
+  }, [fetchBookmarks, pagination]);
+
+  // Modal close handlers
+  const handleCloseHistoricalModal = useCallback(() => {
+    setShowHistoricalModal(false);
+    setSelectedBookmark(null);
+  }, []);
+
+  const handleCloseProgressModal = useCallback(() => {
+    setShowProgressModal(false);
+    setCurrentProgress(null);
+    stopPolling();
+  }, [stopPolling]);
+
+  const handleCloseMetricsCalculationModal = useCallback(() => {
+    setShowMetricsCalculationModal(false);
+    setSelectedBookmark(null);
+  }, []);
+
+  const handleCloseMetricsPreCheckModal = useCallback(() => {
+    setShowMetricsPreCheckModal(false);
   }, []);
 
   // Loading state
-  if (isLoading) {
+  if (isLoading && !hasInitializedRef.current) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -279,8 +509,12 @@ const handleRetryFailed = useCallback(async () => {
     );
   }
 
- const schemesWithoutData = bookmarks.filter(b => (b.nav_records_count || 0) === 0).length;
-const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed').length;
+  const schemesWithoutData = bookmarks.filter(b => (b.nav_records_count || 0) === 0).length;
+  const failedSchemes = bookmarks.filter(b => 
+    b.last_download_status === 'failed' || 
+    ((b.nav_records_count || 0) === 0)
+  ).length;
+  const schemesWithData = bookmarks.filter(b => (b.nav_records_count || 0) > 0).length;
 
   return (
     <div style={{
@@ -292,6 +526,38 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
         maxWidth: '1400px',
         margin: '0 auto'
       }}>
+        {/* Admin View Banner */}
+        {isAdminView && (
+          <div style={{
+            backgroundColor: colors.semantic.warning + '20',
+            border: `2px solid ${colors.semantic.warning}`,
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '24px' }}>👑</div>
+            <div>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '4px'
+              }}>
+                Admin View - All Tenants
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText
+              }}>
+                You're viewing bookmarks from all tenants across the system ({pagination?.total || bookmarks.length} total)
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -315,12 +581,13 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
               color: colors.utility.secondaryText,
               margin: 0
             }}>
-              Bulk download and manage historical NAV data for all schemes
+              Bulk download NAV data and calculate financial metrics
             </p>
           </div>
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {/* NAV Download Buttons */}
             <button
               onClick={handleDownloadAll}
               disabled={bulkDownload.isProcessing || schemesWithoutData === 0}
@@ -350,7 +617,7 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
               }}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              📥 Download All ({schemesWithoutData})
+              📥 Download NAV ({schemesWithoutData})
             </button>
             
             <button
@@ -384,16 +651,50 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
             >
               🔄 Retry Failed ({failedSchemes})
             </button>
+
+            {/* NEW: Metrics Calculation Button */}
+            <button
+              onClick={handleBulkCalculateMetrics}
+              disabled={bulkMetrics.isProcessing || schemesWithData === 0}
+              style={{
+                padding: '12px 20px',
+                backgroundColor: (bulkMetrics.isProcessing || schemesWithData === 0)
+                  ? colors.utility.secondaryText
+                  : colors.semantic.success,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: (bulkMetrics.isProcessing || schemesWithData === 0)
+                  ? 'not-allowed'
+                  : 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'transform 0.2s ease',
+                opacity: (bulkMetrics.isProcessing || schemesWithData === 0) ? 0.6 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (!bulkMetrics.isProcessing && schemesWithData > 0) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              📊 Calculate Metrics ({schemesWithData})
+            </button>
           </div>
         </div>
 
         {/* Statistics Bar */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: '16px',
           marginBottom: '24px'
         }}>
+          {/* TOTAL SCHEMES */}
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
@@ -415,16 +716,26 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
               color: colors.brand.primary,
               marginBottom: '4px'
             }}>
-              {stats.total}
+              {stats.total.toLocaleString()}
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '4px'
             }}>
               Total Schemes
             </div>
+            <div style={{
+              fontSize: '12px',
+              color: colors.utility.secondaryText,
+              paddingTop: '4px',
+              borderTop: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              {bookmarks.length} on current page
+            </div>
           </div>
 
+          {/* HISTORY AVAILABLE */}
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
@@ -441,21 +752,98 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
             e.currentTarget.style.boxShadow = 'none';
           }}>
             <div style={{
-              fontSize: '32px',
+              fontSize: '28px',
               fontWeight: '700',
               color: colors.semantic.success,
-              marginBottom: '4px'
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '8px'
             }}>
-              {stats.historyAvailable}
+              <span style={{ fontSize: '20px', color: colors.utility.secondaryText }}>
+                ?
+              </span>
+              <span style={{ 
+                fontSize: '14px', 
+                fontWeight: '500',
+                color: colors.utility.secondaryText 
+              }}>
+                overall
+              </span>
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '4px'
             }}>
               History Available
             </div>
+            <div style={{
+              fontSize: '12px',
+              color: colors.semantic.success,
+              fontWeight: '600',
+              paddingTop: '4px',
+              borderTop: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              ✓ {stats.historyAvailable} on current page
+            </div>
           </div>
 
+          {/* FAILED / NO DATA */}
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '8px',
+            padding: '20px',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}>
+            <div style={{
+              fontSize: '28px',
+              fontWeight: '700',
+              color: colors.semantic.error,
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '8px'
+            }}>
+              <span style={{ fontSize: '20px', color: colors.utility.secondaryText }}>
+                ?
+              </span>
+              <span style={{ 
+                fontSize: '14px', 
+                fontWeight: '500',
+                color: colors.utility.secondaryText 
+              }}>
+                overall
+              </span>
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              marginBottom: '4px'
+            }}>
+              Failed / No Data
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: colors.semantic.error,
+              fontWeight: '600',
+              paddingTop: '4px',
+              borderTop: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              ⚠ {stats.failed} on current page
+            </div>
+          </div>
+
+          {/* PAGE NAVIGATION INFO */}
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
@@ -474,16 +862,25 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
             <div style={{
               fontSize: '32px',
               fontWeight: '700',
-              color: colors.semantic.error,
+              color: colors.brand.secondary,
               marginBottom: '4px'
             }}>
-              {stats.failed}
+              {pagination?.page || 1} / {pagination?.totalPages || 1}
             </div>
             <div style={{
               fontSize: '14px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              marginBottom: '4px'
             }}>
-              Failed Downloads
+              Current Page
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: colors.utility.secondaryText,
+              paddingTop: '4px',
+              borderTop: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              Showing {bookmarks.length} schemes
             </div>
           </div>
         </div>
@@ -524,7 +921,7 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
                   transition: 'all 0.2s ease'
                 }}
               >
-                All ({stats.total})
+                All ({bookmarks.length})
               </button>
               
               <button
@@ -570,7 +967,7 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
                   transition: 'all 0.2s ease'
                 }}
               >
-                Failed ({stats.failed})
+                Failed / No Data ({stats.failed})
               </button>
             </div>
 
@@ -653,14 +1050,86 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
                 <EnhancedBookmarkCard
                   key={bookmark.id}
                   bookmark={bookmark}
-                  mode="history"
                   onDashboardClick={handleDashboardClick}
+                  onHistoricalDownload={handleHistoricalDownload}
+                  onCalculateMetrics={handleCalculateMetrics}
                   showActions={true}
+                  isCalculating={calculatingSchemeId === bookmark.scheme_id}
                 />
               ))}
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {pagination && pagination.totalPages > 1 && (
+          <div style={{
+            marginTop: '24px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <button
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={!pagination.hasPrev || isLoading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: (pagination.hasPrev && !isLoading) 
+                  ? colors.brand.primary 
+                  : colors.utility.secondaryText,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: (pagination.hasPrev && !isLoading) ? 'pointer' : 'not-allowed',
+                fontSize: '14px',
+                fontWeight: '500',
+                opacity: (pagination.hasPrev && !isLoading) ? 1 : 0.6,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              ← Previous
+            </button>
+            
+            <span style={{ 
+              color: colors.utility.primaryText,
+              fontSize: '14px',
+              fontWeight: '500',
+              padding: '0 8px'
+            }}>
+              Page {pagination.page} of {pagination.totalPages}
+              <span style={{ 
+                color: colors.utility.secondaryText,
+                fontSize: '12px',
+                marginLeft: '8px'
+              }}>
+                ({displayedBookmarks.length} of {stats.total} schemes)
+              </span>
+            </span>
+            
+            <button
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={!pagination.hasNext || isLoading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: (pagination.hasNext && !isLoading) 
+                  ? colors.brand.primary 
+                  : colors.utility.secondaryText,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: (pagination.hasNext && !isLoading) ? 'pointer' : 'not-allowed',
+                fontSize: '14px',
+                fontWeight: '500',
+                opacity: (pagination.hasNext && !isLoading) ? 1 : 0.6,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bulk Download Progress Modal */}
@@ -670,6 +1139,60 @@ const failedSchemes = bookmarks.filter(b => b.last_download_status === 'failed')
         total={bulkDownload.progress.total}
         currentScheme={bulkDownload.progress.currentScheme}
         onCancel={bulkDownload.cancel}
+      />
+
+      {/* Historical Download Modal */}
+      <HistoricalDownloadModal
+        isOpen={showHistoricalModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseHistoricalModal}
+        onDownloadStarted={handleHistoricalDownloadStarted}
+        onShowProgress={handleHistoricalDownloadStarted}
+      />
+
+      {/* NAV Progress Modal */}
+      <NavProgressModal
+        isOpen={showProgressModal}
+        progress={currentProgress}
+        onClose={handleCloseProgressModal}
+        onComplete={handleDownloadComplete}
+        title="Downloading Historical NAV Data"
+        showCancelButton={true}
+      />
+
+      {/* NEW: Metrics Calculation Modal (Single Scheme) */}
+      <MetricsCalculationModal
+        isOpen={showMetricsCalculationModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseMetricsCalculationModal}
+        onCalculationStarted={handleCalculationStarted}
+        onCalculationComplete={handleCalculationComplete}
+      />
+
+      {/* NEW: Bulk Metrics Pre-Check Modal */}
+      <BulkMetricsPreCheckModal
+        isOpen={showMetricsPreCheckModal}
+        schemes={displayedBookmarks.filter(b => (b.nav_records_count || 0) > 0)}
+        onClose={handleCloseMetricsPreCheckModal}
+        onProceed={handleProceedWithCalculation}
+        onDownloadNavFirst={(schemes) => {
+          // Close pre-check and trigger NAV download for these schemes
+          handleCloseMetricsPreCheckModal();
+          toastService.info('Download NAV data first, then calculate metrics');
+        }}
+      />
+
+      {/* NEW: Bulk Metrics Progress Modal */}
+      <BulkMetricsProgress
+        isOpen={bulkMetrics.isProcessing}
+        current={bulkMetrics.progress.current}
+        total={bulkMetrics.progress.total}
+        successCount={bulkMetrics.progress.successCount}
+        failureCount={bulkMetrics.progress.failureCount}
+        currentScheme={bulkMetrics.progress.currentScheme}
+        errors={bulkMetrics.progress.errors}
+        onCancel={bulkMetrics.cancel}
+        onClose={() => bulkMetrics.reset()}
       />
 
       {/* CSS Animations */}

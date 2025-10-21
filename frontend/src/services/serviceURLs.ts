@@ -51,7 +51,7 @@ export const API_ENDPOINTS = {
     DELETE_ADDRESS: (customerId: number, addressId: number) => 
       `${API_BASE}/customers/${customerId}/addresses/${addressId}`,
     
-    // Bookmark endpoints (NEW)
+    // Bookmark endpoints
     BOOKMARK_REASONS: `${API_BASE}/customers/bookmark-reasons`,
     BOOKMARK: (id: number) => `${API_BASE}/customers/${id}/bookmark`,
   },
@@ -122,7 +122,7 @@ export const API_ENDPOINTS = {
     HISTORY: (id: number) => `${API_BASE}/goals/${id}/history`,
   },
   
-  // User Preferences endpoints (NEW)
+  // User Preferences endpoints
   USER_PREFERENCES: {
     // Chart preferences
     GET_ALL_CHART_PREFERENCES: `${API_BASE}/user-preferences/chart`,
@@ -159,7 +159,7 @@ export const API_ENDPOINTS = {
     BOOKMARK_STATS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/stats`,
     BOOKMARK_DOWNLOAD_STATUS: (id: number) => `${API_BASE}/nav/bookmarks/${id}/download-status`,
     
-    // Bookmark Gap Detection endpoints (NEW)
+    // Bookmark Gap Detection endpoints
     BOOKMARK_GAPS: `${API_BASE}/nav/bookmark-gaps`,
     BOOKMARK_GAPS_CUSTOMER: (customerId: number) => `${API_BASE}/nav/bookmark-gaps/customer/${customerId}`,
     BOOKMARK_GAPS_SUMMARY: `${API_BASE}/nav/bookmark-gaps/summary`,
@@ -205,7 +205,7 @@ export const API_ENDPOINTS = {
     HEALTH: `${API_BASE}/market/health`,
   },
   
-  // Market Analysis endpoints (UPDATED)
+  // Market Analysis endpoints
   MARKET_ANALYSIS: {
     HEALTH: `${API_BASE}/market-analysis/health`,
     CALCULATE_METRICS: (indexId: number) => `${API_BASE}/market-analysis/calculate-metrics/${indexId}`,
@@ -213,6 +213,14 @@ export const API_ENDPOINTS = {
     DASHBOARD_STATISTICS: `${API_BASE}/market-analysis/dashboard-statistics`,
     INDEX_RETURNS: `${API_BASE}/market-analysis/index-returns`,
     INDEX_VOLATILITY: (indexId: number) => `${API_BASE}/market-analysis/index-volatility/${indexId}`,
+  },
+  
+  // Scheme Analysis endpoints (NEW)
+  SCHEME_ANALYSIS: {
+    HEALTH: `${API_BASE}/scheme-analysis/health`,
+    CALCULATE_METRICS: (schemeId: number) => `${API_BASE}/scheme-analysis/calculate-metrics/${schemeId}`,
+    GET_METRICS: (schemeId: number) => `${API_BASE}/scheme-analysis/metrics/${schemeId}`,
+    BATCH_CALCULATE: `${API_BASE}/scheme-analysis/batch-calculate`,
   },
   
   // File management endpoints (for future sprints)
@@ -267,6 +275,7 @@ export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
 export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
+export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS; // NEW
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -475,7 +484,7 @@ export const GOAL_URLS = {
     `${API_ENDPOINTS.GOALS.HISTORY(id)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
-// User Preferences-specific URL helpers (NEW)
+// User Preferences-specific URL helpers
 export const USER_PREFERENCES_URLS = {
   getAllChartPreferences: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.USER_PREFERENCES.GET_ALL_CHART_PREFERENCES}${buildQueryParams({}, environment)}`,
@@ -515,7 +524,7 @@ export const CUSTOMER_URLS = {
   getCustomerWithAddresses: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.GET(customerId)}${buildQueryParams({}, environment)}`,
   
-  // Bookmark URL helpers (NEW)
+  // Bookmark URL helpers
   getBookmarkReasons: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.BOOKMARK_REASONS}${buildQueryParams({}, environment)}`,
   addBookmark: (customerId: number, environment?: 'live' | 'test') =>
@@ -579,7 +588,7 @@ export const NAV_URLS = {
   updateBookmarkDownloadStatus: (id: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_DOWNLOAD_STATUS(id)}${buildQueryParams({}, environment)}`,
   
-  // Bookmark Gap Detection URL helpers (NEW)
+  // Bookmark Gap Detection URL helpers
   getBookmarkGaps: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.BOOKMARK_GAPS}${buildQueryParams(params || {}, environment)}`,
   getCustomerBookmarkGaps: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
@@ -662,7 +671,7 @@ export const MARKET_URLS = {
     `${API_ENDPOINTS.MARKET.HEALTH}${buildQueryParams({}, environment)}`,
 } as const;
 
-// Market Analysis-specific URL helpers (UPDATED)
+// Market Analysis-specific URL helpers
 export const MARKET_ANALYSIS_URLS = {
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
@@ -683,6 +692,21 @@ export const MARKET_ANALYSIS_URLS = {
     `${API_ENDPOINTS.MARKET_ANALYSIS.INDEX_VOLATILITY(indexId)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
+// Scheme Analysis-specific URL helpers (NEW)
+export const SCHEME_ANALYSIS_URLS = {
+  getHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
+  
+  calculateMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.SCHEME_ANALYSIS.CALCULATE_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
+  
+  getLatestMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.SCHEME_ANALYSIS.GET_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
+  
+  batchCalculate: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
 // Development logging
 if (process.env.NODE_ENV === 'development') {
   console.log('🔗 API Base URL:', API_BASE);
@@ -700,6 +724,7 @@ if (process.env.NODE_ENV === 'development') {
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Market: Object.keys(API_ENDPOINTS.MARKET).length,
     MarketAnalysis: Object.keys(API_ENDPOINTS.MARKET_ANALYSIS).length,
+    SchemeAnalysis: Object.keys(API_ENDPOINTS.SCHEME_ANALYSIS).length, // NEW
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
@@ -756,6 +781,13 @@ if (process.env.NODE_ENV === 'development') {
     DASHBOARD_STATISTICS: API_ENDPOINTS.MARKET_ANALYSIS.DASHBOARD_STATISTICS,
     INDEX_RETURNS: API_ENDPOINTS.MARKET_ANALYSIS.INDEX_RETURNS,
     INDEX_VOLATILITY: 'GET /api/market-analysis/index-volatility/:indexId',
+  });
+  
+  console.log('📊 Scheme Analysis Endpoints:', { // NEW
+    HEALTH: API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH,
+    CALCULATE_METRICS: 'POST /api/scheme-analysis/calculate-metrics/:schemeId',
+    GET_METRICS: 'GET /api/scheme-analysis/metrics/:schemeId',
+    BATCH_CALCULATE: API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE,
   });
 }
 

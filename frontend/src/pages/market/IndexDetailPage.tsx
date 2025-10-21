@@ -21,6 +21,7 @@ import type { TimePeriod } from '../../utils/timeRangeHelper';
 import type { IndexMetrics } from '../../types/marketAnalysis.types';
 import type { ChartType, ViewMode, DisplayMode, Granularity } from '../../types/chartViewer.types';
 import ChartViewer from '../../components/visualizations/ChartViewer';
+import MetricsSidebar from '../../components/visualizations/MetricsSidebar';
 
 const IndexDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -298,7 +299,7 @@ const IndexDetailPage: React.FC = () => {
     }
   };
 
-  // Memoized latest values from time-series data
+  // Memoized latest values from time-series data for sidebar
   const latestReturns = useMemo(() => {
     if (returnsTimeSeries.length === 0) return {};
     const latest = returnsTimeSeries[returnsTimeSeries.length - 1];
@@ -323,6 +324,16 @@ const IndexDetailPage: React.FC = () => {
       volatility_90d: latest.sd_3m
     };
   }, [volatilityTimeSeries]);
+
+  // Prepare metrics for sidebar
+  const sidebarMetrics = useMemo(() => ({
+    ...latestReturns,
+    ...latestVolatility,
+    cagr: metrics?.cagr,
+    sharpe_ratio: metrics?.sharpe_ratio,
+    max_drawdown: metrics?.max_drawdown,
+    total_risk: metrics?.total_risk
+  }), [latestReturns, latestVolatility, metrics]);
 
   // Initial loading state
   if (isInitialLoading && !hasMetrics) {
@@ -352,7 +363,7 @@ const IndexDetailPage: React.FC = () => {
       backgroundColor: colors.utility.primaryBackground,
       padding: '30px'
     }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
         
         {/* Back Button */}
         <button
@@ -596,214 +607,60 @@ const IndexDetailPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* CHART SECTION - Now uses refactored ChartViewer */}
-            <ChartViewer
-              indexName={metrics?.index_name || `Index ${indexId}`}
-              indexId={indexId}
-              data={chartData}
-              isLoading={isReturnsFetching}
-              error={returnsTimeSeriesQuery.error?.message}
-              showColorPicker={true}
-              allowExport={true}
-              
-              // Parent-controlled filter states
-              chartType={chartType}
-              viewMode={viewMode}
-              displayMode={displayMode}
-              granularity={granularity}
-              timePeriod={timePeriod}
-              customStartDate={customStartDate}
-              customEndDate={customEndDate}
-              lineColor={lineColor}
-              showVolume={showVolume}
-              baselineValue={baselineValue}
-              
-              // Callbacks
-              onChartTypeChange={handleChartTypeChange}
-              onViewModeChange={handleViewModeChange}
-              onDisplayModeChange={handleDisplayModeChange}
-              onGranularityChange={handleGranularityChange}
-              onTimePeriodChange={handleTimePeriodChange}
-              onCustomDateApply={handleApplyCustomDates}
-              onColorChange={handleColorChange}
-              onVolumeToggle={handleVolumeToggle}
-              onBaselineChange={handleBaselineChange}
-            />
-
-            {/* RETURNS AND VOLATILITY - Side by Side */}
+            {/* NEW LAYOUT: 70/30 SPLIT - Chart + Sidebar */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
+              gridTemplateColumns: '70% 30%',
               gap: '24px',
-              marginTop: '24px',
               marginBottom: '24px'
             }}>
-              {/* RETURNS SECTION */}
-              <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '24px',
-                border: `1px solid ${colors.utility.primaryText}10`,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                position: 'relative'
-              }}>
-                <h2 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  margin: '0 0 20px 0'
-                }}>
-                  💹 Returns
-                </h2>
-
-                {isReturnsFetching && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '24px',
-                    right: '24px',
-                    fontSize: '12px',
-                    color: colors.brand.primary,
-                    fontWeight: '500'
-                  }}>
-                    Updating...
-                  </div>
-                )}
-
-                {returnsTimeSeries.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
-                    <p>No returns data available</p>
-                  </div>
-                ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                    gap: '12px',
-                    opacity: isReturnsFetching ? 0.5 : 1,
-                    transition: 'opacity 0.3s ease'
-                  }}>
-                    {[
-                      { key: 'return_1m', label: '1M' },
-                      { key: 'return_3m', label: '3M' },
-                      { key: 'return_6m', label: '6M' },
-                      { key: 'return_1y', label: '1Y' },
-                      { key: 'return_ytd', label: 'YTD' },
-                      { key: 'return_all', label: 'All-Time' }
-                    ].map(period => (
-                      <div
-                        key={period.key}
-                        style={{
-                          padding: '16px',
-                          backgroundColor: colors.utility.primaryBackground,
-                          borderRadius: '8px',
-                          border: `1px solid ${colors.utility.primaryText}10`,
-                          textAlign: 'center'
-                        }}
-                      >
-                        <div style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText,
-                          marginBottom: '8px',
-                          fontWeight: '500',
-                          textTransform: 'uppercase'
-                        }}>
-                          {period.label}
-                        </div>
-                        <div style={{
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          color: colors.utility.primaryText
-                        }}>
-                          {formatMetricValue((latestReturns as any)[period.key] || null)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* LEFT: CHART SECTION (70%) */}
+              <div>
+                <ChartViewer
+                  indexName={metrics?.index_name || `Index ${indexId}`}
+                  indexId={indexId}
+                  data={chartData}
+                  isLoading={isReturnsFetching}
+                  error={returnsTimeSeriesQuery.error?.message}
+                  showColorPicker={true}
+                  allowExport={true}
+                  
+                  // Parent-controlled filter states
+                  chartType={chartType}
+                  viewMode={viewMode}
+                  displayMode={displayMode}
+                  granularity={granularity}
+                  timePeriod={timePeriod}
+                  customStartDate={customStartDate}
+                  customEndDate={customEndDate}
+                  lineColor={lineColor}
+                  showVolume={showVolume}
+                  baselineValue={baselineValue}
+                  
+                  // Callbacks
+                  onChartTypeChange={handleChartTypeChange}
+                  onViewModeChange={handleViewModeChange}
+                  onDisplayModeChange={handleDisplayModeChange}
+                  onGranularityChange={handleGranularityChange}
+                  onTimePeriodChange={handleTimePeriodChange}
+                  onCustomDateApply={handleApplyCustomDates}
+                  onColorChange={handleColorChange}
+                  onVolumeToggle={handleVolumeToggle}
+                  onBaselineChange={handleBaselineChange}
+                />
               </div>
 
-              {/* VOLATILITY SECTION */}
-              <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '24px',
-                border: `1px solid ${colors.utility.primaryText}10`,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                position: 'relative'
-              }}>
-                <h2 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  margin: '0 0 20px 0'
-                }}>
-                  📉 Volatility
-                </h2>
-
-                {isVolatilityFetching && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '24px',
-                    right: '24px',
-                    fontSize: '12px',
-                    color: colors.brand.primary,
-                    fontWeight: '500'
-                  }}>
-                    Updating...
-                  </div>
-                )}
-
-                {volatilityTimeSeries.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
-                    <p>No volatility data available</p>
-                  </div>
-                ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                    gap: '12px',
-                    opacity: isVolatilityFetching ? 0.5 : 1,
-                    transition: 'opacity 0.3s ease'
-                  }}>
-                    {[
-                      { key: 'volatility_7d', label: '7D' },
-                      { key: 'volatility_14d', label: '14D' },
-                      { key: 'volatility_30d', label: '30D' },
-                      { key: 'volatility_60d', label: '60D' },
-                      { key: 'volatility_90d', label: '90D' }
-                    ].map(vol => (
-                      <div
-                        key={vol.key}
-                        style={{
-                          padding: '16px',
-                          backgroundColor: colors.utility.primaryBackground,
-                          borderRadius: '8px',
-                          border: `1px solid ${colors.utility.primaryText}10`,
-                          textAlign: 'center'
-                        }}
-                      >
-                        <div style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText,
-                          marginBottom: '8px',
-                          fontWeight: '500'
-                        }}>
-                          {vol.label} Volatility
-                        </div>
-                        <div style={{
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          color: colors.utility.primaryText
-                        }}>
-                          {formatMetricValue((latestVolatility as any)[vol.key] || null)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* RIGHT: METRICS SIDEBAR (30%) */}
+              <div>
+                <MetricsSidebar
+                  metrics={sidebarMetrics}
+                  colors={colors}
+                  isLoading={isReturnsFetching || isVolatilityFetching}
+                />
               </div>
             </div>
 
-            {/* STATISTICS TABLE */}
+            {/* DETAILED STATISTICS TABLE - Below Main Layout */}
             <div style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',

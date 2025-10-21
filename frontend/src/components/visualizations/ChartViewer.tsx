@@ -3,6 +3,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import CompactFilterToolbar from './chartViewer/filters/CompactFilterToolbar';
 import ChartRenderer from './chartViewer/charts/ChartRenderer';
 import DataTable from './chartViewer/table/DataTable';
@@ -18,6 +19,12 @@ import type {
 import type { TimePeriod } from '../../utils/timeRangeHelper';
 import { prepareChartData } from '../../utils/dataTransformers';
 import { getChartConfig } from '../../utils/chartConfig';
+import { 
+  toggleFullscreen, 
+  isFullscreen, 
+  onFullscreenChange,
+  isFullscreenSupported 
+} from '../../utils/fullscreenUtils';
 
 const ChartViewer: React.FC<ChartViewerProps> = ({
   indexName,
@@ -55,6 +62,9 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Fullscreen state
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+
   // Local state for filters (if not parent-controlled)
   const [localChartType, setLocalChartType] = useState<ChartType>('line');
   const [localViewMode, setLocalViewMode] = useState<ViewMode>('price');
@@ -79,12 +89,26 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
   const showVolume = parentShowVolume ?? localShowVolume;
   const baselineValue = parentBaselineValue ?? localBaselineValue;
 
+  // Chart element ID for export and fullscreen
+  const chartElementId = `chart-viewer-${indexId}`;
+
   // Update local line color when theme changes
   useEffect(() => {
     if (!parentLineColor) {
       setLocalLineColor(colors.brand.primary);
     }
   }, [colors.brand.primary, parentLineColor]);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+
+    const cleanup = onFullscreenChange(handleFullscreenChange);
+    
+    return cleanup;
+  }, []);
 
   // Aggregate filters for CompactFilterToolbar
   const filters: ChartFilters = useMemo(() => ({
@@ -191,17 +215,21 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
     }
   }, [onBaselineChange]);
 
-  // Export handler
-  const handleExport = useCallback(() => {
-    // Export is handled by ChartExport component
-    console.log('Export initiated');
-  }, []);
+  // Fullscreen handler
+  const handleFullscreenToggle = useCallback(async () => {
+    try {
+      await toggleFullscreen(chartElementId);
+    } catch (error: any) {
+      console.error('Fullscreen toggle failed:', error);
+    }
+  }, [chartElementId]);
 
-  // Chart element ID for export
-  const chartElementId = `chart-viewer-${indexId}`;
+  // Check if fullscreen is supported
+  const fullscreenSupported = isFullscreenSupported();
 
   return (
     <div
+      id={chartElementId}
       style={{
         backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '12px',
@@ -215,7 +243,8 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          gap: '12px'
         }}
       >
         <h3
@@ -229,14 +258,61 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
           📊 {indexName} Chart
         </h3>
 
-        {/* Export Button */}
-        {allowExport && displayMode === 'graph' && (
-          <ChartExport
-            elementId={chartElementId}
-            indexName={indexName}
-            colors={colors}
-          />
-        )}
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Fullscreen Button */}
+          {fullscreenSupported && displayMode === 'graph' && (
+            <button
+              onClick={handleFullscreenToggle}
+              title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.brand.primary;
+                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.borderColor = colors.brand.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                e.currentTarget.style.color = colors.utility.primaryText;
+                e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+              }}
+            >
+              {isFullscreenMode ? (
+                <>
+                  <Minimize2 size={16} />
+                  Exit
+                </>
+              ) : (
+                <>
+                  <Maximize2 size={16} />
+                  Fullscreen
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Export Button */}
+          {allowExport && displayMode === 'graph' && (
+            <ChartExport
+              elementId={chartElementId}
+              indexName={indexName}
+              colors={colors}
+            />
+          )}
+        </div>
       </div>
 
       {/* Filter Toolbar */}
@@ -277,7 +353,6 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
 
       {/* Content Area */}
       <div
-        id={chartElementId}
         style={{
           marginTop: '20px',
           minHeight: '400px',

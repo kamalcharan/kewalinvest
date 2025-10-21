@@ -5,7 +5,6 @@ import { hashPassword, verifyPassword } from '../utils/password.utils';
 import { createAccessToken } from '../utils/jwt.utils';
 import { authenticate } from '../middleware/auth.middleware';
 
-// Define the authenticated request interface
 interface AuthenticatedRequest extends Request {
   user?: {
     user_id: number;
@@ -16,122 +15,252 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
-// Register endpoint
-router.post('/register', async (req: Request, res: Response): Promise<Response> => {
-  const { email, password } = req.body;
-   console.log('📥 REGISTER: All headers:', req.headers);
-  console.log('📥 REGISTER: X-Tenant-ID header:', req.headers['x-tenant-id']);
+// ============================================================================
+// HELPER FUNCTIONS FOR TENANT CODE GENERATION
+// ============================================================================
 
-  // Get tenant_id from header (sent by frontend) or default to 1
-  const tenantId = req.headers['x-tenant-id'] ? 
-    parseInt(req.headers['x-tenant-id'] as string) : 1;
- console.log('📥 REGISTER: Final tenant ID being used:', tenantId);
+/**
+ * Generate tenant code: First 4 chars of business name + 4 random digits
+ * Example: "Acme Corp" -> "ACME1234"
+ */
+function generateTenantCode(businessName: string): string {
+  // Get first 4 characters (uppercase, remove spaces and special chars)
+  const prefix = businessName
+    .replace(/[^a-zA-Z0-9]/g, '') // Remove special chars
+    .toUpperCase()
+    .slice(0, 4)
+    .padEnd(4, 'X'); // Pad with X if less than 4 chars
+  
+  // Generate 4 random digits
+  const randomDigits = Math.floor(1000 + Math.random() * 9000);
+  
+  return `${prefix}${randomDigits}`;
+}
+
+/**
+ * Check if tenant_code already exists
+ */
+async function isTenantCodeUnique(tenantCode: string): Promise<boolean> {
+  const result = await pool.query(
+    'SELECT id FROM t_tenants WHERE tenant_code = $1',
+    [tenantCode]
+  );
+  return result.rows.length === 0;
+}
+
+/**
+ * Generate unique tenant code with retry logic
+ */
+async function generateUniqueTenantCode(businessName: string): Promise<string> {
+  let attempts = 0;
+  let tenantCode: string;
+  
+  do {
+    tenantCode = generateTenantCode(businessName);
+    attempts++;
+    
+    if (await isTenantCodeUnique(tenantCode)) {
+      return tenantCode;
+    }
+    
+    // If we've tried 5 times, append timestamp to ensure uniqueness
+    if (attempts >= 5) {
+      const timestamp = Date.now().toString().slice(-4);
+      tenantCode = `${tenantCode.slice(0, 4)}${timestamp}`;
+      return tenantCode;
+    }
+  } while (attempts < 10);
+  
+  throw new Error('Failed to generate unique tenant code');
+}
+
+// ============================================================================
+// REGISTER ENDPOINT - CREATES TENANT + USER
+// ============================================================================
+
+router.post('/register', async (req: Request, res: Response): Promise<Response> => {
+  const { email, password, business_name } = req.body;
+  console.log('📝 REGISTER: Request received:', { email, business_name: business_name ? '***' : 'missing' });
+  
+  const client = await pool.connect();
+  
   try {
-    // Validate input
-    if (!email || !password) {
+    // ========== VALIDATION ==========
+    if (!email || !password || !business_name) {
+      console.log('❌ REGISTER: Missing required fields');
       return res.status(400).json({ 
-        detail: 'Email and password are required' 
+        detail: 'Email, password, and business name are required' 
       });
     }
 
     if (password.length < 6) {
+      console.log('❌ REGISTER: Password too short');
       return res.status(400).json({ 
         detail: 'Password must be at least 6 characters long' 
       });
     }
 
-    // Hash password
-    const password_hash = await hashPassword(password);
-
-    // Start transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Check if user already exists for this tenant
-      const existingUser = await client.query(
-        'SELECT id FROM t_users WHERE email = $1 AND tenant_id = $2',
-        [email, tenantId]
-      );
-
-      if (existingUser.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ 
-          detail: 'User with this email already exists' 
-        });
-      }
-
-      // Create new user with specified tenant_id
-      const result = await client.query(
-        `INSERT INTO t_users (
-          tenant_id, email, password_hash, 
-          is_active, theme_preference, environment_preference, is_live
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7) 
-        RETURNING id, tenant_id, email, is_active, theme_preference, 
-                  environment_preference, created_at`,
-        [tenantId, email, password_hash, true, 'techy-simple', 'live', true]
-      );
-
-      await client.query('COMMIT');
-      const user = result.rows[0];
-
-      // Create JWT token
-      const access_token = createAccessToken({
-        user_id: user.id,
-        tenant_id: user.tenant_id,
-        email: user.email
+    if (business_name.trim().length < 2) {
+      console.log('❌ REGISTER: Business name too short');
+      return res.status(400).json({ 
+        detail: 'Business name must be at least 2 characters long' 
       });
-
-      // Return response matching Python format
-      return res.status(201).json({
-        access_token,
-        token_type: 'bearer',
-        user: {
-          id: user.id,
-          tenant_id: user.tenant_id,
-          email: user.email,
-          is_active: user.is_active,
-          theme_preference: user.theme_preference,
-          environment_preference: user.environment_preference,
-          created_at: user.created_at
-        }
-      });
-
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
 
+    // ========== START TRANSACTION ==========
+    await client.query('BEGIN');
+    console.log('🔄 REGISTER: Transaction started');
+
+    // ========== CHECK IF EMAIL EXISTS ==========
+    const existingUser = await client.query(
+      'SELECT id, email, tenant_id FROM t_users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
+      console.log('❌ REGISTER: Email already exists');
+      return res.status(400).json({ 
+        detail: 'User with this email already exists' 
+      });
+    }
+
+    // ========== GENERATE UNIQUE TENANT CODE ==========
+    console.log('🔑 REGISTER: Generating tenant code for:', business_name);
+    const tenantCode = await generateUniqueTenantCode(business_name);
+    console.log('✅ REGISTER: Generated tenant code:', tenantCode);
+
+    // ========== CREATE TENANT WITH SUBSCRIPTION ==========
+    const subscriptionSettings = {
+      subscription_start_date: new Date().toISOString().split('T')[0], // Today
+      subscription_end_date: '2026-01-20' // Hardcoded end date
+    };
+
+    console.log('🏢 REGISTER: Creating tenant...');
+    const tenantResult = await client.query(
+      `INSERT INTO t_tenants (
+        tenant_code, 
+        tenant_name, 
+        is_active, 
+        is_admin,
+        subscription_plan,
+        settings,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) 
+      RETURNING id, tenant_code, tenant_name, is_active, is_admin, subscription_plan, settings, created_at`,
+      [tenantCode, business_name.trim(), true, false, 'basic', JSON.stringify(subscriptionSettings)]
+    );
+
+    const tenant = tenantResult.rows[0];
+    console.log('✅ REGISTER: Tenant created with ID:', tenant.id);
+
+    // ========== CREATE USER ==========
+    const password_hash = await hashPassword(password);
+
+    console.log('👤 REGISTER: Creating user...');
+    const userResult = await client.query(
+      `INSERT INTO t_users (
+        tenant_id, 
+        email, 
+        password_hash, 
+        is_active, 
+        theme_preference, 
+        environment_preference, 
+        is_live,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) 
+      RETURNING id, tenant_id, email, is_active, theme_preference, 
+                environment_preference, created_at`,
+      [tenant.id, email, password_hash, true, 'techy-simple', 'live', true]
+    );
+
+    const user = userResult.rows[0];
+    console.log('✅ REGISTER: User created with ID:', user.id);
+
+    // ========== COMMIT TRANSACTION ==========
+    await client.query('COMMIT');
+    console.log('✅ REGISTER: Transaction committed successfully');
+
+    // ========== CREATE JWT TOKEN ==========
+    const access_token = createAccessToken({
+      user_id: user.id,
+      tenant_id: user.tenant_id,
+      email: user.email
+    });
+
+    console.log('🎫 REGISTER: JWT token created');
+
+    // ========== RETURN RESPONSE WITH TENANT INFO ==========
+    return res.status(201).json({
+      access_token,
+      token_type: 'bearer',
+      user: {
+        id: user.id,
+        tenant_id: user.tenant_id,
+        email: user.email,
+        is_active: user.is_active,
+        theme_preference: user.theme_preference,
+        environment_preference: user.environment_preference,
+        created_at: user.created_at,
+        tenant: {
+          id: tenant.id,
+          tenant_code: tenant.tenant_code,
+          tenant_name: tenant.tenant_name,
+          is_admin: tenant.is_admin,
+          subscription_plan: tenant.subscription_plan,
+          settings: tenant.settings
+        }
+      }
+    });
+
   } catch (error: any) {
-    console.error('Registration error:', error);
+    await client.query('ROLLBACK');
+    console.error('❌ REGISTER: Error occurred:', error);
     return res.status(500).json({ 
       detail: `Registration failed: ${error.message}` 
     });
+  } finally {
+    client.release();
   }
 });
 
-// Login endpoint
+// ============================================================================
+// LOGIN ENDPOINT - UPDATED TO RETURN TENANT INFO
+// ============================================================================
+
 router.post('/login', async (req: Request, res: Response): Promise<Response> => {
   const { email, password } = req.body;
+  console.log('🔐 LOGIN: Request received for:', email);
 
   try {
-    // Validate input
+    // ========== VALIDATION ==========
     if (!email || !password) {
+      console.log('❌ LOGIN: Missing credentials');
       return res.status(400).json({ 
         detail: 'Email and password are required' 
       });
     }
 
-    // Get user by email
+    // ========== GET USER WITH TENANT INFO ==========
+    console.log('🔍 LOGIN: Fetching user with tenant info...');
     const result = await pool.query(
-      `SELECT * FROM t_users 
-       WHERE email = $1 AND is_active = true`,
+      `SELECT 
+        u.*, 
+        t.tenant_code,
+        t.tenant_name,
+        t.is_admin as tenant_is_admin,
+        t.subscription_plan,
+        t.settings as tenant_settings
+       FROM t_users u
+       JOIN t_tenants t ON t.id = u.tenant_id
+       WHERE u.email = $1 AND u.is_active = true AND t.is_active = true`,
       [email]
     );
 
     if (result.rows.length === 0) {
+      console.log('❌ LOGIN: User not found or inactive');
       return res.status(401).json({ 
         detail: 'Invalid email or password',
         headers: { 'WWW-Authenticate': 'Bearer' }
@@ -139,24 +268,30 @@ router.post('/login', async (req: Request, res: Response): Promise<Response> => 
     }
 
     const user = result.rows[0];
+    console.log('✅ LOGIN: User found:', user.id, '| Tenant:', user.tenant_id);
 
-    // Verify password
+    // ========== VERIFY PASSWORD ==========
     const isValidPassword = await verifyPassword(password, user.password_hash);
     if (!isValidPassword) {
+      console.log('❌ LOGIN: Invalid password');
       return res.status(401).json({ 
         detail: 'Invalid email or password',
         headers: { 'WWW-Authenticate': 'Bearer' }
       });
     }
 
-    // Create JWT token
+    console.log('✅ LOGIN: Password verified');
+
+    // ========== CREATE JWT TOKEN ==========
     const access_token = createAccessToken({
       user_id: user.id,
       tenant_id: user.tenant_id,
       email: user.email
     });
 
-    // Return response matching Python format
+    console.log('🎫 LOGIN: JWT token created');
+
+    // ========== RETURN RESPONSE WITH TENANT INFO ==========
     return res.json({
       access_token,
       token_type: 'bearer',
@@ -167,39 +302,67 @@ router.post('/login', async (req: Request, res: Response): Promise<Response> => 
         is_active: user.is_active,
         theme_preference: user.theme_preference,
         environment_preference: user.environment_preference,
-        created_at: user.created_at
+        created_at: user.created_at,
+        tenant: {
+          id: user.tenant_id,
+          tenant_code: user.tenant_code,
+          tenant_name: user.tenant_name,
+          is_admin: user.tenant_is_admin,
+          subscription_plan: user.subscription_plan,
+          settings: user.tenant_settings
+        }
       }
     });
 
   } catch (error: any) {
-    console.error('Login error:', error);
+    console.error('❌ LOGIN: Error occurred:', error);
     return res.status(500).json({ 
       detail: `Login failed: ${error.message}` 
     });
   }
 });
 
-// Get current user endpoint
+// ============================================================================
+// GET CURRENT USER - UPDATED TO RETURN TENANT INFO
+// ============================================================================
+
 router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   try {
     const userId = req.user?.user_id;
     const tenantId = req.user?.tenant_id;
 
+    console.log('👤 ME: Fetching user info for ID:', userId);
+
     const result = await pool.query(
-      `SELECT id, tenant_id, email, is_active, theme_preference, 
-              environment_preference, created_at 
-       FROM t_users 
-       WHERE id = $1 AND tenant_id = $2`,
+      `SELECT 
+        u.id, 
+        u.tenant_id, 
+        u.email, 
+        u.is_active, 
+        u.theme_preference, 
+        u.environment_preference, 
+        u.created_at,
+        t.tenant_code,
+        t.tenant_name,
+        t.is_admin as tenant_is_admin,
+        t.subscription_plan,
+        t.settings as tenant_settings
+       FROM t_users u
+       JOIN t_tenants t ON t.id = u.tenant_id
+       WHERE u.id = $1 AND u.tenant_id = $2`,
       [userId, tenantId]
     );
 
     if (result.rows.length === 0) {
+      console.log('❌ ME: User not found');
       return res.status(404).json({ 
         detail: 'User not found' 
       });
     }
 
     const user = result.rows[0];
+    console.log('✅ ME: User info retrieved');
+
     return res.json({
       id: user.id,
       tenant_id: user.tenant_id,
@@ -207,16 +370,28 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response)
       is_active: user.is_active,
       theme_preference: user.theme_preference,
       environment_preference: user.environment_preference,
-      created_at: user.created_at
+      created_at: user.created_at,
+      tenant: {
+        id: user.tenant_id,
+        tenant_code: user.tenant_code,
+        tenant_name: user.tenant_name,
+        is_admin: user.tenant_is_admin,
+        subscription_plan: user.subscription_plan,
+        settings: user.tenant_settings
+      }
     });
 
   } catch (error: any) {
-    console.error('Get user error:', error);
+    console.error('❌ ME: Error occurred:', error);
     return res.status(500).json({ 
       detail: `Failed to get user info: ${error.message}` 
     });
   }
 });
+
+// ============================================================================
+// OTHER ENDPOINTS (UNCHANGED)
+// ============================================================================
 
 // Change password endpoint
 router.patch('/change-password', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<Response> => {

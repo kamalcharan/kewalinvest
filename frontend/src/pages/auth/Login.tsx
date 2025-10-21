@@ -1,47 +1,49 @@
 // frontend/src/pages/auth/Login.tsx
 import React, { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import toastService from '../../services/toast.service';
+import authService from '../../services/auth.service';
 import { ButtonLoader } from '../../components/common/Loader';
+import SubscriptionExpiredModal from '../../components/auth/SubscriptionExpiredModal'; // NEW IMPORT
+
+interface LoginFormData {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+}
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, user } = useAuth(); // Added 'user' for modal
   const { theme, isDarkMode } = useTheme();
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LoginFormData>({
     email: '',
-    password: ''
+    password: '',
+    rememberMe: false
   });
+  
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showExpiryModal, setShowExpiryModal] = useState(false); // NEW STATE
+
+  // Get the page user was trying to access before login
+  const from = (location.state as any)?.from?.pathname || '/dashboard';
 
   // Get theme colors
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Get return URL from location state
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.email || !formData.password) {
       toastService.warning('Please enter both email and password');
       return;
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       toastService.error('Please enter a valid email address');
@@ -51,17 +53,64 @@ const Login: React.FC = () => {
     setIsLoading(true);
     
     try {
+      console.log('🔐 LOGIN PAGE: Attempting login...');
+      
       await login(formData);
-      toastService.success('Login successful! Redirecting to dashboard...');
-      setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 1500);
+      
+      console.log('✅ LOGIN PAGE: Login successful');
+      toastService.success('Login successful!');
+      
+      // ========== CHECK SUBSCRIPTION STATUS AFTER LOGIN ==========
+      const currentUser = authService.getStoredUser();
+      
+      if (currentUser?.tenant?.settings?.subscription_end_date) {
+        const endDate = new Date(currentUser.tenant.settings.subscription_end_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        console.log('📅 LOGIN PAGE: Checking subscription...');
+        console.log('   End Date:', endDate.toISOString());
+        console.log('   Today:', today.toISOString());
+        
+        if (endDate < today) {
+          // Subscription expired - show modal
+          console.log('⚠️ LOGIN PAGE: Subscription expired, showing modal');
+          setShowExpiryModal(true);
+          
+          // Still navigate to dashboard after a delay (allow user to see modal)
+          setTimeout(() => {
+            console.log('🔄 LOGIN PAGE: Navigating to dashboard...');
+            navigate(from, { replace: true });
+          }, 2000);
+        } else {
+          // Subscription active - navigate immediately
+          const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          console.log(`✅ LOGIN PAGE: Subscription active (${daysRemaining} days remaining)`);
+          
+          setTimeout(() => {
+            navigate(from, { replace: true });
+          }, 1500);
+        }
+      } else {
+        // No subscription info - navigate normally
+        console.log('ℹ️ LOGIN PAGE: No subscription info found');
+        setTimeout(() => {
+          navigate(from, { replace: true });
+        }, 1500);
+      }
+      
     } catch (err: any) {
+      console.error('❌ LOGIN PAGE: Login failed:', err);
+      
       const errorMessage = err.message || 'Invalid email or password';
       toastService.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInputChange = (field: keyof LoginFormData, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   // Icons
@@ -100,10 +149,24 @@ const Login: React.FC = () => {
     </svg>
   );
 
+  const LogInIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <polyline points="10 17 15 12 10 7" />
+      <line x1="15" y1="12" x2="3" y2="12" />
+    </svg>
+  );
+
   const ArrowRightIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="12 5 19 12 12 19" />
+    </svg>
+  );
+
+  const ShieldIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 
@@ -146,7 +209,7 @@ const Login: React.FC = () => {
         zIndex: 10
       }}>
         
-        {/* Left Side - Branding & Features */}
+        {/* Left Side - Branding */}
         <div style={{
           display: window.innerWidth >= 1024 ? 'block' : 'none'
         }}>
@@ -192,82 +255,23 @@ const Login: React.FC = () => {
             </Link>
           </div>
 
-          {/* Value Proposition */}
+          {/* Welcome Message */}
           <div>
             <h2 style={{
               fontSize: '24px',
               fontWeight: '600',
               color: colors.utility.primaryText,
-              marginBottom: '24px'
+              marginBottom: '16px'
             }}>
-              Welcome back to your financial hub
+              Welcome back!
             </h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {[
-                { title: 'Smart Portfolio Management', desc: 'AI-powered insights for your financial portfolio', color: colors.semantic.success },
-                { title: 'Real-time Analytics', desc: 'Live market data and performance tracking', color: colors.brand.primary },
-                { title: 'Personalized Recommendations', desc: 'Tailored investment strategies for your goals', color: colors.brand.tertiary }
-              ].map((item, index) => (
-                <div key={index} style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: `${item.color}20`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    marginTop: '2px'
-                  }}>
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      backgroundColor: item.color
-                    }} />
-                  </div>
-                  <div>
-                    <h3 style={{
-                      fontWeight: '500',
-                      color: colors.utility.primaryText,
-                      margin: '0 0 4px 0'
-                    }}>
-                      {item.title}
-                    </h3>
-                    <p style={{
-                      fontSize: '14px',
-                      color: colors.utility.secondaryText,
-                      margin: 0
-                    }}>
-                      {item.desc}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Free Trial Banner */}
-            <div style={{
-              marginTop: '24px',
-              padding: '16px',
-              borderRadius: '8px',
-              border: `1px solid ${colors.semantic.success}40`,
-              background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`
+            <p style={{
+              fontSize: '16px',
+              color: colors.utility.secondaryText,
+              lineHeight: '1.6'
             }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: colors.semantic.success
-              }}>
-                <TrendingUpIcon />
-                <span style={{ fontSize: '14px', fontWeight: '500' }}>
-                  Start your financial journey today!
-                </span>
-              </div>
-            </div>
+              Sign in to access your portfolio, track investments, and manage your financial goals with our comprehensive platform.
+            </p>
           </div>
         </div>
 
@@ -330,14 +334,19 @@ const Login: React.FC = () => {
                 fontSize: '24px',
                 fontWeight: 'bold',
                 marginBottom: '8px',
-                color: colors.utility.primaryText
+                color: colors.utility.primaryText,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
               }}>
-                Welcome Back
+                <LogInIcon />
+                <span>Sign In</span>
               </h2>
               <p style={{
                 color: colors.utility.secondaryText
               }}>
-                Sign in to your financial dashboard
+                Access your investment dashboard
               </p>
             </div>
 
@@ -370,7 +379,7 @@ const Login: React.FC = () => {
                     autoComplete="email"
                     required
                     value={formData.email}
-                    onChange={handleChange}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
                     disabled={isLoading}
                     placeholder="Enter your email"
                     style={{
@@ -428,7 +437,7 @@ const Login: React.FC = () => {
                     autoComplete="current-password"
                     required
                     value={formData.password}
-                    onChange={handleChange}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
                     disabled={isLoading}
                     placeholder="Enter your password"
                     style={{
@@ -478,22 +487,59 @@ const Login: React.FC = () => {
                 </div>
               </div>
 
-              {/* Forgot Password */}
-              <div style={{ textAlign: 'right', marginBottom: '24px' }}>
-                <Link
-                  to="/forgot-password"
+              {/* Remember Me & Forgot Password */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '24px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    id="rememberMe"
+                    name="rememberMe"
+                    type="checkbox"
+                    checked={formData.rememberMe}
+                    onChange={(e) => handleInputChange('rememberMe', e.target.checked)}
+                    disabled={isLoading}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '4px',
+                      accentColor: colors.brand.primary,
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <label 
+                    htmlFor="rememberMe"
+                    style={{
+                      fontSize: '14px',
+                      color: colors.utility.primaryText,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Remember me
+                  </label>
+                </div>
+                <button
+                  type="button"
                   style={{
                     fontSize: '14px',
                     fontWeight: '500',
                     color: colors.brand.primary,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
                     textDecoration: 'none',
-                    transition: 'opacity 0.2s'
+                    padding: 0
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+                  onClick={() => {
+                    // Handle forgot password
+                    toastService.info('Forgot password feature coming soon!');
+                  }}
                 >
                   Forgot password?
-                </Link>
+                </button>
               </div>
 
               {/* Sign In Button */}
@@ -535,6 +581,7 @@ const Login: React.FC = () => {
                   </>
                 ) : (
                   <>
+                    <LogInIcon />
                     <span>Sign In</span>
                     <ArrowRightIcon />
                   </>
@@ -542,7 +589,7 @@ const Login: React.FC = () => {
               </button>
             </form>
 
-            {/* Sign Up Link */}
+            {/* Create Account Link */}
             <div style={{ marginTop: '32px', textAlign: 'center' }}>
               <p style={{
                 fontSize: '14px',
@@ -560,7 +607,7 @@ const Login: React.FC = () => {
                   onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
                 >
-                  Start your free account
+                  Create one now
                 </Link>
               </p>
             </div>
@@ -576,14 +623,23 @@ const Login: React.FC = () => {
               gap: '4px',
               color: colors.utility.secondaryText
             }}>
-              <TrendingUpIcon />
-              <span>Your financial data is secured with enterprise-grade encryption</span>
+              <ShieldIcon />
+              <span>Secured with 256-bit encryption</span>
             </p>
           </div>
         </div>
       </div>
+
+      {/* ========== SUBSCRIPTION EXPIRY MODAL - NEW ========== */}
+      <SubscriptionExpiredModal
+        isOpen={showExpiryModal}
+        onClose={() => setShowExpiryModal(false)}
+        subscriptionEndDate={user?.tenant?.settings?.subscription_end_date || ''}
+        businessName={user?.tenant?.tenant_name || 'Your Business'}
+      />
     </div>
   );
 };
 
 export default Login;
+

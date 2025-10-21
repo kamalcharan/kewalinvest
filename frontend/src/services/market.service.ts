@@ -1,6 +1,7 @@
 // frontend/src/services/market.service.ts
 // Complete API service for Market Data operations
 
+import apiService from './api.service';
 import {
   MarketIndex,
   MarketDataRecord,
@@ -19,71 +20,13 @@ import {
 
 // ==================== BASE CONFIGURATION ====================
 
-class MarketService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-  }
-
+export class MarketService {
   // ==================== HELPER METHODS ====================
-
-  /**
-   * Generic fetch wrapper with error handling
-   */
-  private async fetchApi<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    try {
-      const url = `${this.baseUrl}${endpoint}`;
-      
-      const defaultHeaders: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...defaultHeaders,
-          ...options.headers,
-        },
-      });
-
-      // Parse response
-      const data = await response.json();
-
-      // Handle non-2xx responses
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || data.message || `HTTP ${response.status}: ${response.statusText}`,
-          data: undefined
-        };
-      }
-
-      // Success response
-      return {
-        success: data.success !== false,
-        data: data.data || data,
-        message: data.message
-      };
-
-    } catch (error: any) {
-      console.error(`API Error [${endpoint}]:`, error);
-      
-      return {
-        success: false,
-        error: error.message || 'Network error occurred',
-        data: undefined
-      };
-    }
-  }
 
   /**
    * Build query string from params
    */
-  private buildQueryString(params: Record<string, any>): string {
+  private static buildQueryString(params: Record<string, any>): string {
     const filtered = Object.entries(params)
       .filter(([_, value]) => value !== undefined && value !== null && value !== '')
       .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
@@ -98,17 +41,38 @@ class MarketService {
    * Get all market indices with filtering and pagination
    * GET /api/market/indices
    */
-  async getAllIndices(params?: GetIndicesParams): Promise<ApiResponse<GetIndicesResponse>> {
-    const queryString = params ? this.buildQueryString(params) : '';
-    return this.fetchApi<GetIndicesResponse>(`/api/market/indices${queryString}`);
+  static async getAllIndices(params?: GetIndicesParams): Promise<ApiResponse<GetIndicesResponse>> {
+    try {
+      const queryString = params ? this.buildQueryString(params) : '';
+      const endpoint = `/market/indices${queryString}`;
+      
+      return await apiService.get<ApiResponse<GetIndicesResponse>>(endpoint);
+    } catch (error: any) {
+      console.error('Error fetching indices:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch indices',
+        data: undefined
+      };
+    }
   }
 
   /**
    * Get specific index by ID
    * GET /api/market/indices/:id
    */
-  async getIndexById(indexId: number): Promise<ApiResponse<MarketIndex>> {
-    return this.fetchApi<MarketIndex>(`/api/market/indices/${indexId}`);
+  static async getIndexById(indexId: number): Promise<ApiResponse<MarketIndex>> {
+    try {
+      const endpoint = `/market/indices/${indexId}`;
+      return await apiService.get<ApiResponse<MarketIndex>>(endpoint);
+    } catch (error: any) {
+      console.error('Error fetching index:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch index',
+        data: undefined
+      };
+    }
   }
 
   // ==================== DATA OPERATIONS ====================
@@ -117,30 +81,59 @@ class MarketService {
    * Get market data for an index with optional date range filtering
    * GET /api/market/data/:indexId
    */
-  async getMarketData(
+  static async getMarketData(
     indexId: number,
     params?: GetMarketDataParams
   ): Promise<ApiResponse<GetMarketDataResponse>> {
-    const queryString = params ? this.buildQueryString(params) : '';
-    return this.fetchApi<GetMarketDataResponse>(`/api/market/data/${indexId}${queryString}`);
+    try {
+      const queryString = params ? this.buildQueryString(params) : '';
+      const endpoint = `/market/data/${indexId}${queryString}`;
+      
+      return await apiService.get<ApiResponse<GetMarketDataResponse>>(endpoint);
+    } catch (error: any) {
+      console.error('Error fetching market data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch market data',
+        data: undefined
+      };
+    }
   }
 
   /**
    * Get latest market data for an index
    * GET /api/market/data/:indexId/latest
    */
-  async getLatestData(indexId: number): Promise<ApiResponse<MarketDataRecord>> {
-    return this.fetchApi<MarketDataRecord>(`/api/market/data/${indexId}/latest`);
+  static async getLatestData(indexId: number): Promise<ApiResponse<MarketDataRecord>> {
+    try {
+      const endpoint = `/market/data/${indexId}/latest`;
+      return await apiService.get<ApiResponse<MarketDataRecord>>(endpoint);
+    } catch (error: any) {
+      console.error('Error fetching latest data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch latest data',
+        data: undefined
+      };
+    }
   }
 
   /**
    * Delete all data for an index
    * DELETE /api/market/data/:indexId
    */
-  async deleteAllData(indexId: number): Promise<ApiResponse<DeleteDataResponse>> {
-    return this.fetchApi<DeleteDataResponse>(`/api/market/data/${indexId}`, {
-      method: 'DELETE'
-    });
+  static async deleteAllData(indexId: number): Promise<ApiResponse<DeleteDataResponse>> {
+    try {
+      const endpoint = `/market/data/${indexId}`;
+      return await apiService.delete<ApiResponse<DeleteDataResponse>>(endpoint);
+    } catch (error: any) {
+      console.error('Error deleting data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to delete data',
+        data: undefined
+      };
+    }
   }
 
   // ==================== DOWNLOAD OPERATIONS ====================
@@ -149,36 +142,58 @@ class MarketService {
    * Trigger historical data download (20 years)
    * POST /api/market/download/historical
    */
-  async downloadHistorical(
+  static async downloadHistorical(
     request: DownloadHistoricalRequest
   ): Promise<ApiResponse<DownloadJobResponse>> {
-    return this.fetchApi<DownloadJobResponse>('/api/market/download/historical', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    try {
+      const endpoint = '/market/download/historical';
+      return await apiService.post<ApiResponse<DownloadJobResponse>>(endpoint, request);
+    } catch (error: any) {
+      console.error('Error downloading historical data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to download historical data',
+        data: undefined
+      };
+    }
   }
 
   /**
    * Trigger EOD (End of Day) download for a specific index
    * POST /api/market/download/eod
    */
-  async downloadEOD(
+  static async downloadEOD(
     request: DownloadEODRequest
   ): Promise<ApiResponse<DownloadJobResponse>> {
-    return this.fetchApi<DownloadJobResponse>('/api/market/download/eod', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    try {
+      const endpoint = '/market/download/eod';
+      return await apiService.post<ApiResponse<DownloadJobResponse>>(endpoint, request);
+    } catch (error: any) {
+      console.error('Error downloading EOD data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to download EOD data',
+        data: undefined
+      };
+    }
   }
 
   /**
    * Trigger EOD download for all indices (scheduler endpoint)
    * POST /api/market/download/eod-all
    */
-  async downloadEODAll(): Promise<ApiResponse<DownloadJobResponse>> {
-    return this.fetchApi<DownloadJobResponse>('/api/market/download/eod-all', {
-      method: 'POST'
-    });
+  static async downloadEODAll(): Promise<ApiResponse<DownloadJobResponse>> {
+    try {
+      const endpoint = '/market/download/eod-all';
+      return await apiService.post<ApiResponse<DownloadJobResponse>>(endpoint);
+    } catch (error: any) {
+      console.error('Error downloading EOD for all indices:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to download EOD for all indices',
+        data: undefined
+      };
+    }
   }
 
   // ==================== STATISTICS ====================
@@ -187,8 +202,18 @@ class MarketService {
    * Get market data statistics
    * GET /api/market/statistics
    */
-  async getStatistics(): Promise<ApiResponse<MarketStatistics>> {
-    return this.fetchApi<MarketStatistics>('/api/market/statistics');
+  static async getStatistics(): Promise<ApiResponse<MarketStatistics>> {
+    try {
+      const endpoint = '/market/statistics';
+      return await apiService.get<ApiResponse<MarketStatistics>>(endpoint);
+    } catch (error: any) {
+      console.error('Error fetching statistics:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch statistics',
+        data: undefined
+      };
+    }
   }
 
   // ==================== HEALTH CHECK ====================
@@ -197,8 +222,18 @@ class MarketService {
    * Health check and Yahoo Finance connection test
    * GET /api/market/health
    */
-  async healthCheck(): Promise<ApiResponse<HealthCheckResponse>> {
-    return this.fetchApi<HealthCheckResponse>('/api/market/health');
+  static async healthCheck(): Promise<ApiResponse<HealthCheckResponse>> {
+    try {
+      const endpoint = '/market/health';
+      return await apiService.get<ApiResponse<HealthCheckResponse>>(endpoint);
+    } catch (error: any) {
+      console.error('Error checking health:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to check health',
+        data: undefined
+      };
+    }
   }
 
   // ==================== UTILITY METHODS ====================
@@ -206,7 +241,7 @@ class MarketService {
   /**
    * Test if API is reachable
    */
-  async testConnection(): Promise<boolean> {
+  static async testConnection(): Promise<boolean> {
     try {
       const result = await this.healthCheck();
       return result.success && result.data?.yahoo_finance_connection === 'ok';
@@ -218,7 +253,7 @@ class MarketService {
   /**
    * Get data for a specific date range (convenience method)
    */
-  async getDataRange(
+  static async getDataRange(
     indexId: number,
     startDate: string,
     endDate: string,
@@ -235,7 +270,7 @@ class MarketService {
   /**
    * Download last 20 years of data (convenience method)
    */
-  async downloadLast20Years(indexId: number): Promise<ApiResponse<DownloadJobResponse>> {
+  static async downloadLast20Years(indexId: number): Promise<ApiResponse<DownloadJobResponse>> {
     const today = new Date();
     const twentyYearsAgo = new Date(today);
     twentyYearsAgo.setFullYear(today.getFullYear() - 20);
@@ -251,7 +286,7 @@ class MarketService {
   /**
    * Check if index has any data
    */
-  async hasData(indexId: number): Promise<boolean> {
+  static async hasData(indexId: number): Promise<boolean> {
     try {
       const index = await this.getIndexById(indexId);
       return index.success && index.data?.historical_data_available === true;
@@ -263,7 +298,7 @@ class MarketService {
   /**
    * Get record count for an index
    */
-  async getRecordCount(indexId: number): Promise<number> {
+  static async getRecordCount(indexId: number): Promise<number> {
     try {
       const index = await this.getIndexById(indexId);
       return index.data?.total_records || 0;
@@ -275,7 +310,7 @@ class MarketService {
   /**
    * Search indices by name or code
    */
-  async searchIndices(searchTerm: string, pageSize: number = 50): Promise<ApiResponse<GetIndicesResponse>> {
+  static async searchIndices(searchTerm: string, pageSize: number = 50): Promise<ApiResponse<GetIndicesResponse>> {
     return this.getAllIndices({
       search: searchTerm,
       page: 1,
@@ -286,7 +321,7 @@ class MarketService {
   /**
    * Get indices by category
    */
-  async getIndicesByCategory(
+  static async getIndicesByCategory(
     category: 'broad' | 'sectoral' | 'thematic',
     pageSize: number = 50
   ): Promise<ApiResponse<GetIndicesResponse>> {
@@ -300,7 +335,7 @@ class MarketService {
   /**
    * Get indices by download status
    */
-  async getIndicesByStatus(
+  static async getIndicesByStatus(
     status: 'downloaded' | 'pending' | 'failed',
     pageSize: number = 50
   ): Promise<ApiResponse<GetIndicesResponse>> {
@@ -314,21 +349,21 @@ class MarketService {
   /**
    * Get all downloaded indices
    */
-  async getDownloadedIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
+  static async getDownloadedIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
     return this.getIndicesByStatus('downloaded', pageSize);
   }
 
   /**
    * Get all pending indices
    */
-  async getPendingIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
+  static async getPendingIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
     return this.getIndicesByStatus('pending', pageSize);
   }
 
   /**
    * Get all failed downloads
    */
-  async getFailedIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
+  static async getFailedIndices(pageSize: number = 1000): Promise<ApiResponse<GetIndicesResponse>> {
     return this.getIndicesByStatus('failed', pageSize);
   }
 
@@ -337,7 +372,7 @@ class MarketService {
   /**
    * Download historical data for multiple indices (sequential)
    */
-  async downloadMultipleHistorical(
+  static async downloadMultipleHistorical(
     indexIds: number[],
     startDate: string,
     endDate: string,
@@ -389,7 +424,7 @@ class MarketService {
   /**
    * Download EOD for multiple indices (sequential)
    */
-  async downloadMultipleEOD(
+  static async downloadMultipleEOD(
     indexIds: number[],
     onProgress?: (current: number, total: number, indexId: number) => void
   ): Promise<{
@@ -434,7 +469,7 @@ class MarketService {
   /**
    * Delete data for multiple indices
    */
-  async deleteMultiple(
+  static async deleteMultiple(
     indexIds: number[],
     onProgress?: (current: number, total: number, indexId: number) => void
   ): Promise<{
@@ -483,7 +518,7 @@ class MarketService {
   /**
    * Parse API error for user-friendly message
    */
-  parseError(error: string | undefined): string {
+  static parseError(error: string | undefined): string {
     if (!error) return 'An unknown error occurred';
 
     // Common error patterns
@@ -508,24 +543,8 @@ class MarketService {
 
     return error;
   }
-
-  // ==================== LOGGING (OPTIONAL) ====================
-
-  /**
-   * Log API call (for debugging)
-   */
-  private logApiCall(endpoint: string, method: string = 'GET', data?: any): void {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[MarketService] ${method} ${endpoint}`, data || '');
-    }
-  }
 }
-
-// ==================== SINGLETON INSTANCE ====================
-
-const marketService = new MarketService();
 
 // ==================== EXPORTS ====================
 
-export { marketService, MarketService };
-export default marketService;
+export default MarketService;

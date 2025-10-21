@@ -1,14 +1,18 @@
 // frontend/src/pages/nav/NavBookmarksPage.tsx
-// UPDATED: Simplified for MFAPI.in - removed sequential download complexity
+// UPDATED: Added metrics calculation functionality to bulk actions
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookmarks, useDownloads, useDownloadProgress } from '../../hooks/useNavData';
+import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
+import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
+import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
+import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
@@ -26,18 +30,23 @@ const NavBookmarksPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Modal state
+  // Modal state - NAV operations
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
   const [showNavDataModal, setShowNavDataModal] = useState(false);
   const [currentProgress, setCurrentProgress] = useState<DownloadProgress | null>(null);
 
+  // Modal state - Metrics operations
+  const [showMetricsCalculationModal, setShowMetricsCalculationModal] = useState(false);
+  const [showMetricsPreCheckModal, setShowMetricsPreCheckModal] = useState(false);
+  const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
+
   // Bulk selection state
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<number>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
 
-  // Hooks
+  // Hooks - NAV operations
   const {
     bookmarks,
     isLoading,
@@ -57,6 +66,31 @@ const NavBookmarksPage: React.FC = () => {
   const { triggerHistoricalDownload } = useDownloads();
   const { startPolling, stopPolling } = useDownloadProgress();
 
+  // Hooks - Metrics operations
+  const bulkMetrics = useBulkMetricsCalculation({
+    onComplete: (result) => {
+      FrontendErrorLogger.info(
+        'Bulk metrics calculation completed',
+        'NavBookmarksPage',
+        {
+          successful: result.successful,
+          failed: result.failed,
+          total: result.total_schemes,
+        }
+      );
+      
+      // Refresh bookmarks after calculation
+      setTimeout(() => {
+        fetchBookmarks({
+          page: currentPage,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          amc_name: amcFilter || undefined,
+        });
+      }, 1000);
+    }
+  });
+
   // Filter bookmarks based on daily download filter
   const filteredBookmarks = bookmarks.filter(bookmark => {
     if (dailyDownloadFilter === 'enabled') return bookmark.daily_download_enabled;
@@ -67,7 +101,7 @@ const NavBookmarksPage: React.FC = () => {
   // Get unique AMCs for filter dropdown
   const uniqueAmcs = [...new Set(bookmarks.map(b => b.amc_name))].sort();
 
-  // Event handlers
+  // Event handlers - Search and filters
   const handleSearch = useCallback(() => {
     setCurrentPage(1);
     fetchBookmarks({
@@ -153,11 +187,10 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // UPDATED: Simplified historical download handler - removed sequential complexity
+  // Historical download handler
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
     console.log('Historical download started with job ID:', jobId);
     
-    // Validate job ID
     if (!jobId || jobId <= 0) {
       toastService.error('Invalid download job ID received');
       return;
@@ -166,7 +199,6 @@ const NavBookmarksPage: React.FC = () => {
     setShowProgressModal(true);
     setCurrentProgress(null);
 
-    // SIMPLIFIED: Single polling - no sequential complexity
     startPolling(jobId, (progressData: DownloadProgress) => {
       setCurrentProgress(progressData);
       
@@ -204,7 +236,66 @@ const NavBookmarksPage: React.FC = () => {
     stopPolling();
   };
 
-  // Bulk selection handlers
+  // ==================== METRICS CALCULATION HANDLERS ====================
+
+  // Handle single scheme metrics calculation
+  const handleCalculateMetrics = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowMetricsCalculationModal(true);
+    
+    FrontendErrorLogger.info(
+      'Opening Metrics Calculation Modal',
+      'NavBookmarksPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  // Handle calculation started
+  const handleCalculationStarted = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(schemeId);
+    
+    FrontendErrorLogger.info(
+      'Metrics calculation started',
+      'NavBookmarksPage',
+      { schemeId }
+    );
+  }, []);
+
+  // Handle calculation complete
+  const handleCalculationComplete = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(null);
+    
+    FrontendErrorLogger.info(
+      'Metrics calculation completed',
+      'NavBookmarksPage',
+      { schemeId }
+    );
+
+    // Refresh bookmarks
+    setTimeout(() => {
+      fetchBookmarks({
+        page: currentPage,
+        page_size: pageSize,
+        search: searchQuery || undefined,
+        amc_name: amcFilter || undefined,
+      });
+    }, 500);
+  }, [currentPage, searchQuery, amcFilter, fetchBookmarks]);
+
+  const handleCloseMetricsCalculationModal = useCallback(() => {
+    setShowMetricsCalculationModal(false);
+    setSelectedBookmark(null);
+  }, []);
+
+  const handleCloseMetricsPreCheckModal = useCallback(() => {
+    setShowMetricsPreCheckModal(false);
+  }, []);
+
+  // ==================== BULK SELECTION HANDLERS ====================
+
   const handleSelectBookmark = (bookmarkId: number, selected: boolean) => {
     setSelectedBookmarkIds(prev => {
       const newSet = new Set(prev);
@@ -229,7 +320,8 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // Bulk operations
+  // ==================== BULK OPERATIONS ====================
+
   const handleBulkEnableDaily = async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
     try {
@@ -266,11 +358,60 @@ const NavBookmarksPage: React.FC = () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
     if (selectedBookmarks.length === 0) return;
 
-    // For bulk historical download, use the first bookmark as template
     setSelectedBookmark(selectedBookmarks[0]);
     setShowHistoricalModal(true);
     toastService.info('Bulk historical download - showing single scheme for now. Full bulk support coming soon.');
   };
+
+  // NEW: Bulk metrics calculation
+  const handleBulkCalculateMetrics = useCallback(() => {
+    const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
+    const schemesWithData = selectedBookmarks.filter(b => (b.nav_records_count || 0) > 0);
+
+    if (schemesWithData.length === 0) {
+      toastService.warning('Selected schemes have no NAV data. Download NAV data first.');
+      return;
+    }
+
+    FrontendErrorLogger.info(
+      'Opening Bulk Metrics Pre-Check Modal',
+      'NavBookmarksPage',
+      { totalSchemes: schemesWithData.length }
+    );
+
+    setShowMetricsPreCheckModal(true);
+  }, [filteredBookmarks, selectedBookmarkIds]);
+
+  // Handle proceed from pre-check modal
+  const handleProceedWithCalculation = useCallback(async (schemeIds: number[]) => {
+    // Close pre-check modal
+    setShowMetricsPreCheckModal(false);
+
+    FrontendErrorLogger.info(
+      'Starting bulk metrics calculation',
+      'NavBookmarksPage',
+      { totalSchemes: schemeIds.length }
+    );
+
+    // Get bookmarks for selected scheme IDs
+    const schemesToProcess = bookmarks.filter(b => schemeIds.includes(b.scheme_id));
+
+    // Clear selection
+    setSelectedBookmarkIds(new Set());
+    setShowBulkActions(false);
+
+    // Start bulk calculation
+    try {
+      await bulkMetrics.processBatch(schemesToProcess);
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Bulk metrics calculation failed',
+        'NavBookmarksPage',
+        { error: error.message },
+        error.stack
+      );
+    }
+  }, [bookmarks, bulkMetrics]);
 
   const handleBulkDelete = async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
@@ -361,7 +502,7 @@ const NavBookmarksPage: React.FC = () => {
               color: colors.utility.secondaryText,
               margin: 0
             }}>
-              Manage your tracked mutual fund schemes and their NAV downloads
+              Manage your tracked schemes, NAV downloads, and metrics calculation
             </p>
           </div>
 
@@ -621,6 +762,23 @@ const NavBookmarksPage: React.FC = () => {
                   Historical Download
                 </button>
                 
+                {/* NEW: Bulk Calculate Metrics */}
+                <button
+                  onClick={handleBulkCalculateMetrics}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: colors.brand.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}
+                >
+                  📊 Calculate Metrics
+                </button>
+                
                 <button
                   onClick={handleBulkDelete}
                   style={{
@@ -788,7 +946,9 @@ const NavBookmarksPage: React.FC = () => {
                         onToggleDaily={handleToggleDaily}
                         onViewNavData={handleViewNavData}
                         onHistoricalDownload={handleHistoricalDownload}
+                        onCalculateMetrics={handleCalculateMetrics}
                         showActions={true}
+                        isCalculating={calculatingSchemeId === bookmark.scheme_id}
                       />
                     </div>
                     
@@ -897,14 +1057,49 @@ const NavBookmarksPage: React.FC = () => {
         onClose={handleCloseNavDataModal}
       />
 
-      {/* UPDATED: Simplified Progress Modal - removed sequential props */}
+      {/* NAV Progress Modal */}
       <NavProgressModal
         isOpen={showProgressModal}
         progress={currentProgress}
         onClose={handleCloseProgressModal}
-        onCancel={stopPolling}
         title="Downloading Historical NAV Data"
         showCancelButton={true}
+      />
+
+      {/* NEW: Metrics Calculation Modal (Single Scheme) */}
+      <MetricsCalculationModal
+        isOpen={showMetricsCalculationModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseMetricsCalculationModal}
+        onCalculationStarted={handleCalculationStarted}
+        onCalculationComplete={handleCalculationComplete}
+      />
+
+      {/* NEW: Bulk Metrics Pre-Check Modal */}
+      <BulkMetricsPreCheckModal
+        isOpen={showMetricsPreCheckModal}
+        schemes={filteredBookmarks.filter(b => 
+          selectedBookmarkIds.has(b.id) && (b.nav_records_count || 0) > 0
+        )}
+        onClose={handleCloseMetricsPreCheckModal}
+        onProceed={handleProceedWithCalculation}
+        onDownloadNavFirst={(schemes) => {
+          handleCloseMetricsPreCheckModal();
+          toastService.info('Download NAV data first, then calculate metrics');
+        }}
+      />
+
+      {/* NEW: Bulk Metrics Progress Modal */}
+      <BulkMetricsProgress
+        isOpen={bulkMetrics.isProcessing}
+        current={bulkMetrics.progress.current}
+        total={bulkMetrics.progress.total}
+        successCount={bulkMetrics.progress.successCount}
+        failureCount={bulkMetrics.progress.failureCount}
+        currentScheme={bulkMetrics.progress.currentScheme}
+        errors={bulkMetrics.progress.errors}
+        onCancel={bulkMetrics.cancel}
+        onClose={() => bulkMetrics.reset()}
       />
 
       {/* CSS Animation */}

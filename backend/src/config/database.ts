@@ -8,9 +8,12 @@ dotenv.config();
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://kewal_app_user:app123@localhost:5432/kewalinvest',
-  max: 20,
+  max: 100,
+  min: 5,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 20000,
+  statement_timeout: 30000,    
+  allowExitOnIdle: true  
 });
 
 // Test database connection
