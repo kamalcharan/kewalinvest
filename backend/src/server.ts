@@ -20,6 +20,7 @@ import jtbdRoutes from './routes/jtbd.routes';
 import marketRoutes from './routes/market.routes';
 import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
+import userPreferencesRoutes from './routes/userPreferences.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -115,6 +116,8 @@ app.get('/health', (_req: Request, res: Response) => {
       goals: true,
       goal_recalculation: true,
       goal_history: true,
+      user_preferences: true,
+      chart_preferences: true,
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -149,7 +152,8 @@ app.get('/api', (_req: Request, res: Response) => {
       market: '/api/market',
       market_analysis: '/api/market-analysis',
       jtbd: '/api/jtbd',
-      goals: '/api/goals'
+      goals: '/api/goals',
+      user_preferences: '/api/user-preferences'
     }
   });
 });
@@ -167,6 +171,7 @@ app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
+app.use('/api/user-preferences', userPreferencesRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -354,6 +359,12 @@ app.use((_req: Request, res: Response) => {
       'POST /api/goals/customer/:customerId/recalculate',
       'GET /api/goals/customer/:customerId/summary',
       'GET /api/goals/:id/history',
+      
+      // User Preferences endpoints
+      'GET /api/user-preferences/chart',
+      'GET /api/user-preferences/chart/:indexId',
+      'POST /api/user-preferences/chart/:indexId',
+      'DELETE /api/user-preferences/chart/:indexId',
       
       // System logs endpoints
       'GET /api/logs',
@@ -601,6 +612,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/goals/customer/:id/summary║
 ║  • GET  /api/goals/:id/history         ║
 ║                                        ║
+║  ⚙️  User Preferences:                 ║
+║  • GET  /api/user-preferences/chart    ║
+║  • GET  /api/user-preferences/chart/:id║
+║  • POST /api/user-preferences/chart/:id║
+║  • DELETE /api/user-preferences/chart..║
+║                                        ║
 ║  🔖 Customer Bookmarks:                ║
 ║  • GET  /api/customers/bookmark-reasons║
 ║  • POST /api/customers/:id/bookmark    ║
@@ -661,6 +678,8 @@ app.listen(PORT, async () => {
     console.log('✅ Goal management endpoints ready');
     console.log('✅ Goal recalculation ready');
     console.log('✅ Goal history tracking ready');
+    console.log('✅ User preferences endpoints ready');
+    console.log('✅ Chart preferences management ready');
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ System logs endpoints ready');
@@ -746,6 +765,8 @@ app.listen(PORT, async () => {
 ║  Goals: ✅ Ready                       ║
 ║  Goal Recalculation: ✅ Ready          ║
 ║  Goal History: ✅ Ready                ║
+║  User Preferences: ✅ Ready            ║
+║  Chart Preferences: ✅ Ready           ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

@@ -16,11 +16,17 @@ import {
   useSaveChartPreference,
   useEffectiveChartColor,
 } from '../../hooks/useChartPreferences';
-import { getDateRangeFromPeriod } from '../../utils/timeRangeHelper';
-import type { TimePeriod } from '../../utils/timeRangeHelper';
+import { getDateRangeFromPeriod, TimePeriod } from '../../utils/timeRangeHelper';
 import type { IndexMetrics } from '../../types/marketAnalysis.types';
-import type { ChartType, ViewMode, DisplayMode, Granularity } from '../../types/chartViewer.types';
 import ChartViewer from '../../components/visualizations/ChartViewer';
+
+// Updated to include 'weekly'
+type Granularity = 'daily' | 'weekly' | 'monthly';
+
+interface TimeSeriesPoint {
+  date: string;
+  [key: string]: any;
+}
 
 const IndexDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,16 +38,11 @@ const IndexDetailPage: React.FC = () => {
   
   const indexId = parseInt(idParam || '0', 10);
   
-  // STATE MANAGEMENT - Filter States
-  const [chartType, setChartType] = useState<ChartType>('line');
-  const [viewMode, setViewMode] = useState<ViewMode>('price');
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('graph');
-  const [granularity, setGranularity] = useState<Granularity>('daily');
+  // STATE MANAGEMENT
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('1y');
+  const [granularity, setGranularity] = useState<Granularity>('daily');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const [showVolume, setShowVolume] = useState(false);
-  const [baselineValue, setBaselineValue] = useState<number | null>(null);
 
   // COLOR MANAGEMENT - Use preference or theme default
   const defaultColor = colors.brand.primary;
@@ -92,15 +93,19 @@ const IndexDetailPage: React.FC = () => {
   const returnsTimeSeries = returnsTimeSeriesQuery.data || [];
   const volatilityTimeSeries = volatilityTimeSeriesQuery.data || [];
 
-  // Loading and error states
+  // Loading and error states - USE isFetching for granularity/period changes!
   const isInitialLoading = metricsQuery.isLoading;
+  const isReturnsLoading = returnsTimeSeriesQuery.isLoading;
+  const isVolatilityLoading = volatilityTimeSeriesQuery.isLoading;
+  
   const isReturnsFetching = returnsTimeSeriesQuery.isFetching;
   const isVolatilityFetching = volatilityTimeSeriesQuery.isFetching;
+  
   const isCalculating = calculateMetricsMutation.isPending;
   const hasMetrics = !!metrics && metrics.id !== undefined;
   const calculationError = calculateMetricsMutation.error?.message;
 
-  // Transform API data to ChartViewer format
+  // Transform API data to ChartViewer format - UPDATED WITH OHLC FIELDS
   const chartData = useMemo(() => {
     if (!returnsTimeSeries || returnsTimeSeries.length === 0) return [];
     
@@ -142,45 +147,6 @@ const IndexDetailPage: React.FC = () => {
         'Calculate metrics action failed',
         'IndexDetailPage',
         { indexId, error: error.message },
-        error.stack
-      );
-    }
-  };
-
-  const handleChartTypeChange = (type: ChartType) => {
-    try {
-      setChartType(type);
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Chart type change failed',
-        'IndexDetailPage',
-        { chartType: type, error: error.message },
-        error.stack
-      );
-    }
-  };
-
-  const handleViewModeChange = (mode: ViewMode) => {
-    try {
-      setViewMode(mode);
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'View mode change failed',
-        'IndexDetailPage',
-        { viewMode: mode, error: error.message },
-        error.stack
-      );
-    }
-  };
-
-  const handleDisplayModeChange = (mode: DisplayMode) => {
-    try {
-      setDisplayMode(mode);
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Display mode change failed',
-        'IndexDetailPage',
-        { displayMode: mode, error: error.message },
         error.stack
       );
     }
@@ -241,32 +207,6 @@ const IndexDetailPage: React.FC = () => {
         'Apply custom dates failed',
         'IndexDetailPage',
         { startDate, endDate, error: error.message },
-        error.stack
-      );
-    }
-  };
-
-  const handleVolumeToggle = (show: boolean) => {
-    try {
-      setShowVolume(show);
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Volume toggle failed',
-        'IndexDetailPage',
-        { showVolume: show, error: error.message },
-        error.stack
-      );
-    }
-  };
-
-  const handleBaselineChange = (value: number | null) => {
-    try {
-      setBaselineValue(value);
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Baseline change failed',
-        'IndexDetailPage',
-        { baselineValue: value, error: error.message },
         error.stack
       );
     }
@@ -441,7 +381,7 @@ const IndexDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Price Display */}
+          {/* Price Display - WITH SAFE OHLC */}
           <div style={{ textAlign: 'right' }}>
             {hasMetrics && metrics?.last_price !== null && metrics?.last_price !== undefined ? (
               <>
@@ -464,7 +404,7 @@ const IndexDetailPage: React.FC = () => {
                   Current Price
                 </div>
                 
-                {/* OHLC Display */}
+                {/* UPDATED: SAFE OHLC Display */}
                 {returnsTimeSeries.length > 0 && (() => {
                   const latest = returnsTimeSeries[returnsTimeSeries.length - 1];
                   const openValue = latest?.open != null && !isNaN(Number(latest.open)) 
@@ -555,7 +495,7 @@ const IndexDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* MAIN CONTENT */}
+        {/* SINGLE PAGE LAYOUT - NO TABS */}
         {!hasMetrics ? (
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
@@ -575,7 +515,7 @@ const IndexDetailPage: React.FC = () => {
               No Data Available
             </p>
             <p style={{ fontSize: '13px', margin: '0 0 20px 0', maxWidth: '400px', marginLeft: 'auto', marginRight: 'auto' }}>
-              Calculate metrics to see analysis for this index
+              Calculate metrics using the button above to see analysis for this index
             </p>
             <button
               onClick={handleCalculateMetrics}
@@ -596,46 +536,53 @@ const IndexDetailPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* CHART SECTION - Now uses refactored ChartViewer */}
-            <ChartViewer
-              indexName={metrics?.index_name || `Index ${indexId}`}
-              indexId={indexId}
-              data={chartData}
-              isLoading={isReturnsFetching}
-              error={returnsTimeSeriesQuery.error?.message}
-              showColorPicker={true}
-              allowExport={true}
-              
-              // Parent-controlled filter states
-              chartType={chartType}
-              viewMode={viewMode}
-              displayMode={displayMode}
-              granularity={granularity}
-              timePeriod={timePeriod}
-              customStartDate={customStartDate}
-              customEndDate={customEndDate}
-              lineColor={lineColor}
-              showVolume={showVolume}
-              baselineValue={baselineValue}
-              
-              // Callbacks
-              onChartTypeChange={handleChartTypeChange}
-              onViewModeChange={handleViewModeChange}
-              onDisplayModeChange={handleDisplayModeChange}
-              onGranularityChange={handleGranularityChange}
-              onTimePeriodChange={handleTimePeriodChange}
-              onCustomDateApply={handleApplyCustomDates}
-              onColorChange={handleColorChange}
-              onVolumeToggle={handleVolumeToggle}
-              onBaselineChange={handleBaselineChange}
-            />
+            {/* CHART SECTION - Main Focus */}
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '24px',
+              border: `1px solid ${colors.utility.primaryText}10`,
+              marginBottom: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                margin: '0 0 20px 0'
+              }}>
+                📈 Price Chart
+              </h2>
+
+              {/* Chart Component - Filters are now inside ChartViewer */}
+              <ChartViewer 
+                indexName={metrics?.index_name || `Index ${indexId}`}
+                indexId={indexId}
+                data={chartData}
+                isLoading={isReturnsFetching}
+                error={returnsTimeSeriesQuery.error?.message}
+                showColorPicker={true}
+                lineColor={lineColor}
+                onColorChange={handleColorChange}
+                granularity={granularity}
+                timePeriod={timePeriod}
+                customStartDate={customStartDate}
+                customEndDate={customEndDate}
+                onGranularityChange={handleGranularityChange}
+                onTimePeriodChange={handleTimePeriodChange}
+                onCustomDateApply={(start: string, end: string) => {
+                  setCustomStartDate(start);
+                  setCustomEndDate(end);
+                  setTimePeriod('custom');
+                }}
+              />
+            </div>
 
             {/* RETURNS AND VOLATILITY - Side by Side */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
               gap: '24px',
-              marginTop: '24px',
               marginBottom: '24px'
             }}>
               {/* RETURNS SECTION */}
@@ -669,7 +616,11 @@ const IndexDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {returnsTimeSeries.length === 0 ? (
+                {isReturnsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                    <p>Loading returns data...</p>
+                  </div>
+                ) : returnsTimeSeries.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
                     <p>No returns data available</p>
                   </div>
@@ -752,7 +703,11 @@ const IndexDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {volatilityTimeSeries.length === 0 ? (
+                {isVolatilityLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+                    <p>Loading volatility data...</p>
+                  </div>
+                ) : volatilityTimeSeries.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
                     <p>No volatility data available</p>
                   </div>
@@ -803,7 +758,7 @@ const IndexDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* STATISTICS TABLE */}
+            {/* STATISTICS TABLE - Full Width */}
             <div style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',

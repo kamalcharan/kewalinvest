@@ -122,6 +122,15 @@ export const API_ENDPOINTS = {
     HISTORY: (id: number) => `${API_BASE}/goals/${id}/history`,
   },
   
+  // User Preferences endpoints (NEW)
+  USER_PREFERENCES: {
+    // Chart preferences
+    GET_ALL_CHART_PREFERENCES: `${API_BASE}/user-preferences/chart`,
+    GET_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+    SAVE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+    DELETE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+  },
+  
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
@@ -253,6 +262,7 @@ export type TransactionEndpoints = typeof API_ENDPOINTS.TRANSACTIONS;
 export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
 export type JTBDEndpoints = typeof API_ENDPOINTS.JTBD;
 export type GoalEndpoints = typeof API_ENDPOINTS.GOALS;
+export type UserPreferencesEndpoints = typeof API_ENDPOINTS.USER_PREFERENCES;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
@@ -465,6 +475,21 @@ export const GOAL_URLS = {
     `${API_ENDPOINTS.GOALS.HISTORY(id)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
+// User Preferences-specific URL helpers (NEW)
+export const USER_PREFERENCES_URLS = {
+  getAllChartPreferences: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.USER_PREFERENCES.GET_ALL_CHART_PREFERENCES}${buildQueryParams({}, environment)}`,
+  
+  getChartPreference: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.USER_PREFERENCES.GET_CHART_PREFERENCE(indexId)}${buildQueryParams({}, environment)}`,
+  
+  saveChartPreference: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.USER_PREFERENCES.SAVE_CHART_PREFERENCE(indexId)}${buildQueryParams({}, environment)}`,
+  
+  deleteChartPreference: (indexId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.USER_PREFERENCES.DELETE_CHART_PREFERENCE(indexId)}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Contact-specific URL helpers
 export const CONTACT_URLS = {
   getContactList: (params?: Record<string, any>, environment?: 'live' | 'test') => 
@@ -670,6 +695,7 @@ if (process.env.NODE_ENV === 'development') {
     Portfolio: Object.keys(API_ENDPOINTS.PORTFOLIO).length,
     JTBD: Object.keys(API_ENDPOINTS.JTBD).length,
     Goals: Object.keys(API_ENDPOINTS.GOALS).length,
+    UserPreferences: Object.keys(API_ENDPOINTS.USER_PREFERENCES).length,
     Import: Object.keys(API_ENDPOINTS.IMPORT).length,
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Market: Object.keys(API_ENDPOINTS.MARKET).length,
@@ -701,6 +727,13 @@ if (process.env.NODE_ENV === 'development') {
   console.log('🎯 Goal Management Endpoints:', {
     CREATE: API_ENDPOINTS.GOALS.CREATE,
     RECALCULATE_CUSTOMER: API_ENDPOINTS.GOALS.RECALCULATE_CUSTOMER,
+  });
+  
+  console.log('⚙️  User Preferences Endpoints:', {
+    GET_ALL_CHART_PREFERENCES: API_ENDPOINTS.USER_PREFERENCES.GET_ALL_CHART_PREFERENCES,
+    GET_CHART_PREFERENCE: 'GET /api/user-preferences/chart/:indexId',
+    SAVE_CHART_PREFERENCE: 'POST /api/user-preferences/chart/:indexId',
+    DELETE_CHART_PREFERENCE: 'DELETE /api/user-preferences/chart/:indexId',
   });
   
   console.log('🔍 NAV Bookmark Gap Detection:', {

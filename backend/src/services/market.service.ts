@@ -133,17 +133,8 @@ export interface IndexSearchParams {
 
 // ==================== NEW INTERFACES FOR TIME-SERIES ====================
 
-export interface ReturnTimeSeriesData {
-  date: string;
-  daily_return?: number | null;
-  return_1w?: number | null;
-  return_1m?: number | null;
-  return_3m?: number | null;
-  return_6m?: number | null;
-  return_1y?: number | null;
-  return_ytd?: number | null;
-  return_all?: number | null;
-}
+// UPDATED: Now returns full MarketDataRecord instead of selective fields
+export interface ReturnTimeSeriesData extends MarketDataRecord {}
 
 export interface VolatilityTimeSeriesData {
   date: string;
@@ -795,19 +786,20 @@ export class MarketService {
 
   /**
    * Get time-series returns data for an index
+   * UPDATED: Now returns full MarketDataRecord objects instead of selective fields
    * @param indexId Database ID of index
    * @param periods Array of return periods to fetch (e.g., ['1m', '3m', '6m', '1y', 'ytd', 'all'])
    * @param startDate Start date for time series
    * @param endDate End date for time series
-   * @param granularity 'daily' or 'monthly'
-   * @returns Time-series array of returns data
+   * @param granularity 'daily', 'weekly', or 'monthly'
+   * @returns Time-series array of complete MarketDataRecord objects
    */
   async getIndexReturnsTimeSeries(
     indexId: number,
     periods: string[] = ['1m', '3m', '6m', '1y', 'ytd', 'all'],
     startDate?: Date,
     endDate?: Date,
-    granularity: 'daily' | 'monthly' = 'daily'
+    granularity: 'daily' | 'weekly' | 'monthly' = 'daily'
   ): Promise<ReturnTimeSeriesData[]> {
     try {
       if (!indexId || indexId <= 0) {
@@ -845,28 +837,9 @@ export class MarketService {
 
       const whereClause = whereConditions.join(' AND ');
 
-      // Build SELECT clause with only requested periods
-      const selectFields = ['date'];
-      const periodMap: { [key: string]: string } = {
-        'daily': 'daily_return',
-        '1w': 'return_1w',
-        '1m': 'return_1m',
-        '3m': 'return_3m',
-        '6m': 'return_6m',
-        '1y': 'return_1y',
-        'ytd': 'return_ytd',
-        'all': 'return_all'
-      };
-
-      for (const period of periods) {
-        const dbField = periodMap[period];
-        if (dbField) {
-          selectFields.push(dbField);
-        }
-      }
-
+      // NEW: Select ALL fields instead of selective fields
       const query = `
-        SELECT ${selectFields.join(', ')}
+        SELECT *
         FROM t_market_data_records
         WHERE ${whereClause}
         ORDER BY date ASC
@@ -883,43 +856,12 @@ export class MarketService {
         return [];
       }
 
-      // Transform data to time-series format
-      let timeSeriesData = result.rows.map((row: any) => {
-        const data: ReturnTimeSeriesData = {
-          date: new Date(row.date).toISOString().split('T')[0]
-        };
-
-        if (periods.includes('daily') && row.daily_return !== undefined) {
-          data.daily_return = row.daily_return;
-        }
-        if (periods.includes('1w') && row.return_1w !== undefined) {
-          data.return_1w = row.return_1w;
-        }
-        if (periods.includes('1m') && row.return_1m !== undefined) {
-          data.return_1m = row.return_1m;
-        }
-        if (periods.includes('3m') && row.return_3m !== undefined) {
-          data.return_3m = row.return_3m;
-        }
-        if (periods.includes('6m') && row.return_6m !== undefined) {
-          data.return_6m = row.return_6m;
-        }
-        if (periods.includes('1y') && row.return_1y !== undefined) {
-          data.return_1y = row.return_1y;
-        }
-        if (periods.includes('ytd') && row.return_ytd !== undefined) {
-          data.return_ytd = row.return_ytd;
-        }
-        if (periods.includes('all') && row.return_all !== undefined) {
-          data.return_all = row.return_all;
-        }
-
-        return data;
-      });
+      // Return complete MarketDataRecord objects
+      let timeSeriesData: ReturnTimeSeriesData[] = result.rows;
 
       // Aggregate by granularity if needed
-      if (granularity === 'monthly') {
-        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, 'monthly') as ReturnTimeSeriesData[];
+      if (granularity === 'weekly' || granularity === 'monthly') {
+        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, granularity) as ReturnTimeSeriesData[];
       }
 
       SimpleLogger.info('MarketService', 'Retrieved returns time-series data', 'getIndexReturnsTimeSeries', {
@@ -946,14 +888,14 @@ export class MarketService {
    * @param indexId Database ID of index
    * @param startDate Start date for time series
    * @param endDate End date for time series
-   * @param granularity 'daily' or 'monthly'
+   * @param granularity 'daily', 'weekly', or 'monthly'
    * @returns Time-series array of volatility data
    */
   async getIndexVolatilityTimeSeries(
     indexId: number,
     startDate?: Date,
     endDate?: Date,
-    granularity: 'daily' | 'monthly' = 'daily'
+    granularity: 'daily' | 'weekly' | 'monthly' = 'daily'
   ): Promise<VolatilityTimeSeriesData[]> {
     try {
       if (!indexId || indexId <= 0) {
@@ -1016,8 +958,8 @@ export class MarketService {
       }));
 
       // Aggregate by granularity if needed
-      if (granularity === 'monthly') {
-        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, 'monthly') as VolatilityTimeSeriesData[];
+      if (granularity === 'weekly' || granularity === 'monthly') {
+        timeSeriesData = this.aggregateDataByGranularity(timeSeriesData, granularity) as VolatilityTimeSeriesData[];
       }
 
       SimpleLogger.info('MarketService', 'Retrieved volatility time-series data', 'getIndexVolatilityTimeSeries', {
@@ -1172,68 +1114,107 @@ export class MarketService {
   }
 
   /**
+   * Helper to get week key (Sunday to Saturday)
+   * Returns format: "2025-W01" for week containing the given date
+   * Week starts on Sunday (day 0) and ends on Saturday (day 6)
+   */
+  private getWeekKey(date: Date): string {
+    const d = new Date(date);
+    
+    // Find Sunday of this week
+    const day = d.getDay(); // 0 = Sunday, 6 = Saturday
+    const diff = d.getDate() - day; // Subtract days to get to Sunday
+    const sunday = new Date(d);
+    sunday.setDate(diff);
+    
+    // Calculate week number of the year
+    const year = sunday.getFullYear();
+    const startOfYear = new Date(year, 0, 1);
+    const daysSinceStartOfYear = Math.floor((sunday.getTime() - startOfYear.getTime()) / 86400000);
+    const weekNum = Math.ceil((daysSinceStartOfYear + startOfYear.getDay() + 1) / 7);
+    
+    return `${year}-W${String(weekNum).padStart(2, '0')}`;
+  }
+
+  /**
    * Helper method to aggregate data by granularity
-   * @param data Time-series data array
-   * @param granularity 'daily' or 'monthly'
+   * Uses MaxDate strategy: For each period (week/month), keep the LAST trading day's data
+   * 
+   * @param data Time-series data array (must be sorted by date ASC)
+   * @param granularity 'daily', 'weekly', or 'monthly'
    * @returns Aggregated data
+   * 
+   * Weekly: Sunday to Saturday, pick MaxDate (last trading day of week)
+   * Monthly: Calendar month, pick MaxDate (last trading day of month)
    */
   private aggregateDataByGranularity(
     data: (ReturnTimeSeriesData | VolatilityTimeSeriesData)[],
-    granularity: 'daily' | 'monthly'
+    granularity: 'daily' | 'weekly' | 'monthly'
   ): (ReturnTimeSeriesData | VolatilityTimeSeriesData)[] {
     try {
+      // Return as-is for daily or empty data
       if (granularity === 'daily' || !data || data.length === 0) {
         return data;
       }
 
-      if (granularity === 'monthly') {
-        const monthlyMap: { [key: string]: any } = {};
-
+      // WEEKLY AGGREGATION (Sunday-Saturday)
+      if (granularity === 'weekly') {
+        const weeklyMap: { [key: string]: any } = {};
+        
         for (const record of data) {
           const dateObj = new Date(record.date);
-          const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-
-          if (!monthlyMap[monthKey]) {
-            monthlyMap[monthKey] = {
-              date: `${monthKey}-01`,
-              count: 0,
-              ...Object.keys(record)
-                .filter(key => key !== 'date')
-                .reduce((acc: any, key: any) => {
-                  acc[key] = 0;
-                  return acc;
-                }, {})
-            };
-          }
-
-          monthlyMap[monthKey].count++;
+          const weekKey = this.getWeekKey(dateObj);
           
-          // Average all numeric fields
-          for (const key of Object.keys(record)) {
-            if (key !== 'date') {
-              const value = record[key as keyof typeof record];
-              
-              // Only process numeric values
-              if (typeof value === 'number' && !isNaN(value)) {
-                monthlyMap[monthKey][key] = 
-                  ((monthlyMap[monthKey][key] * (monthlyMap[monthKey].count - 1)) + value) / 
-                  monthlyMap[monthKey].count;
-              } else if (value === null || value === undefined) {
-                // For null/undefined, keep the existing value
-                monthlyMap[monthKey][key] = monthlyMap[monthKey][key];
-              }
-            }
+          // Keep the LAST (MaxDate) record of each week
+          if (!weeklyMap[weekKey] || new Date(record.date) > new Date(weeklyMap[weekKey].date)) {
+            weeklyMap[weekKey] = { ...record };
           }
         }
+        
+        // Sort by date ascending
+        const aggregated = Object.values(weeklyMap).sort((a: any, b: any) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
 
-        const aggregated = Object.values(monthlyMap).map((record: any) => {
-          const { count, ...rest } = record;
-          return rest;
+        SimpleLogger.info('MarketService', 'Weekly aggregation completed', 'aggregateDataByGranularity', {
+          originalPoints: data.length,
+          aggregatedPoints: aggregated.length,
+          compressionRatio: `${Math.round((aggregated.length / data.length) * 100)}%`
         });
-
+        
         return aggregated;
       }
 
+      // MONTHLY AGGREGATION (Calendar month)
+      if (granularity === 'monthly') {
+        const monthlyMap: { [key: string]: any } = {};
+        
+        for (const record of data) {
+          const dateObj = new Date(record.date);
+          // Use YYYY-MM format as key
+          const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          
+          // Keep the LAST (MaxDate) record of each month
+          if (!monthlyMap[monthKey] || new Date(record.date) > new Date(monthlyMap[monthKey].date)) {
+            monthlyMap[monthKey] = { ...record };
+          }
+        }
+        
+        // Sort by date ascending
+        const aggregated = Object.values(monthlyMap).sort((a: any, b: any) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+
+        SimpleLogger.info('MarketService', 'Monthly aggregation completed', 'aggregateDataByGranularity', {
+          originalPoints: data.length,
+          aggregatedPoints: aggregated.length,
+          compressionRatio: `${Math.round((aggregated.length / data.length) * 100)}%`
+        });
+        
+        return aggregated;
+      }
+
+      // Default: return original data
       return data;
 
     } catch (error: any) {
@@ -1241,10 +1222,11 @@ export class MarketService {
         dataLength: data?.length || 0,
         granularity,
         error: error.message
-      });
+      }, undefined, undefined, error.stack);
       throw error;
     }
   }
+
   // ==================== JOB MANAGEMENT ====================
 
   /**

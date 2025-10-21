@@ -1,845 +1,371 @@
 // frontend/src/components/visualizations/ChartViewer.tsx
+// Main chart viewer component - orchestrates all visualization components
 
-import React, { useState, useMemo, useCallback } from 'react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend
-} from 'recharts';
-
-// Mock types - will be imported from src/types/marketAnalysis.types.ts
-interface ChartDataPoint {
-  date: string;
-  value: number;
-  rawDate: number;
-}
-
-interface ChartViewerProps {
-  indexName: string;
-  indexId: number;
-  lineColor?: string;
-  onColorChange?: (color: string) => void;
-  isLoading?: boolean;
-  error?: string;
-  data?: ChartDataPoint[];
-  showColorPicker?: boolean;
-}
-
-type ViewMode = 'graph' | 'table';
-type Granularity = 'daily' | 'weekly' | 'monthly';
-type TimePeriod = '1w' | '1m' | '3m' | '6m' | '1y' | 'all' | 'custom';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import CompactFilterToolbar from './chartViewer/filters/CompactFilterToolbar';
+import ChartRenderer from './chartViewer/charts/ChartRenderer';
+import DataTable from './chartViewer/table/DataTable';
+import ChartExport from './chartViewer/export/ChartExport';
+import type { 
+  ChartViewerProps, 
+  ChartFilters,
+  DisplayMode,
+  ChartType,
+  ViewMode,
+  Granularity
+} from '../../types/chartViewer.types';
+import type { TimePeriod } from '../../utils/timeRangeHelper';
+import { prepareChartData } from '../../utils/dataTransformers';
+import { getChartConfig } from '../../utils/chartConfig';
 
 const ChartViewer: React.FC<ChartViewerProps> = ({
   indexName,
   indexId,
-  lineColor = '#f83b46',
-  onColorChange,
+  data = [],
   isLoading = false,
   error = null,
-  data = [],
-  showColorPicker = true
+  showColorPicker = true,
+  allowExport = true,
+  
+  // Parent-controlled filter values
+  chartType: parentChartType,
+  viewMode: parentViewMode,
+  displayMode: parentDisplayMode,
+  granularity: parentGranularity,
+  timePeriod: parentTimePeriod,
+  customStartDate: parentCustomStartDate,
+  customEndDate: parentCustomEndDate,
+  lineColor: parentLineColor,
+  showVolume: parentShowVolume,
+  baselineValue: parentBaselineValue,
+  
+  // Callbacks
+  onChartTypeChange,
+  onViewModeChange,
+  onDisplayModeChange,
+  onGranularityChange,
+  onTimePeriodChange,
+  onCustomDateApply,
+  onColorChange,
+  onVolumeToggle,
+  onBaselineChange
 }) => {
-  // Mock theme
-  const theme = {
-    colors: {
-      brand: {
-        primary: '#f83b46',
-        secondary: '#ff6a73',
-      },
-      utility: {
-        primaryText: '#141518',
-        secondaryText: '#677681',
-        primaryBackground: '#f1f4f8',
-        secondaryBackground: '#ffffff',
-      },
-      semantic: {
-        success: '#6bbd78',
-        error: '#ff5963',
-        warning: '#ec9c4b',
-        info: '#0299ff',
+  // Theme integration
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  // Local state for filters (if not parent-controlled)
+  const [localChartType, setLocalChartType] = useState<ChartType>('line');
+  const [localViewMode, setLocalViewMode] = useState<ViewMode>('price');
+  const [localDisplayMode, setLocalDisplayMode] = useState<DisplayMode>('graph');
+  const [localGranularity, setLocalGranularity] = useState<Granularity>('daily');
+  const [localTimePeriod, setLocalTimePeriod] = useState<TimePeriod>('1y');
+  const [localCustomStartDate, setLocalCustomStartDate] = useState('');
+  const [localCustomEndDate, setLocalCustomEndDate] = useState('');
+  const [localLineColor, setLocalLineColor] = useState(colors.brand.primary);
+  const [localShowVolume, setLocalShowVolume] = useState(false);
+  const [localBaselineValue, setLocalBaselineValue] = useState<number | null>(null);
+
+  // Use parent-controlled values if provided, otherwise use local state
+  const chartType = parentChartType ?? localChartType;
+  const viewMode = parentViewMode ?? localViewMode;
+  const displayMode = parentDisplayMode ?? localDisplayMode;
+  const granularity = parentGranularity ?? localGranularity;
+  const timePeriod = parentTimePeriod ?? localTimePeriod;
+  const customStartDate = parentCustomStartDate ?? localCustomStartDate;
+  const customEndDate = parentCustomEndDate ?? localCustomEndDate;
+  const lineColor = parentLineColor ?? localLineColor;
+  const showVolume = parentShowVolume ?? localShowVolume;
+  const baselineValue = parentBaselineValue ?? localBaselineValue;
+
+  // Update local line color when theme changes
+  useEffect(() => {
+    if (!parentLineColor) {
+      setLocalLineColor(colors.brand.primary);
+    }
+  }, [colors.brand.primary, parentLineColor]);
+
+  // Aggregate filters for CompactFilterToolbar
+  const filters: ChartFilters = useMemo(() => ({
+    chartType,
+    viewMode,
+    displayMode,
+    granularity,
+    timePeriod,
+    customStartDate,
+    customEndDate,
+    lineColor,
+    showVolume,
+    baselineValue
+  }), [chartType, viewMode, displayMode, granularity, timePeriod, customStartDate, customEndDate, lineColor, showVolume, baselineValue]);
+
+  // Chart configuration
+  const chartConfig = useMemo(() => 
+    getChartConfig(colors, data.length),
+    [colors, data.length]
+  );
+
+  // Process chart data
+  const processedData = useMemo(() => 
+    prepareChartData(data, viewMode, chartType, baselineValue),
+    [data, viewMode, chartType, baselineValue]
+  );
+
+  // Filter change handlers
+  const handleChartTypeChange = useCallback((type: ChartType) => {
+    if (onChartTypeChange) {
+      onChartTypeChange(type);
+    } else {
+      setLocalChartType(type);
+    }
+  }, [onChartTypeChange]);
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    } else {
+      setLocalViewMode(mode);
+    }
+  }, [onViewModeChange]);
+
+  const handleDisplayModeChange = useCallback((mode: DisplayMode) => {
+    if (onDisplayModeChange) {
+      onDisplayModeChange(mode);
+    } else {
+      setLocalDisplayMode(mode);
+    }
+  }, [onDisplayModeChange]);
+
+  const handleGranularityChange = useCallback((gran: Granularity) => {
+    if (onGranularityChange) {
+      onGranularityChange(gran);
+    } else {
+      setLocalGranularity(gran);
+    }
+  }, [onGranularityChange]);
+
+  const handleTimePeriodChange = useCallback((period: TimePeriod) => {
+    if (onTimePeriodChange) {
+      onTimePeriodChange(period);
+    } else {
+      setLocalTimePeriod(period);
+      if (period !== 'custom') {
+        setLocalCustomStartDate('');
+        setLocalCustomEndDate('');
       }
     }
-  };
+  }, [onTimePeriodChange]);
 
-  const [viewMode, setViewMode] = useState<ViewMode>('graph');
-  const [granularity, setGranularity] = useState<Granularity>('daily');
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('1y');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [tempLineColor, setTempLineColor] = useState(lineColor);
-  const [showHexInput, setShowHexInput] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
-
-  // Sort and prepare chart data
-  const chartData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    
-    return [...data]
-      .sort((a, b) => a.rawDate - b.rawDate)
-      .map(item => ({
-        ...item,
-        displayValue: parseFloat(item.value.toFixed(4))
-      }));
-  }, [data]);
-
-  // Calculate statistics
-  const statistics = useMemo(() => {
-    if (chartData.length === 0) return null;
-
-    const values = chartData.map(d => d.value).filter(v => !isNaN(v));
-    if (values.length === 0) return null;
-
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
-    const currentValue = values[values.length - 1];
-    const startValue = values[0];
-    const change = currentValue - startValue;
-    const changePercent = startValue !== 0 ? ((change / startValue) * 100).toFixed(2) : '0.00';
-
-    return {
-      current: currentValue.toFixed(4),
-      min: minValue.toFixed(4),
-      max: maxValue.toFixed(4),
-      change: change.toFixed(4),
-      changePercent,
-      isPositive: change >= 0
-    };
-  }, [chartData]);
-
-  const handleLoadData = useCallback(() => {
-    // TODO: Fetch data from API based on selected filters
-    console.log('Load chart data', {
-      indexId,
-      timePeriod,
-      granularity,
-      customStartDate,
-      customEndDate
-    });
-  }, [indexId, timePeriod, granularity, customStartDate, customEndDate]);
+  const handleCustomDateApply = useCallback((startDate: string, endDate: string) => {
+    if (onCustomDateApply) {
+      onCustomDateApply(startDate, endDate);
+    } else {
+      setLocalCustomStartDate(startDate);
+      setLocalCustomEndDate(endDate);
+      setLocalTimePeriod('custom');
+    }
+  }, [onCustomDateApply]);
 
   const handleColorChange = useCallback((color: string) => {
-    setTempLineColor(color);
     if (onColorChange) {
       onColorChange(color);
-      // TODO: Save preference to backend
-      console.log('Save color preference for index', indexId, color);
+    } else {
+      setLocalLineColor(color);
     }
-  }, [indexId, onColorChange]);
+  }, [onColorChange]);
 
-  const handlePeriodChange = (period: TimePeriod) => {
-    setTimePeriod(period);
-    setCurrentPage(1);
-    // TODO: Trigger data load
-    console.log('Period changed to:', period);
-  };
-
-  const handleGranularityChange = (gran: Granularity) => {
-    setGranularity(gran);
-    setCurrentPage(1);
-    // TODO: Trigger data load
-    console.log('Granularity changed to:', gran);
-  };
-
-  const handleApplyCustomDates = () => {
-    if (customStartDate && customEndDate) {
-      handleLoadData();
+  const handleVolumeToggle = useCallback((show: boolean) => {
+    if (onVolumeToggle) {
+      onVolumeToggle(show);
+    } else {
+      setLocalShowVolume(show);
     }
-  };
+  }, [onVolumeToggle]);
 
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-  };
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{
-          backgroundColor: theme.colors.utility.primaryBackground,
-          border: `1px solid ${theme.colors.utility.primaryText}20`,
-          borderRadius: '8px',
-          padding: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        }}>
-          <p style={{
-            margin: '0 0 4px 0',
-            fontSize: '12px',
-            color: theme.colors.utility.secondaryText
-          }}>
-            {payload[0].payload.date}
-          </p>
-          <p style={{
-            margin: 0,
-            fontSize: '16px',
-            fontWeight: '600',
-            color: lineColor
-          }}>
-            {payload[0].value.toFixed(4)}
-          </p>
-        </div>
-      );
+  const handleBaselineChange = useCallback((value: number | null) => {
+    if (onBaselineChange) {
+      onBaselineChange(value);
+    } else {
+      setLocalBaselineValue(value);
     }
-    return null;
-  };
+  }, [onBaselineChange]);
+
+  // Export handler
+  const handleExport = useCallback(() => {
+    // Export is handled by ChartExport component
+    console.log('Export initiated');
+  }, []);
+
+  // Chart element ID for export
+  const chartElementId = `chart-viewer-${indexId}`;
 
   return (
-    <div style={{
-      backgroundColor: theme.colors.utility.secondaryBackground,
-      borderRadius: '12px',
-      padding: '20px',
-      border: `1px solid ${theme.colors.utility.primaryText}10`
-    }}>
+    <div
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        padding: '20px',
+        border: `1px solid ${colors.utility.primaryText}10`
+      }}
+    >
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px'
-      }}>
-        <h3 style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: theme.colors.utility.primaryText,
-          margin: 0
-        }}>
-          📊 {indexName} Price Chart
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}
+      >
+        <h3
+          style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            color: colors.utility.primaryText,
+            margin: 0
+          }}
+        >
+          📊 {indexName} Chart
         </h3>
-      </div>
 
-      {/* Controls Panel */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        marginBottom: '20px',
-        padding: '16px',
-        backgroundColor: theme.colors.utility.primaryBackground,
-        borderRadius: '8px'
-      }}>
-        {/* View Mode Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{
-            fontSize: '13px',
-            fontWeight: '600',
-            color: theme.colors.utility.primaryText,
-            minWidth: '100px'
-          }}>
-            View Mode:
-          </span>
-          <div style={{
-            display: 'inline-flex',
-            backgroundColor: theme.colors.utility.secondaryBackground,
-            borderRadius: '6px',
-            padding: '3px',
-            border: `1px solid ${theme.colors.utility.primaryText}10`
-          }}>
-            {['graph', 'table'].map(mode => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode as ViewMode)}
-                style={{
-                  padding: '6px 16px',
-                  backgroundColor: viewMode === mode ? theme.colors.brand.primary : 'transparent',
-                  color: viewMode === mode ? 'white' : theme.colors.utility.primaryText,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {mode === 'graph' ? 'Graph' : 'Table'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Granularity Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{
-            fontSize: '13px',
-            fontWeight: '600',
-            color: theme.colors.utility.primaryText,
-            minWidth: '100px'
-          }}>
-            Granularity:
-          </span>
-          <div style={{
-            display: 'inline-flex',
-            backgroundColor: theme.colors.utility.secondaryBackground,
-            borderRadius: '6px',
-            padding: '3px',
-            border: `1px solid ${theme.colors.utility.primaryText}10`
-          }}>
-            {['daily', 'weekly', 'monthly'].map(gran => (
-              <button
-                key={gran}
-                onClick={() => handleGranularityChange(gran as Granularity)}
-                style={{
-                  padding: '6px 16px',
-                  backgroundColor: granularity === gran ? theme.colors.brand.secondary : 'transparent',
-                  color: granularity === gran ? 'white' : theme.colors.utility.primaryText,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {gran === 'daily' && 'Daily'}
-                {gran === 'weekly' && 'Weekly'}
-                {gran === 'monthly' && 'Monthly'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Time Period Selection */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: '13px',
-            fontWeight: '600',
-            color: theme.colors.utility.primaryText,
-            minWidth: '100px'
-          }}>
-            Time Period:
-          </span>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {(['1w', '1m', '3m', '6m', '1y', 'all', 'custom'] as TimePeriod[]).map(period => (
-              <button
-                key={period}
-                onClick={() => handlePeriodChange(period)}
-                style={{
-                  padding: '6px 14px',
-                  backgroundColor: timePeriod === period 
-                    ? theme.colors.brand.primary 
-                    : theme.colors.utility.secondaryBackground,
-                  color: timePeriod === period ? 'white' : theme.colors.utility.primaryText,
-                  border: `1px solid ${timePeriod === period ? theme.colors.brand.primary : theme.colors.utility.primaryText}20`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {period === '1w' && '1W'}
-                {period === '1m' && '1M'}
-                {period === '3m' && '3M'}
-                {period === '6m' && '6M'}
-                {period === '1y' && '1Y'}
-                {period === 'all' && 'All'}
-                {period === 'custom' && 'Custom'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Custom Date Range */}
-        {timePeriod === 'custom' && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            paddingLeft: '116px'
-          }}>
-            <input
-              type="date"
-              value={customStartDate}
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              max={customEndDate || undefined}
-              style={{
-                padding: '6px 10px',
-                border: `1px solid ${theme.colors.utility.primaryText}20`,
-                borderRadius: '4px',
-                backgroundColor: theme.colors.utility.secondaryBackground,
-                color: theme.colors.utility.primaryText,
-                fontSize: '13px',
-                outline: 'none'
-              }}
-            />
-            <span style={{ color: theme.colors.utility.secondaryText, fontSize: '13px' }}>to</span>
-            <input
-              type="date"
-              value={customEndDate}
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              min={customStartDate || undefined}
-              style={{
-                padding: '6px 10px',
-                border: `1px solid ${theme.colors.utility.primaryText}20`,
-                borderRadius: '4px',
-                backgroundColor: theme.colors.utility.secondaryBackground,
-                color: theme.colors.utility.primaryText,
-                fontSize: '13px',
-                outline: 'none'
-              }}
-            />
-            <button
-              onClick={handleApplyCustomDates}
-              disabled={!customStartDate || !customEndDate}
-              style={{
-                padding: '6px 16px',
-                backgroundColor: (!customStartDate || !customEndDate) 
-                  ? theme.colors.utility.secondaryText 
-                  : theme.colors.brand.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: (!customStartDate || !customEndDate) ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}
-            >
-              Apply
-            </button>
-          </div>
-        )}
-
-        {/* Color Picker */}
-        {showColorPicker && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{
-              fontSize: '13px',
-              fontWeight: '600',
-              color: theme.colors.utility.primaryText,
-              minWidth: '100px'
-            }}>
-              Line Color:
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="color"
-                value={tempLineColor}
-                onChange={(e) => handleColorChange(e.target.value)}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              />
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  value={tempLineColor}
-                  onChange={(e) => {
-                    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
-                      handleColorChange(e.target.value);
-                    }
-                  }}
-                  placeholder="#f83b46"
-                  style={{
-                    padding: '6px 10px',
-                    border: `1px solid ${theme.colors.utility.primaryText}20`,
-                    borderRadius: '4px',
-                    backgroundColor: theme.colors.utility.secondaryBackground,
-                    color: theme.colors.utility.primaryText,
-                    fontSize: '13px',
-                    width: '120px',
-                    outline: 'none',
-                    fontFamily: 'monospace'
-                  }}
-                />
-              </div>
-              <span style={{
-                fontSize: '11px',
-                color: theme.colors.utility.secondaryText
-              }}>
-                (Hex format)
-              </span>
-            </div>
-          </div>
+        {/* Export Button */}
+        {allowExport && displayMode === 'graph' && (
+          <ChartExport
+            elementId={chartElementId}
+            indexName={indexName}
+            colors={colors}
+          />
         )}
       </div>
 
-      {/* Statistics Panel */}
-      {statistics && !isLoading && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '12px',
-          marginBottom: '20px',
-          padding: '14px',
-          backgroundColor: theme.colors.utility.primaryBackground,
-          borderRadius: '8px'
-        }}>
-          <div>
-            <div style={{
-              fontSize: '11px',
-              color: theme.colors.utility.secondaryText,
-              marginBottom: '4px',
-              fontWeight: '500'
-            }}>
-              Current Value
-            </div>
-            <div style={{
-              fontSize: '20px',
-              fontWeight: '700',
-              color: theme.colors.brand.primary,
-              fontFamily: 'monospace'
-            }}>
-              {statistics.current}
-            </div>
-          </div>
-          <div>
-            <div style={{
-              fontSize: '11px',
-              color: theme.colors.utility.secondaryText,
-              marginBottom: '4px',
-              fontWeight: '500'
-            }}>
-              Min Value
-            </div>
-            <div style={{
-              fontSize: '20px',
-              fontWeight: '700',
-              color: theme.colors.semantic.error,
-              fontFamily: 'monospace'
-            }}>
-              {statistics.min}
-            </div>
-          </div>
-          <div>
-            <div style={{
-              fontSize: '11px',
-              color: theme.colors.utility.secondaryText,
-              marginBottom: '4px',
-              fontWeight: '500'
-            }}>
-              Max Value
-            </div>
-            <div style={{
-              fontSize: '20px',
-              fontWeight: '700',
-              color: theme.colors.semantic.success,
-              fontFamily: 'monospace'
-            }}>
-              {statistics.max}
-            </div>
-          </div>
-          <div>
-            <div style={{
-              fontSize: '11px',
-              color: theme.colors.utility.secondaryText,
-              marginBottom: '4px',
-              fontWeight: '500'
-            }}>
-              Period Change
-            </div>
-            <div style={{
-              fontSize: '20px',
-              fontWeight: '700',
-              color: statistics.isPositive ? theme.colors.semantic.success : theme.colors.semantic.error,
-              fontFamily: 'monospace'
-            }}>
-              {statistics.isPositive ? '+' : ''}{statistics.change}
-            </div>
-            <div style={{
-              fontSize: '11px',
-              color: statistics.isPositive ? theme.colors.semantic.success : theme.colors.semantic.error,
-              fontWeight: '600'
-            }}>
-              {statistics.isPositive ? '+' : ''}{statistics.changePercent}%
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Filter Toolbar */}
+      <CompactFilterToolbar
+        filters={filters}
+        onFilterChange={{
+          chartType: handleChartTypeChange,
+          viewMode: handleViewModeChange,
+          displayMode: handleDisplayModeChange,
+          granularity: handleGranularityChange,
+          timePeriod: handleTimePeriodChange,
+          customDates: handleCustomDateApply,
+          color: handleColorChange,
+          volume: handleVolumeToggle,
+          baseline: handleBaselineChange
+        }}
+        colors={colors}
+        showColorPicker={showColorPicker}
+        allowExport={false} // Export button in header instead
+      />
 
       {/* Error Display */}
       {error && (
-        <div style={{
-          padding: '12px',
-          backgroundColor: theme.colors.semantic.error + '10',
-          color: theme.colors.semantic.error,
-          borderRadius: '6px',
-          marginBottom: '16px',
-          border: `1px solid ${theme.colors.semantic.error}30`,
-          fontSize: '13px'
-        }}>
+        <div
+          style={{
+            marginTop: '20px',
+            padding: '12px',
+            backgroundColor: colors.semantic.error + '10',
+            color: colors.semantic.error,
+            borderRadius: '6px',
+            border: `1px solid ${colors.semantic.error}30`,
+            fontSize: '13px'
+          }}
+        >
           {error}
         </div>
       )}
 
       {/* Content Area */}
-      <div style={{
-        minHeight: '400px',
-        border: `1px solid ${theme.colors.utility.primaryText}10`,
-        borderRadius: '8px',
-        backgroundColor: theme.colors.utility.primaryBackground,
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div
+        id={chartElementId}
+        style={{
+          marginTop: '20px',
+          minHeight: '400px',
+          border: `1px solid ${colors.utility.primaryText}10`,
+          borderRadius: '8px',
+          backgroundColor: colors.utility.primaryBackground,
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {isLoading ? (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '80px',
-            color: theme.colors.utility.secondaryText
-          }}>
-            <span style={{
-              width: '32px',
-              height: '32px',
-              border: '4px solid transparent',
-              borderTop: `4px solid ${theme.colors.brand.primary}`,
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              marginRight: '12px'
-            }} />
-            Loading chart data...
+          // Loading State
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '80px',
+              color: colors.utility.secondaryText,
+              flexDirection: 'column',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                border: '4px solid transparent',
+                borderTop: `4px solid ${colors.brand.primary}`,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}
+            />
+            <span>Loading chart data...</span>
           </div>
-        ) : chartData.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '80px 20px',
-            color: theme.colors.utility.secondaryText,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>📊</div>
-            <p style={{
-              fontSize: '16px',
-              fontWeight: '500',
-              margin: '0 0 8px 0',
-              color: theme.colors.utility.primaryText
-            }}>
+        ) : processedData.length === 0 ? (
+          // Empty State
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '80px 20px',
+              color: colors.utility.secondaryText,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+          >
+            <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>
+              📊
+            </div>
+            <p
+              style={{
+                fontSize: '16px',
+                fontWeight: '500',
+                margin: '0 0 8px 0',
+                color: colors.utility.primaryText
+              }}
+            >
               No Data Available
             </p>
-            <p style={{
-              fontSize: '13px',
-              margin: 0
-            }}>
+            <p style={{ fontSize: '13px', margin: 0 }}>
               Try selecting a different time period or date range
             </p>
           </div>
-        ) : viewMode === 'graph' ? (
-          <div style={{
-            padding: '20px',
-            width: '100%',
-            height: '500px',
-            minHeight: '500px'
-          }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={theme.colors.utility.primaryText + '15'}
-                />
-                <XAxis
-                  dataKey="date"
-                  stroke={theme.colors.utility.secondaryText}
-                  style={{ fontSize: '12px' }}
-                  angle={chartData.length > 50 ? -45 : 0}
-                  textAnchor={chartData.length > 50 ? 'end' : 'middle'}
-                  height={chartData.length > 50 ? 80 : 50}
-                  interval={chartData.length > 100 ? 'preserveStartEnd' : 'preserveStart'}
-                />
-                <YAxis
-                  stroke={theme.colors.utility.secondaryText}
-                  style={{ fontSize: '12px' }}
-                  domain={['auto', 'auto']}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{
-                    fontSize: '13px',
-                    color: theme.colors.utility.primaryText,
-                    paddingTop: '10px'
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="displayValue"
-                  stroke={lineColor}
-                  strokeWidth={2}
-                  dot={chartData.length <= 50 ? { fill: lineColor, r: 3 } : false}
-                  activeDot={{ r: 6 }}
-                  name={`${indexName} Value`}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        ) : displayMode === 'graph' ? (
+          // Chart View
+          <ChartRenderer
+            chartType={chartType}
+            data={processedData}
+            config={chartConfig}
+            lineColor={lineColor}
+            indexName={indexName}
+            viewMode={viewMode}
+            baselineValue={baselineValue}
+          />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: '13px'
-              }}>
-                <thead>
-                  <tr style={{
-                    backgroundColor: theme.colors.utility.secondaryBackground,
-                    borderBottom: `2px solid ${theme.colors.utility.primaryText}10`,
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1
-                  }}>
-                    <th style={{
-                      padding: '14px 20px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: theme.colors.utility.primaryText
-                    }}>
-                      Date
-                    </th>
-                    <th style={{
-                      padding: '14px 20px',
-                      textAlign: 'right',
-                      fontWeight: '600',
-                      color: theme.colors.utility.primaryText
-                    }}>
-                      Value
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {chartData
-                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-                    .map((row, index) => (
-                    <tr
-                      key={`${row.rawDate}-${index}`}
-                      style={{
-                        borderBottom: `1px solid ${theme.colors.utility.primaryText}05`,
-                        backgroundColor: index % 2 === 0 ? 'transparent' : theme.colors.utility.primaryText + '03'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = theme.colors.utility.primaryText + '08';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = index % 2 === 0 
-                          ? 'transparent' 
-                          : theme.colors.utility.primaryText + '03';
-                      }}
-                    >
-                      <td style={{
-                        padding: '12px 20px',
-                        color: theme.colors.utility.primaryText
-                      }}>
-                        {row.date}
-                      </td>
-                      <td style={{
-                        padding: '12px 20px',
-                        textAlign: 'right',
-                        color: lineColor,
-                        fontWeight: '600',
-                        fontFamily: 'monospace'
-                      }}>
-                        {row.displayValue.toFixed(4)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {chartData.length > pageSize && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 20px',
-                borderTop: `1px solid ${theme.colors.utility.primaryText}10`,
-                backgroundColor: theme.colors.utility.secondaryBackground
-              }}>
-                <div style={{ fontSize: '12px', color: theme.colors.utility.secondaryText }}>
-                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, chartData.length)} of {chartData.length}
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    onClick={() => handlePageChange(1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: currentPage === 1 ? theme.colors.utility.primaryBackground : theme.colors.brand.primary,
-                      color: currentPage === 1 ? theme.colors.utility.secondaryText : 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    First
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: currentPage === 1 ? theme.colors.utility.primaryBackground : theme.colors.brand.primary,
-                      color: currentPage === 1 ? theme.colors.utility.secondaryText : 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    Prev
-                  </button>
-                  <span style={{
-                    padding: '6px 12px',
-                    fontSize: '12px',
-                    color: theme.colors.utility.primaryText,
-                    fontWeight: '600'
-                  }}>
-                    Page {currentPage} of {Math.ceil(chartData.length / pageSize)}
-                  </span>
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage >= Math.ceil(chartData.length / pageSize)}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: currentPage >= Math.ceil(chartData.length / pageSize) ? theme.colors.utility.primaryBackground : theme.colors.brand.primary,
-                      color: currentPage >= Math.ceil(chartData.length / pageSize) ? theme.colors.utility.secondaryText : 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: currentPage >= Math.ceil(chartData.length / pageSize) ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    Next
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(Math.ceil(chartData.length / pageSize))}
-                    disabled={currentPage >= Math.ceil(chartData.length / pageSize)}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: currentPage >= Math.ceil(chartData.length / pageSize) ? theme.colors.utility.primaryBackground : theme.colors.brand.primary,
-                      color: currentPage >= Math.ceil(chartData.length / pageSize) ? theme.colors.utility.secondaryText : 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: currentPage >= Math.ceil(chartData.length / pageSize) ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    Last
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          // Table View
+          <DataTable
+            data={processedData}
+            colors={colors}
+            viewMode={viewMode}
+            pageSize={50}
+          />
         )}
       </div>
 
+      {/* CSS Animations */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }

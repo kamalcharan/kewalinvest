@@ -88,11 +88,12 @@ export function useIndexMetrics(indexId: number) {
 
 /**
  * Hook to fetch time-series returns data for an index
+ * UPDATED: Now supports 'weekly' granularity
  */
 export function useIndexReturnsTimeSeries(
   indexId: number,
   periods: string[] = ['1m', '3m', '6m', '1y', 'ytd', 'all'],
-  granularity: 'daily' | 'monthly' = 'daily',
+  granularity: 'daily' | 'weekly' | 'monthly' = 'daily',
   startDate?: string,
   endDate?: string
 ) {
@@ -127,10 +128,11 @@ export function useIndexReturnsTimeSeries(
 
 /**
  * Hook to fetch time-series volatility data for an index
+ * UPDATED: Now supports 'weekly' granularity
  */
 export function useIndexVolatilityTimeSeries(
   indexId: number,
-  granularity: 'daily' | 'monthly' = 'daily',
+  granularity: 'daily' | 'weekly' | 'monthly' = 'daily',
   startDate?: string,
   endDate?: string
 ) {

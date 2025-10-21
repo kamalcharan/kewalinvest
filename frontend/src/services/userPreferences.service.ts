@@ -1,363 +1,463 @@
 // frontend/src/services/userPreferences.service.ts
+// API service for user chart preferences
 
+import apiService from './api.service';
+import { API_ENDPOINTS } from './serviceURLs';
 import {
-  UserChartPreference,
-  SaveColorPreferenceRequest,
-  SaveColorPreferenceResponse,
-  GetColorPreferenceResponse,
-  MarketAnalysisError,
-  ApiError
-} from '../types/marketAnalysis.types';
+  ChartPreference,
+  GetChartPreferenceResponse,
+  SaveChartPreferenceRequest,
+  SaveChartPreferenceResponse,
+  GetAllPreferencesResponse,
+  DeletePreferenceResponse,
+  PreferenceError,
+  isValidHexColor
+} from '../types/userPreferences.types';
 
-class UserPreferencesService {
-  private baseUrl: string;
-  private timeout: number = 10000; // 10 seconds for preferences
+/**
+ * Transform backend response to frontend ChartPreference type
+ */
+function transformToChartPreference(backendPref: any): ChartPreference {
+  return {
+    index_id: backendPref.index_id,
+    line_color: backendPref.line_color,
+    created_at: backendPref.created_at instanceof Date 
+      ? backendPref.created_at.toISOString() 
+      : backendPref.created_at,
+    updated_at: backendPref.updated_at instanceof Date 
+      ? backendPref.updated_at.toISOString() 
+      : backendPref.updated_at,
+  };
+}
 
-  constructor() {
-    // TODO: Replace with environment variable
-    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-  }
-
+/**
+ * User Preferences Service
+ * Handles all API calls related to chart preferences
+ */
+export class UserPreferencesService {
   /**
-   * Make HTTP request with error handling
+   * Get chart preference for a specific index
+   * Returns null if no preference exists (will use theme default)
+   * 
+   * GET /api/user/preferences/chart/:indexId
    */
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
+  static async getColorPreference(indexId: number): Promise<ChartPreference | null> {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json().catch(() => ({
-          message: `HTTP ${response.status}: ${response.statusText}`,
-          code: `HTTP_${response.status}`
-        }));
-
-        throw new MarketAnalysisError(
-          errorData.message,
-          errorData.code,
-          errorData.details
-        );
+      if (!indexId || indexId <= 0) {
+        throw new PreferenceError('Invalid index ID', 400);
       }
 
-      return await response.json();
+      const url = API_ENDPOINTS.USER_PREFERENCES.GET_CHART_PREFERENCE(indexId);
+      const response = await apiService.get<GetChartPreferenceResponse>(url);
+
+      if (response.success && response.preference) {
+        return transformToChartPreference(response.preference);
+      }
+
+      // No preference found - return null (frontend will use theme default)
+      return null;
+
     } catch (error: any) {
-      if (error instanceof MarketAnalysisError) {
-        throw error;
-      }
-
-      if (error.name === 'AbortError') {
-        throw new MarketAnalysisError(
-          'Request timeout',
-          'TIMEOUT',
-          { timeout: this.timeout }
-        );
-      }
-
-      throw new MarketAnalysisError(
-        error.message || 'Unknown error',
-        'NETWORK_ERROR',
-        { originalError: error }
-      );
-    }
-  }
-
-  /**
-   * Validate hex color format
-   */
-  private isValidHexColor(color: string): boolean {
-    return /^#[0-9A-F]{6}$/i.test(color);
-  }
-
-  /**
-   * Save or update chart color preference for an index
-   */
-  async saveColorPreference(
-    indexId: number,
-    lineColor: string
-  ): Promise<UserChartPreference> {
-    try {
-      // Validate color format
-      if (!this.isValidHexColor(lineColor)) {
-        throw new MarketAnalysisError(
-          'Invalid hex color format. Use #RRGGBB format.',
-          'INVALID_COLOR_FORMAT',
-          { color: lineColor }
-        );
-      }
-
-      const request: SaveColorPreferenceRequest = {
-        index_id: indexId,
-        line_color: lineColor
-      };
-
-      const response = await this.request<SaveColorPreferenceResponse>(
-        '/user-preferences/chart-colors',
-        {
-          method: 'POST',
-          body: JSON.stringify(request)
-        }
-      );
-
-      if (!response.success) {
-        throw new MarketAnalysisError(
-          response.error || 'Failed to save color preference',
-          'SAVE_PREFERENCE_ERROR'
-        );
-      }
-
-      if (!response.data) {
-        throw new MarketAnalysisError(
-          'No data returned from server',
-          'NO_DATA_ERROR'
-        );
-      }
-
-      console.log('Color preference saved:', {
-        indexId,
-        color: lineColor
-      });
-
-      return response.data;
-    } catch (error: any) {
-      console.error('Save color preference failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get chart color preference for an index
-   */
-  async getColorPreference(indexId: number): Promise<UserChartPreference | null> {
-    try {
-      const response = await this.request<GetColorPreferenceResponse>(
-        `/user-preferences/chart-colors/${indexId}`,
-        { method: 'GET' }
-      );
-
-      if (!response.success) {
-        // 404 is expected if no preference exists
-        if (response.error?.includes('404') || response.error?.includes('not found')) {
-          return null;
-        }
-
-        throw new MarketAnalysisError(
-          response.error || 'Failed to get color preference',
-          'GET_PREFERENCE_ERROR'
-        );
-      }
-
-      return response.data || null;
-    } catch (error: any) {
-      // Handle 404 gracefully
-      if (error instanceof MarketAnalysisError && error.code === 'HTTP_404') {
-        console.log('No color preference found for index:', indexId);
+      // If 404 or preference not found, return null (not an error - use default)
+      if (error.response?.status === 404 || error.message?.includes('not found')) {
         return null;
       }
 
-      console.error('Get color preference failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all chart color preferences for the current user
-   */
-  async getAllColorPreferences(): Promise<UserChartPreference[]> {
-    try {
-      const response = await this.request<{ success: boolean; data: UserChartPreference[]; error?: string }>(
-        '/user-preferences/chart-colors',
-        { method: 'GET' }
+      console.error('Get chart preference failed:', error);
+      throw new PreferenceError(
+        error.message || 'Failed to fetch chart preference',
+        error.response?.status
       );
-
-      if (!response.success) {
-        throw new MarketAnalysisError(
-          response.error || 'Failed to get color preferences',
-          'GET_PREFERENCES_ERROR'
-        );
-      }
-
-      return response.data || [];
-    } catch (error: any) {
-      console.error('Get all color preferences failed:', error);
-      throw error;
     }
   }
 
   /**
-   * Delete chart color preference for an index
-   * Reverts to default theme color
+   * Save or update chart preference for a specific index
+   * Validates color format before sending
+   * 
+   * POST /api/user/preferences/chart/:indexId
    */
-  async deleteColorPreference(indexId: number): Promise<void> {
-    try {
-      const response = await this.request<{ success: boolean; message: string; error?: string }>(
-        `/user-preferences/chart-colors/${indexId}`,
-        { method: 'DELETE' }
-      );
-
-      if (!response.success) {
-        throw new MarketAnalysisError(
-          response.error || 'Failed to delete color preference',
-          'DELETE_PREFERENCE_ERROR'
-        );
-      }
-
-      console.log('Color preference deleted for index:', indexId);
-    } catch (error: any) {
-      console.error('Delete color preference failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete all chart color preferences
-   * Reverts all to default theme colors
-   */
-  async deleteAllColorPreferences(): Promise<void> {
-    try {
-      const response = await this.request<{ success: boolean; message: string; error?: string }>(
-        '/user-preferences/chart-colors',
-        { method: 'DELETE' }
-      );
-
-      if (!response.success) {
-        throw new MarketAnalysisError(
-          response.error || 'Failed to delete all color preferences',
-          'DELETE_ALL_PREFERENCES_ERROR'
-        );
-      }
-
-      console.log('All color preferences deleted');
-    } catch (error: any) {
-      console.error('Delete all color preferences failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Batch update color preferences
-   * Useful for bot operations
-   */
-  async batchUpdateColorPreferences(
-    preferences: Array<{ index_id: number; line_color: string }>
-  ): Promise<UserChartPreference[]> {
-    try {
-      // Validate all colors first
-      for (const pref of preferences) {
-        if (!this.isValidHexColor(pref.line_color)) {
-          throw new MarketAnalysisError(
-            `Invalid hex color format for index ${pref.index_id}. Use #RRGGBB format.`,
-            'INVALID_COLOR_FORMAT',
-            { index_id: pref.index_id, color: pref.line_color }
-          );
-        }
-      }
-
-      const response = await this.request<{ success: boolean; data: UserChartPreference[]; error?: string }>(
-        '/user-preferences/chart-colors/batch',
-        {
-          method: 'POST',
-          body: JSON.stringify({ preferences })
-        }
-      );
-
-      if (!response.success) {
-        throw new MarketAnalysisError(
-          response.error || 'Failed to batch update color preferences',
-          'BATCH_UPDATE_ERROR'
-        );
-      }
-
-      console.log('Batch color preferences updated:', preferences.length);
-
-      return response.data || [];
-    } catch (error: any) {
-      console.error('Batch update color preferences failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get or create preference with default
-   * Returns existing preference or creates one with provided default color
-   */
-  async getOrCreateColorPreference(
+  static async saveColorPreference(
     indexId: number,
-    defaultColor: string = '#f83b46'
-  ): Promise<UserChartPreference> {
+    lineColor: string
+  ): Promise<ChartPreference> {
     try {
-      // Try to get existing preference
-      const existing = await this.getColorPreference(indexId);
-      if (existing) {
-        return existing;
+      if (!indexId || indexId <= 0) {
+        throw new PreferenceError('Invalid index ID', 400);
       }
 
-      // Create new preference with default color
-      return await this.saveColorPreference(indexId, defaultColor);
+      // Validate hex color format on frontend
+      if (!isValidHexColor(lineColor)) {
+        throw new PreferenceError(
+          `Invalid hex color format: ${lineColor}. Expected format: #RRGGBB`,
+          400
+        );
+      }
+
+      const url = API_ENDPOINTS.USER_PREFERENCES.SAVE_CHART_PREFERENCE(indexId);
+      const body: SaveChartPreferenceRequest = { line_color: lineColor };
+
+      const response = await apiService.post<SaveChartPreferenceResponse>(url, body);
+
+      if (response.success && response.preference) {
+        return transformToChartPreference(response.preference);
+      }
+
+      throw new PreferenceError('Failed to save preference');
+
     } catch (error: any) {
-      console.error('Get or create color preference failed:', error);
-      throw error;
+      console.error('Save chart preference failed:', error);
+      
+      // Re-throw PreferenceError as-is
+      if (error instanceof PreferenceError) {
+        throw error;
+      }
+
+      throw new PreferenceError(
+        error.message || 'Failed to save chart preference',
+        error.response?.status
+      );
     }
   }
 
   /**
-   * Export preferences as JSON
-   * Useful for data export/import
+   * Get all chart preferences for the current user
+   * 
+   * GET /api/user/preferences/chart
    */
-  async exportPreferencesAsJSON(): Promise<Blob> {
+  static async getAllColorPreferences(): Promise<ChartPreference[]> {
+    try {
+      const url = API_ENDPOINTS.USER_PREFERENCES.GET_ALL_CHART_PREFERENCES;
+      const response = await apiService.get<GetAllPreferencesResponse>(url);
+
+      if (response.success && response.preferences) {
+        return response.preferences.map(transformToChartPreference);
+      }
+
+      return [];
+
+    } catch (error: any) {
+      console.error('Get all preferences failed:', error);
+      throw new PreferenceError(
+        error.message || 'Failed to fetch preferences',
+        error.response?.status
+      );
+    }
+  }
+
+  /**
+   * Delete chart preference for a specific index
+   * After deletion, frontend should use theme default color
+   * 
+   * DELETE /api/user/preferences/chart/:indexId
+   */
+  static async deleteColorPreference(indexId: number): Promise<void> {
+    try {
+      if (!indexId || indexId <= 0) {
+        throw new PreferenceError('Invalid index ID', 400);
+      }
+
+      const url = API_ENDPOINTS.USER_PREFERENCES.DELETE_CHART_PREFERENCE(indexId);
+      const response = await apiService.delete<DeletePreferenceResponse>(url);
+
+      if (!response.success) {
+        throw new PreferenceError('Failed to delete preference');
+      }
+
+    } catch (error: any) {
+      console.error('Delete chart preference failed:', error);
+      throw new PreferenceError(
+        error.message || 'Failed to delete chart preference',
+        error.response?.status
+      );
+    }
+  }
+
+  /**
+   * Batch get preferences for multiple indices
+   * Useful for preloading preferences for dashboard
+   */
+  static async getPreferencesForIndices(indexIds: number[]): Promise<Map<number, string>> {
+    try {
+      const allPreferences = await this.getAllColorPreferences();
+      
+      const preferenceMap = new Map<number, string>();
+      
+      allPreferences.forEach(pref => {
+        if (indexIds.includes(pref.index_id)) {
+          preferenceMap.set(pref.index_id, pref.line_color);
+        }
+      });
+
+      return preferenceMap;
+
+    } catch (error: any) {
+      console.error('Get preferences for indices failed:', error);
+      // Return empty map on error - frontend will use defaults
+      return new Map();
+    }
+  }
+
+  /**
+   * Check if preference exists for an index
+   * Useful for UI indicators
+   */
+  static async hasPreference(indexId: number): Promise<boolean> {
+    try {
+      const preference = await this.getColorPreference(indexId);
+      return preference !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Helper: Debounced save function
+   * Use this for color pickers to avoid excessive API calls
+   * Returns a debounced function that saves after delay
+   * 
+   * @param indexId - The index ID to save preference for
+   * @param delayMs - Delay in milliseconds (default: 1000ms)
+   * @returns Debounced save function
+   * 
+   * @example
+   * const debouncedSave = UserPreferencesService.createDebouncedSave(indexId, 1000);
+   * // In color picker onChange:
+   * debouncedSave(newColor);
+   */
+  static createDebouncedSave(
+    indexId: number,
+    delayMs: number = 1000
+  ): (color: string) => void {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    return (color: string) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      timeoutId = setTimeout(async () => {
+        try {
+          await this.saveColorPreference(indexId, color);
+          console.log(`Debounced save completed for index ${indexId}: ${color}`);
+        } catch (error) {
+          console.error('Debounced save failed:', error);
+        }
+      }, delayMs);
+    };
+  }
+
+  /**
+   * Batch save multiple preferences
+   * Useful for bulk operations or importing settings
+   * 
+   * @param preferences - Array of preferences to save
+   * @returns Results with success/failure for each
+   */
+  static async batchSavePreferences(
+    preferences: Array<{ indexId: number; lineColor: string }>
+  ): Promise<{
+    successful: number;
+    failed: number;
+    results: Array<{ indexId: number; success: boolean; error?: string }>;
+  }> {
+    const results: Array<{ indexId: number; success: boolean; error?: string }> = [];
+    let successful = 0;
+    let failed = 0;
+
+    for (const pref of preferences) {
+      try {
+        await this.saveColorPreference(pref.indexId, pref.lineColor);
+        results.push({ indexId: pref.indexId, success: true });
+        successful++;
+      } catch (error: any) {
+        results.push({ 
+          indexId: pref.indexId, 
+          success: false, 
+          error: error.message 
+        });
+        failed++;
+      }
+    }
+
+    return { successful, failed, results };
+  }
+
+  /**
+   * Export all user preferences as JSON
+   * Useful for backup or migration
+   */
+  static async exportPreferences(): Promise<string> {
     try {
       const preferences = await this.getAllColorPreferences();
       
-      const json = JSON.stringify(preferences, null, 2);
-      return new Blob([json], { type: 'application/json' });
+      const exportData = {
+        version: '1.0',
+        exported_at: new Date().toISOString(),
+        preferences: preferences.map(pref => ({
+          index_id: pref.index_id,
+          line_color: pref.line_color
+        }))
+      };
+
+      return JSON.stringify(exportData, null, 2);
+
     } catch (error: any) {
       console.error('Export preferences failed:', error);
-      throw error;
+      throw new PreferenceError(
+        error.message || 'Failed to export preferences',
+        error.response?.status
+      );
     }
   }
 
   /**
    * Import preferences from JSON
-   * Useful for data import
+   * Useful for restoring backup or migration
+   * 
+   * @param jsonData - JSON string with preferences
+   * @param overwrite - Whether to overwrite existing preferences (default: false)
    */
-  async importPreferencesFromJSON(file: File): Promise<UserChartPreference[]> {
+  static async importPreferences(
+    jsonData: string,
+    overwrite: boolean = false
+  ): Promise<{
+    imported: number;
+    skipped: number;
+    failed: number;
+  }> {
     try {
-      const text = await file.text();
-      const preferences = JSON.parse(text) as Array<{ index_id: number; line_color: string }>;
+      const data = JSON.parse(jsonData);
+      
+      if (!data.preferences || !Array.isArray(data.preferences)) {
+        throw new PreferenceError('Invalid import data format');
+      }
 
-      // Validate before importing
-      for (const pref of preferences) {
-        if (!pref.index_id || !this.isValidHexColor(pref.line_color)) {
-          throw new MarketAnalysisError(
-            'Invalid preference data in file',
-            'INVALID_IMPORT_DATA',
-            { file: file.name }
-          );
+      let imported = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const pref of data.preferences) {
+        try {
+          // Check if preference already exists
+          if (!overwrite) {
+            const exists = await this.hasPreference(pref.index_id);
+            if (exists) {
+              skipped++;
+              continue;
+            }
+          }
+
+          await this.saveColorPreference(pref.index_id, pref.line_color);
+          imported++;
+        } catch {
+          failed++;
         }
       }
 
-      return await this.batchUpdateColorPreferences(preferences);
+      return { imported, skipped, failed };
+
     } catch (error: any) {
       console.error('Import preferences failed:', error);
-      throw error;
+      throw new PreferenceError(
+        error.message || 'Failed to import preferences',
+        error.response?.status
+      );
     }
+  }
+
+  /**
+   * Reset all preferences for current user
+   * WARNING: This will delete all saved color preferences
+   */
+  static async resetAllPreferences(): Promise<number> {
+    try {
+      const allPreferences = await this.getAllColorPreferences();
+      
+      let deletedCount = 0;
+      
+      for (const pref of allPreferences) {
+        try {
+          await this.deleteColorPreference(pref.index_id);
+          deletedCount++;
+        } catch (error) {
+          console.error(`Failed to delete preference for index ${pref.index_id}:`, error);
+        }
+      }
+
+      return deletedCount;
+
+    } catch (error: any) {
+      console.error('Reset all preferences failed:', error);
+      throw new PreferenceError(
+        error.message || 'Failed to reset preferences',
+        error.response?.status
+      );
+    }
+  }
+
+  /**
+   * Get preference statistics
+   * Useful for analytics or debugging
+   */
+  static async getPreferenceStats(): Promise<{
+    total: number;
+    colors: Map<string, number>;
+    mostUsedColor: string | null;
+  }> {
+    try {
+      const preferences = await this.getAllColorPreferences();
+      
+      const colorCounts = new Map<string, number>();
+      
+      preferences.forEach(pref => {
+        const count = colorCounts.get(pref.line_color) || 0;
+        colorCounts.set(pref.line_color, count + 1);
+      });
+
+      let mostUsedColor: string | null = null;
+      let maxCount = 0;
+      
+      colorCounts.forEach((count, color) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mostUsedColor = color;
+        }
+      });
+
+      return {
+        total: preferences.length,
+        colors: colorCounts,
+        mostUsedColor
+      };
+
+    } catch (error: any) {
+      console.error('Get preference stats failed:', error);
+      throw new PreferenceError(
+        error.message || 'Failed to get preference statistics',
+        error.response?.status
+      );
+    }
+  }
+
+  /**
+   * Format error message for user display
+   */
+  static formatError(error: unknown): string {
+    if (error instanceof PreferenceError) {
+      return error.message;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'An unexpected error occurred';
   }
 }
 
-// Export singleton instance
-export const userPreferencesService = new UserPreferencesService();
+// Export singleton instance for convenience
+export const userPreferencesService = UserPreferencesService;
+
+// Default export
+export default UserPreferencesService;

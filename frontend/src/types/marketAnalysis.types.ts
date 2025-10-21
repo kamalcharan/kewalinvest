@@ -40,8 +40,13 @@ export interface IndexMetrics {
   index_id: number;
   date?: string | null;
   
-  // Price data
-  last_price: number | null;
+  // NEW: Index metadata from JOIN
+  index_name: string;
+  index_code: string;
+  yahoo_symbol: string;
+  
+  // Price data - UPDATED: last_price is now number (not nullable)
+  last_price: number;
   price_date?: Date | string | null;
   
   // Returns (various periods)
@@ -192,6 +197,10 @@ export interface GetIndexMetricsResponse {
   success: boolean;
   index_id?: number;
   date?: string;
+  index_name?: string;
+  index_code?: string;
+  yahoo_symbol?: string;
+  last_price?: number;
   metrics?: {
     daily_return: number | null;
     return_1w: number | null;
@@ -350,18 +359,22 @@ export interface MarketDashboardState {
   statistics: DashboardStatistics | null;
 }
 
+/**
+ * UPDATED: Complete MarketDataRecord with all fields
+ * Used for time-series data that returns full records
+ */
 export interface MarketDataRecord {
   id: number;
   index_id: number;
-  date: Date;
+  date: Date | string;
   
   // OHLCV
   open: number;
   high: number;
   low: number;
   close: number;
-  volume?: number;
-  adj_close?: number;
+  volume?: number | null;
+  adj_close?: number | null;
   data_source: string;
   
   // Returns (%)
@@ -394,6 +407,21 @@ export interface MarketDataRecord {
   
   // Timestamps
   metrics_calculated_at?: Date | string | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+/**
+ * UPDATED: Time-series data types now use complete MarketDataRecord
+ */
+export interface ReturnTimeSeriesData extends MarketDataRecord {}
+
+export interface VolatilityTimeSeriesData {
+  date: string;
+  sd_7d?: number | null;
+  sd_14d?: number | null;
+  sd_21d?: number | null;
+  sd_42d?: number | null;
+  sd_3m?: number | null;
+  sd_6m?: number | null;
 }
