@@ -5,13 +5,13 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-01-15 (Schema extraction from live database)
+-- Updated: 2025-10-22 (Schema extraction from live database - current_schema.sql)
 -- ============================================================================
 
 -- ============================================================================
 -- SECTION 1: CORE FOUNDATION TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Creating Core Foundation Tables';
@@ -56,7 +56,7 @@ COMMENT ON COLUMN t_users.is_live IS 'Data environment flag: true=production, fa
 -- ============================================================================
 -- SECTION 2: CHAT TABLES (AI Assistant)
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Chat Tables...';
 END $$;
@@ -92,7 +92,7 @@ COMMENT ON COLUMN t_chat_messages.message_type IS 'Type: user, assistant, system
 -- ============================================================================
 -- SECTION 3: CONTACT & CUSTOMER TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Contact and Customer Tables...';
 END $$;
@@ -166,7 +166,7 @@ CREATE TABLE t_customers (
     created_by INTEGER REFERENCES t_users(id),
     CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan, is_live),
     CONSTRAINT death_date_logic CHECK (
-        (survival_status = 'alive' AND date_of_death IS NULL) OR 
+        (survival_status = 'alive' AND date_of_death IS NULL) OR
         (survival_status = 'deceased' AND date_of_death IS NOT NULL)
     )
 );
@@ -205,7 +205,7 @@ COMMENT ON COLUMN t_customer_addresses.is_primary IS 'Primary address for the cu
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Import and File Upload Tables...';
 END $$;
@@ -372,7 +372,7 @@ COMMENT ON TABLE t_import_logs IS 'Audit trail for import operations';
 -- ============================================================================
 -- SECTION 5: SCHEME & NAV TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Scheme and NAV Tables...';
 END $$;
@@ -453,7 +453,7 @@ CREATE TABLE t_scheme_bookmarks (
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
 COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference). Falls back to scheme_name if NULL';
 
--- TABLE: t_nav_data
+-- TABLE: t_nav_data (UPDATED with metric columns)
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER DEFAULT NULL,
@@ -467,10 +467,53 @@ CREATE TABLE t_nav_data (
     data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- NEW: Performance metrics columns
+    daily_return NUMERIC(10,4),
+    return_1w NUMERIC(10,4),
+    return_1m NUMERIC(10,4),
+    return_3m NUMERIC(10,4),
+    return_6m NUMERIC(10,4),
+    return_1y NUMERIC(10,4),
+    return_ytd NUMERIC(10,4),
+    return_all NUMERIC(10,4),
+    sd_7d NUMERIC(10,4),
+    sd_14d NUMERIC(10,4),
+    sd_21d NUMERIC(10,4),
+    sd_42d NUMERIC(10,4),
+    sd_3m NUMERIC(10,4),
+    sd_6m NUMERIC(10,4),
+    count_3m INTEGER,
+    count_42d INTEGER,
+    sharpe_ratio NUMERIC(10,4),
+    max_drawdown NUMERIC(10,4),
+    total_risk NUMERIC(10,4),
+    cagr NUMERIC(10,4),
+    metrics_calculated_at TIMESTAMP,
     CONSTRAINT unique_nav_record UNIQUE (scheme_id, nav_date, is_live)
 );
 
-COMMENT ON TABLE t_nav_data IS 'Historical NAV data for mutual fund schemes';
+COMMENT ON TABLE t_nav_data IS 'Historical NAV data for mutual fund schemes with performance metrics';
+COMMENT ON COLUMN t_nav_data.daily_return IS 'Daily return percentage (today vs yesterday)';
+COMMENT ON COLUMN t_nav_data.return_1w IS '1-week return percentage';
+COMMENT ON COLUMN t_nav_data.return_1m IS '1-month return percentage';
+COMMENT ON COLUMN t_nav_data.return_3m IS '3-month return percentage';
+COMMENT ON COLUMN t_nav_data.return_6m IS '6-month return percentage';
+COMMENT ON COLUMN t_nav_data.return_1y IS '1-year return percentage';
+COMMENT ON COLUMN t_nav_data.return_ytd IS 'Year-to-date return percentage';
+COMMENT ON COLUMN t_nav_data.return_all IS 'All-time return percentage (since inception)';
+COMMENT ON COLUMN t_nav_data.sd_7d IS '7-day rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.sd_14d IS '14-day rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.sd_21d IS '21-day rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.sd_42d IS '42-day rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.sd_3m IS '3-month rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.sd_6m IS '6-month rolling standard deviation (volatility)';
+COMMENT ON COLUMN t_nav_data.count_3m IS 'Number of data points available in 3-month period';
+COMMENT ON COLUMN t_nav_data.count_42d IS 'Number of data points available in 42-day period';
+COMMENT ON COLUMN t_nav_data.sharpe_ratio IS 'Sharpe ratio (risk-adjusted return metric)';
+COMMENT ON COLUMN t_nav_data.max_drawdown IS 'Maximum drawdown percentage (largest peak-to-trough decline)';
+COMMENT ON COLUMN t_nav_data.total_risk IS 'Total risk metric (composite volatility measure)';
+COMMENT ON COLUMN t_nav_data.cagr IS 'Compound Annual Growth Rate percentage';
+COMMENT ON COLUMN t_nav_data.metrics_calculated_at IS 'Timestamp when metrics were last calculated';
 
 -- TABLE: t_nav_download_jobs
 CREATE TABLE t_nav_download_jobs (
@@ -532,7 +575,7 @@ COMMENT ON TABLE t_nav_schedule_executions IS 'Execution history for NAV schedul
 -- ============================================================================
 -- SECTION 6: PORTFOLIO & TRANSACTION TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Portfolio and Transaction Tables...';
 END $$;
@@ -615,10 +658,34 @@ COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the sta
 COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
 COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
 
+-- TABLE: t_monthly_portfolio_snapshots (NEW)
+CREATE TABLE t_monthly_portfolio_snapshots (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    customer_id INTEGER NOT NULL,
+    snapshot_month_end DATE NOT NULL,
+    total_invested NUMERIC(18,2),
+    current_value NUMERIC(18,2),
+    total_returns NUMERIC(18,2),
+    return_percentage NUMERIC(10,2),
+    total_units NUMERIC(18,4),
+    total_schemes INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio snapshots for tracking performance over time';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.snapshot_month_end IS 'Last day of the month for this snapshot';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.total_invested IS 'Total amount invested as of this snapshot date';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.current_value IS 'Portfolio value as of this snapshot date';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.total_returns IS 'Total returns (gains/losses) as of this snapshot date';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.return_percentage IS 'Return percentage as of this snapshot date';
+
 -- ============================================================================
 -- SECTION 7: JTBD (JOBS TO BE DONE) TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating JTBD Tables...';
 END $$;
@@ -644,10 +711,51 @@ CREATE TABLE t_jtbd_configurations (
 COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert and reminder configurations';
 COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger';
 
+-- TABLE: t_goal_alerts
+CREATE TABLE t_goal_alerts (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    action_required VARCHAR(100),
+    action_details JSONB,
+    is_acknowledged BOOLEAN DEFAULT false,
+    acknowledged_at TIMESTAMP,
+    acknowledged_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_goal_alerts IS 'Alerts generated for customer goals and JTBD configurations';
+
+-- TABLE: t_goal_progress_snapshots
+CREATE TABLE t_goal_progress_snapshots (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL,
+    current_value NUMERIC(15,2) NOT NULL,
+    monthly_contribution NUMERIC(15,2) NOT NULL,
+    projected_corpus NUMERIC(15,2),
+    projected_achievement_date DATE,
+    probability_of_success NUMERIC(5,2),
+    on_track BOOLEAN,
+    deviation_percentage NUMERIC(5,2),
+    recalculation_trigger VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_goal_snapshot UNIQUE (goal_id, snapshot_date)
+);
+
+COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement over time';
+
 -- ============================================================================
 -- SECTION 8: BOOKMARK TABLES & REASON MASTERS
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Bookmark Tables...';
 END $$;
@@ -696,7 +804,7 @@ COMMENT ON COLUMN t_customer_bookmarks.notes IS 'Optional notes about why custom
 -- ============================================================================
 -- SECTION 9: MARKET DATA TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating Market Data Tables...';
 END $$;
@@ -729,7 +837,7 @@ COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Y
 COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
 COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
 
--- TABLE: t_market_data_records
+-- TABLE: t_market_data_records (UPDATED with metrics_calculated_at)
 CREATE TABLE t_market_data_records (
     id SERIAL PRIMARY KEY,
     index_id INTEGER NOT NULL REFERENCES t_market_indices(id) ON DELETE CASCADE,
@@ -743,11 +851,13 @@ CREATE TABLE t_market_data_records (
     data_source VARCHAR(50) DEFAULT 'yahoo_finance',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metrics_calculated_at TIMESTAMP,
     CONSTRAINT unique_market_data UNIQUE (index_id, date)
 );
 
 COMMENT ON TABLE t_market_data_records IS 'Historical OHLCV data for market indices';
 COMMENT ON COLUMN t_market_data_records.adj_close IS 'Adjusted close price (for splits/dividends)';
+COMMENT ON COLUMN t_market_data_records.metrics_calculated_at IS 'Timestamp when metrics were last calculated';
 
 -- TABLE: t_market_download_jobs
 CREATE TABLE t_market_download_jobs (
@@ -807,54 +917,31 @@ CREATE TABLE t_market_eod_scheduler (
 COMMENT ON TABLE t_market_eod_scheduler IS 'Global EOD scheduler configuration';
 
 -- ============================================================================
--- SECTION 10: GOAL TRACKING TABLES
+-- SECTION 10: USER PREFERENCE TABLES
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Creating Goal Tracking Tables...';
+    RAISE NOTICE 'Creating User Preference Tables...';
 END $$;
 
--- TABLE: t_goal_alerts
-CREATE TABLE t_goal_alerts (
+-- TABLE: t_user_chart_preferences (NEW)
+CREATE TABLE t_user_chart_preferences (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
-    is_live BOOLEAN NOT NULL,
-    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
-    alert_type VARCHAR(50) NOT NULL,
-    severity VARCHAR(20) NOT NULL,
-    message TEXT NOT NULL,
-    action_required VARCHAR(100),
-    action_details JSONB,
-    is_acknowledged BOOLEAN DEFAULT false,
-    acknowledged_at TIMESTAMP,
-    acknowledged_by INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    user_id INTEGER NOT NULL,
+    index_id INTEGER NOT NULL,
+    line_color VARCHAR(7) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
 );
 
--- TABLE: t_goal_progress_snapshots
-CREATE TABLE t_goal_progress_snapshots (
-    id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
-    is_live BOOLEAN NOT NULL,
-    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-    snapshot_date DATE NOT NULL,
-    current_value NUMERIC(15,2) NOT NULL,
-    monthly_contribution NUMERIC(15,2) NOT NULL,
-    projected_corpus NUMERIC(15,2),
-    projected_achievement_date DATE,
-    probability_of_success NUMERIC(5,2),
-    on_track BOOLEAN,
-    deviation_percentage NUMERIC(5,2),
-    recalculation_trigger VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_goal_snapshot UNIQUE (goal_id, snapshot_date)
-);
+COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
+COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
 
 -- ============================================================================
 -- SECTION 11: SYSTEM LOGS TABLE
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
     RAISE NOTICE 'Creating System Logs Table...';
 END $$;
@@ -883,15 +970,15 @@ COMMENT ON COLUMN t_system_logs.stack_trace IS 'Stack trace for error-level logs
 -- ============================================================================
 -- COMPLETION MESSAGE
 -- ============================================================================
-DO $$ 
+DO $$
 DECLARE
     v_table_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO v_table_count
-    FROM information_schema.tables 
-    WHERE table_schema = 'public' 
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
     AND table_type = 'BASE TABLE';
-    
+
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Table creation completed!';
     RAISE NOTICE 'Total tables created: %', v_table_count;
@@ -901,5 +988,12 @@ BEGIN
     RAISE NOTICE '  - Foreign key relationships';
     RAISE NOTICE '  - Comments on tables/columns';
     RAISE NOTICE '  - Proper sequences for auto-increment';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Changes from previous version:';
+    RAISE NOTICE '  - Added t_monthly_portfolio_snapshots table';
+    RAISE NOTICE '  - Added t_user_chart_preferences table';
+    RAISE NOTICE '  - Updated t_nav_data with performance metrics columns';
+    RAISE NOTICE '  - Updated t_market_data_records with metrics_calculated_at';
+    RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';
 END $$;
