@@ -167,10 +167,13 @@ export interface CustomerSearchParams {
   page_size?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
-  
+
   // Bookmark filters (NEW)
   is_bookmarked?: boolean;
   bookmark_reason?: string; // Filter by reason_code
+
+  // Family filter (NEW)
+  account_type?: 'all' | 'individual' | 'family'; // Filter by family membership
 }
 
 export interface CustomerStats {
@@ -185,6 +188,8 @@ export interface CustomerStats {
   onboarding_completed: number;
   recent_30_days: number;
   bookmarked?: number; // NEW
+  family_count?: number; // NEW - Count of unique family codes
+  customers_in_families?: number; // NEW - Total customers in families
 }
 
 export interface ConvertToCustomerRequest {

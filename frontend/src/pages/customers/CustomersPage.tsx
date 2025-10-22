@@ -403,25 +403,51 @@ const CustomersPage: React.FC = () => {
             </div>
           </div>
           
+          {/* Family Accounts Card (NEW) */}
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '8px',
-            padding: '20px'
-          }}>
+            padding: '20px',
+            cursor: stats?.family_count ? 'pointer' : 'default',
+            transition: 'transform 0.2s ease'
+          }}
+          onClick={() => {
+            if (stats?.family_count) {
+              setSearchParams(prev => ({ ...prev, account_type: 'family', page: 1 }));
+            }
+          }}
+          onMouseEnter={(e) => {
+            if (stats?.family_count) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+          >
             <div style={{
               fontSize: '32px',
               fontWeight: '700',
-              color: colors.semantic.success,
+              color: colors.brand.secondary,
               marginBottom: '4px'
             }}>
-              {stats?.active || 0}
+              {stats?.family_count || 0}
             </div>
             <div style={{
               fontSize: '14px',
               color: colors.utility.secondaryText
             }}>
-              Active
+              Family Accounts
             </div>
+            {stats?.customers_in_families ? (
+              <div style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText,
+                marginTop: '4px'
+              }}>
+                ({stats.customers_in_families} customers)
+              </div>
+            ) : null}
           </div>
 
           {/* Bookmarked Stat Card (NEW) */}

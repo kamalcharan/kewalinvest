@@ -55,6 +55,9 @@ export const API_ENDPOINTS = {
     // Bookmark endpoints
     BOOKMARK_REASONS: `${API_BASE}/customers/bookmark-reasons`,
     BOOKMARK: (id: number) => `${API_BASE}/customers/${id}/bookmark`,
+
+    // Family endpoints
+    FAMILY_MEMBERS: (familyCode: string) => `${API_BASE}/customers/family/${familyCode}`,
   },
   
   // Scheme management endpoints
@@ -535,6 +538,10 @@ export const CUSTOMER_URLS = {
     `${API_ENDPOINTS.CUSTOMERS.BOOKMARK(customerId)}${buildQueryParams({}, environment)}`,
   removeBookmark: (customerId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CUSTOMERS.BOOKMARK(customerId)}${buildQueryParams({}, environment)}`,
+
+  // Family URL helpers
+  getFamilyMembers: (familyCode: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CUSTOMERS.FAMILY_MEMBERS(familyCode)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Import-specific URL helpers

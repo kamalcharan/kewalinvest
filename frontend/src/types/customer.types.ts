@@ -230,7 +230,7 @@ export interface UpdateAddressRequest {
 }
 
 // Search/List interfaces
-// UPDATED: Added bookmark filters
+// UPDATED: Added bookmark filters and family filter
 export interface CustomerSearchParams {
   page?: number;
   page_size?: number;
@@ -244,10 +244,13 @@ export interface CustomerSearchParams {
   is_active?: boolean;
   birthday_month?: number;
   anniversary_month?: number;
-  
+
   // Bookmark filters (NEW)
   is_bookmarked?: boolean;
   bookmark_reason?: string;
+
+  // Family filter (NEW)
+  account_type?: 'all' | 'individual' | 'family';
 }
 
 export interface CustomerListResponse {
@@ -260,7 +263,7 @@ export interface CustomerListResponse {
   has_prev: boolean;
 }
 
-// Statistics interface - UPDATED to include bookmarked count
+// Statistics interface - UPDATED to include bookmarked count and family statistics
 export interface CustomerStats {
   total: number;
   active: number;
@@ -273,6 +276,8 @@ export interface CustomerStats {
   onboarding_completed: number;
   recent_30_days: number;
   bookmarked?: number;  // NEW
+  family_count?: number;  // NEW - Count of unique family codes
+  customers_in_families?: number;  // NEW - Total customers in families
   birthdays_this_month?: number;
   anniversaries_this_month?: number;
 }

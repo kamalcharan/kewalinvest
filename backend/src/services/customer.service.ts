@@ -27,7 +27,7 @@ export class CustomerService {
 
   /**
    * Get customers with filtering and pagination
-   * UPDATED: Added bookmark LEFT JOIN and filters
+   * UPDATED: Added bookmark LEFT JOIN and filters, account_type filter
    */
   async getCustomers(
     tenantId: number,
@@ -44,6 +44,7 @@ export class CustomerService {
         is_active,
         is_bookmarked,      // NEW
         bookmark_reason,    // NEW
+        account_type,       // NEW: 'all' | 'individual' | 'family'
         page = 1,
         page_size = 20,
         sort_by = 'c.name',
@@ -63,6 +64,14 @@ export class CustomerService {
         queryParams.push(is_active);
         paramIndex++;
       }
+
+      // NEW: Account type filter
+      if (account_type === 'individual') {
+        whereConditions.push('cust.family_head_iwell_code IS NULL');
+      } else if (account_type === 'family') {
+        whereConditions.push('cust.family_head_iwell_code IS NOT NULL');
+      }
+      // 'all' → no filter
 
       // Search filter - name, family_head_name, and iwell_code
       if (search && search.trim()) {
@@ -721,7 +730,7 @@ export class CustomerService {
 
   /**
    * Get customer statistics
-   * UPDATED: Added bookmarked count
+   * UPDATED: Added bookmarked count and family statistics
    */
   async getCustomerStats(
     tenantId: number,
@@ -730,7 +739,7 @@ export class CustomerService {
   ): Promise<CustomerStats> {
     try {
       const query = `
-        SELECT 
+        SELECT
           COUNT(*) as total,
           COUNT(*) FILTER (WHERE is_active = true) as active,
           COUNT(*) FILTER (WHERE is_active = false) as inactive,
@@ -753,7 +762,9 @@ export class CustomerService {
             AND bm.tenant_id = $1
             AND bm.is_live = $2
             AND bm.is_active = true
-          )) as bookmarked
+          )) as bookmarked,
+          COUNT(DISTINCT family_head_iwell_code) FILTER (WHERE family_head_iwell_code IS NOT NULL) as family_count,
+          COUNT(*) FILTER (WHERE family_head_iwell_code IS NOT NULL) as customers_in_families
         FROM t_customers cust
         WHERE cust.tenant_id = $1 AND cust.is_live = $2
       `;
@@ -772,10 +783,53 @@ export class CustomerService {
         onboarding_pending: parseInt(stats.onboarding_pending),
         onboarding_completed: parseInt(stats.onboarding_completed),
         recent_30_days: parseInt(stats.recent_30_days),
-        bookmarked: parseInt(stats.bookmarked || 0)  // NEW
+        bookmarked: parseInt(stats.bookmarked || 0),
+        family_count: parseInt(stats.family_count || 0),  // NEW
+        customers_in_families: parseInt(stats.customers_in_families || 0)  // NEW
       };
     } catch (error) {
       console.error('Error getting customer stats:', error);
+      throw error;
+    }
+  }
+
+  // ==================== FAMILY METHODS (NEW) ====================
+
+  /**
+   * Get family members by family head iwell code
+   * Returns all customers with the given family_head_iwell_code
+   * PLUS the family head (where iwell_code = familyCode AND family_head_iwell_code IS NULL)
+   */
+  async getFamilyMembers(
+    tenantId: number,
+    isLive: boolean,
+    familyCode: string
+  ): Promise<Array<{ id: number; name: string; iwell_code: string; is_family_head: boolean }>> {
+    try {
+      const query = `
+        SELECT
+          cust.id,
+          c.name,
+          cust.iwell_code,
+          CASE
+            WHEN cust.iwell_code = $3 AND cust.family_head_iwell_code IS NULL THEN true
+            ELSE false
+          END as is_family_head
+        FROM t_customers cust
+        JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE cust.tenant_id = $1
+          AND cust.is_live = $2
+          AND (
+            cust.family_head_iwell_code = $3
+            OR (cust.iwell_code = $3 AND cust.family_head_iwell_code IS NULL)
+          )
+        ORDER BY is_family_head DESC, c.name
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive, familyCode]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting family members:', error);
       throw error;
     }
   }
