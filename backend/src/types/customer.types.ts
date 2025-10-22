@@ -25,7 +25,9 @@ export interface Customer {
   // Family details
   family_head_name?: string;
   family_head_iwell_code?: string;
-  
+  is_family_head?: boolean;  // Computed field: true if others reference this iwell_code
+  family_code?: string;      // Computed field: family identifier for badge display
+
   // Referral
   referred_by?: number;
   referred_by_name?: string;

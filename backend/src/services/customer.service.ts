@@ -67,9 +67,27 @@ export class CustomerService {
 
       // NEW: Account type filter
       if (account_type === 'individual') {
-        whereConditions.push('cust.family_head_iwell_code IS NULL');
+        // Individual = NOT in a family (no family_head_iwell_code AND no one references their iwell_code)
+        whereConditions.push(`(
+          cust.family_head_iwell_code IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM t_customers fam
+            WHERE fam.tenant_id = cust.tenant_id
+            AND fam.is_live = cust.is_live
+            AND fam.family_head_iwell_code = cust.iwell_code
+          )
+        )`);
       } else if (account_type === 'family') {
-        whereConditions.push('cust.family_head_iwell_code IS NOT NULL');
+        // Family = in a family (has family_head_iwell_code OR someone references their iwell_code)
+        whereConditions.push(`(
+          cust.family_head_iwell_code IS NOT NULL
+          OR EXISTS (
+            SELECT 1 FROM t_customers fam
+            WHERE fam.tenant_id = cust.tenant_id
+            AND fam.is_live = cust.is_live
+            AND fam.family_head_iwell_code = cust.iwell_code
+          )
+        )`);
       }
       // 'all' → no filter
 
@@ -158,9 +176,9 @@ export class CustomerService {
 
       const offset = (page - 1) * page_size;
 
-      // UPDATED: Added bookmark LEFT JOIN
+      // UPDATED: Added bookmark LEFT JOIN and family identification fields
       const query = `
-        SELECT 
+        SELECT
           cust.*,
           c.prefix,
           c.name,
@@ -173,10 +191,10 @@ export class CustomerService {
             AND addr.is_live = $2
             AND addr.is_active = true
           ) as address_count,
-          CASE 
-            WHEN cust.date_of_birth IS NOT NULL 
+          CASE
+            WHEN cust.date_of_birth IS NOT NULL
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, cust.date_of_birth))
-            ELSE NULL 
+            ELSE NULL
           END as age,
           bm.id as bookmark_id,
           bm.reason_id as bookmark_reason_id,
@@ -184,7 +202,27 @@ export class CustomerService {
           bm.notes as bookmark_notes,
           br.reason_code as bookmark_reason_code,
           br.reason_label as bookmark_reason_label,
-          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked
+          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked,
+          CASE
+            WHEN cust.family_head_iwell_code IS NOT NULL THEN false
+            WHEN EXISTS (
+              SELECT 1 FROM t_customers fam
+              WHERE fam.tenant_id = cust.tenant_id
+              AND fam.is_live = cust.is_live
+              AND fam.family_head_iwell_code = cust.iwell_code
+            ) THEN true
+            ELSE false
+          END as is_family_head,
+          CASE
+            WHEN cust.family_head_iwell_code IS NOT NULL THEN cust.family_head_iwell_code
+            WHEN EXISTS (
+              SELECT 1 FROM t_customers fam
+              WHERE fam.tenant_id = cust.tenant_id
+              AND fam.is_live = cust.is_live
+              AND fam.family_head_iwell_code = cust.iwell_code
+            ) THEN cust.iwell_code
+            ELSE NULL
+          END as family_code
         FROM t_customers cust
         JOIN t_contacts c ON c.id = cust.contact_id
         LEFT JOIN t_customer_bookmarks bm ON bm.customer_id = cust.id 
@@ -232,15 +270,15 @@ export class CustomerService {
   ): Promise<CustomerWithContact | null> {
     try {
       const query = `
-        SELECT 
+        SELECT
           cust.*,
           c.prefix,
           c.name,
           c.is_active as contact_is_active,
-          CASE 
-            WHEN cust.date_of_birth IS NOT NULL 
+          CASE
+            WHEN cust.date_of_birth IS NOT NULL
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, cust.date_of_birth))
-            ELSE NULL 
+            ELSE NULL
           END as age,
           bm.id as bookmark_id,
           bm.reason_id as bookmark_reason_id,
@@ -248,10 +286,30 @@ export class CustomerService {
           bm.notes as bookmark_notes,
           br.reason_code as bookmark_reason_code,
           br.reason_label as bookmark_reason_label,
-          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked
+          CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked,
+          CASE
+            WHEN cust.family_head_iwell_code IS NOT NULL THEN false
+            WHEN EXISTS (
+              SELECT 1 FROM t_customers fam
+              WHERE fam.tenant_id = cust.tenant_id
+              AND fam.is_live = cust.is_live
+              AND fam.family_head_iwell_code = cust.iwell_code
+            ) THEN true
+            ELSE false
+          END as is_family_head,
+          CASE
+            WHEN cust.family_head_iwell_code IS NOT NULL THEN cust.family_head_iwell_code
+            WHEN EXISTS (
+              SELECT 1 FROM t_customers fam
+              WHERE fam.tenant_id = cust.tenant_id
+              AND fam.is_live = cust.is_live
+              AND fam.family_head_iwell_code = cust.iwell_code
+            ) THEN cust.iwell_code
+            ELSE NULL
+          END as family_code
         FROM t_customers cust
         JOIN t_contacts c ON c.id = cust.contact_id
-        LEFT JOIN t_customer_bookmarks bm ON bm.customer_id = cust.id 
+        LEFT JOIN t_customer_bookmarks bm ON bm.customer_id = cust.id
           AND bm.user_id = $4
           AND bm.tenant_id = $2
           AND bm.is_live = $3
@@ -764,7 +822,15 @@ export class CustomerService {
             AND bm.is_active = true
           )) as bookmarked,
           COUNT(DISTINCT family_head_iwell_code) FILTER (WHERE family_head_iwell_code IS NOT NULL) as family_count,
-          COUNT(*) FILTER (WHERE family_head_iwell_code IS NOT NULL) as customers_in_families
+          COUNT(*) FILTER (WHERE
+            family_head_iwell_code IS NOT NULL
+            OR EXISTS (
+              SELECT 1 FROM t_customers fam
+              WHERE fam.tenant_id = cust.tenant_id
+              AND fam.is_live = cust.is_live
+              AND fam.family_head_iwell_code = cust.iwell_code
+            )
+          ) as customers_in_families
         FROM t_customers cust
         WHERE cust.tenant_id = $1 AND cust.is_live = $2
       `;

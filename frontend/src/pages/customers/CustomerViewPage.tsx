@@ -473,11 +473,11 @@ const CustomerViewPage: React.FC = () => {
               }}>
                 <span>Customer ID: {customer.id}</span>
                 {customer.iwell_code && <span>IWell: {customer.iwell_code}</span>}
-                {/* Family Badge (NEW) */}
-                {(customer.family_head_iwell_code || customer.iwell_code) && (
+                {/* Family Badge - Only show for customers actually in a family */}
+                {customer.family_code && (
                   <FamilyMembersPopover
-                    familyCode={customer.family_head_iwell_code || customer.iwell_code || ''}
-                    isFamilyHead={!customer.family_head_iwell_code}
+                    familyCode={customer.family_code}
+                    isFamilyHead={customer.is_family_head || false}
                   >
                     <span style={{
                       display: 'inline-block',
@@ -497,9 +497,9 @@ const CustomerViewPage: React.FC = () => {
                       e.currentTarget.style.backgroundColor = colors.brand.secondary + '15';
                     }}
                     >
-                      {customer.family_head_iwell_code
-                        ? `Family: ${customer.family_head_iwell_code}`
-                        : `Family Head: ${customer.iwell_code}`
+                      {customer.is_family_head
+                        ? `Family Head: ${customer.family_code}`
+                        : `Family: ${customer.family_code}`
                       }
                     </span>
                   </FamilyMembersPopover>
