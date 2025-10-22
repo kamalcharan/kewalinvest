@@ -15,6 +15,7 @@ import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
+import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -467,10 +468,42 @@ const CustomerViewPage: React.FC = () => {
                 display: 'flex',
                 gap: '24px',
                 fontSize: '14px',
-                color: colors.utility.secondaryText
+                color: colors.utility.secondaryText,
+                alignItems: 'center'
               }}>
                 <span>Customer ID: {customer.id}</span>
                 {customer.iwell_code && <span>IWell: {customer.iwell_code}</span>}
+                {/* Family Badge (NEW) */}
+                {(customer.family_head_iwell_code || customer.iwell_code) && (
+                  <FamilyMembersPopover
+                    familyCode={customer.family_head_iwell_code || customer.iwell_code || ''}
+                    isFamilyHead={!customer.family_head_iwell_code}
+                  >
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      backgroundColor: colors.brand.secondary + '15',
+                      color: colors.brand.secondary,
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = colors.brand.secondary + '25';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = colors.brand.secondary + '15';
+                    }}
+                    >
+                      {customer.family_head_iwell_code
+                        ? `Family: ${customer.family_head_iwell_code}`
+                        : `Family Head: ${customer.iwell_code}`
+                      }
+                    </span>
+                  </FamilyMembersPopover>
+                )}
                 {portfolio && <span>Schemes: {portfolio.summary.total_schemes ?? 0}</span>}
                 <span>Member Since: 2016</span>
               </div>

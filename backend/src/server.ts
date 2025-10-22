@@ -95,6 +95,7 @@ app.get('/health', (_req: Request, res: Response) => {
       customers: true,
       customer_bookmarks: true,
       customer_activation: true,
+      customer_family_accounts: true,
       schemes: true,
       transactions: true,
       portfolio: true,
@@ -225,6 +226,7 @@ app.use((_req: Request, res: Response) => {
       'POST /api/customers',
       'GET /api/customers/stats',
       'GET /api/customers/bookmark-reasons',
+      'GET /api/customers/family/:familyCode',
       'GET /api/customers/:id',
       'PUT /api/customers/:id',
       'DELETE /api/customers/:id',
@@ -514,6 +516,7 @@ app.listen(PORT, async () => {
 ║  • POST /api/customers                 ║
 ║  • GET  /api/customers/stats           ║
 ║  • GET  /api/customers/bookmark-reasons║
+║  • GET  /api/customers/family/:code    ║
 ║  • GET  /api/customers/:id             ║
 ║  • PUT  /api/customers/:id             ║
 ║  • DELETE /api/customers/:id           ║
@@ -681,6 +684,7 @@ app.listen(PORT, async () => {
     console.log('✅ Customer management endpoints ready');
     console.log('✅ Customer bookmark system ready');
     console.log('✅ Customer activation feature ready');
+    console.log('✅ Customer family accounts ready');
     console.log('✅ Scheme management endpoints ready');
     console.log('✅ Transaction management endpoints ready');
     console.log('✅ Portfolio tracking endpoints ready');
@@ -779,6 +783,7 @@ app.listen(PORT, async () => {
 ║  Bookmark Gap Detection: ✅ Ready      ║
 ║  Customer Bookmarks: ✅ Ready          ║
 ║  Customer Activation: ✅ Ready         ║
+║  Customer Family Accounts: ✅ Ready    ║
 ║  Market Data: ✅ Ready                 ║
 ║  Market Indices: ✅ Ready              ║
 ║  Market Downloads: ✅ Ready            ║

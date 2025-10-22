@@ -37,7 +37,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   const debouncedSearch = useDebounce(searchInput, 500);
 
   // Advanced filters state (local, not sent to API until "Apply" is clicked)
-  // UPDATED: Added bookmark filters
+  // UPDATED: Added bookmark filters and account_type
   const [localFilters, setLocalFilters] = useState<CustomerSearchParams>({
     search: '',
     sort_by: 'c.name',
@@ -51,6 +51,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
     anniversary_month: undefined,
     is_bookmarked: undefined,
     bookmark_reason: undefined,
+    account_type: undefined,
     page: 1,
     page_size: 20,
     ...initialFilters
@@ -95,6 +96,18 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
     onFiltersChangeRef.current(newFilters);
   }, [appliedFilters]);
 
+  // Handle account type change (immediate API call)
+  const handleAccountTypeChange = useCallback((value: string) => {
+    const newFilters = {
+      ...appliedFilters,
+      account_type: value === '' ? undefined : (value as 'all' | 'individual' | 'family'),
+      page: 1
+    };
+    setAppliedFilters(newFilters);
+    setLocalFilters(newFilters);
+    onFiltersChangeRef.current(newFilters);
+  }, [appliedFilters]);
+
   // Apply advanced filters (triggers API call)
   const handleApplyFilters = useCallback(() => {
     const newFilters = {
@@ -107,7 +120,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
   }, [localFilters, debouncedSearch]);
 
   // Clear all filters
-  // UPDATED: Clear bookmark filters
+  // UPDATED: Clear bookmark filters and account_type
   const clearFilters = useCallback(() => {
     const clearedFilters = {
       search: '',
@@ -122,6 +135,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       anniversary_month: undefined,
       is_bookmarked: undefined,
       bookmark_reason: undefined,
+      account_type: undefined,
       page: 1,
       page_size: 20
     };
@@ -383,6 +397,29 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
             <option value="desc">Z-A</option>
           </select>
         </div>
+
+        {/* Account Type Filter (NEW) */}
+        <select
+          value={appliedFilters.account_type || 'all'}
+          onChange={(e) => handleAccountTypeChange(e.target.value)}
+          disabled={loading}
+          style={{
+            padding: '8px 16px',
+            border: `1px solid ${appliedFilters.account_type && appliedFilters.account_type !== 'all' ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+            borderRadius: '6px',
+            backgroundColor: appliedFilters.account_type && appliedFilters.account_type !== 'all' ? colors.brand.primary + '10' : colors.utility.primaryBackground,
+            color: appliedFilters.account_type && appliedFilters.account_type !== 'all' ? colors.brand.primary : colors.utility.primaryText,
+            fontSize: '14px',
+            outline: 'none',
+            cursor: 'pointer',
+            fontWeight: appliedFilters.account_type && appliedFilters.account_type !== 'all' ? '600' : '400',
+            minWidth: '150px'
+          }}
+        >
+          <option value="all">All Accounts</option>
+          <option value="individual">Individual</option>
+          <option value="family">Family</option>
+        </select>
 
         {/* Toggle Filters Button */}
         <button
