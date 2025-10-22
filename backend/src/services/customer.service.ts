@@ -69,23 +69,27 @@ export class CustomerService {
       if (account_type === 'individual') {
         // Individual = NOT in a family (no family_head_iwell_code AND no one references their iwell_code)
         whereConditions.push(`(
-          cust.family_head_iwell_code IS NULL
+          (cust.family_head_iwell_code IS NULL OR cust.family_head_iwell_code = '')
           AND NOT EXISTS (
             SELECT 1 FROM t_customers fam
             WHERE fam.tenant_id = cust.tenant_id
             AND fam.is_live = cust.is_live
             AND fam.family_head_iwell_code = cust.iwell_code
+            AND fam.family_head_iwell_code IS NOT NULL
+            AND fam.family_head_iwell_code != ''
           )
         )`);
       } else if (account_type === 'family') {
         // Family = in a family (has family_head_iwell_code OR someone references their iwell_code)
         whereConditions.push(`(
-          cust.family_head_iwell_code IS NOT NULL
+          (cust.family_head_iwell_code IS NOT NULL AND cust.family_head_iwell_code != '')
           OR EXISTS (
             SELECT 1 FROM t_customers fam
             WHERE fam.tenant_id = cust.tenant_id
             AND fam.is_live = cust.is_live
             AND fam.family_head_iwell_code = cust.iwell_code
+            AND fam.family_head_iwell_code IS NOT NULL
+            AND fam.family_head_iwell_code != ''
           )
         )`);
       }
@@ -204,22 +208,26 @@ export class CustomerService {
           br.reason_label as bookmark_reason_label,
           CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked,
           CASE
-            WHEN cust.family_head_iwell_code IS NOT NULL THEN false
+            WHEN cust.family_head_iwell_code IS NOT NULL AND cust.family_head_iwell_code != '' THEN false
             WHEN EXISTS (
               SELECT 1 FROM t_customers fam
               WHERE fam.tenant_id = cust.tenant_id
               AND fam.is_live = cust.is_live
               AND fam.family_head_iwell_code = cust.iwell_code
+              AND fam.family_head_iwell_code IS NOT NULL
+              AND fam.family_head_iwell_code != ''
             ) THEN true
             ELSE false
           END as is_family_head,
           CASE
-            WHEN cust.family_head_iwell_code IS NOT NULL THEN cust.family_head_iwell_code
+            WHEN cust.family_head_iwell_code IS NOT NULL AND cust.family_head_iwell_code != '' THEN cust.family_head_iwell_code
             WHEN EXISTS (
               SELECT 1 FROM t_customers fam
               WHERE fam.tenant_id = cust.tenant_id
               AND fam.is_live = cust.is_live
               AND fam.family_head_iwell_code = cust.iwell_code
+              AND fam.family_head_iwell_code IS NOT NULL
+              AND fam.family_head_iwell_code != ''
             ) THEN cust.iwell_code
             ELSE NULL
           END as family_code
@@ -288,22 +296,26 @@ export class CustomerService {
           br.reason_label as bookmark_reason_label,
           CASE WHEN bm.id IS NOT NULL THEN true ELSE false END as is_bookmarked,
           CASE
-            WHEN cust.family_head_iwell_code IS NOT NULL THEN false
+            WHEN cust.family_head_iwell_code IS NOT NULL AND cust.family_head_iwell_code != '' THEN false
             WHEN EXISTS (
               SELECT 1 FROM t_customers fam
               WHERE fam.tenant_id = cust.tenant_id
               AND fam.is_live = cust.is_live
               AND fam.family_head_iwell_code = cust.iwell_code
+              AND fam.family_head_iwell_code IS NOT NULL
+              AND fam.family_head_iwell_code != ''
             ) THEN true
             ELSE false
           END as is_family_head,
           CASE
-            WHEN cust.family_head_iwell_code IS NOT NULL THEN cust.family_head_iwell_code
+            WHEN cust.family_head_iwell_code IS NOT NULL AND cust.family_head_iwell_code != '' THEN cust.family_head_iwell_code
             WHEN EXISTS (
               SELECT 1 FROM t_customers fam
               WHERE fam.tenant_id = cust.tenant_id
               AND fam.is_live = cust.is_live
               AND fam.family_head_iwell_code = cust.iwell_code
+              AND fam.family_head_iwell_code IS NOT NULL
+              AND fam.family_head_iwell_code != ''
             ) THEN cust.iwell_code
             ELSE NULL
           END as family_code
@@ -821,14 +833,16 @@ export class CustomerService {
             AND bm.is_live = $2
             AND bm.is_active = true
           )) as bookmarked,
-          COUNT(DISTINCT family_head_iwell_code) FILTER (WHERE family_head_iwell_code IS NOT NULL) as family_count,
+          COUNT(DISTINCT family_head_iwell_code) FILTER (WHERE family_head_iwell_code IS NOT NULL AND family_head_iwell_code != '') as family_count,
           COUNT(*) FILTER (WHERE
-            family_head_iwell_code IS NOT NULL
+            (family_head_iwell_code IS NOT NULL AND family_head_iwell_code != '')
             OR EXISTS (
               SELECT 1 FROM t_customers fam
               WHERE fam.tenant_id = cust.tenant_id
               AND fam.is_live = cust.is_live
               AND fam.family_head_iwell_code = cust.iwell_code
+              AND fam.family_head_iwell_code IS NOT NULL
+              AND fam.family_head_iwell_code != ''
             )
           ) as customers_in_families
         FROM t_customers cust
