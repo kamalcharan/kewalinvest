@@ -19,6 +19,9 @@ router.get('/stats', customerController.getCustomerStats);
 // Bookmark routes (NEW - MUST be before /:id route)
 router.get('/bookmark-reasons', customerController.getBookmarkReasons);
 
+// Family routes (NEW - MUST be before /:id route)
+router.get('/family/:familyCode', customerController.getFamilyMembers);
+
 router.post('/', customerController.createCustomer);
 router.get('/:id', customerController.getCustomer);
 router.put('/:id', customerController.updateCustomer);

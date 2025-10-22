@@ -544,7 +544,7 @@ export class CustomerController {
 
       // Query JTBD summary
       const query = `
-        SELECT 
+        SELECT
           customer_id,
           COUNT(*) as jtbd_count,
           MIN(next_alert_date) as next_alert_date,
@@ -594,6 +594,49 @@ export class CustomerController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get customer JTBD summary'
+      });
+    }
+  };
+
+  // ==================== FAMILY ENDPOINTS (NEW) ====================
+
+  /**
+   * Get family members by family code
+   * GET /api/customers/family/:familyCode
+   */
+  getFamilyMembers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const familyCode = req.params.familyCode;
+
+      if (!familyCode) {
+        res.status(400).json({
+          success: false,
+          error: 'Family code is required'
+        });
+        return;
+      }
+
+      const members = await this.customerService.getFamilyMembers(
+        user!.tenant_id,
+        isLive,
+        familyCode
+      );
+
+      res.json({
+        success: true,
+        data: {
+          family_code: familyCode,
+          members,
+          total: members.length
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting family members:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get family members'
       });
     }
   };

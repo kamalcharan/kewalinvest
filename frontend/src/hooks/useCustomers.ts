@@ -25,7 +25,7 @@ import {
 } from '../types/customer.types';
 
 // Query Keys for consistent caching
-// UPDATED: Added bookmark-related keys
+// UPDATED: Added bookmark-related and family-related keys
 export const CUSTOMER_QUERY_KEYS = {
   all: ['customers'] as const,
   lists: () => [...CUSTOMER_QUERY_KEYS.all, 'list'] as const,
@@ -35,6 +35,7 @@ export const CUSTOMER_QUERY_KEYS = {
   stats: () => [...CUSTOMER_QUERY_KEYS.all, 'stats'] as const,
   addresses: (customerId: number) => [...CUSTOMER_QUERY_KEYS.detail(customerId), 'addresses'] as const,
   bookmarkReasons: () => [...CUSTOMER_QUERY_KEYS.all, 'bookmark-reasons'] as const,
+  familyMembers: (familyCode: string) => [...CUSTOMER_QUERY_KEYS.all, 'family', familyCode] as const,
 } as const;
 
 // Enhanced error handling
@@ -539,12 +540,48 @@ export function useUpdateBookmark() {
       queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.lists() });
       // Invalidate specific customer detail to show updated bookmark
       queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEYS.detail(customerId) });
-      
+
       toastService.success('Bookmark updated successfully');
     },
     onError: (error) => {
       handleAPIError(error, 'Failed to update bookmark');
     }
+  });
+}
+
+// ==================== FAMILY HOOKS (NEW) ====================
+
+/**
+ * Hook for getting family members by family code
+ * Fetches all members of a family including the family head
+ */
+export function useFamilyMembers(familyCode: string, enabled: boolean = true) {
+  const { user, tenantId, environment } = useAuth();
+
+  return useQuery<{ family_code: string; members: Array<{ id: number; name: string; iwell_code: string; is_family_head: boolean }>; total: number }, Error>({
+    queryKey: CUSTOMER_QUERY_KEYS.familyMembers(familyCode),
+    queryFn: async () => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        const endpoint = CUSTOMER_URLS.getFamilyMembers(familyCode, environment);
+        const response = await apiService.get<{ success: boolean; data: { family_code: string; members: Array<{ id: number; name: string; iwell_code: string; is_family_head: boolean }>; total: number }; error?: string }>(endpoint);
+
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to fetch family members');
+        }
+
+        return response.data;
+      } catch (error) {
+        throw handleAPIError(error, 'Failed to load family members');
+      }
+    },
+    enabled: !!user && !!tenantId && !!familyCode && enabled,
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
   });
 }
 
