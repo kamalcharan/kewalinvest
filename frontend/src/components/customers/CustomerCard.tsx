@@ -8,6 +8,7 @@ import { useBookmarkCustomer, useUnbookmarkCustomer, useBookmarkReasons } from '
 import { useTheme } from '../../contexts/ThemeContext';
 import JTBDStatusBadge from '../jtbd/JTBDStatusBadge';
 import PerformanceSparkline from '../visualizations/PerformanceSparkline';
+import FamilyMembersPopover from './FamilyMembersPopover';
 
 interface CustomerCardProps {
   customer: CustomerWithContact;
@@ -362,6 +363,40 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                   <>
                     <span>•</span>
                     <span style={{ fontFamily: 'monospace' }}>IW: {customer.iwell_code}</span>
+                  </>
+                )}
+                {/* Family Badge (NEW) */}
+                {(customer.family_head_iwell_code || customer.iwell_code) && (
+                  <>
+                    <span>•</span>
+                    <FamilyMembersPopover
+                      familyCode={customer.family_head_iwell_code || customer.iwell_code || ''}
+                      isFamilyHead={!customer.family_head_iwell_code}
+                    >
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        backgroundColor: colors.brand.secondary + '15',
+                        color: colors.brand.secondary,
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.brand.secondary + '25';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.brand.secondary + '15';
+                      }}
+                      >
+                        {customer.family_head_iwell_code
+                          ? `Family: ${customer.family_head_iwell_code}`
+                          : `Family Head: ${customer.iwell_code}`
+                        }
+                      </span>
+                    </FamilyMembersPopover>
                   </>
                 )}
                 {age && (
