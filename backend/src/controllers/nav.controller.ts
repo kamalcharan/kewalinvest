@@ -1,5 +1,5 @@
 // backend/src/controllers/nav.controller.ts
-// UPDATED: Handle DATE_RANGE_OVERLAP error with detailed information
+// UPDATED: Added time-series endpoint for chart visualization
 
 import { Request, Response } from 'express';
 import { NavService } from '../services/nav.service';
@@ -8,6 +8,7 @@ import { NavSchedulerService } from '../services/navScheduler.service';
 import { AmfiDataSourceService } from '../services/amfiDataSource.service';
 import { SchemeService, SchemeDetail } from '../services/scheme.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
+import { navAnalyticsService } from '../services/navAnalytics.service';
 import {
   SchemeBookmarkSearchParams,
   CreateSchemeBookmarkRequest,
@@ -139,68 +140,69 @@ export class NavController {
   // ==================== BOOKMARK MANAGEMENT ====================
 
   /**
- * Get user's bookmarked schemes
- * UPDATED: Returns all bookmarks for admin users (is_admin = true)
- */
-getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const { user, environment } = req;
-    const isLive = environment === 'live';
+   * Get user's bookmarked schemes
+   * UPDATED: Returns all bookmarks for admin users (is_admin = true)
+   */
+  getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
 
-    // Check if user is admin
-    const isAdmin = user?.tenant?.is_admin === true;
+      // Check if user is admin
+      const isAdmin = user?.tenant?.is_admin === true;
 
-    const params: SchemeBookmarkSearchParams = {
-      page: req.query.page ? Number(req.query.page) : 1,
-      page_size: req.query.page_size ? Number(req.query.page_size) : 20,
-      search: req.query.search as string,
-      daily_download_only: req.query.daily_download_only === 'true',
-      amc_name: req.query.amc_name as string
-    };
+      const params: SchemeBookmarkSearchParams = {
+        page: req.query.page ? Number(req.query.page) : 1,
+        page_size: req.query.page_size ? Number(req.query.page_size) : 20,
+        search: req.query.search as string,
+        daily_download_only: req.query.daily_download_only === 'true',
+        amc_name: req.query.amc_name as string
+      };
 
-    // Call service with admin flag
-    const result = await this.navService.getUserBookmarks(
-      user!.tenant_id,
-      isLive,
-      user!.user_id,
-      params,
-      isAdmin  // Pass admin flag
-    );
+      // Call service with admin flag
+      const result = await this.navService.getUserBookmarks(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        params,
+        isAdmin  // Pass admin flag
+      );
 
-    // Log admin access for security audit
-    if (isAdmin) {
-      SimpleLogger.info('NavController', 'Admin accessed all bookmarks', 'getBookmarks', {
-        tenantId: user!.tenant_id,
-        userId: user!.user_id,
-        totalBookmarks: result.total,
-        page: params.page,
-        pageSize: params.page_size,
-        searchQuery: params.search || 'none'
-      }, user!.user_id, user!.tenant_id);
-    }
-
-    res.json({
-      success: true,
-      data: result,
-      meta: {
-        is_admin_view: isAdmin  // Include in response so frontend knows
+      // Log admin access for security audit
+      if (isAdmin) {
+        SimpleLogger.info('NavController', 'Admin accessed all bookmarks', 'getBookmarks', {
+          tenantId: user!.tenant_id,
+          userId: user!.user_id,
+          totalBookmarks: result.total,
+          page: params.page,
+          pageSize: params.page_size,
+          searchQuery: params.search || 'none'
+        }, user!.user_id, user!.tenant_id);
       }
-    });
-  } catch (error: any) {
-    SimpleLogger.error('NavController', 'Failed to get bookmarks', 'getBookmarks', {
-      tenantId: req.user?.tenant_id,
-      userId: req.user?.user_id,
-      isAdmin: req.user?.tenant?.is_admin === true,
-      params: req.query,
-      error: error.message
-    }, req.user?.user_id, req.user?.tenant_id, error.stack);
 
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to get bookmarks'
-    });
-  }
-};
+      res.json({
+        success: true,
+        data: result,
+        meta: {
+          is_admin_view: isAdmin  // Include in response so frontend knows
+        }
+      });
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get bookmarks', 'getBookmarks', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        isAdmin: req.user?.tenant?.is_admin === true,
+        params: req.query,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get bookmarks'
+      });
+    }
+  };
+
   addBookmark = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -365,73 +367,74 @@ getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> =
   };
 
   getBookmarkNavData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const { user, environment } = req;
-    const isLive = environment === 'live';
-    const bookmarkId = parseInt(req.params.id);
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const bookmarkId = parseInt(req.params.id);
 
-    if (isNaN(bookmarkId)) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid bookmark ID'
-      });
-      return;
-    }
-
-    const params: BookmarkNavDataParams = {
-      bookmark_id: bookmarkId,
-      start_date: req.query.start_date as string,
-      end_date: req.query.end_date as string,
-      page: req.query.page ? Number(req.query.page) : 1,
-      page_size: req.query.page_size ? Number(req.query.page_size) : 50,
-      granularity: (req.query.granularity as 'daily' | 'monthly') || 'daily' // ADD THIS LINE
-    };
-
-    if (params.start_date && params.end_date) {
-      const startDate = new Date(params.start_date);
-      const endDate = new Date(params.end_date);
-      
-      if (startDate > endDate) {
+      if (isNaN(bookmarkId)) {
         res.status(400).json({
           success: false,
-          error: 'Start date cannot be after end date'
+          error: 'Invalid bookmark ID'
         });
         return;
       }
-    }
 
-    const result = await this.navService.getBookmarkNavData(
-      user!.tenant_id,
-      isLive,
-      user!.user_id,
-      params
-    );
+      const params: BookmarkNavDataParams = {
+        bookmark_id: bookmarkId,
+        start_date: req.query.start_date as string,
+        end_date: req.query.end_date as string,
+        page: req.query.page ? Number(req.query.page) : 1,
+        page_size: req.query.page_size ? Number(req.query.page_size) : 50,
+        granularity: (req.query.granularity as 'daily' | 'monthly') || 'daily'
+      };
 
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error: any) {
-    SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
-      tenantId: req.user?.tenant_id,
-      userId: req.user?.user_id,
-      bookmarkId: req.params.id,
-      error: error.message
-    }, req.user?.user_id, req.user?.tenant_id, error.stack);
+      if (params.start_date && params.end_date) {
+        const startDate = new Date(params.start_date);
+        const endDate = new Date(params.end_date);
+        
+        if (startDate > endDate) {
+          res.status(400).json({
+            success: false,
+            error: 'Start date cannot be after end date'
+          });
+          return;
+        }
+      }
 
-    if (error.message === 'Bookmark not found or access denied') {
-      res.status(404).json({
-        success: false,
-        error: 'Bookmark not found'
+      const result = await this.navService.getBookmarkNavData(
+        user!.tenant_id,
+        isLive,
+        user!.user_id,
+        params
+      );
+
+      res.json({
+        success: true,
+        data: result
       });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to get bookmark NAV data'
-      });
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get bookmark NAV data', 'getBookmarkNavData', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        bookmarkId: req.params.id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      if (error.message === 'Bookmark not found or access denied') {
+        res.status(404).json({
+          success: false,
+          error: 'Bookmark not found'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to get bookmark NAV data'
+        });
+      }
     }
-  }
-};
+  };
+
   updateBookmarkDownloadStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
@@ -650,6 +653,161 @@ getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> =
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get latest NAV'
+      });
+    }
+  };
+
+  /**
+   * GET /api/nav/timeseries/:schemeId
+   * Get NAV time series data for chart visualization
+   * 
+   * Path params:
+   *   - schemeId: Scheme ID (integer)
+   * 
+   * Query params:
+   *   - start_date: Start date (YYYY-MM-DD), optional
+   *   - end_date: End date (YYYY-MM-DD), optional
+   *   - granularity: 'daily' | 'weekly' | 'monthly', default: 'daily'
+   *   - include_metrics: Include calculated metrics, default: true
+   * 
+   * Response: 200 with time series data
+   */
+  getNavTimeSeries = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const startTime = Date.now();
+    
+    try {
+      // Extract and validate scheme ID
+      const schemeId = parseInt(req.params.schemeId);
+      
+      if (isNaN(schemeId) || schemeId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid scheme ID. Must be a positive integer.'
+        });
+        return;
+      }
+
+      // Extract query parameters
+      const {
+        start_date,
+        end_date,
+        granularity = 'daily',
+        include_metrics = 'true'
+      } = req.query;
+
+      // Validate granularity
+      const validGranularities = ['daily', 'weekly', 'monthly'];
+      if (granularity && !validGranularities.includes(granularity as string)) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid granularity. Must be one of: ${validGranularities.join(', ')}`
+        });
+        return;
+      }
+
+      // Get environment
+      const isLive = req.environment === 'live';
+
+      // Build params object
+      const params = {
+        start_date: start_date as string | undefined,
+        end_date: end_date as string | undefined,
+        granularity: granularity as 'daily' | 'weekly' | 'monthly',
+        include_metrics: include_metrics !== 'false' // defaults to true unless explicitly set to 'false'
+      };
+
+      SimpleLogger.info(
+        'NavController',
+        'Time series request received',
+        'getNavTimeSeries',
+        {
+          schemeId,
+          isLive,
+          params,
+          userId: req.user?.user_id,
+          tenantId: req.user?.tenant_id
+        },
+        req.user?.user_id,
+        req.user?.tenant_id
+      );
+
+      // Call analytics service
+      const result = await navAnalyticsService.getNavTimeSeries(
+        schemeId,
+        isLive,
+        params
+      );
+
+      const executionTime = Date.now() - startTime;
+
+      SimpleLogger.info(
+        'NavController',
+        'Time series data retrieved successfully',
+        'getNavTimeSeries',
+        {
+          schemeId,
+          granularity: result.granularity,
+          totalPoints: result.total_points,
+          metricsCoverage: result.metrics_coverage.coverage_percentage.toFixed(1) + '%',
+          executionTimeMs: executionTime,
+          userId: req.user?.user_id,
+          tenantId: req.user?.tenant_id
+        },
+        req.user?.user_id,
+        req.user?.tenant_id
+      );
+
+      // Return success response
+      res.status(200).json({
+        success: true,
+        data: result,
+        execution_time_ms: executionTime
+      });
+
+    } catch (error: any) {
+      const executionTime = Date.now() - startTime;
+
+      SimpleLogger.error(
+        'NavController',
+        'Failed to get time series data',
+        'getNavTimeSeries',
+        {
+          schemeId: req.params.schemeId,
+          error: error.message,
+          executionTimeMs: executionTime,
+          userId: req.user?.user_id,
+          tenantId: req.user?.tenant_id
+        },
+        req.user?.user_id,
+        req.user?.tenant_id,
+        error.stack
+      );
+
+      // Handle specific error types
+      if (error.message.includes('Scheme not found')) {
+        res.status(404).json({
+          success: false,
+          error: error.message,
+          execution_time_ms: executionTime
+        });
+        return;
+      }
+
+      if (error.message.includes('Invalid') || error.message.includes('format')) {
+        res.status(400).json({
+          success: false,
+          error: error.message,
+          execution_time_ms: executionTime
+        });
+        return;
+      }
+
+      // Generic error response
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve time series data',
+        message: error.message,
+        execution_time_ms: executionTime
       });
     }
   };

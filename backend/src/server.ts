@@ -1,4 +1,5 @@
 // backend/src/server.ts
+// UPDATED: Added time-series analytics route
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -21,7 +22,7 @@ import marketRoutes from './routes/market.routes';
 import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
-import schemeAnalysisRoutes from './routes/schemeAnalysis.routes'; // NEW
+import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -104,6 +105,7 @@ app.get('/health', (_req: Request, res: Response) => {
       nav_enhanced_bookmarks: true,
       nav_bookmark_gaps: true,
       nav_scheduler: !!navScheduler,
+      nav_timeseries_analytics: true, // NEW: Time series analytics
       market_data: true,
       market_indices: true,
       market_downloads: true,
@@ -112,9 +114,9 @@ app.get('/health', (_req: Request, res: Response) => {
       market_analysis_dashboard: true,
       market_analysis_returns: true,
       market_analysis_volatility: true,
-      scheme_analysis: true, // NEW
-      scheme_analysis_metrics: true, // NEW
-      scheme_analysis_batch: true, // NEW
+      scheme_analysis: true,
+      scheme_analysis_metrics: true,
+      scheme_analysis_batch: true,
       jtbd: true,
       jtbd_dashboard: true,
       goals: true,
@@ -155,7 +157,7 @@ app.get('/api', (_req: Request, res: Response) => {
       nav: '/api/nav',
       market: '/api/market',
       market_analysis: '/api/market-analysis',
-      scheme_analysis: '/api/scheme-analysis', // NEW
+      scheme_analysis: '/api/scheme-analysis',
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences'
@@ -174,7 +176,7 @@ app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
-app.use('/api/scheme-analysis', schemeAnalysisRoutes); // NEW
+app.use('/api/scheme-analysis', schemeAnalysisRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
@@ -298,6 +300,7 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/bookmark-gaps/summary',
       'GET /api/nav/data',
       'GET /api/nav/schemes/:id/latest',
+      'GET /api/nav/timeseries/:schemeId', // NEW: Time series analytics
       'POST /api/nav/download/daily',
       'POST /api/nav/download/historical',
       'GET /api/nav/download/progress/:jobId',
@@ -338,7 +341,7 @@ app.use((_req: Request, res: Response) => {
       'GET /api/market-analysis/index-returns',
       'GET /api/market-analysis/index-volatility/:indexId',
       
-      // Scheme Analysis endpoints (NEW)
+      // Scheme Analysis endpoints
       'GET /api/scheme-analysis/health',
       'POST /api/scheme-analysis/calculate-metrics/:schemeId',
       'GET /api/scheme-analysis/metrics/:schemeId',
@@ -553,6 +556,7 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/bookmarks             ║
 ║  • POST /api/nav/bookmarks             ║
 ║  • GET  /api/nav/data                  ║
+║  • GET  /api/nav/timeseries/:schemeId  ║
 ║  • POST /api/nav/download/daily        ║
 ║  • POST /api/nav/download/historical   ║
 ║  • GET  /api/nav/download/progress/:id ║
@@ -681,6 +685,7 @@ app.listen(PORT, async () => {
     console.log('✅ Transaction management endpoints ready');
     console.log('✅ Portfolio tracking endpoints ready');
     console.log('✅ NAV tracking endpoints ready');
+    console.log('✅ NAV time-series analytics ready'); // NEW
     console.log('✅ Enhanced bookmark endpoints ready');
     console.log('✅ Bookmark gap detection ready');
     console.log('✅ Market data endpoints ready');
@@ -691,9 +696,9 @@ app.listen(PORT, async () => {
     console.log('✅ Market analysis dashboard endpoints ready');
     console.log('✅ Market analysis returns endpoints ready');
     console.log('✅ Market analysis volatility endpoints ready');
-    console.log('✅ Scheme analysis endpoints ready'); // NEW
-    console.log('✅ Scheme analysis metrics calculation ready'); // NEW
-    console.log('✅ Scheme analysis batch processing ready'); // NEW
+    console.log('✅ Scheme analysis endpoints ready');
+    console.log('✅ Scheme analysis metrics calculation ready');
+    console.log('✅ Scheme analysis batch processing ready');
     console.log('✅ JTBD endpoints ready');
     console.log('✅ JTBD Dashboard endpoints ready');
     console.log('✅ Goal management endpoints ready');
@@ -769,6 +774,7 @@ app.listen(PORT, async () => {
 ║  Transactions: ✅ Ready                ║
 ║  Portfolio: ✅ Ready                   ║
 ║  NAV Routes: ✅ Ready                  ║
+║  NAV Time Series: ✅ Ready             ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
 ║  Bookmark Gap Detection: ✅ Ready      ║
 ║  Customer Bookmarks: ✅ Ready          ║

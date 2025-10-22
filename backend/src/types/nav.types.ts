@@ -431,3 +431,77 @@ export interface PaginatedResponse<T> {
   items: T[];
   pagination: PaginationParams;
 }
+
+// ==================== NAV TIME SERIES TYPES ====================
+// For ChartViewer integration and scheme analytics
+
+/**
+ * Parameters for time-series query
+ */
+export interface NavTimeSeriesParams {
+  start_date?: string;      // YYYY-MM-DD format
+  end_date?: string;        // YYYY-MM-DD format
+  granularity?: 'daily' | 'weekly' | 'monthly';  // Default: daily
+  include_metrics?: boolean; // Include calculated metrics (default: true)
+}
+
+/**
+ * Single data point in time-series
+ * Contains NAV value and optional calculated metrics
+ */
+export interface NavTimeSeriesDataPoint {
+  date: string;              // YYYY-MM-DD format
+  nav_value: number;         // NAV value for this date
+  
+  // Optional metrics (if calculated and include_metrics = true)
+  daily_return?: number | null;
+  return_1w?: number | null;
+  return_1m?: number | null;
+  return_3m?: number | null;
+  return_6m?: number | null;
+  return_1y?: number | null;
+  return_ytd?: number | null;
+  return_all?: number | null;
+  sd_7d?: number | null;
+  sd_14d?: number | null;
+  sd_21d?: number | null;
+  sd_42d?: number | null;
+  sd_3m?: number | null;
+  sd_6m?: number | null;
+  sharpe_ratio?: number | null;
+  max_drawdown?: number | null;
+  total_risk?: number | null;
+  cagr?: number | null;
+  
+  // Metadata
+  has_metrics: boolean;
+  metrics_calculated_at?: string | null;  // ISO datetime
+}
+
+/**
+ * Metrics coverage statistics
+ */
+export interface MetricsCoverage {
+  total_dates: number;
+  dates_with_metrics: number;
+  coverage_percentage: number;
+}
+
+/**
+ * Complete time-series response
+ * Optimized for chart visualization
+ */
+export interface NavTimeSeriesResponse {
+  scheme_id: number;
+  scheme_code: string;
+  scheme_name: string;
+  amc_name: string;
+  granularity: 'daily' | 'weekly' | 'monthly';
+  date_range: {
+    start_date: string;      // YYYY-MM-DD
+    end_date: string;        // YYYY-MM-DD
+  };
+  data: NavTimeSeriesDataPoint[];
+  total_points: number;
+  metrics_coverage: MetricsCoverage;
+}

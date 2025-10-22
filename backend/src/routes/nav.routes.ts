@@ -1,5 +1,6 @@
 // backend/src/routes/nav.routes.ts
 // File 8/14: NAV routing with enhanced bookmark endpoints and scheduler management
+// UPDATED: Added time-series endpoint for chart visualization
 
 import { Router } from 'express';
 import { NavController } from '../controllers/nav.controller';
@@ -270,6 +271,54 @@ router.get('/data', navController.getNavData);
  */
 router.get('/schemes/:id/latest', navController.getLatestNav);
 
+/**
+ * Get NAV time series data for a specific scheme
+ * GET /api/nav/timeseries/:schemeId
+ * 
+ * Path params:
+ *   - schemeId: Scheme ID (integer)
+ * 
+ * Query params:
+ *   - start_date: Start date (YYYY-MM-DD), optional
+ *   - end_date: End date (YYYY-MM-DD), optional
+ *   - granularity: 'daily' | 'weekly' | 'monthly' (default: 'daily')
+ *   - include_metrics: Include calculated metrics (default: true)
+ * 
+ * Returns time-series data optimized for chart visualization
+ * with optional calculated metrics (returns, volatility, etc.)
+ * 
+ * Response: {
+ *   scheme_id: number,
+ *   scheme_name: string,
+ *   granularity: string,
+ *   total_points: number,
+ *   date_range: { start: string, end: string },
+ *   data_points: [
+ *     {
+ *       date: string,
+ *       nav: number,
+ *       daily_return?: number,
+ *       cumulative_return?: number,
+ *       volatility?: number,
+ *       min_nav?: number,
+ *       max_nav?: number,
+ *       avg_nav?: number
+ *     }
+ *   ],
+ *   summary_metrics?: {
+ *     current_nav: number,
+ *     total_return: number,
+ *     annualized_return: number,
+ *     volatility: number,
+ *     sharpe_ratio: number,
+ *     max_drawdown: number
+ *   }
+ * }
+ * 
+ * Example: GET /api/nav/timeseries/123?granularity=weekly&start_date=2024-01-01
+ */
+router.get('/timeseries/:schemeId', navController.getNavTimeSeries);
+
 // ==================== DOWNLOAD OPERATION ROUTES ====================
 
 /**
@@ -518,8 +567,9 @@ router.get('/health', (req, res) => {
       features: {
         schemes_search: true,
         bookmarks: true,
-        enhanced_bookmarks: true, // NEW: Enhanced bookmark features
+        enhanced_bookmarks: true,
         nav_data: true,
+        timeseries_analytics: true, // NEW: Time series analytics feature
         downloads: true,
         scheduler: true,
         n8n_integration: !!process.env.N8N_BASE_URL,
@@ -610,7 +660,7 @@ router.use((error: any, req: any, res: any, next: any) => {
       status: 400,
       message: 'Scheduler is not enabled for this user'
     },
-    // NEW: Bookmark-specific error codes
+    // Bookmark-specific error codes
     'BOOKMARK_ACCESS_DENIED': {
       status: 403,
       message: 'You do not have permission to access this bookmark'
@@ -676,7 +726,6 @@ router.get('/docs', (req, res) => {
         create: { method: 'POST', path: '/bookmarks' },
         update: { method: 'PUT', path: '/bookmarks/:id' },
         delete: { method: 'DELETE', path: '/bookmarks/:id' },
-        // NEW: Enhanced bookmark endpoints
         nav_data: { 
           method: 'GET', 
           path: '/bookmarks/:id/nav-data',
@@ -713,7 +762,13 @@ router.get('/docs', (req, res) => {
       },
       nav_data: {
         list: { method: 'GET', path: '/data' },
-        latest: { method: 'GET', path: '/schemes/:id/latest' }
+        latest: { method: 'GET', path: '/schemes/:id/latest' },
+        timeseries: { 
+          method: 'GET', 
+          path: '/timeseries/:schemeId',
+          description: 'Get time-series data for chart visualization',
+          parameters: ['start_date', 'end_date', 'granularity', 'include_metrics']
+        }
       },
       downloads: {
         daily: { method: 'POST', path: '/download/daily', rate_limit: '10/hour' },
@@ -761,7 +816,6 @@ router.get('/docs', (req, res) => {
       'SCHEDULER_ALREADY_EXISTS': 409,
       'N8N_WEBHOOK_FAILED': 502,
       'SCHEDULER_NOT_ENABLED': 400,
-      // NEW: Bookmark-specific error codes
       'BOOKMARK_ACCESS_DENIED': 403,
       'INVALID_DOWNLOAD_STATUS': 400,
       'NAV_DATA_NOT_AVAILABLE': 404

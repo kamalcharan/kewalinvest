@@ -1,4 +1,5 @@
 // frontend/src/services/serviceURLs.ts
+// UPDATED: Added NAV time-series analytics endpoint
 
 // API Base URL from environment variable
 const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
@@ -167,6 +168,7 @@ export const API_ENDPOINTS = {
     
     NAV_DATA: `${API_BASE}/nav/data`,
     LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
+    TIME_SERIES: (schemeId: number) => `${API_BASE}/nav/timeseries/${schemeId}`, // NEW: Time series analytics
     DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
     DOWNLOAD_HISTORICAL: `${API_BASE}/nav/download/historical`,
     DOWNLOAD_PROGRESS: (jobId: number) => `${API_BASE}/nav/download/progress/${jobId}`,
@@ -215,7 +217,7 @@ export const API_ENDPOINTS = {
     INDEX_VOLATILITY: (indexId: number) => `${API_BASE}/market-analysis/index-volatility/${indexId}`,
   },
   
-  // Scheme Analysis endpoints (NEW)
+  // Scheme Analysis endpoints
   SCHEME_ANALYSIS: {
     HEALTH: `${API_BASE}/scheme-analysis/health`,
     CALCULATE_METRICS: (schemeId: number) => `${API_BASE}/scheme-analysis/calculate-metrics/${schemeId}`,
@@ -275,7 +277,7 @@ export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
 export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
-export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS; // NEW
+export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -602,6 +604,11 @@ export const NAV_URLS = {
     `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
   getLatestNav: (schemeId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.LATEST_NAV(schemeId)}${buildQueryParams({}, environment)}`,
+  
+  // NEW: Time series analytics helper
+  getTimeSeries: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.TIME_SERIES(schemeId)}${buildQueryParams(params || {}, environment)}`,
+  
   triggerDailyDownload: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.DOWNLOAD_DAILY}${buildQueryParams({}, environment)}`,
   triggerHistoricalDownload: (environment?: 'live' | 'test') =>
@@ -692,7 +699,7 @@ export const MARKET_ANALYSIS_URLS = {
     `${API_ENDPOINTS.MARKET_ANALYSIS.INDEX_VOLATILITY(indexId)}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
-// Scheme Analysis-specific URL helpers (NEW)
+// Scheme Analysis-specific URL helpers
 export const SCHEME_ANALYSIS_URLS = {
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
@@ -724,7 +731,7 @@ if (process.env.NODE_ENV === 'development') {
     Nav: Object.keys(API_ENDPOINTS.NAV).length,
     Market: Object.keys(API_ENDPOINTS.MARKET).length,
     MarketAnalysis: Object.keys(API_ENDPOINTS.MARKET_ANALYSIS).length,
-    SchemeAnalysis: Object.keys(API_ENDPOINTS.SCHEME_ANALYSIS).length, // NEW
+    SchemeAnalysis: Object.keys(API_ENDPOINTS.SCHEME_ANALYSIS).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,
@@ -766,6 +773,11 @@ if (process.env.NODE_ENV === 'development') {
     BOOKMARK_GAPS_SUMMARY: API_ENDPOINTS.NAV.BOOKMARK_GAPS_SUMMARY,
   });
   
+  console.log('📊 NAV Analytics:', { // NEW
+    LATEST_NAV: 'GET /api/nav/schemes/:schemeId/latest',
+    TIME_SERIES: 'GET /api/nav/timeseries/:schemeId',
+  });
+  
   console.log('📈 Market Data Endpoints:', {
     INDICES: API_ENDPOINTS.MARKET.INDICES,
     DOWNLOAD_HISTORICAL: API_ENDPOINTS.MARKET.DOWNLOAD_HISTORICAL,
@@ -783,7 +795,7 @@ if (process.env.NODE_ENV === 'development') {
     INDEX_VOLATILITY: 'GET /api/market-analysis/index-volatility/:indexId',
   });
   
-  console.log('📊 Scheme Analysis Endpoints:', { // NEW
+  console.log('📊 Scheme Analysis Endpoints:', {
     HEALTH: API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH,
     CALCULATE_METRICS: 'POST /api/scheme-analysis/calculate-metrics/:schemeId',
     GET_METRICS: 'GET /api/scheme-analysis/metrics/:schemeId',

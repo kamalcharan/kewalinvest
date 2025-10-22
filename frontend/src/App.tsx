@@ -26,7 +26,7 @@ import NavSchedulerPage from './pages/nav/NavSchedulerPage';
 import NavBookmarksPage from './pages/nav/NavBookmarksPage';
 import NavHistoryPage from './pages/nav/NavHistoryPage';
 import MarketHistoryPage from './pages/nav/MarketHistoryPage';
-import SchemeDashboardPage from './pages/nav/SchemeDashboardPage';
+import SchemeDetailPage from './pages/nav/SchemeDetailPage';  
 
 // Market Analysis Pages - NEW
 import MarketAnalysisDashboard from './pages/market/MarketAnalysisDashboard';
@@ -98,7 +98,7 @@ function App() {
                 <Route path="nav/scheduler" element={<NavSchedulerPage />} />
                 <Route path="nav/history" element={<NavHistoryPage />} />
                 <Route path="nav/market-history" element={<MarketHistoryPage />} />
-                <Route path="fund-dashboard/:schemeId" element={<SchemeDashboardPage />} />
+                <Route path="fund-dashboard/:scheme_id" element={<SchemeDetailPage />} />
                 
                 {/* Market Analysis Routes - NEW */}
                 <Route path="market/dashboard" element={<MarketAnalysisDashboard />} />

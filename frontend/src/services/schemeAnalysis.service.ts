@@ -1,5 +1,5 @@
 // frontend/src/services/schemeAnalysis.service.ts
-// FIXED: Correct SchemeReadiness structure and constants
+// FIXED: Changed from full URLs to relative paths to match market.service.ts pattern
 
 import { apiService } from './api.service';
 import { FrontendErrorLogger } from './errorLogger.service';
@@ -11,16 +11,17 @@ import type {
   BulkMetricsResult,
   SchemeReadiness,
   SchemeBookmark,
+  NavTimeSeriesParams,
+  NavTimeSeriesResponse,
 } from '../types/nav.types';
 import { METRICS_CONSTANTS } from '../types/nav.types';
 
 /**
  * SchemeAnalysisService
  * Handles all scheme analysis and metrics calculation operations
+ * FIXED: Now uses relative paths like market.service.ts
  */
 export class SchemeAnalysisService {
-  private static readonly BASE_PATH = '/api/nav/scheme-analysis';
-
   /**
    * Get latest calculated metrics for a scheme
    */
@@ -36,7 +37,8 @@ export class SchemeAnalysisService {
         { schemeId, date, environment }
       );
 
-      const url = `${this.BASE_PATH}/metrics/${schemeId}`;
+      // FIXED: Use relative path instead of full URL
+      const url = `/scheme-analysis/metrics/${schemeId}`;
       const params: Record<string, string> = { environment };
       
       if (date) {
@@ -93,6 +95,130 @@ export class SchemeAnalysisService {
   }
 
   /**
+   * Get NAV time series data for chart visualization
+   * 
+   * @param schemeId - Scheme ID
+   * @param params - Query parameters (dates, granularity, metrics)
+   * @returns Time series data with NAV values and calculated metrics
+   * 
+   * @example
+   * const timeSeries = await SchemeAnalysisService.getNavTimeSeries(123, {
+   *   granularity: 'weekly',
+   *   start_date: '2024-01-01',
+   *   end_date: '2024-12-31',
+   *   include_metrics: true
+   * });
+   */
+  static async getNavTimeSeries(
+    schemeId: number,
+    params?: NavTimeSeriesParams
+  ): Promise<NavTimeSeriesResponse> {
+    try {
+      FrontendErrorLogger.info(
+        'Fetching NAV time series data',
+        'SchemeAnalysisService.getNavTimeSeries',
+        { schemeId, params }
+      );
+
+      // Use relative path following the existing pattern
+     const url = `/nav/timeseries/${schemeId}`;
+      
+      // Build query parameters
+      const queryParams: Record<string, any> = {};
+      
+      if (params?.start_date) {
+        queryParams.start_date = params.start_date;
+      }
+      
+      if (params?.end_date) {
+        queryParams.end_date = params.end_date;
+      }
+      
+      if (params?.granularity) {
+        queryParams.granularity = params.granularity;
+      }
+      
+      if (params?.include_metrics !== undefined) {
+        queryParams.include_metrics = params.include_metrics;
+      }
+
+      // Make API call - API returns wrapper with success, data, execution_time_ms
+      const response = await apiService.get<{
+        success: boolean;
+        data: NavTimeSeriesResponse;
+        execution_time_ms: number;
+      }>(
+        url,
+        { params: queryParams }
+      );
+
+      if (!response || !response.success) {
+        throw new Error('Failed to fetch NAV time series data');
+      }
+
+      FrontendErrorLogger.info(
+        'NAV time series data fetched successfully',
+        'SchemeAnalysisService.getNavTimeSeries',
+        {
+          schemeId,
+          granularity: response.data.granularity,
+          totalPoints: response.data.total_points,
+          executionTimeMs: response.execution_time_ms,
+        }
+      );
+
+      return response.data;
+
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        FrontendErrorLogger.error(
+          'Scheme not found or no NAV data available',
+          'SchemeAnalysisService.getNavTimeSeries',
+          { schemeId, params, statusCode: 404 }
+        );
+        
+        throw new Error(`No NAV time series data found for scheme ${schemeId}`);
+      }
+
+      if (error.response?.status === 400) {
+        FrontendErrorLogger.error(
+          'Invalid time series request parameters',
+          'SchemeAnalysisService.getNavTimeSeries',
+          {
+            schemeId,
+            params,
+            statusCode: 400,
+            error: error.response?.data?.error,
+          }
+        );
+        
+        throw new Error(
+          error.response?.data?.error || 
+          'Invalid time series request parameters'
+        );
+      }
+
+      FrontendErrorLogger.error(
+        'Failed to fetch NAV time series data',
+        'SchemeAnalysisService.getNavTimeSeries',
+        {
+          schemeId,
+          params,
+          error: error.message,
+          statusCode: error.response?.status,
+        },
+        error.stack
+      );
+
+      throw new Error(
+        error.response?.data?.error || 
+        error.message || 
+        'Failed to fetch NAV time series data'
+      );
+    }
+  }
+
+  /**
    * Calculate metrics for a single scheme
    */
   static async calculateMetrics(
@@ -106,7 +232,8 @@ export class SchemeAnalysisService {
         { schemeId, options }
       );
 
-      const url = `${this.BASE_PATH}/calculate-metrics/${schemeId}`;
+      // FIXED: Use relative path instead of full URL
+      const url = `/scheme-analysis/calculate-metrics/${schemeId}`;
       const body = options || {};
 
       const response = await apiService.post<MetricsCalculationResponse>(url, body);
@@ -193,7 +320,8 @@ export class SchemeAnalysisService {
         }
       );
 
-      const url = `${this.BASE_PATH}/batch-calculate`;
+      // FIXED: Use relative path instead of full URL
+      const url = '/scheme-analysis/batch-calculate';
       const body = request;
 
       const response = await apiService.post<BulkMetricsResult>(url, body);
@@ -263,9 +391,12 @@ export class SchemeAnalysisService {
     }
   }
 
+  // ==================== HELPER METHODS ====================
+  // All helper methods remain unchanged as they contain business logic
+
   /**
    * Validate if a scheme is ready for metrics calculation
-   * FIXED: Returns full SchemeReadiness object with scheme info
+   * Returns full SchemeReadiness object with scheme info
    * 
    * @param bookmark - Scheme bookmark with all info
    * @returns Complete SchemeReadiness object
@@ -273,7 +404,6 @@ export class SchemeAnalysisService {
   static validateSchemeReadiness(bookmark: SchemeBookmark): SchemeReadiness {
     const navRecordsCount = bookmark.nav_records_count || 0;
 
-    // FIXED: Return full SchemeReadiness structure
     if (navRecordsCount === 0) {
       return {
         scheme_id: bookmark.scheme_id,
@@ -285,7 +415,6 @@ export class SchemeAnalysisService {
       };
     }
 
-    // FIXED: Use RECOMMENDED_MIN_RECORDS instead of MIN_NAV_RECORDS
     if (navRecordsCount < METRICS_CONSTANTS.RECOMMENDED_MIN_RECORDS) {
       return {
         scheme_id: bookmark.scheme_id,
@@ -297,7 +426,6 @@ export class SchemeAnalysisService {
       };
     }
 
-    // FIXED: Status can only be 'ready', 'partial', or 'no_data'
     return {
       scheme_id: bookmark.scheme_id,
       scheme_code: bookmark.scheme_code,
@@ -310,7 +438,6 @@ export class SchemeAnalysisService {
 
   /**
    * Check if metrics are stale
-   * FIXED: Use hours instead of days
    */
   static isMetricsStale(metricsCalculatedAt: string): boolean {
     try {
@@ -318,7 +445,6 @@ export class SchemeAnalysisService {
       const now = new Date();
       const hoursDiff = (now.getTime() - calculatedDate.getTime()) / (1000 * 60 * 60);
 
-      // FIXED: Use STALE_THRESHOLD_HOURS instead of STALE_THRESHOLD_DAYS
       return hoursDiff > METRICS_CONSTANTS.STALE_THRESHOLD_HOURS;
     } catch (error) {
       FrontendErrorLogger.error(
@@ -403,7 +529,7 @@ export class SchemeAnalysisService {
 
   /**
    * Categorize schemes by readiness
-   * FIXED: Returns SchemeReadiness objects, not bookmarks
+   * Returns SchemeReadiness objects, not bookmarks
    */
   static categorizeSchemes(bookmarks: SchemeBookmark[]): {
     ready: SchemeReadiness[];
@@ -417,7 +543,6 @@ export class SchemeAnalysisService {
     bookmarks.forEach(bookmark => {
       const readiness = this.validateSchemeReadiness(bookmark);
       
-      // FIXED: Only valid statuses: 'ready', 'partial', 'no_data'
       if (readiness.status === 'no_data') {
         noData.push(readiness);
       } else if (readiness.status === 'partial') {
@@ -431,4 +556,5 @@ export class SchemeAnalysisService {
   }
 }
 
+// Export singleton instance for backward compatibility
 export const schemeAnalysisService = SchemeAnalysisService;
