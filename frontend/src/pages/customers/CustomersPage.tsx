@@ -498,27 +498,6 @@ const CustomersPage: React.FC = () => {
             padding: '20px'
           }}>
             <div style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: colors.brand.primary,
-              marginBottom: '4px'
-            }}>
-              {metricsLoading ? '...' : formatCurrency(portfolioMetrics.totalAUM)}
-            </div>
-            <div style={{
-              fontSize: '14px',
-              color: colors.utility.secondaryText
-            }}>
-              Total AUM
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '8px',
-            padding: '20px'
-          }}>
-            <div style={{
               fontSize: '32px',
               fontWeight: '700',
               color: colors.brand.secondary,
@@ -531,27 +510,6 @@ const CustomersPage: React.FC = () => {
               color: colors.utility.secondaryText
             }}>
               With Portfolio
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '8px',
-            padding: '20px'
-          }}>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: portfolioMetrics.avgReturns >= 0 ? '#10B981' : '#EF4444',
-              marginBottom: '4px'
-            }}>
-              {metricsLoading ? '...' : `${portfolioMetrics.avgReturns >= 0 ? '+' : ''}${portfolioMetrics.avgReturns.toFixed(1)}%`}
-            </div>
-            <div style={{
-              fontSize: '14px',
-              color: colors.utility.secondaryText
-            }}>
-              Avg Returns
             </div>
           </div>
         </div>
