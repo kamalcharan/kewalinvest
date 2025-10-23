@@ -1,10 +1,32 @@
 -- ============================================================================
 -- File: 05_seed_data.sql
 -- Description: Seed data for transaction types and initial tenants
--- Purpose: Master data and test tenants
+-- Purpose: Master data and test tenants for INITIAL DATABASE SETUP
 -- Execution: Run FIFTH (last) after 04_functions_views_policies.sql
 -- Author: System
 -- Date: 2025-01-08
+-- Updated: 2025-01-23 - Added automatic tenant seeding on signup
+-- ============================================================================
+--
+-- IMPORTANT NOTES:
+-- ================
+-- 1. NEW TENANT SIGNUP: Starting from 2025-01-23, when a new tenant signs up
+--    via the /register endpoint, the following data is AUTOMATICALLY seeded:
+--    - Transaction types (17 types) for both LIVE and TEST environments
+--    - Bookmark reasons (8 reasons) for both LIVE and TEST environments
+--    See: backend/src/services/tenantSeed.service.ts
+--
+-- 2. THIS SCRIPT PURPOSE: This script is now primarily used for:
+--    - Initial database setup (fresh deployment)
+--    - Seeding pre-existing tenants (Kewal, Staging, QA) during deployment
+--    - Backfilling data for tenants created before auto-seeding was implemented
+--    - Development/testing environments where you need multiple tenants setup
+--
+-- 3. DEPLOYMENT: When deploying to a client:
+--    - Run this script ONCE during initial setup to seed pre-configured tenants
+--    - Future tenants will be automatically seeded via the signup flow
+--    - No need to modify this script when adding new tenants via signup
+--
 -- ============================================================================
 
 -- ============================================================================

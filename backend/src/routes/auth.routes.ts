@@ -4,6 +4,7 @@ import { pool } from '../config/database';
 import { hashPassword, verifyPassword } from '../utils/password.utils';
 import { createAccessToken } from '../utils/jwt.utils';
 import { authenticate } from '../middleware/auth.middleware';
+import { seedTenantData } from '../services/tenantSeed.service';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -178,6 +179,11 @@ router.post('/register', async (req: Request, res: Response): Promise<Response> 
 
     const user = userResult.rows[0];
     console.log('✅ REGISTER: User created with ID:', user.id);
+
+    // ========== SEED TENANT DATA ==========
+    console.log('🌱 REGISTER: Seeding master data for new tenant...');
+    await seedTenantData(tenant.id, client);
+    console.log('✅ REGISTER: Tenant data seeded successfully');
 
     // ========== COMMIT TRANSACTION ==========
     await client.query('COMMIT');
