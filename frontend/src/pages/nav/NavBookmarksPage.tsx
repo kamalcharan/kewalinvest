@@ -133,31 +133,16 @@ const NavBookmarksPage: React.FC = () => {
   };
 
   // Enhanced bookmark card handlers
-  const handleToggleDaily = async (bookmarkId: number, enabled: boolean) => {
-    try {
-      await updateBookmark(bookmarkId, { daily_download_enabled: enabled });
-      toastService.success(`Daily download ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error: any) {
-      toastService.error('Failed to update bookmark');
-    }
-  };
+  const handleDashboardClick = (bookmark: SchemeBookmark) => {
+    navigate(`/fund-dashboard/${bookmark.scheme_id}`);
 
-  const handleViewNavData = (bookmark: SchemeBookmark) => {
-    if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
-      toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
-      return;
-    }
-
-    setSelectedBookmark(bookmark);
-    setShowNavDataModal(true);
-    
     FrontendErrorLogger.info(
-      'Opening NAV Data Viewer from Bookmarks page',
+      'Navigating to fund dashboard from Bookmarks page',
       'NavBookmarksPage',
       {
         bookmarkId: bookmark.id,
-        schemeName: bookmark.scheme_name,
-        navRecordsCount: bookmark.nav_records_count
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name
       }
     );
   };
@@ -943,8 +928,7 @@ const NavBookmarksPage: React.FC = () => {
                     <div style={{ flex: 1 }}>
                       <EnhancedBookmarkCard
                         bookmark={bookmark}
-                        onToggleDaily={handleToggleDaily}
-                        onViewNavData={handleViewNavData}
+                        onDashboardClick={handleDashboardClick}
                         onHistoricalDownload={handleHistoricalDownload}
                         onCalculateMetrics={handleCalculateMetrics}
                         showActions={true}
