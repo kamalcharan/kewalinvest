@@ -73,7 +73,7 @@ export const MetricsStatusBadge: React.FC<MetricsStatusBadgeProps> = ({
       case 'outdated':
         return {
           icon: '⚠',
-          text: 'Outdated',
+          text: 'Metrics Outdated',
           color: colors.semantic.warning,
           bgColor: colors.semantic.warning + '15',
           borderColor: colors.semantic.warning + '30',
