@@ -8,7 +8,6 @@ import { useNavDashboard, useDownloads, useDownloadProgress } from '../../hooks/
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
-import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import BookmarkGapAlert from '../../components/nav/BookmarkGapAlert';
 import UnbookmarkedSchemesModal from '../../components/nav/UnbookmarkedSchemesModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
@@ -50,8 +49,7 @@ const NavDashboardPage: React.FC = () => {
   // Enhanced bookmark card modals
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
-  const [showNavDataModal, setShowNavDataModal] = useState(false);
-  
+
   // Unbookmarked schemes modal
   const [showUnbookmarkedModal, setShowUnbookmarkedModal] = useState(false);
 
@@ -125,48 +123,6 @@ const NavDashboardPage: React.FC = () => {
     }
   }, [isTriggeringDownload, triggerDailyDownload, debouncedRefresh]);
 
-  // Handle toggle daily download
-  const handleToggleDaily = useCallback(async (bookmarkId: number, enabled: boolean) => {
-    try {
-      // EnhancedBookmarkCard handles the API call internally
-      if (!isLoading) {
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            debouncedRefresh();
-          }
-        }, 1000);
-      }
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Failed to toggle daily download',
-        'NavDashboardPage',
-        { bookmarkId, enabled, error: error.message },
-        error.stack
-      );
-    }
-  }, [isLoading, debouncedRefresh]);
-
-  // Handle view NAV data
-  const handleViewNavData = useCallback((bookmark: SchemeBookmark) => {
-    if (!bookmark.nav_records_count || bookmark.nav_records_count === 0) {
-      toastService.warning(`No NAV data available for ${bookmark.scheme_name}. Try downloading historical data first.`);
-      return;
-    }
-
-    setSelectedBookmark(bookmark);
-    setShowNavDataModal(true);
-    
-    FrontendErrorLogger.info(
-      'Opening NAV Data Viewer',
-      'NavDashboardPage',
-      {
-        bookmarkId: bookmark.id,
-        schemeName: bookmark.scheme_name,
-        navRecordsCount: bookmark.nav_records_count
-      }
-    );
-  }, []);
-
   // Handle historical download
   const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
     setSelectedBookmark(bookmark);
@@ -238,17 +194,6 @@ const NavDashboardPage: React.FC = () => {
     
     FrontendErrorLogger.info(
       'Historical Download Modal closed',
-      'NavDashboardPage',
-      {}
-    );
-  }, []);
-
-  const handleCloseNavDataModal = useCallback(() => {
-    setShowNavDataModal(false);
-    setSelectedBookmark(null);
-    
-    FrontendErrorLogger.info(
-      'NAV Data Viewer Modal closed',
       'NavDashboardPage',
       {}
     );
@@ -956,8 +901,6 @@ const NavDashboardPage: React.FC = () => {
                 <EnhancedBookmarkCard
                   key={bookmark.id}
                   bookmark={bookmark}
-                  onToggleDaily={handleToggleDaily}
-                  onViewNavData={handleViewNavData}
                   onHistoricalDownload={handleHistoricalDownload}
                   showActions={true}
                 />
@@ -1002,13 +945,6 @@ const NavDashboardPage: React.FC = () => {
         onClose={handleCloseHistoricalModal}
         onDownloadStarted={handleHistoricalDownloadStarted}
         onShowProgress={handleHistoricalDownloadStarted}
-      />
-
-      {/* NAV Data Viewer Modal */}
-      <NavDataViewerModal
-        isOpen={showNavDataModal}
-        bookmark={selectedBookmark}
-        onClose={handleCloseNavDataModal}
       />
 
       {/* Progress Modal with automatic refresh on completion - FIXED */}
