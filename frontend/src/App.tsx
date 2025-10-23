@@ -32,6 +32,9 @@ import SchemeDetailPage from './pages/nav/SchemeDetailPage';
 import MarketAnalysisDashboard from './pages/market/MarketAnalysisDashboard';
 import IndexDetailPage from './pages/market/IndexDetailPage';
 
+// Cruise Control Pages - NEW
+import CruiseControlPage from './pages/cruiseControl/CruiseControlPage';
+
 // Contact pages
 import ContactsPage from './pages/contacts/ContactsPage';
 import ContactFormPage from './pages/contacts/ContactFormPage';
@@ -103,7 +106,10 @@ function App() {
                 {/* Market Analysis Routes - NEW */}
                 <Route path="market/dashboard" element={<MarketAnalysisDashboard />} />
                 <Route path="market/indices/:id" element={<IndexDetailPage />} />
-                
+
+                {/* Cruise Control Routes - NEW */}
+                <Route path="cruise-control" element={<CruiseControlPage />} />
+
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
 
