@@ -304,14 +304,14 @@ const MarketAnalysisDashboard: React.FC = () => {
                 Loading market data...
               </p>
             </div>
-          ) : indexPerformances.length === 0 ? (
+          ) : indexPerformances.length === 0 || indexPerformances.every(idx => !idx.has_metrics) ? (
             <div style={{
               textAlign: 'center',
               padding: '60px 20px',
               color: colors.utility.secondaryText
             }}>
               <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>
-                📭
+                📊
               </div>
               <p style={{
                 fontSize: '16px',
@@ -319,14 +319,36 @@ const MarketAnalysisDashboard: React.FC = () => {
                 margin: '0 0 8px 0',
                 color: colors.utility.primaryText
               }}>
-                No indices available
+                {indices.length === 0 ? 'No indices available' : 'No metrics calculated yet'}
               </p>
               <p style={{
                 fontSize: '13px',
-                margin: 0
+                margin: '0 0 16px 0',
+                lineHeight: '1.6'
               }}>
-                Indices will appear here once they are configured
+                {indices.length === 0
+                  ? 'Indices will appear here once they are configured'
+                  : 'Click on an index below to view details and calculate metrics. Metrics are required to display performance data.'}
               </p>
+              {indices.length > 0 && (
+                <div style={{
+                  marginTop: '24px',
+                  padding: '16px',
+                  backgroundColor: colors.semantic.info + '10',
+                  border: `1px solid ${colors.semantic.info}30`,
+                  borderRadius: '8px',
+                  textAlign: 'left',
+                  fontSize: '13px',
+                  lineHeight: '1.6'
+                }}>
+                  <strong style={{ color: colors.semantic.info }}>📌 Quick Start:</strong>
+                  <ol style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                    <li>Click on any index tile below</li>
+                    <li>On the detail page, click "Calculate Metrics"</li>
+                    <li>Return to this dashboard to see performance data</li>
+                  </ol>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{
