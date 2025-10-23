@@ -976,6 +976,8 @@ async triggerDatabaseProcessing(
     }
     
     console.log(`Calling database function: ${processingFunction} for session ${sessionId}`);
+
+
     
     // Execute processing function - this will run synchronously
     // In production, you might want to use pg_background or a job queue

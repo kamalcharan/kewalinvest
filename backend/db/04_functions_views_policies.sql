@@ -190,9 +190,10 @@ ALTER FUNCTION public.check_customer_duplicate(p_pan character varying, p_email 
 
 COMMENT ON FUNCTION public.check_customer_duplicate(p_pan character varying, p_email character varying, p_mobile character varying) IS 'Check for duplicate customers using PAN (plain text), email, or mobile';
 
-CREATE FUNCTION public.process_single_customer_record(p_staging_id integer) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
+CREATE OR REPLACE FUNCTION public.process_single_customer_record(p_staging_id integer)
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_staging RECORD;
     v_mapped_data JSONB;
@@ -204,6 +205,7 @@ DECLARE
     v_date_of_birth DATE;
     v_anniversary_date DATE;
     v_iwell_code VARCHAR(100);
+    v_existing_customer_id INTEGER;  -- NEW
 BEGIN
     -- Get staging record
     SELECT * INTO v_staging
@@ -223,20 +225,54 @@ BEGIN
     v_error_messages := ARRAY[]::TEXT[];
     
     BEGIN
-        -- Check for duplicates
-        v_is_duplicate := check_customer_duplicate(
-            v_mapped_data->>'pan',
-            v_mapped_data->>'email',
-            v_mapped_data->>'mobile'
-        );
+        -- ✅ FIXED: Check for duplicates WITH tenant_id and is_live scope
+        -- Check by PAN or IWELL code in customers table
+        SELECT id INTO v_existing_customer_id
+        FROM t_customers
+        WHERE tenant_id = v_staging.tenant_id        -- ✅ CRITICAL: Scope by tenant
+          AND is_live = v_staging.is_live            -- ✅ CRITICAL: Scope by environment
+          AND (
+            (pan IS NOT NULL AND pan = NULLIF(TRIM(v_mapped_data->>'pan'), ''))
+            OR 
+            (iwell_code IS NOT NULL AND iwell_code = NULLIF(TRIM(v_mapped_data->>'iwell_code'), ''))
+          );
         
-        IF v_is_duplicate THEN
+        IF v_existing_customer_id IS NOT NULL THEN
             UPDATE t_import_staging_data
             SET processing_status = 'duplicate',
-                warnings = array_append(warnings, 'Customer already exists'),
+                warnings = array_append(warnings, 'Customer already exists with same PAN or IWELL code'),
+                created_record_id = v_existing_customer_id,
                 processed_at = CURRENT_TIMESTAMP
             WHERE id = p_staging_id;
             RETURN;
+        END IF;
+        
+        -- ✅ OPTIONAL: Also check for contact duplicates (email/mobile) with tenant scope
+        IF (v_mapped_data->>'email' IS NOT NULL AND TRIM(v_mapped_data->>'email') != '') OR
+           (v_mapped_data->>'mobile' IS NOT NULL AND TRIM(v_mapped_data->>'mobile') != '') THEN
+            
+            SELECT c.id INTO v_existing_customer_id
+            FROM t_customers c
+            JOIN t_contacts ct ON ct.id = c.contact_id
+            JOIN t_contact_channels cc ON cc.contact_id = ct.id
+            WHERE c.tenant_id = v_staging.tenant_id      -- ✅ Scope by tenant
+              AND c.is_live = v_staging.is_live          -- ✅ Scope by environment
+              AND (
+                (cc.channel_type = 'email' AND cc.channel_value = NULLIF(TRIM(v_mapped_data->>'email'), ''))
+                OR
+                (cc.channel_type = 'mobile' AND cc.channel_value = NULLIF(TRIM(v_mapped_data->>'mobile'), ''))
+              )
+            LIMIT 1;
+            
+            IF v_existing_customer_id IS NOT NULL THEN
+                UPDATE t_import_staging_data
+                SET processing_status = 'duplicate',
+                    warnings = array_append(warnings, 'Customer already exists with same email or mobile'),
+                    created_record_id = v_existing_customer_id,
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE id = p_staging_id;
+                RETURN;
+            END IF;
         END IF;
         
         -- Clean and validate prefix
@@ -427,8 +463,7 @@ BEGIN
         END IF;
     END;
 END;
-$$;
-
+$function$;
 
 ALTER FUNCTION public.process_single_customer_record(p_staging_id integer) OWNER TO kewal_admin;
 
