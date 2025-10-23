@@ -14,6 +14,7 @@ import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import MarketService from '../../services/market.service';
+import { marketAnalysisService } from '../../services/marketAnalysis.service';
 import type { MarketIndex } from '../../types/market.types';
 
 const MarketHistoryPage: React.FC = () => {
@@ -37,6 +38,9 @@ const MarketHistoryPage: React.FC = () => {
   // Connection test state
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'ok' | 'failed'>('unknown');
+
+  // Calculate metrics state
+  const [calculatingIndexId, setCalculatingIndexId] = useState<number | null>(null);
 
   // Use combined dashboard hook
   const {
@@ -216,6 +220,53 @@ const MarketHistoryPage: React.FC = () => {
     }
   }, [selectedIndex, deleteData, refetchAll]);
 
+  // Handle Calculate Metrics
+  const handleCalculateMetrics = useCallback(async (index: MarketIndex) => {
+    setCalculatingIndexId(index.id);
+
+    FrontendErrorLogger.info(
+      'Starting metrics calculation',
+      'MarketHistoryPage',
+      {
+        indexId: index.id,
+        indexName: index.index_name,
+        recordCount: index.total_records
+      }
+    );
+
+    try {
+      const response = await marketAnalysisService.calculateMetrics({
+        index_id: index.id,
+        recalculate: true
+      });
+
+      if (response.success) {
+        toastService.success(`Metrics calculated successfully for ${index.index_name}`);
+        setTimeout(() => {
+          refetchAll();
+        }, 1000);
+      } else {
+        throw new Error(response.error || 'Calculation failed');
+      }
+
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to calculate metrics';
+      toastService.error(`Calculation failed: ${errorMsg}`);
+
+      FrontendErrorLogger.error(
+        'Metrics calculation failed',
+        'MarketHistoryPage',
+        {
+          indexId: index.id,
+          error: errorMsg
+        },
+        err.stack
+      );
+    } finally {
+      setCalculatingIndexId(null);
+    }
+  }, [refetchAll]);
+
   // Handle connection test
   const handleTestConnection = useCallback(async () => {
     setIsTestingConnection(true);
@@ -248,12 +299,13 @@ const MarketHistoryPage: React.FC = () => {
           undefined
         );
       }
+
     } catch (err: any) {
       setConnectionStatus('failed');
       toastService.error('❌ Connection test failed');
       
       FrontendErrorLogger.error(
-        'Connection test exception',
+        'Connection test error',
         'MarketHistoryPage',
         { error: err.message },
         err.stack
@@ -263,76 +315,53 @@ const MarketHistoryPage: React.FC = () => {
     }
   }, []);
 
-
-  // Initial load logging
-  useEffect(() => {
-    FrontendErrorLogger.info(
-      'MarketHistoryPage mounted',
-      'MarketHistoryPage',
-      {}
-    );
-  }, []);
-
-  // Loading state
-  if (isLoading && indices.length === 0) {
+  // Error display
+  if (error) {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: colors.utility.primaryBackground,
         padding: '24px',
+        backgroundColor: colors.utility.secondaryBackground,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
         <div style={{
-          textAlign: 'center',
-          color: colors.utility.secondaryText
+          maxWidth: '500px',
+          width: '100%',
+          padding: '32px',
+          backgroundColor: colors.utility.primaryBackground,
+          borderRadius: '12px',
+          border: `1px solid ${colors.semantic.error}40`,
+          textAlign: 'center'
         }}>
           <div style={{
-            width: '48px',
-            height: '48px',
-            border: `4px solid ${colors.utility.secondaryBackground}`,
-            borderTop: `4px solid ${colors.brand.primary}`,
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          Loading Market Data...
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && indices.length === 0) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: colors.utility.primaryBackground,
-        padding: '24px'
-      }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: '40px',
-          textAlign: 'center',
-          backgroundColor: colors.semantic.error + '10',
-          borderRadius: '12px',
-          color: colors.semantic.error
-        }}>
-          <p style={{ marginBottom: '16px', fontSize: '16px' }}>⚠️ Failed to load Market Data</p>
-          <p style={{ 
-            marginBottom: '16px', 
+            fontSize: '48px',
+            marginBottom: '16px'
+          }}>
+            ⚠️
+          </div>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '700',
+            color: colors.semantic.error,
+            marginBottom: '12px'
+          }}>
+            Failed to Load Market Data
+          </h2>
+          <p style={{
             fontSize: '14px',
-            color: colors.utility.secondaryText 
+            color: colors.utility.secondaryText,
+            marginBottom: '24px',
+            lineHeight: '1.6'
           }}>
             {error}
           </p>
           <button
-            onClick={() => refetchAll()}
+            onClick={() => window.location.reload()}
             style={{
               padding: '10px 20px',
-              backgroundColor: colors.semantic.error,
+              backgroundColor: colors.brand.primary,
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -358,21 +387,23 @@ const MarketHistoryPage: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: colors.utility.primaryBackground,
-      padding: '24px'
+      padding: '24px',
+      backgroundColor: colors.utility.secondaryBackground
     }}>
       <div style={{
         maxWidth: '1400px',
-        margin: '0 auto'
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px'
       }}>
         {/* Header */}
         <div style={{
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '24px',
-          flexWrap: 'wrap',
-          gap: '16px'
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap'
         }}>
           <div>
             <h1 style={{
@@ -555,11 +586,13 @@ const MarketHistoryPage: React.FC = () => {
                   key={index.id}
                   index={index}
                   onViewDashboard={handleViewDashboard}
+                  onCalculateMetrics={handleCalculateMetrics}
                   onDownloadHistorical={handleDownloadHistorical}
                   onDownloadEOD={handleDownloadEOD}
                   onDelete={handleDelete}
                   showDeleteButton={isSuperAdmin}
                   isDownloading={isProcessing}
+                  isCalculating={calculatingIndexId === index.id}
                 />
               ))}
             </div>

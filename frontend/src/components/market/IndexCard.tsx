@@ -11,9 +11,11 @@ interface IndexCardProps {
   onDownloadHistorical: (index: MarketIndex) => void;
   onDownloadEOD: (index: MarketIndex) => void;
   onViewDashboard?: (index: MarketIndex) => void;
+  onCalculateMetrics?: (index: MarketIndex) => void;
   onDelete?: (index: MarketIndex) => void;
   showDeleteButton?: boolean;
   isDownloading?: boolean;
+  isCalculating?: boolean;
 }
 
 const IndexCard: React.FC<IndexCardProps> = ({
@@ -21,9 +23,11 @@ const IndexCard: React.FC<IndexCardProps> = ({
   onDownloadHistorical,
   onDownloadEOD,
   onViewDashboard,
+  onCalculateMetrics,
   onDelete,
   showDeleteButton = false,
-  isDownloading = false
+  isDownloading = false,
+  isCalculating = false
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -255,42 +259,41 @@ const IndexCard: React.FC<IndexCardProps> = ({
           </div>
         </div>
 
-        {/* Data Statistics */}
+        {/* Data Metrics - Only show if data is available */}
         {index.historical_data_available && index.total_records > 0 ? (
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '12px',
             marginTop: '12px',
-            padding: '12px',
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '6px',
-            border: `1px solid ${colors.utility.primaryText}05`
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px'
           }}>
-            {/* Record Count */}
+            {/* Total Records */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              padding: '10px',
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '6px'
             }}>
               <div style={{
                 width: '32px',
                 height: '32px',
-                backgroundColor: colors.brand.primary + '10',
-                borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                backgroundColor: colors.brand.primary + '10',
+                borderRadius: '6px',
                 flexShrink: 0
               }}>
                 <Database size={16} color={colors.brand.primary} />
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: colors.utility.primaryText,
-                  lineHeight: '1'
+                  lineHeight: '1.3'
                 }}>
                   {index.total_records.toLocaleString()}
                 </div>
@@ -308,23 +311,26 @@ const IndexCard: React.FC<IndexCardProps> = ({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              padding: '10px',
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '6px'
             }}>
               <div style={{
                 width: '32px',
                 height: '32px',
-                backgroundColor: colors.semantic.info + '10',
-                borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                backgroundColor: colors.brand.secondary + '10',
+                borderRadius: '6px',
                 flexShrink: 0
               }}>
-                <Calendar size={16} color={colors.semantic.info} />
+                <Calendar size={16} color={colors.brand.secondary} />
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: '600',
                   color: colors.utility.primaryText,
                   lineHeight: '1.3',
@@ -339,7 +345,7 @@ const IndexCard: React.FC<IndexCardProps> = ({
                   color: colors.utility.secondaryText,
                   marginTop: '2px'
                 }}>
-                  Data Range
+                  Date Range
                 </div>
               </div>
             </div>
@@ -348,7 +354,10 @@ const IndexCard: React.FC<IndexCardProps> = ({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              padding: '10px',
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '6px'
             }}>
               <div style={{
                 width: '32px',
@@ -461,6 +470,47 @@ const IndexCard: React.FC<IndexCardProps> = ({
             }}
           >
             📊 Dashboard
+          </button>
+        )}
+
+        {/* Calculate Metrics Button */}
+        {onCalculateMetrics && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCalculateMetrics(index);
+            }}
+            disabled={!index.historical_data_available || isDownloading || isCalculating}
+            title={
+              !index.historical_data_available
+                ? 'No data available. Download data first.'
+                : isCalculating
+                ? 'Calculating metrics...'
+                : 'Calculate or recalculate performance metrics'
+            }
+            style={{
+              backgroundColor: 'transparent',
+              color: (!index.historical_data_available || isDownloading || isCalculating)
+                ? colors.utility.secondaryText
+                : colors.semantic.success,
+              border: `1px solid ${(!index.historical_data_available || isDownloading || isCalculating)
+                ? colors.utility.secondaryText + '40'
+                : colors.semantic.success + '40'}`,
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '12px',
+              cursor: (!index.historical_data_available || isDownloading || isCalculating)
+                ? 'not-allowed'
+                : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: (!index.historical_data_available || isDownloading || isCalculating) ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {isCalculating ? '⏳ Calculating...' : '🧮 Calculate'}
           </button>
         )}
 
