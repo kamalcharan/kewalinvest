@@ -42,6 +42,11 @@ const MarketHistoryPage: React.FC = () => {
   // Calculate metrics state
   const [calculatingIndexId, setCalculatingIndexId] = useState<number | null>(null);
 
+  // Download tracking state
+  const [downloadingIndexId, setDownloadingIndexId] = useState<number | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<string>('');
+  const pollingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
   // Use combined dashboard hook
   const {
     indices,
@@ -98,6 +103,72 @@ const MarketHistoryPage: React.FC = () => {
     );
   }, []);
 
+  // Cleanup polling on unmount
+  React.useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Start polling for download completion
+  const startPolling = useCallback((indexId: number, indexName: string, initialRecordCount: number) => {
+    let pollCount = 0;
+    const maxPolls = 24; // 2 minutes max (24 * 5 seconds)
+
+    setDownloadingIndexId(indexId);
+    setDownloadProgress(`Downloading data for ${indexName}...`);
+
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Poll every 5 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      pollCount++;
+
+      // Update progress message
+      const elapsed = pollCount * 5;
+      setDownloadProgress(`Downloading ${indexName}... (${elapsed}s elapsed)`);
+
+      // Refetch data to check if download completed
+      refetchAll();
+
+      // Check if we should stop polling
+      if (pollCount >= maxPolls) {
+        clearInterval(pollingIntervalRef.current!);
+        pollingIntervalRef.current = null;
+        setDownloadingIndexId(null);
+        setDownloadProgress('');
+        toastService.info('Download is taking longer than expected. Please refresh the page in a few moments.');
+      }
+    }, 5000);
+
+    // Also do an immediate refetch after 3 seconds (for fast downloads)
+    setTimeout(() => {
+      refetchAll();
+    }, 3000);
+  }, [refetchAll]);
+
+  // Stop polling when data updates
+  React.useEffect(() => {
+    if (downloadingIndexId && indices.length > 0) {
+      const downloadingIndex = indices.find(idx => idx.id === downloadingIndexId);
+      if (downloadingIndex && downloadingIndex.historical_data_available) {
+        // Download completed!
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setDownloadingIndexId(null);
+        setDownloadProgress('');
+        toastService.success(`Download completed for ${downloadingIndex.index_name}`);
+      }
+    }
+  }, [downloadingIndexId, indices]);
+
   // Handle Date Picker Confirm
   const handleDateConfirm = useCallback(async (startDate: string, endDate: string) => {
     if (!selectedIndex) return;
@@ -117,11 +188,9 @@ const MarketHistoryPage: React.FC = () => {
 
     try {
       await downloadHistorical(selectedIndex.id, startDate, endDate);
-      
-      // Wait a bit then refetch to show updated data
-      setTimeout(() => {
-        refetchAll();
-      }, 2000);
+
+      // Start polling for completion
+      startPolling(selectedIndex.id, selectedIndex.index_name, selectedIndex.total_records || 0);
 
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -134,7 +203,7 @@ const MarketHistoryPage: React.FC = () => {
         err.stack
       );
     }
-  }, [selectedIndex, downloadHistorical, refetchAll]);
+  }, [selectedIndex, downloadHistorical, startPolling]);
 
   // Handle EOD Download
   const handleDownloadEOD = useCallback(async (index: MarketIndex) => {
@@ -149,11 +218,9 @@ const MarketHistoryPage: React.FC = () => {
 
     try {
       await downloadEOD(index.id);
-      
-      // Wait a bit then refetch to show updated data
-      setTimeout(() => {
-        refetchAll();
-      }, 2000);
+
+      // Start polling for completion
+      startPolling(index.id, index.index_name, index.total_records || 0);
 
     } catch (err: any) {
       FrontendErrorLogger.error(
@@ -166,7 +233,7 @@ const MarketHistoryPage: React.FC = () => {
         err.stack
       );
     }
-  }, [downloadEOD, refetchAll]);
+  }, [downloadEOD, startPolling]);
 
   // Handle Delete click
   const handleDelete = useCallback((index: MarketIndex) => {
@@ -591,7 +658,7 @@ const MarketHistoryPage: React.FC = () => {
                   onDownloadEOD={handleDownloadEOD}
                   onDelete={handleDelete}
                   showDeleteButton={isSuperAdmin}
-                  isDownloading={isProcessing}
+                  isDownloading={downloadingIndexId === index.id}
                   isCalculating={calculatingIndexId === index.id}
                 />
               ))}
@@ -651,6 +718,81 @@ const MarketHistoryPage: React.FC = () => {
         type="error"
         isLoading={isProcessing}
       />
+
+      {/* Download Progress Overlay */}
+      {downloadingIndexId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+          >
+            {/* Spinner */}
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                margin: '0 auto 24px',
+                border: `4px solid ${colors.utility.primaryText}20`,
+                borderTop: `4px solid ${colors.brand.primary}`,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}
+            />
+
+            {/* Progress Text */}
+            <h3
+              style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '12px'
+              }}
+            >
+              Download in Progress
+            </h3>
+            <p
+              style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                lineHeight: '1.6'
+              }}
+            >
+              {downloadProgress}
+            </p>
+            <p
+              style={{
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                fontStyle: 'italic'
+              }}
+            >
+              Please wait... This may take a few moments for large datasets.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* CSS Animations */}
       <style>{`
