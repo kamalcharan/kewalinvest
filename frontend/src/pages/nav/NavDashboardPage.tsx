@@ -8,6 +8,7 @@ import { useNavDashboard, useDownloads, useDownloadProgress } from '../../hooks/
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
 import { NavProgressModal } from '../../components/nav/NavProgressModal';
+import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import BookmarkGapAlert from '../../components/nav/BookmarkGapAlert';
 import UnbookmarkedSchemesModal from '../../components/nav/UnbookmarkedSchemesModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
@@ -49,6 +50,8 @@ const NavDashboardPage: React.FC = () => {
   // Enhanced bookmark card modals
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
+  const [showMetricsCalculationModal, setShowMetricsCalculationModal] = useState(false);
+  const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
 
   // Unbookmarked schemes modal
   const [showUnbookmarkedModal, setShowUnbookmarkedModal] = useState(false);
@@ -127,7 +130,7 @@ const NavDashboardPage: React.FC = () => {
   const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
     setSelectedBookmark(bookmark);
     setShowHistoricalModal(true);
-    
+
     FrontendErrorLogger.info(
       'Opening Historical Download Modal',
       'NavDashboardPage',
@@ -137,6 +140,61 @@ const NavDashboardPage: React.FC = () => {
       }
     );
   }, []);
+
+  // Handle dashboard click
+  const handleDashboardClick = useCallback((bookmark: SchemeBookmark) => {
+    navigate(`/fund-dashboard/${bookmark.scheme_id}`);
+
+    FrontendErrorLogger.info(
+      'Navigating to fund dashboard',
+      'NavDashboardPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, [navigate]);
+
+  // Handle calculate metrics
+  const handleCalculateMetrics = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowMetricsCalculationModal(true);
+
+    FrontendErrorLogger.info(
+      'Opening Metrics Calculation Modal',
+      'NavDashboardPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  // Handle calculation started
+  const handleCalculationStarted = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(schemeId);
+
+    FrontendErrorLogger.info(
+      'Metrics calculation started',
+      'NavDashboardPage',
+      { schemeId }
+    );
+  }, []);
+
+  // Handle calculation complete
+  const handleCalculationComplete = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(null);
+
+    FrontendErrorLogger.info(
+      'Metrics calculation completed',
+      'NavDashboardPage',
+      { schemeId }
+    );
+
+    // Refresh dashboard data
+    forceRefresh();
+  }, [forceRefresh]);
 
   // Historical download handler
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
@@ -197,6 +255,11 @@ const NavDashboardPage: React.FC = () => {
       'NavDashboardPage',
       {}
     );
+  }, []);
+
+  const handleCloseMetricsCalculationModal = useCallback(() => {
+    setShowMetricsCalculationModal(false);
+    setSelectedBookmark(null);
   }, []);
 
   const handleCloseProgressModal = useCallback(() => {
@@ -901,8 +964,11 @@ const NavDashboardPage: React.FC = () => {
                 <EnhancedBookmarkCard
                   key={bookmark.id}
                   bookmark={bookmark}
+                  onDashboardClick={handleDashboardClick}
                   onHistoricalDownload={handleHistoricalDownload}
+                  onCalculateMetrics={handleCalculateMetrics}
                   showActions={true}
+                  isCalculating={calculatingSchemeId === bookmark.scheme_id}
                 />
               ))}
               
@@ -945,6 +1011,15 @@ const NavDashboardPage: React.FC = () => {
         onClose={handleCloseHistoricalModal}
         onDownloadStarted={handleHistoricalDownloadStarted}
         onShowProgress={handleHistoricalDownloadStarted}
+      />
+
+      {/* Metrics Calculation Modal */}
+      <MetricsCalculationModal
+        isOpen={showMetricsCalculationModal}
+        bookmark={selectedBookmark}
+        onClose={handleCloseMetricsCalculationModal}
+        onCalculationStarted={handleCalculationStarted}
+        onCalculationComplete={handleCalculationComplete}
       />
 
       {/* Progress Modal with automatic refresh on completion - FIXED */}
