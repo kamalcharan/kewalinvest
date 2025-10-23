@@ -111,7 +111,7 @@ export const NAVIGATION_MENU: NavigationSection[] = [
       {
         id: 'cruise_control',
         name: 'Cruise Control',
-        path: '/nav/cuise-control',
+        path: '/cruise-control',
         icon: Settings
       },
     ]
