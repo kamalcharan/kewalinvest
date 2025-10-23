@@ -195,70 +195,86 @@ export class MarketMetricsCalculator {
   }
 
   /**
-   * Get date 1 month ago (end of previous month)
+   * Get date 1 month ago - OPTION 1: Month-end to Month-end (for charts)
+   * Example: Oct 23 → Sept 30 (last day of previous month)
    */
   private getMonthAgoDate(baseDate: Date): Date {
     const date = new Date(baseDate);
-    date.setMonth(date.getMonth() - 1);
-    // Move to last day of the month
-    date.setDate(0);
+    date.setDate(1);  // Go to 1st day of current month (e.g., Oct 1)
+    date.setDate(0);  // Go to last day of previous month (e.g., Sept 30)
     return date;
   }
 
   /**
-   * Get date 3 months ago (~90 trading days)
+   * Get date 1 month ago - OPTION 2: Same date last month
+   * Example: Oct 23 → Sept 23
+   */
+  private getMonthAgoDateSameDay(baseDate: Date): Date {
+    const date = new Date(baseDate);
+    date.setMonth(date.getMonth() - 1);
+    return date;
+  }
+
+  /**
+   * Get date 3 months ago - OPTION 1: Month-end to Month-end (for charts)
+   * Example: Oct 23 → July 31 (last day 3 months back)
    */
   private getQuarterAgoDate(baseDate: Date): Date {
     const date = new Date(baseDate);
-    let daysToGoBack = 90;
-
-    while (daysToGoBack > 0) {
-      date.setDate(date.getDate() - 1);
-      const dayOfWeek = date.getDay();
-      
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        daysToGoBack--;
-      }
-    }
-
+    date.setMonth(date.getMonth() - 3);  // Go back 3 months
+    date.setDate(1);                      // Go to 1st day of that month
+    date.setDate(0);                      // Go to last day of previous month
     return date;
   }
 
   /**
-   * Get date 6 months ago (~126 trading days)
+   * Get date 3 months ago - OPTION 2: Same date 3 months back
+   */
+  private getQuarterAgoDateSameDay(baseDate: Date): Date {
+    const date = new Date(baseDate);
+    date.setMonth(date.getMonth() - 3);
+    return date;
+  }
+
+  /**
+   * Get date 6 months ago - OPTION 1: Month-end to Month-end (for charts)
+   * Example: Oct 23 → April 30 (last day 6 months back)
    */
   private getSixMonthsAgoDate(baseDate: Date): Date {
     const date = new Date(baseDate);
-    let daysToGoBack = 126; // ~126 trading days = 6 months
-
-    while (daysToGoBack > 0) {
-      date.setDate(date.getDate() - 1);
-      const dayOfWeek = date.getDay();
-      
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        daysToGoBack--;
-      }
-    }
-
+    date.setMonth(date.getMonth() - 6);  // Go back 6 months
+    date.setDate(1);                      // Go to 1st day of that month
+    date.setDate(0);                      // Go to last day of previous month
     return date;
   }
 
   /**
-   * Get date 1 year ago (~252 trading days)
+   * Get date 6 months ago - OPTION 2: Same date 6 months back
+   */
+  private getSixMonthsAgoDateSameDay(baseDate: Date): Date {
+    const date = new Date(baseDate);
+    date.setMonth(date.getMonth() - 6);
+    return date;
+  }
+
+  /**
+   * Get date 1 year ago - OPTION 1: Month-end to Month-end (for charts)
+   * Example: Oct 23 2025 → Oct 31 2024 (last day of same month last year)
    */
   private getYearAgoDate(baseDate: Date): Date {
     const date = new Date(baseDate);
-    let daysToGoBack = 252; // ~252 trading days in a year
+    date.setFullYear(date.getFullYear() - 1);  // Go back 1 year
+    date.setDate(1);                            // Go to 1st day of that month
+    date.setDate(0);                            // Go to last day of previous month
+    return date;
+  }
 
-    while (daysToGoBack > 0) {
-      date.setDate(date.getDate() - 1);
-      const dayOfWeek = date.getDay();
-      
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        daysToGoBack--;
-      }
-    }
-
+  /**
+   * Get date 1 year ago - OPTION 2: Same date last year
+   */
+  private getYearAgoDateSameDay(baseDate: Date): Date {
+    const date = new Date(baseDate);
+    date.setFullYear(date.getFullYear() - 1);
     return date;
   }
 
