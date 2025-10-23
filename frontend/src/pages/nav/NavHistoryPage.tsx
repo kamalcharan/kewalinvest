@@ -13,7 +13,7 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
-import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import type { SchemeBookmark } from '../../types/nav.types';
