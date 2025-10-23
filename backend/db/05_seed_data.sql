@@ -129,31 +129,164 @@ SELECT setval('t_tenants_id_seq',
     (SELECT GREATEST(MAX(id), 3) FROM t_tenants), 
     true);
 
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Tenants seeded: % total, % active', 
+    RAISE NOTICE 'Tenants seeded: % total, % active',
         (SELECT COUNT(*) FROM t_tenants),
         (SELECT COUNT(*) FROM t_tenants WHERE is_active = true);
 END $$;
 
 -- ============================================================================
--- SECTION 4: VERIFICATION & SUMMARY
+-- SECTION 4: SEED BOOKMARK REASONS
 -- ============================================================================
-DO $$ 
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seeding Bookmark Reasons';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- Insert bookmark reasons for all tenants (both live and test environments)
+-- Standard bookmark reasons for customer management
+-- ----------------------------------------------------------------------------
+
+-- Bookmark reasons for tenant 1 (Kewal Investments) - LIVE
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (1, TRUE, 'VIP', 'VIP Customer', 1, TRUE),
+    (1, TRUE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (1, TRUE, 'IMPORTANT', 'Important', 3, TRUE),
+    (1, TRUE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (1, TRUE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (1, TRUE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (1, TRUE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (1, TRUE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+-- Bookmark reasons for tenant 1 (Kewal Investments) - TEST
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (1, FALSE, 'VIP', 'VIP Customer', 1, TRUE),
+    (1, FALSE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (1, FALSE, 'IMPORTANT', 'Important', 3, TRUE),
+    (1, FALSE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (1, FALSE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (1, FALSE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (1, FALSE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (1, FALSE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+-- Bookmark reasons for tenant 2 (Staging) - LIVE
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (2, TRUE, 'VIP', 'VIP Customer', 1, TRUE),
+    (2, TRUE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (2, TRUE, 'IMPORTANT', 'Important', 3, TRUE),
+    (2, TRUE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (2, TRUE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (2, TRUE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (2, TRUE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (2, TRUE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+-- Bookmark reasons for tenant 2 (Staging) - TEST
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (2, FALSE, 'VIP', 'VIP Customer', 1, TRUE),
+    (2, FALSE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (2, FALSE, 'IMPORTANT', 'Important', 3, TRUE),
+    (2, FALSE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (2, FALSE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (2, FALSE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (2, FALSE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (2, FALSE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+-- Bookmark reasons for tenant 3 (QA) - LIVE
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (3, TRUE, 'VIP', 'VIP Customer', 1, TRUE),
+    (3, TRUE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (3, TRUE, 'IMPORTANT', 'Important', 3, TRUE),
+    (3, TRUE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (3, TRUE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (3, TRUE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (3, TRUE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (3, TRUE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+-- Bookmark reasons for tenant 3 (QA) - TEST
+INSERT INTO m_bookmark_reasons (tenant_id, is_live, reason_code, reason_label, display_order, is_active)
+VALUES
+    (3, FALSE, 'VIP', 'VIP Customer', 1, TRUE),
+    (3, FALSE, 'FOLLOW_UP', 'Follow-up Required', 2, TRUE),
+    (3, FALSE, 'IMPORTANT', 'Important', 3, TRUE),
+    (3, FALSE, 'HIGH_VALUE', 'High Value Client', 4, TRUE),
+    (3, FALSE, 'ATTENTION', 'Requires Attention', 5, TRUE),
+    (3, FALSE, 'PORTFOLIO_REVIEW', 'Portfolio Review Due', 6, TRUE),
+    (3, FALSE, 'TAX_PLANNING', 'Tax Planning', 7, TRUE),
+    (3, FALSE, 'OTHER', 'Other (Custom)', 99, TRUE)
+ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
+    SET reason_label = EXCLUDED.reason_label,
+        display_order = EXCLUDED.display_order,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+DO $$
+BEGIN
+    RAISE NOTICE 'Bookmark Reasons seeded: % total (% per tenant x 2 environments x 3 tenants)',
+        (SELECT COUNT(*) FROM m_bookmark_reasons),
+        (SELECT COUNT(DISTINCT reason_code) FROM m_bookmark_reasons);
+    RAISE NOTICE 'Active Bookmark Reasons: %',
+        (SELECT COUNT(*) FROM m_bookmark_reasons WHERE is_active = true);
+END $$;
+
+-- ============================================================================
+-- SECTION 5: VERIFICATION & SUMMARY
+-- ============================================================================
+DO $$
 DECLARE
     v_txn_count INTEGER;
     v_tenant_count INTEGER;
     v_active_txn INTEGER;
     v_active_tenant INTEGER;
+    v_bookmark_count INTEGER;
+    v_active_bookmark INTEGER;
+    v_unique_reasons INTEGER;
 BEGIN
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
     INTO v_txn_count, v_active_txn
     FROM m_transaction_types;
-    
+
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
     INTO v_tenant_count, v_active_tenant
     FROM t_tenants;
-    
+
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true), COUNT(DISTINCT reason_code)
+    INTO v_bookmark_count, v_active_bookmark, v_unique_reasons
+    FROM m_bookmark_reasons;
+
     RAISE NOTICE '========================================';
     RAISE NOTICE '     SEED DATA SUMMARY';
     RAISE NOTICE '========================================';
@@ -164,6 +297,10 @@ BEGIN
     RAISE NOTICE 'Tenants:';
     RAISE NOTICE '  - Total: %', v_tenant_count;
     RAISE NOTICE '  - Active: %', v_active_tenant;
+    RAISE NOTICE '';
+    RAISE NOTICE 'Bookmark Reasons:';
+    RAISE NOTICE '  - Total: % (% unique reasons × % tenants × 2 environments)', v_bookmark_count, v_unique_reasons, v_tenant_count;
+    RAISE NOTICE '  - Active: %', v_active_bookmark;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
     RAISE NOTICE '========================================';
