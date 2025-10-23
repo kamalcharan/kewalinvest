@@ -623,6 +623,30 @@ COMMENT ON COLUMN m_transaction_types.txn_code IS 'Unique transaction code (e.g.
 COMMENT ON COLUMN m_transaction_types.txn_name IS 'Full name of transaction type';
 COMMENT ON COLUMN m_transaction_types.txn_type IS 'Addition or Deduction type for portfolio calculations';
 
+-- Seed global transaction types (shared by all tenants)
+INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, description) VALUES
+    ('SIP', 'Systematic Investment Plan', 'Addition', TRUE,
+     'Regular systematic investment contributions at fixed intervals'),
+
+    ('STP IN', 'Systematic Transfer Plan - In', 'Addition', TRUE,
+     'Systematic transfer of funds from another scheme (incoming)'),
+
+    ('PURCHASE', 'One-Time Purchase', 'Addition', TRUE,
+     'Lump sum purchase or investment transaction'),
+
+    ('SWITCH IN', 'Switch In', 'Addition', TRUE,
+     'Funds received from switching from another scheme'),
+
+    ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE,
+     'Systematic transfer of funds to another scheme (outgoing)'),
+
+    ('REDEMPTION', 'Redemption', 'Deduction', TRUE,
+     'Withdrawal or redemption of invested funds'),
+
+    ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE,
+     'Funds moved out by switching to another scheme')
+ON CONFLICT (txn_code) DO NOTHING;
+
 -- TABLE: t_transaction_table
 CREATE TABLE t_transaction_table (
     id SERIAL PRIMARY KEY,
