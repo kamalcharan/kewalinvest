@@ -39,27 +39,36 @@ const MarketAnalysisDashboard: React.FC = () => {
     {
       label: 'Best Performer',
       value: dashboardStats.best_performer?.index_name || 'N/A',
-      detail: dashboardStats.best_performer?.return_value !== undefined && dashboardStats.best_performer?.return_value !== null
-        ? `${dashboardStats.best_performer.return_value > 0 ? '+' : ''}${dashboardStats.best_performer.return_value.toFixed(2)}%`
-        : '',
+      detail: (() => {
+        const returnValue = Number(dashboardStats.best_performer?.return_value);
+        return !isNaN(returnValue)
+          ? `${returnValue > 0 ? '+' : ''}${returnValue.toFixed(2)}%`
+          : '';
+      })(),
       status: 'positive' as const,
       icon: '📈'
     },
     {
       label: 'Worst Performer',
       value: worstPerformer?.index_name || 'N/A',
-      detail: worstPerformer?.return_value !== undefined && worstPerformer?.return_value !== null
-        ? `${worstPerformer.return_value > 0 ? '+' : ''}${worstPerformer.return_value.toFixed(2)}%`
-        : '',
+      detail: (() => {
+        const returnValue = Number(worstPerformer?.return_value);
+        return !isNaN(returnValue)
+          ? `${returnValue > 0 ? '+' : ''}${returnValue.toFixed(2)}%`
+          : '';
+      })(),
       status: 'negative' as const,
       icon: '📉'
     },
     {
       label: 'Most Volatile',
       value: dashboardStats.most_volatile?.index_name || 'N/A',
-      detail: dashboardStats.most_volatile?.volatility_value !== undefined && dashboardStats.most_volatile?.volatility_value !== null
-        ? `${dashboardStats.most_volatile.volatility_value.toFixed(2)}%`
-        : '',
+      detail: (() => {
+        const volatilityValue = Number(dashboardStats.most_volatile?.volatility_value);
+        return !isNaN(volatilityValue)
+          ? `${volatilityValue.toFixed(2)}%`
+          : '';
+      })(),
       status: 'neutral' as const,
       icon: '📊'
     },
@@ -397,7 +406,9 @@ const MarketAnalysisDashboard: React.FC = () => {
                       : colors.utility.secondaryText,
                     marginBottom: '8px'
                   }}>
-                    {index.has_metrics ? `${index.return_value > 0 ? '+' : ''}${index.return_value.toFixed(2)}%` : '--'}
+                    {index.has_metrics && !isNaN(Number(index.return_value))
+                      ? `${index.return_value > 0 ? '+' : ''}${Number(index.return_value).toFixed(2)}%`
+                      : '--'}
                   </div>
 
                   {!index.has_metrics && (
