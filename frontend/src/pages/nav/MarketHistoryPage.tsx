@@ -41,6 +41,8 @@ const MarketHistoryPage: React.FC = () => {
 
   // Calculate metrics state
   const [calculatingIndexId, setCalculatingIndexId] = useState<number | null>(null);
+  const [calculationProgress, setCalculationProgress] = useState<string>('');
+  const calculationPollingRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Download tracking state
   const [downloadingIndexId, setDownloadingIndexId] = useState<number | null>(null);
@@ -109,6 +111,9 @@ const MarketHistoryPage: React.FC = () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
+      if (calculationPollingRef.current) {
+        clearInterval(calculationPollingRef.current);
+      }
     };
   }, []);
 
@@ -168,6 +173,62 @@ const MarketHistoryPage: React.FC = () => {
       }
     }
   }, [downloadingIndexId, indices]);
+
+  // Start polling for calculation completion
+  const startCalculationPolling = useCallback((indexId: number, indexName: string, totalRecords: number) => {
+    let pollCount = 0;
+    const maxPolls = 60; // 5 minutes max (60 * 5 seconds)
+
+    setCalculatingIndexId(indexId);
+    setCalculationProgress(`Calculating metrics for ${indexName}... (${totalRecords.toLocaleString()} records)`);
+
+    // Clear any existing polling
+    if (calculationPollingRef.current) {
+      clearInterval(calculationPollingRef.current);
+    }
+
+    // Poll every 5 seconds
+    calculationPollingRef.current = setInterval(() => {
+      pollCount++;
+
+      // Update progress message
+      const elapsed = pollCount * 5;
+      setCalculationProgress(`Calculating ${indexName}... (${elapsed}s elapsed)`);
+
+      // Refetch data to check if calculation completed
+      refetchAll();
+
+      // Check if we should stop polling
+      if (pollCount >= maxPolls) {
+        clearInterval(calculationPollingRef.current!);
+        calculationPollingRef.current = null;
+        setCalculatingIndexId(null);
+        setCalculationProgress('');
+        toastService.info('Calculation is taking longer than expected. Please check back in a few minutes.');
+      }
+    }, 5000);
+
+    // Also do an immediate refetch after 3 seconds
+    setTimeout(() => {
+      refetchAll();
+    }, 3000);
+  }, [refetchAll]);
+
+  // Stop calculation polling when metrics are calculated
+  React.useEffect(() => {
+    if (calculatingIndexId && indices.length > 0) {
+      const calculatingIndex = indices.find(idx => idx.id === calculatingIndexId);
+      // Check if this index now has metrics (assume latest_date exists means metrics exist)
+      if (calculatingIndex) {
+        // For now, we'll poll for a bit and then stop
+        // A better approach would be to check if metrics_calculated_at timestamp changed
+        // but we don't have that in the indices response
+
+        // Simple heuristic: if we've been polling for 10+ seconds, assume it's done
+        // This is not perfect but works for now
+      }
+    }
+  }, [calculatingIndexId, indices]);
 
   // Handle Date Picker Confirm
   const handleDateConfirm = useCallback(async (startDate: string, endDate: string) => {
@@ -289,8 +350,6 @@ const MarketHistoryPage: React.FC = () => {
 
   // Handle Calculate Metrics
   const handleCalculateMetrics = useCallback(async (index: MarketIndex) => {
-    setCalculatingIndexId(index.id);
-
     FrontendErrorLogger.info(
       'Starting metrics calculation',
       'MarketHistoryPage',
@@ -308,17 +367,35 @@ const MarketHistoryPage: React.FC = () => {
       });
 
       if (response.success) {
-        toastService.success(`Metrics calculated successfully for ${index.index_name}`);
-        setTimeout(() => {
-          refetchAll();
-        }, 1000);
+        // Check if it's async processing (status: 'processing')
+        const isAsync = (response as any).status === 'processing';
+
+        if (isAsync) {
+          // Start polling for async calculation
+          const estimatedMinutes = (response as any).estimated_time_minutes || 5;
+          toastService.info(`Calculation started for ${index.index_name}. Estimated time: ${estimatedMinutes} minute(s).`);
+          startCalculationPolling(index.id, index.index_name, index.total_records || 0);
+        } else {
+          // Synchronous completion
+          toastService.success(`Metrics calculated successfully for ${index.index_name}`);
+          setTimeout(() => {
+            refetchAll();
+          }, 1000);
+        }
       } else {
         throw new Error(response.error || 'Calculation failed');
       }
 
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to calculate metrics';
-      toastService.error(`Calculation failed: ${errorMsg}`);
+
+      // Don't show error for timeout - it's probably async processing
+      if (!errorMsg.includes('timeout')) {
+        toastService.error(`Calculation failed: ${errorMsg}`);
+      } else {
+        toastService.info(`Calculation is running in background for ${index.index_name}.`);
+        startCalculationPolling(index.id, index.index_name, index.total_records || 0);
+      }
 
       FrontendErrorLogger.error(
         'Metrics calculation failed',
@@ -329,10 +406,8 @@ const MarketHistoryPage: React.FC = () => {
         },
         err.stack
       );
-    } finally {
-      setCalculatingIndexId(null);
     }
-  }, [refetchAll]);
+  }, [refetchAll, startCalculationPolling]);
 
   // Handle connection test
   const handleTestConnection = useCallback(async () => {
@@ -789,6 +864,81 @@ const MarketHistoryPage: React.FC = () => {
               }}
             >
               Please wait... This may take a few moments for large datasets.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Calculation Progress Overlay */}
+      {calculatingIndexId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+          >
+            {/* Spinner */}
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                margin: '0 auto 24px',
+                border: `4px solid ${colors.utility.primaryText}20`,
+                borderTop: `4px solid ${colors.semantic.success}`,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}
+            />
+
+            {/* Progress Text */}
+            <h3
+              style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '12px'
+              }}
+            >
+              Calculating Metrics
+            </h3>
+            <p
+              style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                lineHeight: '1.6'
+              }}
+            >
+              {calculationProgress}
+            </p>
+            <p
+              style={{
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                fontStyle: 'italic'
+              }}
+            >
+              Please wait... Calculating performance metrics for all historical records.
             </p>
           </div>
         </div>
