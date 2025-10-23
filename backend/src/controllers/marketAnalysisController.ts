@@ -16,12 +16,12 @@ export class MarketAnalysisController {
 
   /**
    * POST /api/market-analysis/calculate-metrics/:indexId
-   * Calculate metrics for an index - SMART BATCH PROCESSING
-   * 
+   * Calculate metrics for an index - ASYNC BATCH PROCESSING
+   *
    * MODES:
    * 1. Default (no params): Calculate ALL dates with missing metrics
    * 2. as_of_date provided: Calculate for specific date only
-   * 3. recalculate=true: Force recalculate ALL dates
+   * 3. recalculate=true: Force recalculate ALL dates (ASYNC for large datasets)
    */
   calculateMetrics = async (req: Request, res: Response): Promise<void> => {
     const startTime = Date.now();
@@ -57,14 +57,63 @@ export class MarketAnalysisController {
         return;
       }
 
-      // CASE 1: Calculate for specific date
+      // CASE 1: Calculate for specific date (SYNCHRONOUS - fast)
       if (asOfDate) {
         const result = await this.calculateForSingleDate(indexId, asOfDate, recalculate, startTime);
         res.json(result);
         return;
       }
 
-      // CASE 2: Batch calculate for all missing/all metrics
+      // CASE 2: Batch calculate
+      // Check dataset size first
+      const allData = await this.marketService.getMarketData(
+        indexId,
+        undefined,
+        undefined,
+        1,
+        1
+      );
+
+      const totalRecords = allData.total || 0;
+
+      // If dataset is large (>500 records) and recalculate=true, run async
+      if (totalRecords > 500 && recalculate) {
+        SimpleLogger.info('MarketAnalysisController', 'Large dataset detected - running async', 'calculateMetrics', {
+          indexId,
+          totalRecords,
+          threshold: 500
+        });
+
+        // Start calculation in background
+        this.calculateBatchMetrics(indexId, recalculate, startTime).then(result => {
+          SimpleLogger.info('MarketAnalysisController', 'Async batch calculation completed', 'calculateMetrics-async', {
+            indexId,
+            processed: result.records_processed,
+            timeMs: result.calculation_time_ms
+          });
+        }).catch(error => {
+          SimpleLogger.error('MarketAnalysisController', 'Async batch calculation failed', 'calculateMetrics-async', {
+            indexId,
+            error: error.message
+          });
+        });
+
+        // Return immediately with 202 Accepted
+        res.status(202).json({
+          success: true,
+          index_id: indexId,
+          date: 'batch',
+          metrics: {} as any,
+          records_processed: 0,
+          calculation_time_ms: Date.now() - startTime,
+          message: `Calculation started in background. Processing ${totalRecords} records. This may take several minutes.`,
+          status: 'processing',
+          estimated_time_minutes: Math.ceil(totalRecords / 50) // ~50 records per minute
+        });
+        return;
+      }
+
+      // Small dataset or only calculating missing - run synchronously
       const result = await this.calculateBatchMetrics(indexId, recalculate, startTime);
       res.json(result);
 
