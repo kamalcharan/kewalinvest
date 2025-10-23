@@ -29,64 +29,69 @@ const MarketAnalysisDashboard: React.FC = () => {
     setSelectedPeriod(period);
   };
 
+  // Find worst performer from heatmap
+  const worstPerformer = dashboardStats?.heatmap
+    ?.filter(item => item.return_value !== null)
+    .sort((a, b) => (a.return_value || 0) - (b.return_value || 0))[0];
+
   // Transform dashboard stats into KPI cards
   const kpiCards = dashboardStats ? [
     {
       label: 'Best Performer',
-      value: dashboardStats.best_performer?.name || 'N/A',
-      detail: dashboardStats.best_performer?.return
-        ? `${dashboardStats.best_performer.return > 0 ? '+' : ''}${dashboardStats.best_performer.return.toFixed(2)}%`
+      value: dashboardStats.best_performer?.index_name || 'N/A',
+      detail: dashboardStats.best_performer?.return_value !== undefined && dashboardStats.best_performer?.return_value !== null
+        ? `${dashboardStats.best_performer.return_value > 0 ? '+' : ''}${dashboardStats.best_performer.return_value.toFixed(2)}%`
         : '',
       status: 'positive' as const,
       icon: '📈'
     },
     {
       label: 'Worst Performer',
-      value: dashboardStats.worst_performer?.name || 'N/A',
-      detail: dashboardStats.worst_performer?.return
-        ? `${dashboardStats.worst_performer.return > 0 ? '+' : ''}${dashboardStats.worst_performer.return.toFixed(2)}%`
+      value: worstPerformer?.index_name || 'N/A',
+      detail: worstPerformer?.return_value !== undefined && worstPerformer?.return_value !== null
+        ? `${worstPerformer.return_value > 0 ? '+' : ''}${worstPerformer.return_value.toFixed(2)}%`
         : '',
       status: 'negative' as const,
       icon: '📉'
     },
     {
       label: 'Most Volatile',
-      value: dashboardStats.most_volatile?.name || 'N/A',
-      detail: dashboardStats.most_volatile?.volatility
-        ? `${dashboardStats.most_volatile.volatility.toFixed(2)}%`
+      value: dashboardStats.most_volatile?.index_name || 'N/A',
+      detail: dashboardStats.most_volatile?.volatility_value !== undefined && dashboardStats.most_volatile?.volatility_value !== null
+        ? `${dashboardStats.most_volatile.volatility_value.toFixed(2)}%`
         : '',
       status: 'neutral' as const,
       icon: '📊'
     },
     {
       label: 'Market Breadth',
-      value: dashboardStats.market_breadth?.positive_count ?? 'N/A',
-      detail: `${dashboardStats.market_breadth?.positive_count || 0} advancing, ${dashboardStats.market_breadth?.negative_count || 0} declining`,
-      unit: dashboardStats.market_breadth?.total_count ? `/ ${dashboardStats.market_breadth.total_count}` : '',
+      value: dashboardStats.indices_up ?? 'N/A',
+      detail: `${dashboardStats.indices_up || 0} advancing, ${dashboardStats.indices_down || 0} declining`,
+      unit: dashboardStats.total_indices_analyzed ? `/ ${dashboardStats.total_indices_analyzed}` : '',
       status: 'neutral' as const,
       icon: '📋'
     }
   ] : [
-    { label: 'Best Performer', value: 'Loading...', status: 'neutral' as const, icon: '📈' },
-    { label: 'Worst Performer', value: 'Loading...', status: 'neutral' as const, icon: '📉' },
-    { label: 'Most Volatile', value: 'Loading...', status: 'neutral' as const, icon: '📊' },
-    { label: 'Market Breadth', value: 'Loading...', status: 'neutral' as const, icon: '📋' }
+    { label: 'Best Performer', value: 'Loading...', status: 'neutral' as const, icon: '📈', detail: '', unit: '' },
+    { label: 'Worst Performer', value: 'Loading...', status: 'neutral' as const, icon: '📉', detail: '', unit: '' },
+    { label: 'Most Volatile', value: 'Loading...', status: 'neutral' as const, icon: '📊', detail: '', unit: '' },
+    { label: 'Market Breadth', value: 'Loading...', status: 'neutral' as const, icon: '📋', detail: '', unit: '' }
   ];
 
   // Transform indices into performance data
   const indexPerformances = indices.map((index: MarketIndex) => {
-    // Get return value from dashboard stats if available
-    const indexReturn = dashboardStats?.index_returns?.find(r => r.index_id === index.id);
+    // Get return value from dashboard stats heatmap if available
+    const heatmapData = dashboardStats?.heatmap?.find(item => item.index_id === index.id);
 
     return {
       id: index.id,
       index_name: index.index_name,
       index_code: index.index_code,
-      return_value: indexReturn?.return_value || 0,
-      status: (indexReturn?.return_value || 0) > 0 ? 'positive' as const
-        : (indexReturn?.return_value || 0) < 0 ? 'negative' as const
+      return_value: heatmapData?.return_value || 0,
+      status: (heatmapData?.return_value || 0) > 0 ? 'positive' as const
+        : (heatmapData?.return_value || 0) < 0 ? 'negative' as const
         : 'neutral' as const,
-      has_metrics: !!indexReturn && index.historical_data_available
+      has_metrics: heatmapData?.return_value !== null && heatmapData?.return_value !== undefined && index.historical_data_available
     };
   });
 
@@ -244,7 +249,7 @@ const MarketAnalysisDashboard: React.FC = () => {
                   flex: 1
                 }}>
                   {card.value}
-                  {card.unit && ` ${card.unit}`}
+                  {(card as any).unit && ` ${(card as any).unit}`}
                 </div>
               </div>
 
