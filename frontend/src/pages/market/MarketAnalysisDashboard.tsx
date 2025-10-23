@@ -2,91 +2,24 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-// Mock types - will be imported from src/types/marketAnalysis.types.ts
-interface KPIData {
-  label: string;
-  value: string | number;
-  unit?: string;
-  status: 'positive' | 'negative' | 'neutral';
-  icon: string;
-}
-
-interface IndexPerformance {
-  id: number;
-  index_name: string;
-  index_code: string;
-  return_value: number;
-  status: 'positive' | 'negative' | 'neutral';
-  has_metrics: boolean;
-}
+import { useTheme } from '../../contexts/ThemeContext';
+import { useMarketDashboard } from '../../hooks/useMarketData';
+import { useDashboardStatistics } from '../../hooks/useMarketMetrics';
+import type { MarketIndex } from '../../types/market.types';
 
 type TimePeriod = '1m' | '3m' | '6m' | '1y';
 
 const MarketAnalysisDashboard: React.FC = () => {
-  // Mock theme (will use useTheme hook in real implementation)
-  const theme = {
-    colors: {
-      brand: {
-        primary: '#f83b46',
-        secondary: '#ff6a73',
-      },
-      utility: {
-        primaryText: '#141518',
-        secondaryText: '#677681',
-        primaryBackground: '#f1f4f8',
-        secondaryBackground: '#ffffff',
-      },
-      semantic: {
-        success: '#6bbd78',
-        error: '#ff5963',
-        warning: '#ec9c4b',
-        info: '#0299ff',
-      }
-    }
-  };
-
-  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('3m');
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   const navigate = useNavigate();
-  
-  // Mock data structure - will come from API
-  const kpiCards: KPIData[] = [
-    {
-      label: 'Best Performer',
-      value: 'No Data',
-      status: 'neutral',
-      icon: '📈'
-    },
-    {
-      label: 'Most Volatile',
-      value: 'No Data',
-      status: 'neutral',
-      icon: '📊'
-    },
-    {
-      label: 'Market Breadth',
-      value: 'No Data',
-      unit: '%',
-      status: 'neutral',
-      icon: '📋'
-    },
-    {
-      label: 'Avg Correlation',
-      value: 'No Data',
-      status: 'neutral',
-      icon: '🔗'
-    }
-  ];
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('3m');
 
-  // Mock indices - will come from API with metric data
-  const indexPerformances: IndexPerformance[] = [
-    { id: 1, index_name: 'NIFTY 50', index_code: 'NIFTY50', return_value: 0, status: 'neutral', has_metrics: false },
-    { id: 2, index_name: 'NIFTY IT', index_code: 'NIFTYIT', return_value: 0, status: 'neutral', has_metrics: false },
-    { id: 3, index_name: 'NIFTY BANK', index_code: 'NIFTYBANK', return_value: 0, status: 'neutral', has_metrics: false },
-    { id: 4, index_name: 'NIFTY PHARMA', index_code: 'NIFTYPHARM', return_value: 0, status: 'neutral', has_metrics: false },
-    { id: 5, index_name: 'NIFTY INFRA', index_code: 'NIFTYINFRA', return_value: 0, status: 'neutral', has_metrics: false },
-    { id: 6, index_name: 'NIFTY PSU', index_code: 'NIFTYPSU', return_value: 0, status: 'neutral', has_metrics: false },
-  ];
+  // Fetch real data from API
+  const { indices, isLoading: indicesLoading } = useMarketDashboard();
+  const { data: dashboardStats, isLoading: statsLoading } = useDashboardStatistics(selectedPeriod);
+
+  const isLoading = indicesLoading || statsLoading;
 
   const handleIndexClick = (indexId: number) => {
     navigate(`/market/indices/${indexId}`);
@@ -94,9 +27,68 @@ const MarketAnalysisDashboard: React.FC = () => {
 
   const handlePeriodChange = (period: TimePeriod) => {
     setSelectedPeriod(period);
-    // TODO: Fetch metrics for new period from API
-    console.log('Fetch metrics for period:', period);
   };
+
+  // Transform dashboard stats into KPI cards
+  const kpiCards = dashboardStats ? [
+    {
+      label: 'Best Performer',
+      value: dashboardStats.best_performer?.name || 'N/A',
+      detail: dashboardStats.best_performer?.return
+        ? `${dashboardStats.best_performer.return > 0 ? '+' : ''}${dashboardStats.best_performer.return.toFixed(2)}%`
+        : '',
+      status: 'positive' as const,
+      icon: '📈'
+    },
+    {
+      label: 'Worst Performer',
+      value: dashboardStats.worst_performer?.name || 'N/A',
+      detail: dashboardStats.worst_performer?.return
+        ? `${dashboardStats.worst_performer.return > 0 ? '+' : ''}${dashboardStats.worst_performer.return.toFixed(2)}%`
+        : '',
+      status: 'negative' as const,
+      icon: '📉'
+    },
+    {
+      label: 'Most Volatile',
+      value: dashboardStats.most_volatile?.name || 'N/A',
+      detail: dashboardStats.most_volatile?.volatility
+        ? `${dashboardStats.most_volatile.volatility.toFixed(2)}%`
+        : '',
+      status: 'neutral' as const,
+      icon: '📊'
+    },
+    {
+      label: 'Market Breadth',
+      value: dashboardStats.market_breadth?.positive_count ?? 'N/A',
+      detail: `${dashboardStats.market_breadth?.positive_count || 0} advancing, ${dashboardStats.market_breadth?.negative_count || 0} declining`,
+      unit: dashboardStats.market_breadth?.total_count ? `/ ${dashboardStats.market_breadth.total_count}` : '',
+      status: 'neutral' as const,
+      icon: '📋'
+    }
+  ] : [
+    { label: 'Best Performer', value: 'Loading...', status: 'neutral' as const, icon: '📈' },
+    { label: 'Worst Performer', value: 'Loading...', status: 'neutral' as const, icon: '📉' },
+    { label: 'Most Volatile', value: 'Loading...', status: 'neutral' as const, icon: '📊' },
+    { label: 'Market Breadth', value: 'Loading...', status: 'neutral' as const, icon: '📋' }
+  ];
+
+  // Transform indices into performance data
+  const indexPerformances = indices.map((index: MarketIndex) => {
+    // Get return value from dashboard stats if available
+    const indexReturn = dashboardStats?.index_returns?.find(r => r.index_id === index.id);
+
+    return {
+      id: index.id,
+      index_name: index.index_name,
+      index_code: index.index_code,
+      return_value: indexReturn?.return_value || 0,
+      status: (indexReturn?.return_value || 0) > 0 ? 'positive' as const
+        : (indexReturn?.return_value || 0) < 0 ? 'negative' as const
+        : 'neutral' as const,
+      has_metrics: !!indexReturn && index.historical_data_available
+    };
+  });
 
   const getStatusColor = (status: 'positive' | 'negative' | 'neutral') => {
     switch (status) {
@@ -123,11 +115,11 @@ const MarketAnalysisDashboard: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: theme.colors.utility.primaryBackground,
+      backgroundColor: colors.utility.primaryBackground,
       padding: '30px'
     }}>
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        
+
         {/* Header */}
         <div style={{
           marginBottom: '30px'
@@ -135,14 +127,14 @@ const MarketAnalysisDashboard: React.FC = () => {
           <h1 style={{
             fontSize: '28px',
             fontWeight: '700',
-            color: theme.colors.utility.primaryText,
+            color: colors.utility.primaryText,
             margin: '0 0 8px 0'
           }}>
             📊 Market Analysis Dashboard
           </h1>
           <p style={{
             fontSize: '14px',
-            color: theme.colors.utility.secondaryText,
+            color: colors.utility.secondaryText,
             margin: 0
           }}>
             Monitor NSE indices performance and analytics
@@ -162,15 +154,15 @@ const MarketAnalysisDashboard: React.FC = () => {
               onClick={() => handlePeriodChange(period)}
               style={{
                 padding: '10px 18px',
-                backgroundColor: selectedPeriod === period 
-                  ? theme.colors.brand.primary 
-                  : theme.colors.utility.secondaryBackground,
-                color: selectedPeriod === period 
-                  ? 'white' 
-                  : theme.colors.utility.primaryText,
+                backgroundColor: selectedPeriod === period
+                  ? colors.brand.primary
+                  : colors.utility.secondaryBackground,
+                color: selectedPeriod === period
+                  ? 'white'
+                  : colors.utility.primaryText,
                 border: selectedPeriod === period
                   ? 'none'
-                  : `1px solid ${theme.colors.utility.secondaryText}30`,
+                  : `1px solid ${colors.utility.secondaryText}30`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 fontSize: '14px',
@@ -179,13 +171,13 @@ const MarketAnalysisDashboard: React.FC = () => {
               }}
               onMouseEnter={(e) => {
                 if (selectedPeriod !== period) {
-                  e.currentTarget.style.backgroundColor = theme.colors.utility.secondaryBackground;
-                  e.currentTarget.style.borderColor = theme.colors.brand.primary + '50';
+                  e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                  e.currentTarget.style.borderColor = colors.brand.primary + '50';
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedPeriod !== period) {
-                  e.currentTarget.style.borderColor = theme.colors.utility.secondaryText + '30';
+                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '30';
                 }
               }}
             >
@@ -208,10 +200,10 @@ const MarketAnalysisDashboard: React.FC = () => {
             <div
               key={index}
               style={{
-                backgroundColor: theme.colors.utility.secondaryBackground,
+                backgroundColor: colors.utility.secondaryBackground,
                 padding: '24px',
                 borderRadius: '10px',
-                border: `1px solid ${theme.colors.utility.primaryText}10`,
+                border: `1px solid ${colors.utility.primaryText}10`,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                 transition: 'all 0.3s ease'
               }}
@@ -226,7 +218,7 @@ const MarketAnalysisDashboard: React.FC = () => {
             >
               <div style={{
                 fontSize: '12px',
-                color: theme.colors.utility.secondaryText,
+                color: colors.utility.secondaryText,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
                 marginBottom: '12px',
@@ -237,66 +229,81 @@ const MarketAnalysisDashboard: React.FC = () => {
               
               <div style={{
                 display: 'flex',
-                alignItems: 'flex-end',
-                gap: '12px',
-                marginBottom: '12px'
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+                minHeight: '40px'
               }}>
                 <div style={{
-                  fontSize: '32px',
-                  color: getStatusColor(card.status),
-                  fontWeight: '700',
-                  lineHeight: '1'
+                  fontSize: card.value === 'Loading...' || card.value === 'N/A' ? '16px' : '20px',
+                  color: card.value === 'Loading...' || card.value === 'N/A'
+                    ? colors.utility.secondaryText
+                    : getStatusColor(card.status),
+                  fontWeight: card.value === 'Loading...' || card.value === 'N/A' ? '500' : '700',
+                  lineHeight: '1.2',
+                  flex: 1
                 }}>
                   {card.value}
+                  {card.unit && ` ${card.unit}`}
                 </div>
-                {card.unit && (
-                  <div style={{
-                    fontSize: '16px',
-                    color: getStatusColor(card.status),
-                    fontWeight: '600',
-                    marginBottom: '4px'
-                  }}>
-                    {card.unit}
-                  </div>
-                )}
               </div>
 
-              <div style={{
-                padding: '10px',
-                backgroundColor: getStatusBgColor(card.status),
-                borderRadius: '6px',
-                textAlign: 'center',
-                fontSize: '13px',
-                color: theme.colors.utility.secondaryText
-              }}>
-                No data available
-              </div>
+              {(card as any).detail && (
+                <div style={{
+                  padding: '10px',
+                  backgroundColor: getStatusBgColor(card.status),
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: colors.utility.primaryText,
+                  fontWeight: '500'
+                }}>
+                  {(card as any).detail}
+                </div>
+              )}
             </div>
           ))}
         </div>
 
         {/* Heatmap Section */}
         <div style={{
-          backgroundColor: theme.colors.utility.secondaryBackground,
+          backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
           padding: '24px',
-          border: `1px solid ${theme.colors.utility.primaryText}10`,
+          border: `1px solid ${colors.utility.primaryText}10`,
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
         }}>
           <h2 style={{
             fontSize: '18px',
             fontWeight: '600',
-            color: theme.colors.utility.primaryText,
+            color: colors.utility.primaryText,
             margin: '0 0 20px 0'
           }}>
             Index Performance Heatmap ({selectedPeriod.toUpperCase()} Returns)
           </h2>
 
-          {indexPerformances.length === 0 ? (
+          {isLoading ? (
             <div style={{
               textAlign: 'center',
               padding: '60px 20px',
-              color: theme.colors.utility.secondaryText
+              color: colors.utility.secondaryText
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                ⏳
+              </div>
+              <p style={{
+                fontSize: '16px',
+                fontWeight: '500',
+                margin: '0 0 8px 0',
+                color: colors.utility.primaryText
+              }}>
+                Loading market data...
+              </p>
+            </div>
+          ) : indexPerformances.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              color: colors.utility.secondaryText
             }}>
               <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>
                 📭
@@ -305,7 +312,7 @@ const MarketAnalysisDashboard: React.FC = () => {
                 fontSize: '16px',
                 fontWeight: '500',
                 margin: '0 0 8px 0',
-                color: theme.colors.utility.primaryText
+                color: colors.utility.primaryText
               }}>
                 No indices available
               </p>
@@ -328,10 +335,10 @@ const MarketAnalysisDashboard: React.FC = () => {
                   onClick={() => handleIndexClick(index.id)}
                   style={{
                     padding: '18px',
-                    backgroundColor: index.has_metrics 
+                    backgroundColor: index.has_metrics
                       ? getStatusBgColor(index.status)
-                      : theme.colors.utility.primaryBackground,
-                    border: `1px solid ${theme.colors.utility.primaryText}10`,
+                      : colors.utility.primaryBackground,
+                    border: `1px solid ${colors.utility.primaryText}10`,
                     borderRadius: '8px',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -348,19 +355,19 @@ const MarketAnalysisDashboard: React.FC = () => {
                 >
                   <div style={{
                     fontSize: '12px',
-                    color: theme.colors.utility.secondaryText,
+                    color: colors.utility.secondaryText,
                     marginBottom: '8px',
                     fontWeight: '500'
                   }}>
                     {index.index_name}
                   </div>
-                  
+
                   <div style={{
                     fontSize: '20px',
                     fontWeight: '700',
-                    color: index.has_metrics 
+                    color: index.has_metrics
                       ? getStatusColor(index.status)
-                      : theme.colors.utility.secondaryText,
+                      : colors.utility.secondaryText,
                     marginBottom: '8px'
                   }}>
                     {index.has_metrics ? `${index.return_value > 0 ? '+' : ''}${index.return_value.toFixed(2)}%` : '--'}
@@ -369,7 +376,7 @@ const MarketAnalysisDashboard: React.FC = () => {
                   {!index.has_metrics && (
                     <div style={{
                       fontSize: '11px',
-                      color: theme.colors.utility.secondaryText,
+                      color: colors.utility.secondaryText,
                       fontStyle: 'italic'
                     }}>
                       No data
@@ -385,14 +392,14 @@ const MarketAnalysisDashboard: React.FC = () => {
         <div style={{
           marginTop: '30px',
           padding: '16px',
-          backgroundColor: theme.colors.semantic.info + '10',
-          border: `1px solid ${theme.colors.semantic.info}30`,
+          backgroundColor: colors.semantic.info + '10',
+          border: `1px solid ${colors.semantic.info}30`,
           borderRadius: '8px',
           fontSize: '13px',
-          color: theme.colors.utility.secondaryText,
+          color: colors.utility.secondaryText,
           lineHeight: '1.6'
         }}>
-          <strong style={{ color: theme.colors.semantic.info }}>ℹ️ Getting Started:</strong>
+          <strong style={{ color: colors.semantic.info }}>ℹ️ Getting Started:</strong>
           <br />
           Click on any index tile to view detailed analysis. Use the "Calculate" button on the index detail page to compute metrics for the first time. Daily calculations will run automatically at 11:00 PM.
         </div>
