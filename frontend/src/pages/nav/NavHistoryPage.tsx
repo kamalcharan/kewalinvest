@@ -16,6 +16,7 @@ import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
+import { navService } from '../../services/nav.service';
 import type { SchemeBookmark } from '../../types/nav.types';
 import type { DownloadProgress } from '../../services/nav.service';
 
@@ -406,14 +407,26 @@ const NavHistoryPage: React.FC = () => {
     );
 
     try {
-      // TODO: Call delete NAV data API
-      // For now, show a placeholder message
-      toastService.info('Delete functionality will be implemented with backend API');
+      // Call delete NAV data API
+      const response = await navService.deleteNavData(bookmarkToDelete.scheme_id);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete NAV data');
+      }
+
+      FrontendErrorLogger.info(
+        'NAV data deleted successfully',
+        'NavHistoryPage',
+        {
+          schemeId: bookmarkToDelete.scheme_id,
+          deletedCount: response.data?.deleted_count
+        }
+      );
 
       setShowDeleteDialog(false);
       setBookmarkToDelete(null);
 
-      // Refresh bookmarks
+      // Refresh bookmarks to reflect updated record count
       setTimeout(() => {
         if (isMountedRef.current) {
           refetch();
