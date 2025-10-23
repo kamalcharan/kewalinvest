@@ -10,7 +10,9 @@ interface IndexCardProps {
   index: MarketIndex;
   onDownloadHistorical: (index: MarketIndex) => void;
   onDownloadEOD: (index: MarketIndex) => void;
-  onDelete: (index: MarketIndex) => void;
+  onViewDashboard?: (index: MarketIndex) => void;
+  onDelete?: (index: MarketIndex) => void;
+  showDeleteButton?: boolean;
   isDownloading?: boolean;
 }
 
@@ -18,7 +20,9 @@ const IndexCard: React.FC<IndexCardProps> = ({
   index,
   onDownloadHistorical,
   onDownloadEOD,
+  onViewDashboard,
   onDelete,
+  showDeleteButton = false,
   isDownloading = false
 }) => {
   const { theme, isDarkMode } = useTheme();
@@ -92,6 +96,40 @@ const IndexCard: React.FC<IndexCardProps> = ({
     }
 
     return `${start} → ${end}`;
+  };
+
+  // Get data ageing display
+  const getDataAgeingDisplay = (): string => {
+    if (!index.latest_date) {
+      return 'No data';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const latestDate = new Date(index.latest_date);
+    latestDate.setHours(0, 0, 0, 0);
+
+    const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff === 0) return 'Last Data: Today';
+    if (daysDiff === 1) return 'Last Data: Yesterday';
+    if (daysDiff < 0) return 'Last Data: Future date';
+
+    return `Last Data: ${daysDiff} days ago`;
+  };
+
+  // Get ageing in days (for warnings)
+  const getAgingDays = (): number => {
+    if (!index.latest_date) return 999;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const latestDate = new Date(index.latest_date);
+    latestDate.setHours(0, 0, 0, 0);
+
+    return Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
   };
 
   // Get category badge color
@@ -270,8 +308,7 @@ const IndexCard: React.FC<IndexCardProps> = ({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              gridColumn: 'span 2'
+              gap: '8px'
             }}>
               <div style={{
                 width: '32px',
@@ -303,6 +340,53 @@ const IndexCard: React.FC<IndexCardProps> = ({
                   marginTop: '2px'
                 }}>
                   Data Range
+                </div>
+              </div>
+            </div>
+
+            {/* Data Ageing */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                backgroundColor: getAgingDays() > 7
+                  ? colors.semantic.warning + '10'
+                  : getAgingDays() > 3
+                  ? colors.semantic.info + '10'
+                  : colors.semantic.success + '10',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <TrendingUp size={16} color={
+                  getAgingDays() > 7
+                    ? colors.semantic.warning
+                    : getAgingDays() > 3
+                    ? colors.semantic.info
+                    : colors.semantic.success
+                } />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  lineHeight: '1.3'
+                }}>
+                  {getDataAgeingDisplay()}
+                </div>
+                <div style={{
+                  fontSize: '11px',
+                  color: colors.utility.secondaryText,
+                  marginTop: '2px'
+                }}>
+                  Data Ageing
                 </div>
               </div>
             </div>
@@ -339,134 +423,163 @@ const IndexCard: React.FC<IndexCardProps> = ({
       {/* Right Section: Action Buttons */}
       <div style={{
         display: 'flex',
-        flexDirection: 'column',
+        alignItems: 'center',
         gap: '8px',
-        minWidth: '160px',
         flexShrink: 0
       }}>
-        {/* Download Historical Button */}
+        {/* Dashboard Button */}
+        {onViewDashboard && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDashboard(index);
+            }}
+            disabled={!index.historical_data_available || isDownloading}
+            title={
+              !index.historical_data_available
+                ? 'No data available. Download data first.'
+                : 'View market analysis dashboard'
+            }
+            style={{
+              backgroundColor: 'transparent',
+              color: (!index.historical_data_available || isDownloading)
+                ? colors.utility.secondaryText
+                : colors.brand.primary,
+              border: `1px solid ${(!index.historical_data_available || isDownloading)
+                ? colors.utility.secondaryText + '40'
+                : colors.brand.primary + '40'}`,
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '12px',
+              cursor: (!index.historical_data_available || isDownloading) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: (!index.historical_data_available || isDownloading) ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            📊 Dashboard
+          </button>
+        )}
+
+        {/* Download More Button */}
         <button
-          onClick={() => onDownloadHistorical(index)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownloadHistorical(index);
+          }}
           disabled={isDownloading}
           title={
             index.historical_data_available
-              ? `Download additional historical data. Current: ${index.total_records.toLocaleString()} records`
+              ? `Download additional data. Current: ${index.total_records.toLocaleString()} records`
               : 'Download 20 years of historical data'
           }
           style={{
-            padding: '10px 14px',
-            fontSize: '13px',
-            backgroundColor: index.historical_data_available
+            backgroundColor: 'transparent',
+            color: isDownloading
+              ? colors.utility.secondaryText
+              : index.historical_data_available
               ? colors.semantic.success
               : colors.brand.primary,
-            color: 'white',
-            border: 'none',
+            border: `1px solid ${isDownloading
+              ? colors.utility.secondaryText + '40'
+              : index.historical_data_available
+              ? colors.semantic.success + '40'
+              : colors.brand.primary + '40'}`,
             borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: '12px',
             cursor: isDownloading ? 'not-allowed' : 'pointer',
-            fontWeight: '600',
-            transition: 'all 0.2s ease',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
+            gap: '4px',
             opacity: isDownloading ? 0.5 : 1,
+            transition: 'all 0.2s ease',
             whiteSpace: 'nowrap'
           }}
-          onMouseEnter={(e) => {
-            if (!isDownloading) {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
         >
-          {index.historical_data_available ? '✓ Download More' : '📥 Download History'}
+          {index.historical_data_available ? '📥 Download More' : '📥 Download History'}
         </button>
 
         {/* Download EOD Button */}
         <button
-          onClick={() => onDownloadEOD(index)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownloadEOD(index);
+          }}
           disabled={isDownloading}
-          title="Download latest End of Day data"
+          title={
+            getAgingDays() > 7
+              ? `⚠️ Data is ${getAgingDays()} days old. Use 'Download More' to fill gap first.`
+              : 'Download latest End of Day data'
+          }
           style={{
-            padding: '10px 14px',
-            fontSize: '13px',
-            backgroundColor: colors.brand.secondary,
-            color: 'white',
-            border: 'none',
+            backgroundColor: 'transparent',
+            color: isDownloading
+              ? colors.utility.secondaryText
+              : getAgingDays() > 7
+              ? colors.semantic.warning
+              : colors.brand.secondary,
+            border: `1px solid ${isDownloading
+              ? colors.utility.secondaryText + '40'
+              : getAgingDays() > 7
+              ? colors.semantic.warning + '40'
+              : colors.brand.secondary + '40'}`,
             borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: '12px',
             cursor: isDownloading ? 'not-allowed' : 'pointer',
-            fontWeight: '600',
-            transition: 'all 0.2s ease',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
+            gap: '4px',
             opacity: isDownloading ? 0.5 : 1,
+            transition: 'all 0.2s ease',
             whiteSpace: 'nowrap'
-          }}
-          onMouseEnter={(e) => {
-            if (!isDownloading) {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
           }}
         >
           🔄 Download EOD
         </button>
 
-        {/* Delete Button */}
-        <button
-          onClick={() => onDelete(index)}
-          disabled={isDownloading || !index.historical_data_available}
-          title={
-            !index.historical_data_available
-              ? 'No data to delete'
-              : `Delete all ${index.total_records.toLocaleString()} records`
-          }
-          style={{
-            padding: '10px 14px',
-            fontSize: '13px',
-            backgroundColor: (!index.historical_data_available || isDownloading)
-              ? colors.utility.secondaryBackground
-              : colors.semantic.error,
-            color: (!index.historical_data_available || isDownloading)
-              ? colors.utility.secondaryText
-              : 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: (!index.historical_data_available || isDownloading)
-              ? 'not-allowed'
-              : 'pointer',
-            fontWeight: '600',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            opacity: (!index.historical_data_available || isDownloading) ? 0.5 : 1,
-            whiteSpace: 'nowrap'
-          }}
-          onMouseEnter={(e) => {
-            if (!isDownloading && index.historical_data_available) {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+        {/* Delete All Button - Admin Only */}
+        {showDeleteButton && onDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(index);
+            }}
+            disabled={isDownloading || !index.historical_data_available}
+            title={
+              !index.historical_data_available
+                ? 'No data to delete'
+                : `Delete all ${index.total_records.toLocaleString()} records`
             }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          🗑️ Delete All
-        </button>
+            style={{
+              backgroundColor: 'transparent',
+              color: (!index.historical_data_available || isDownloading)
+                ? colors.utility.secondaryText
+                : colors.semantic.error,
+              border: `1px solid ${(!index.historical_data_available || isDownloading)
+                ? colors.utility.secondaryText + '40'
+                : colors.semantic.error + '40'}`,
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '12px',
+              cursor: (!index.historical_data_available || isDownloading)
+                ? 'not-allowed'
+                : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: (!index.historical_data_available || isDownloading) ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            🗑️ Delete All
+          </button>
+        )}
       </div>
 
       {/* CSS animations */}

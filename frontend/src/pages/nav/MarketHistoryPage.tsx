@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useMarketDashboard } from '../../hooks/useMarketData';
 import StatisticsBar from '../../components/market/StatisticsBar';
 import FilterBar, { type FilterState } from '../../components/market/FilterBar';
@@ -19,6 +20,7 @@ const MarketHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const { isSuperAdmin } = useAuth();
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -60,18 +62,34 @@ const MarketHistoryPage: React.FC = () => {
     );
   }, []);
 
-  // Handle Download Historical click
+  // Handle Dashboard/Metrics click
+  const handleViewDashboard = useCallback((index: MarketIndex) => {
+    navigate(`/market/analysis/${index.id}`);
+
+    FrontendErrorLogger.info(
+      'Navigating to market analysis dashboard',
+      'MarketHistoryPage',
+      {
+        indexId: index.id,
+        indexName: index.index_name
+      }
+    );
+  }, [navigate]);
+
+  // Handle Download Historical click with smart date auto-fill
   const handleDownloadHistorical = useCallback((index: MarketIndex) => {
     setSelectedIndex(index);
     setShowDatePicker(true);
-    
+
     FrontendErrorLogger.info(
       'Opening date picker for historical download',
       'MarketHistoryPage',
       {
         indexId: index.id,
         indexName: index.index_name,
-        yahoo_symbol: index.yahoo_symbol
+        yahoo_symbol: index.yahoo_symbol,
+        latestDate: index.latest_date,
+        hasData: index.historical_data_available
       }
     );
   }, []);
@@ -245,10 +263,6 @@ const MarketHistoryPage: React.FC = () => {
     }
   }, []);
 
-  // Handle back navigation
-  const handleBack = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
 
   // Initial load logging
   useEffect(() => {
@@ -360,50 +374,22 @@ const MarketHistoryPage: React.FC = () => {
           flexWrap: 'wrap',
           gap: '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button
-              onClick={handleBack}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: 'transparent',
-                color: colors.utility.secondaryText,
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              ← Back
-            </button>
-
-            <div>
-              <h1 style={{
-                fontSize: '28px',
-                fontWeight: '700',
-                color: colors.utility.primaryText,
-                margin: '0 0 4px 0'
-              }}>
-                📈 Market Data History
-              </h1>
-              <p style={{
-                fontSize: '14px',
-                color: colors.utility.secondaryText,
-                margin: 0
-              }}>
-                Download and manage NSE market indices historical data
-              </p>
-            </div>
+          <div>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: '700',
+              color: colors.utility.primaryText,
+              margin: '0 0 4px 0'
+            }}>
+              📈 Market Data History
+            </h1>
+            <p style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              margin: 0
+            }}>
+              Download and manage NSE market indices historical data
+            </p>
           </div>
 
           {/* Connection Test Button */}
@@ -568,9 +554,11 @@ const MarketHistoryPage: React.FC = () => {
                 <IndexCard
                   key={index.id}
                   index={index}
+                  onViewDashboard={handleViewDashboard}
                   onDownloadHistorical={handleDownloadHistorical}
                   onDownloadEOD={handleDownloadEOD}
                   onDelete={handleDelete}
+                  showDeleteButton={isSuperAdmin}
                   isDownloading={isProcessing}
                 />
               ))}
@@ -603,12 +591,19 @@ const MarketHistoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Date Range Picker Modal */}
+      {/* Date Range Picker Modal with Smart Date Auto-fill */}
       <DateRangePicker
         isOpen={showDatePicker}
         onClose={() => setShowDatePicker(false)}
         onConfirm={handleDateConfirm}
         indexName={selectedIndex?.index_name || ''}
+        defaultStartDate={
+          selectedIndex?.latest_date
+            ? new Date(new Date(selectedIndex.latest_date).getTime() + 24 * 60 * 60 * 1000)
+                .toISOString().split('T')[0]
+            : undefined
+        }
+        defaultEndDate={new Date().toISOString().split('T')[0]}
       />
 
       {/* Delete Confirmation Dialog */}
