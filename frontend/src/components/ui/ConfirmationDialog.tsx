@@ -63,50 +63,105 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   return (
     <>
       {/* Overlay */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}
         onClick={isLoading ? undefined : onClose}
       >
         {/* Dialog */}
-        <div 
-          className="relative max-w-md w-full mx-4 rounded-lg shadow-xl"
-          style={{ backgroundColor: colors.utility.secondaryBackground }}
+        <div
+          style={{
+            position: 'relative',
+            maxWidth: '500px',
+            width: '100%',
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
           {!isLoading && (
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-1 rounded hover:opacity-80 transition-opacity"
-              style={{ color: colors.utility.secondaryText }}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                padding: '4px',
+                color: colors.utility.secondaryText,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'opacity 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.8';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
+              }}
             >
-              <X className="w-5 h-5" />
+              <X style={{ width: '20px', height: '20px' }} />
             </button>
           )}
 
           {/* Content */}
-          <div className="p-6">
+          <div style={{ padding: '24px' }}>
             {/* Icon and Title */}
-            <div className="flex items-start space-x-4 mb-4">
-              <div 
-                className="p-3 rounded-full"
-                style={{ 
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '16px',
+              marginBottom: '16px'
+            }}>
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '50%',
                   backgroundColor: typeColor + '20',
-                  color: typeColor 
+                  color: typeColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
                 }}
               >
                 {displayIcon}
               </div>
-              <div className="flex-1">
-                <h3 
-                  className="text-lg font-semibold mb-2"
-                  style={{ color: colors.utility.primaryText }}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    marginBottom: '8px',
+                    lineHeight: '1.4'
+                  }}
                 >
                   {title}
                 </h3>
-                <p 
-                  className="text-sm"
-                  style={{ color: colors.utility.secondaryText }}
+                <p
+                  style={{
+                    fontSize: '14px',
+                    color: colors.utility.secondaryText,
+                    lineHeight: '1.5'
+                  }}
                 >
                   {description}
                 </p>
@@ -114,14 +169,31 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end space-x-3 mt-6">
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              marginTop: '24px'
+            }}>
               {!isLoading && (
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 rounded-lg border transition-colors hover:opacity-80"
-                  style={{ 
-                    borderColor: colors.utility.secondaryText + '30',
-                    color: colors.utility.primaryText 
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: `1px solid ${colors.utility.secondaryText}30`,
+                    backgroundColor: 'transparent',
+                    color: colors.utility.primaryText,
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = '0.8';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = '1';
                   }}
                 >
                   {cancelText}
@@ -130,10 +202,27 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
               <button
                 onClick={onConfirm}
                 disabled={isLoading}
-                className="px-4 py-2 rounded-lg transition-colors hover:opacity-80 disabled:opacity-50"
-                style={{ 
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
                   backgroundColor: typeColor,
-                  color: '#ffffff' 
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  opacity: isLoading ? 0.5 : 1,
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.opacity = '0.8';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.opacity = '1';
+                  }
                 }}
               >
                 {isLoading ? 'Processing...' : confirmText}
