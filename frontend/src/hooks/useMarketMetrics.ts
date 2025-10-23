@@ -61,6 +61,7 @@ const handleAPIError = (error: any, defaultMessage: string) => {
 
 /**
  * Hook to fetch index metrics
+ * Gracefully handles 404 (metrics not calculated yet) by returning null
  */
 export function useIndexMetrics(indexId: number) {
   const { user } = useAuth();
@@ -74,14 +75,20 @@ export function useIndexMetrics(indexId: number) {
 
       try {
         return await marketAnalysisService.getIndexMetrics(indexId);
-      } catch (error) {
+      } catch (error: any) {
+        // Handle 404 gracefully - metrics haven't been calculated yet
+        if (error?.response?.status === 404 || error?.message?.includes('404')) {
+          console.log(`API Error: No calculated metrics available for index ${indexId}. Please run calculations first.`);
+          return null; // Return null instead of throwing - this is an expected state
+        }
+        // For other errors, show error and throw
         throw handleAPIError(error, 'Failed to load index metrics');
       }
     },
     enabled: !!user && !!indexId && indexId > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    retry: 2,
+    retry: false, // Don't retry 404s
     refetchOnWindowFocus: false,
   });
 }

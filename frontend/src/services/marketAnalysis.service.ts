@@ -146,6 +146,7 @@ export class MarketAnalysisService {
 
   /**
    * Get latest calculated metrics for an index
+   * Returns null if metrics haven't been calculated yet (404)
    */
   static async getIndexMetrics(indexId: number): Promise<IndexMetrics | null> {
     try {
@@ -158,12 +159,12 @@ export class MarketAnalysisService {
           id: response.index_id,
           index_id: response.index_id,
           date: response.date,
-          
+
           // NEW: Map index metadata from response
           index_name: response.index_name || '',
           index_code: response.index_code || '',
           yahoo_symbol: response.yahoo_symbol || '',
-          
+
           last_price: response.last_price || 0, // UPDATED: Use from response
           daily_return: metricsData.daily_return ?? null,
           return_1w: metricsData.return_1w ?? null,
@@ -196,6 +197,12 @@ export class MarketAnalysisService {
         'GET_METRICS_ERROR'
       );
     } catch (error: any) {
+      // Handle 404 gracefully - metrics haven't been calculated yet
+      if (error?.response?.status === 404 || error?.status === 404) {
+        console.log(`No metrics calculated for index ${indexId} yet - this is expected for new indices`);
+        return null;
+      }
+      // Log and re-throw other errors
       console.error('Get index metrics failed:', error);
       throw error;
     }
