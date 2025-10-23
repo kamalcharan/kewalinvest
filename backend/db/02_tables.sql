@@ -5,7 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-22 (Schema extraction from live database - current_schema.sql)
+-- Updated: 2025-10-23 (COMPLETE regeneration from current_schema_utf8.sql - 100% exact schema)
 -- ============================================================================
 
 -- ============================================================================
@@ -27,12 +27,14 @@ CREATE TABLE t_tenants (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     settings JSONB DEFAULT '{}'::jsonb,
-    subscription_plan VARCHAR(50) DEFAULT 'basic'
+    subscription_plan VARCHAR(50) DEFAULT 'basic',
+    is_admin BOOLEAN DEFAULT false
 );
 
 COMMENT ON TABLE t_tenants IS 'Multi-tenant isolation - each client has separate data';
 COMMENT ON COLUMN t_tenants.tenant_code IS 'Unique identifier for tenant (e.g., kewal, localsing)';
 COMMENT ON COLUMN t_tenants.settings IS 'JSON configuration for tenant-specific settings';
+COMMENT ON COLUMN t_tenants.is_admin IS 'System admin tenant flag - only ONE tenant should have this as true (SaaS owner)';
 
 -- TABLE: t_users
 CREATE TABLE t_users (
@@ -412,16 +414,16 @@ CREATE TABLE t_scheme_details (
     isin_div_payout VARCHAR(50),
     isin_growth VARCHAR(50),
     isin_div_reinvestment VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id),
     last_nav_download_date DATE,
     last_nav_download_status VARCHAR(20) CHECK (last_nav_download_status IN ('success', 'failed', 'in_progress', NULL)),
     last_nav_download_error TEXT,
     historical_data_available BOOLEAN DEFAULT false,
     earliest_nav_date DATE,
     latest_nav_date DATE,
-    total_nav_records INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by INTEGER REFERENCES t_users(id)
+    total_nav_records INTEGER DEFAULT 0
 );
 
 COMMENT ON TABLE t_scheme_details IS 'Mutual fund scheme details and metadata';
@@ -439,7 +441,6 @@ CREATE TABLE t_scheme_bookmarks (
     scheme_code VARCHAR(100) NOT NULL,
     scheme_name VARCHAR(500) NOT NULL,
     amc_name VARCHAR(255),
-    alias_name VARCHAR(255),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     daily_download_enabled BOOLEAN DEFAULT false,
@@ -447,16 +448,16 @@ CREATE TABLE t_scheme_bookmarks (
     historical_download_completed BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    alias_name VARCHAR(255),
     CONSTRAINT unique_tenant_bookmark UNIQUE(tenant_id, scheme_id, is_live)
 );
 
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
 COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference). Falls back to scheme_name if NULL';
 
--- TABLE: t_nav_data (UPDATED with metric columns)
+-- TABLE: t_nav_data (CORRECTED - NO tenant_id column)
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER DEFAULT NULL,
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
     scheme_code VARCHAR(100) NOT NULL,
     nav_date DATE NOT NULL,
@@ -467,7 +468,7 @@ CREATE TABLE t_nav_data (
     data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- NEW: Performance metrics columns
+    -- Performance metrics columns
     daily_return NUMERIC(10,4),
     return_1w NUMERIC(10,4),
     return_1m NUMERIC(10,4),
@@ -627,7 +628,6 @@ CREATE TABLE t_transaction_table (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES t_customers(id),
     scheme_code VARCHAR(50),
-    scheme_id INTEGER REFERENCES t_scheme_details(id),
     scheme_name VARCHAR(255),
     folio_no VARCHAR(100),
     txn_type_id INTEGER,
@@ -636,10 +636,6 @@ CREATE TABLE t_transaction_table (
     units NUMERIC(15,4),
     nav NUMERIC(10,4),
     stamp_duty NUMERIC(10,2),
-    txn_description TEXT,
-    txn_source VARCHAR(100),
-    stt NUMERIC(15,2) DEFAULT 0,
-    tds NUMERIC(15,2) DEFAULT 0,
     is_potential_duplicate BOOLEAN DEFAULT false,
     portfolio_flag BOOLEAN DEFAULT true,
     staging_record_id INTEGER REFERENCES t_import_staging_data(id) ON DELETE SET NULL,
@@ -649,7 +645,12 @@ CREATE TABLE t_transaction_table (
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    scheme_id INTEGER REFERENCES t_scheme_details(id),
+    txn_description TEXT,
+    txn_source VARCHAR(100),
+    stt NUMERIC(15,2) DEFAULT 0,
+    tds NUMERIC(15,2) DEFAULT 0
 );
 
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
@@ -658,7 +659,7 @@ COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the sta
 COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
 COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
 
--- TABLE: t_monthly_portfolio_snapshots (NEW)
+-- TABLE: t_monthly_portfolio_snapshots
 CREATE TABLE t_monthly_portfolio_snapshots (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
@@ -837,7 +838,7 @@ COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Y
 COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
 COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
 
--- TABLE: t_market_data_records (UPDATED with metrics_calculated_at)
+-- TABLE: t_market_data_records
 CREATE TABLE t_market_data_records (
     id SERIAL PRIMARY KEY,
     index_id INTEGER NOT NULL REFERENCES t_market_indices(id) ON DELETE CASCADE,
@@ -851,6 +852,26 @@ CREATE TABLE t_market_data_records (
     data_source VARCHAR(50) DEFAULT 'yahoo_finance',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    daily_return NUMERIC(10,4),
+    return_1w NUMERIC(10,4),
+    return_1m NUMERIC(10,4),
+    return_3m NUMERIC(10,4),
+    return_6m NUMERIC(10,4),
+    return_1y NUMERIC(10,4),
+    return_ytd NUMERIC(10,4),
+    return_all NUMERIC(10,4),
+    sd_7d NUMERIC(10,4),
+    sd_14d NUMERIC(10,4),
+    sd_21d NUMERIC(10,4),
+    sd_42d NUMERIC(10,4),
+    sd_3m NUMERIC(10,4),
+    sd_6m NUMERIC(10,4),
+    count_3m INTEGER,
+    count_42d INTEGER,
+    sharpe_ratio NUMERIC(10,4),
+    max_drawdown NUMERIC(10,4),
+    total_risk NUMERIC(10,4),
+    cagr NUMERIC(10,4),
     metrics_calculated_at TIMESTAMP,
     CONSTRAINT unique_market_data UNIQUE (index_id, date)
 );
@@ -924,7 +945,7 @@ BEGIN
     RAISE NOTICE 'Creating User Preference Tables...';
 END $$;
 
--- TABLE: t_user_chart_preferences (NEW)
+-- TABLE: t_user_chart_preferences
 CREATE TABLE t_user_chart_preferences (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -989,11 +1010,11 @@ BEGIN
     RAISE NOTICE '  - Comments on tables/columns';
     RAISE NOTICE '  - Proper sequences for auto-increment';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Changes from previous version:';
-    RAISE NOTICE '  - Added t_monthly_portfolio_snapshots table';
-    RAISE NOTICE '  - Added t_user_chart_preferences table';
-    RAISE NOTICE '  - Updated t_nav_data with performance metrics columns';
-    RAISE NOTICE '  - Updated t_market_data_records with metrics_calculated_at';
+    RAISE NOTICE 'CRITICAL FIXES IN THIS VERSION:';
+    RAISE NOTICE '  - ADDED: t_tenants.is_admin column (was missing!)';
+    RAISE NOTICE '  - REMOVED: t_nav_data.tenant_id column (was extra!)';
+    RAISE NOTICE '  - Schema now 100%% matches current_schema_utf8.sql';
+    RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';
 END $$;
