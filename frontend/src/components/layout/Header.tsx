@@ -1,11 +1,10 @@
 // frontend/src/components/layout/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Menu, 
-  Bell, 
-  Search, 
-  ChevronDown, 
+import {
+  Menu,
+  Search,
+  ChevronDown,
   LogOut,
   Sun,
   Moon,
@@ -20,6 +19,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { toastService } from '../../services/toast.service';
+import { AlertBellIcon } from '../cruiseControl/AlertBellIcon';
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -496,45 +496,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             />
           </div>
 
-          {/* Notifications */}
-          <button
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              position: 'relative',
-              padding: '8px',
-              borderRadius: '6px',
-              color: colors.utility.primaryText,
-              backgroundColor: `${colors.utility.primaryText}10`,
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}20`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-            }}
-          >
-            <Bell size={20} />
-            <span style={{
-              position: 'absolute',
-              top: '2px',
-              right: '2px',
-              backgroundColor: colors.semantic.error,
-              color: 'white',
-              borderRadius: '50%',
-              width: '16px',
-              height: '16px',
-              fontSize: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 'bold'
-            }}>
-              2
-            </span>
-          </button>
+          {/* Cruise Control Alert Bell Icon */}
+          <AlertBellIcon alertCount={7} />
 
           {/* User menu */}
           <div ref={userMenuRef} style={{ position: 'relative' }}>
