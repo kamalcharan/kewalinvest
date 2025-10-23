@@ -13,6 +13,7 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import type { SchemeBookmark } from '../../types/nav.types';
@@ -79,6 +80,11 @@ const NavHistoryPage: React.FC = () => {
   const [showMetricsCalculationModal, setShowMetricsCalculationModal] = useState(false);
   const [showMetricsPreCheckModal, setShowMetricsPreCheckModal] = useState(false);
   const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
+
+  // Modal state - Delete Confirmation
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [bookmarkToDelete, setBookmarkToDelete] = useState<SchemeBookmark | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Prevent multiple fetches on mount
   useEffect(() => {
@@ -362,6 +368,73 @@ const NavHistoryPage: React.FC = () => {
       }
     }, 500);
   }, [refetch]);
+
+  // ==================== DELETE HANDLERS ====================
+
+  // Handle Delete click
+  const handleDelete = useCallback((bookmark: SchemeBookmark) => {
+    setBookmarkToDelete(bookmark);
+    setShowDeleteDialog(true);
+
+    FrontendErrorLogger.info(
+      'Opening delete confirmation',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name,
+        recordCount: bookmark.nav_records_count
+      }
+    );
+  }, []);
+
+  // Handle Delete Confirm
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!bookmarkToDelete) return;
+
+    setIsDeleting(true);
+
+    FrontendErrorLogger.info(
+      'Deleting NAV data',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmarkToDelete.id,
+        schemeId: bookmarkToDelete.scheme_id,
+        schemeName: bookmarkToDelete.scheme_name,
+        recordCount: bookmarkToDelete.nav_records_count
+      }
+    );
+
+    try {
+      // TODO: Call delete NAV data API
+      // For now, show a placeholder message
+      toastService.info('Delete functionality will be implemented with backend API');
+
+      setShowDeleteDialog(false);
+      setBookmarkToDelete(null);
+
+      // Refresh bookmarks
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          refetch();
+        }
+      }, 500);
+
+    } catch (err: any) {
+      FrontendErrorLogger.error(
+        'Delete NAV data failed',
+        'NavHistoryPage',
+        {
+          bookmarkId: bookmarkToDelete.id,
+          error: err.message
+        },
+        err.stack
+      );
+      toastService.error(`Delete failed: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [bookmarkToDelete, refetch]);
 
   // ==================== OTHER HANDLERS ====================
 
@@ -1053,7 +1126,9 @@ const NavHistoryPage: React.FC = () => {
                   onDashboardClick={handleDashboardClick}
                   onHistoricalDownload={handleHistoricalDownload}
                   onCalculateMetrics={handleCalculateMetrics}
+                  onDelete={handleDelete}
                   showActions={true}
+                  showDeleteButton={isAdminView}
                   isCalculating={calculatingSchemeId === bookmark.scheme_id}
                 />
               ))}
@@ -1180,6 +1255,19 @@ const NavHistoryPage: React.FC = () => {
           handleCloseMetricsPreCheckModal();
           toastService.info('Download NAV data first, then calculate metrics');
         }}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete All NAV Data"
+        description={`Are you sure you want to delete all ${(bookmarkToDelete?.nav_records_count || 0).toLocaleString()} NAV records for ${bookmarkToDelete?.scheme_name}? This action cannot be undone and will also remove all calculated metrics.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="error"
+        isLoading={isDeleting}
       />
 
       {/* NEW: Bulk Metrics Progress Modal */}
