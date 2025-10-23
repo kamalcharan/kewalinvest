@@ -10,6 +10,7 @@ import {
   useIndexMetrics,
   useIndexReturnsTimeSeries,
   useIndexVolatilityTimeSeries,
+  useIndexDetail,
 } from '../../hooks/useMarketMetrics';
 import {
   useChartPreference,
@@ -69,8 +70,9 @@ const IndexDetailPage: React.FC = () => {
   }, [timePeriod, customStartDate, customEndDate]);
 
   // DATA FETCHING HOOKS
+  const indexDetailQuery = useIndexDetail(indexId); // Fetch basic index info
   const metricsQuery = useIndexMetrics(indexId);
-  
+
   const returnsTimeSeriesQuery = useIndexReturnsTimeSeries(
     indexId,
     ['1m', '3m', '6m', '1y', 'ytd', 'all'],
@@ -78,23 +80,24 @@ const IndexDetailPage: React.FC = () => {
     dateRange?.startDate,
     dateRange?.endDate
   );
-  
+
   const volatilityTimeSeriesQuery = useIndexVolatilityTimeSeries(
     indexId,
     granularity,
     dateRange?.startDate,
     dateRange?.endDate
   );
-  
+
   const calculateMetricsMutation = useCalculateMetrics();
 
   // Extract data
+  const indexDetail = indexDetailQuery.data;
   const metrics = metricsQuery.data as IndexMetrics | null;
   const returnsTimeSeries = returnsTimeSeriesQuery.data || [];
   const volatilityTimeSeries = volatilityTimeSeriesQuery.data || [];
 
   // Loading and error states
-  const isInitialLoading = metricsQuery.isLoading;
+  const isInitialLoading = indexDetailQuery.isLoading || metricsQuery.isLoading;
   const isReturnsFetching = returnsTimeSeriesQuery.isFetching;
   const isVolatilityFetching = volatilityTimeSeriesQuery.isFetching;
   const isCalculating = calculateMetricsMutation.isPending;
@@ -421,7 +424,7 @@ const IndexDetailPage: React.FC = () => {
                 color: colors.utility.primaryText,
                 margin: 0
               }}>
-                {metrics?.index_name || `Index #${indexId}`} ({metrics?.index_code || 'N/A'})
+                {metrics?.index_name || indexDetail?.index_name || `Index #${indexId}`} ({metrics?.index_code || indexDetail?.index_code || 'N/A'})
               </h1>
               <span style={{
                 padding: '6px 12px',
@@ -617,7 +620,7 @@ const IndexDetailPage: React.FC = () => {
               {/* LEFT: CHART SECTION (70%) */}
               <div>
                 <ChartViewer
-                  indexName={metrics?.index_name || `Index ${indexId}`}
+                  indexName={metrics?.index_name || indexDetail?.index_name || `Index ${indexId}`}
                   indexId={indexId}
                   data={chartData}
                   isLoading={isReturnsFetching}
