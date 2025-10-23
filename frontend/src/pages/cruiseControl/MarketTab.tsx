@@ -23,6 +23,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: null,
     historical_data_available: true,
     next_eod_retry_at: null,
+    eod_retry_count: 0,
+    last_successful_eod_download_at: '2025-01-23T10:00:00Z',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2025-01-23T10:00:00Z'
   },
@@ -43,6 +45,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: null,
     historical_data_available: true,
     next_eod_retry_at: null,
+    eod_retry_count: 0,
+    last_successful_eod_download_at: '2025-01-23T10:00:00Z',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2025-01-23T10:00:00Z'
   },
@@ -63,6 +67,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: null,
     historical_data_available: true,
     next_eod_retry_at: null,
+    eod_retry_count: 0,
+    last_successful_eod_download_at: '2025-01-21T18:30:00Z',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2025-01-21T18:30:00Z'
   },
@@ -83,6 +89,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: null,
     historical_data_available: true,
     next_eod_retry_at: null,
+    eod_retry_count: 0,
+    last_successful_eod_download_at: '2025-01-20T18:30:00Z',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2025-01-20T18:30:00Z'
   },
@@ -103,6 +111,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: null,
     historical_data_available: false,
     next_eod_retry_at: null,
+    eod_retry_count: 0,
+    last_successful_eod_download_at: null,
     created_at: '2025-01-15T00:00:00Z',
     updated_at: '2025-01-15T00:00:00Z'
   },
@@ -123,6 +133,8 @@ const DUMMY_INDICES: MarketIndex[] = [
     last_download_error: 'API rate limit exceeded',
     historical_data_available: true,
     next_eod_retry_at: '2025-01-24T18:30:00Z',
+    eod_retry_count: 3,
+    last_successful_eod_download_at: '2025-01-17T18:30:00Z',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2025-01-18T18:30:00Z'
   }
@@ -372,7 +384,8 @@ export const MarketTab: React.FC = () => {
                   onDownloadHistorical={(idx) => alert(`Download historical for: ${idx.index_name}`)}
                   onDownloadEOD={(idx) => alert(`Download EOD for: ${idx.index_name}`)}
                   onDelete={(idx) => {
-                    if (confirm(`Delete all data for ${idx.index_name}?`)) {
+                    // eslint-disable-next-line no-restricted-globals
+                    if (window.confirm(`Delete all data for ${idx.index_name}?`)) {
                       alert(`Deleted ${idx.total_records} records`);
                     }
                   }}
