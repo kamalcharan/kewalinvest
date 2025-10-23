@@ -64,10 +64,10 @@ const MarketHistoryPage: React.FC = () => {
 
   // Handle Dashboard/Metrics click
   const handleViewDashboard = useCallback((index: MarketIndex) => {
-    navigate(`/market/analysis/${index.id}`);
+    navigate(`/market/indices/${index.id}`);
 
     FrontendErrorLogger.info(
-      'Navigating to market analysis dashboard',
+      'Navigating to index detail dashboard',
       'MarketHistoryPage',
       {
         indexId: index.id,
