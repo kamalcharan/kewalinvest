@@ -170,6 +170,7 @@ export const API_ENDPOINTS = {
     BULK_BOOKMARK_SCHEMES: `${API_BASE}/nav/bookmarks/bulk`, 
     
     NAV_DATA: `${API_BASE}/nav/data`,
+    DELETE_NAV_DATA: (schemeId: number) => `${API_BASE}/nav/data/${schemeId}`,
     LATEST_NAV: (schemeId: number) => `${API_BASE}/nav/schemes/${schemeId}/latest`,
     TIME_SERIES: (schemeId: number) => `${API_BASE}/nav/timeseries/${schemeId}`, // NEW: Time series analytics
     DOWNLOAD_DAILY: `${API_BASE}/nav/download/daily`,
@@ -607,8 +608,10 @@ export const NAV_URLS = {
   bulkBookmarkSchemes: (environment?: 'live' | 'test') =>  
     `${API_ENDPOINTS.NAV.BULK_BOOKMARK_SCHEMES}${buildQueryParams({}, environment)}`, 
   
-  getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') => 
+  getNavData: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.NAV_DATA}${buildQueryParams(params || {}, environment)}`,
+  deleteNavData: (schemeId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NAV.DELETE_NAV_DATA(schemeId)}${buildQueryParams({}, environment)}`,
   getLatestNav: (schemeId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.NAV.LATEST_NAV(schemeId)}${buildQueryParams({}, environment)}`,
   

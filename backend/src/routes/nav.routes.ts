@@ -266,6 +266,13 @@ router.get('/bookmark-gaps/summary', bookmarkGapController.getGapSummary);
 router.get('/data', navController.getNavData);
 
 /**
+ * Delete all NAV data for a scheme
+ * DELETE /api/nav/data/:schemeId
+ * Admin only - requires authentication
+ */
+router.delete('/data/:schemeId', navController.deleteAllData);
+
+/**
  * Get latest NAV for a specific scheme
  * GET /api/nav/schemes/:id/latest
  */
