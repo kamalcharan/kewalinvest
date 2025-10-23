@@ -1366,7 +1366,7 @@ const NavHistoryPage: React.FC = () => {
         >
           <div
             style={{
-              backgroundColor: colors.background.primary,
+              backgroundColor: colors.utility.primaryBackground,
               padding: '32px',
               borderRadius: '12px',
               maxWidth: '500px',
@@ -1380,7 +1380,7 @@ const NavHistoryPage: React.FC = () => {
                 style={{
                   width: '48px',
                   height: '48px',
-                  border: `4px solid ${colors.utility.border}`,
+                  border: `4px solid ${colors.utility.secondaryText}40`,
                   borderTop: `4px solid ${colors.semantic.error}`,
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite',
@@ -1393,7 +1393,7 @@ const NavHistoryPage: React.FC = () => {
                 fontSize: '18px',
                 fontWeight: '600',
                 marginBottom: '12px',
-                color: colors.text.primary
+                color: colors.utility.primaryText
               }}>
                 Deleting NAV Data
               </h3>
