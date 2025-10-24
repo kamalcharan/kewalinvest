@@ -1670,4 +1670,66 @@ async getUserBookmarks(
       return [];
     }
   }
+
+  /**
+   * Delete all NAV data for a scheme
+   * Similar to market data deletion - removes all records and updates statistics
+   */
+  async deleteAllData(schemeId: number, isLive: boolean): Promise<number> {
+    const client = await this.db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Get count before deletion
+      const countQuery = 'SELECT COUNT(*) as total FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2';
+      const countResult = await client.query(countQuery, [schemeId, isLive]);
+      const recordCount = parseInt(countResult.rows[0]?.total || '0');
+
+      if (recordCount === 0) {
+        await client.query('COMMIT');
+        return 0;
+      }
+
+      // Delete all NAV records for the scheme
+      const deleteQuery = 'DELETE FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2';
+      await client.query(deleteQuery, [schemeId, isLive]);
+
+      // Update scheme statistics to reflect no data
+      const updateQuery = `
+        UPDATE t_scheme_details
+        SET
+          total_nav_records = 0,
+          earliest_nav_date = NULL,
+          latest_nav_date = NULL,
+          historical_data_available = false,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `;
+      await client.query(updateQuery, [schemeId]);
+
+      await client.query('COMMIT');
+
+      SimpleLogger.info('NavService', 'All NAV data deleted for scheme', 'deleteAllData', {
+        schemeId,
+        isLive,
+        recordsDeleted: recordCount
+      });
+
+      return recordCount;
+
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+
+      SimpleLogger.error('NavService', 'Failed to delete all NAV data', 'deleteAllData', {
+        schemeId,
+        isLive,
+        error: error.message
+      }, undefined, undefined, error.stack);
+
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }

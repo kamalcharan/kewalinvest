@@ -7,9 +7,10 @@ import SessionRecordsTable from './SessionRecordsTable';
 
 interface SessionDetailsProps {
   session: ImportSession | null;
+  onRefreshSessions?: () => void;
 }
 
-const SessionDetails: React.FC<SessionDetailsProps> = ({ session }) => {
+const SessionDetails: React.FC<SessionDetailsProps> = ({ session, onRefreshSessions }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -62,8 +63,8 @@ const SessionDetails: React.FC<SessionDetailsProps> = ({ session }) => {
       gap: '24px'
     }}>
       {/* Session Metrics */}
-      <SessionMetrics session={session} />
-      
+      <SessionMetrics session={session} onStagingDeleted={onRefreshSessions} />
+
       {/* Session Records Table */}
       <SessionRecordsTable session={session} />
     </div>

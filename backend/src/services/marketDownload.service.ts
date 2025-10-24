@@ -528,7 +528,7 @@ export class MarketDownloadService {
     }
 
     // Check if date range is too large (more than 20 years)
-    const maxRangeDays = 20 * 365;
+    const maxRangeDays = Math.floor(20 * 365.25)
     const rangeDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     
     if (rangeDays > maxRangeDays) {

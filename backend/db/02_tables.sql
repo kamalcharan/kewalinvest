@@ -645,6 +645,12 @@ INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, descri
 
     ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE,
      'Funds moved out by switching to another scheme')
+
+     ('SELL', 'Sell', 'Deduction', TRUE,
+     'Funds moved out / encashed from the scheme')
+
+     ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
+     'Funds added to system portfolio to balance the transaction records')
 ON CONFLICT (txn_code) DO NOTHING;
 
 -- TABLE: t_transaction_table
@@ -969,19 +975,19 @@ BEGIN
     RAISE NOTICE 'Creating User Preference Tables...';
 END $$;
 
--- TABLE: t_user_chart_preferences
-CREATE TABLE t_user_chart_preferences (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    index_id INTEGER NOT NULL,
-    line_color VARCHAR(7) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
-);
+    -- TABLE: t_user_chart_preferences
+    CREATE TABLE t_user_chart_preferences (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        index_id INTEGER NOT NULL,
+        line_color VARCHAR(7) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
+    );
 
-COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
-COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
+    COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
+    COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
 
 -- ============================================================================
 -- SECTION 11: SYSTEM LOGS TABLE
@@ -1037,7 +1043,7 @@ BEGIN
     RAISE NOTICE 'CRITICAL FIXES IN THIS VERSION:';
     RAISE NOTICE '  - ADDED: t_tenants.is_admin column (was missing!)';
     RAISE NOTICE '  - REMOVED: t_nav_data.tenant_id column (was extra!)';
-    RAISE NOTICE '  - Schema now 100%% matches current_schema_utf8.sql';
+    RAISE NOTICE '  - Schema now 100 percent matches current_schema_utf8.sql';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';

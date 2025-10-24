@@ -1,11 +1,12 @@
 // frontend/src/components/ETL/ImportTypeSelection.tsx
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { 
-  FILE_IMPORT_TYPES, 
-  IMPORT_TYPE_LABELS, 
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  FILE_IMPORT_TYPES,
+  IMPORT_TYPE_LABELS,
   IMPORT_TYPE_DESCRIPTIONS,
-  FileImportType 
+  FileImportType
 } from '../../constants/fileImportTypes';
 
 interface ImportTypeSelectionProps {
@@ -21,6 +22,7 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const { isSuperAdmin } = useAuth();
 
   // Icon components
   const CustomerDataIcon = () => (
@@ -52,7 +54,7 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
     </svg>
   );
 
-  const importTypes = [
+  const allImportTypes = [
     {
       type: FILE_IMPORT_TYPES.CUSTOMER_DATA,
       icon: <CustomerDataIcon />,
@@ -65,7 +67,8 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
         'Address information',
         'Family relationships'
       ],
-      examples: 'customer_master.xlsx, clients_data.csv'
+      examples: 'customer_master.xlsx, clients_data.csv',
+      adminOnly: false
     },
     {
       type: FILE_IMPORT_TYPES.SCHEME_DATA,
@@ -79,7 +82,8 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
         'ISIN codes for different options',
         'Launch and closure dates'
       ],
-      examples: 'scheme_master.xlsx, fund_details.csv'
+      examples: 'scheme_master.xlsx, fund_details.csv',
+      adminOnly: true
     },
     {
       type: FILE_IMPORT_TYPES.TRANSACTION_DATA,
@@ -93,9 +97,13 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
         'Financial statements',
         'Account balances'
       ],
-      examples: 'portfolio_data.xlsx, transactions.csv'
+      examples: 'portfolio_data.xlsx, transactions.csv',
+      adminOnly: false
     }
   ];
+
+  // Filter out admin-only types for non-admin users
+  const importTypes = allImportTypes.filter(type => !type.adminOnly || isSuperAdmin);
 
   return (
     <div style={{

@@ -41,7 +41,7 @@ services:
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: kewalinvest  # Use kewalinvest database
       DB_POSTGRESDB_USER: ${DB_USER:-kewal_admin}
-      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD:-kewal_secure_pass_2024}
+      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD:-}
       DB_POSTGRESDB_SCHEMA: n8n  # Use the n8n schema within kewalinvest
       
       # n8n Configuration

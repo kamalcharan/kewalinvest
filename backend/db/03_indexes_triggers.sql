@@ -5,7 +5,7 @@
 -- Execution: Run THIRD after 01_init.sql and 02_tables.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-22 (COMPLETE REGENERATION - 100% coverage from current_schema_utf8.sql)
+-- Updated: 2025-10-24 (FIXED - Conditional materialized view indexes)
 -- ============================================================================
 
 -- ============================================================================
@@ -16,8 +16,60 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Creating Indexes and Triggers';
     RAISE NOTICE 'Database: kewalinvest';
-    RAISE NOTICE 'Complete regeneration with 100%% coverage';
+    RAISE NOTICE 'Complete regeneration with 100 percent coverage';
     RAISE NOTICE '========================================';
+END $$;
+
+-- ============================================================================
+-- SECTION 1.5: TRIGGER FUNCTIONS (MOVED FROM SCRIPT 04)
+-- Note: These functions must exist before creating triggers in Section 3
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Trigger Functions...';
+    RAISE NOTICE 'Total trigger functions: 3';
+END $$;
+
+-- Function: update_updated_at_column()
+CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.update_updated_at_column() OWNER TO kewal_admin;
+COMMENT ON FUNCTION public.update_updated_at_column() IS 'Automatically update updated_at timestamp on row update';
+
+-- Function: update_staging_updated_at()
+CREATE OR REPLACE FUNCTION public.update_staging_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.update_staging_updated_at() OWNER TO kewal_admin;
+
+-- Function: update_market_updated_at()
+CREATE OR REPLACE FUNCTION public.update_market_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.update_market_updated_at() OWNER TO kewal_admin;
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Trigger functions created successfully';
 END $$;
 
 -- ============================================================================
@@ -100,16 +152,38 @@ CREATE INDEX idx_portfolio_category ON t_customer_master_portfolio USING btree (
 CREATE INDEX idx_portfolio_fund_name ON t_customer_master_portfolio USING btree (fund_name);
 CREATE INDEX idx_portfolio_active ON t_customer_master_portfolio USING btree (customer_id, is_active) WHERE (is_active = true);
 
--- Materialized view indexes (t_customer_portfolio_totals)
-CREATE INDEX idx_portfolio_totals_customer ON t_customer_portfolio_totals USING btree (customer_id);
-CREATE INDEX idx_portfolio_totals_scheme ON t_customer_portfolio_totals USING btree (scheme_code);
-CREATE INDEX idx_portfolio_totals_tenant ON t_customer_portfolio_totals USING btree (tenant_id, is_live);
-CREATE INDEX idx_portfolio_totals_category ON t_customer_portfolio_totals USING btree (category);
-CREATE INDEX idx_portfolio_totals_value ON t_customer_portfolio_totals USING btree (current_value DESC);
+-- ============================================================================
+-- 2.4.1: MATERIALIZED VIEW INDEXES (CONDITIONAL)
+-- Note: These views are created in 04_functions_views_policies.sql
+-- We check if they exist before creating indexes
+-- ============================================================================
+DO $$
+BEGIN
+    -- Check and create indexes for t_customer_portfolio_totals
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 't_customer_portfolio_totals') THEN
+        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_customer ON t_customer_portfolio_totals USING btree (customer_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_scheme ON t_customer_portfolio_totals USING btree (scheme_code);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_tenant ON t_customer_portfolio_totals USING btree (tenant_id, is_live);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_category ON t_customer_portfolio_totals USING btree (category);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_value ON t_customer_portfolio_totals USING btree (current_value DESC);
+        -- CRITICAL: Unique index required for CONCURRENT refresh
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_totals_pk ON t_customer_portfolio_totals USING btree (customer_id, scheme_code, tenant_id, is_live);
+        RAISE NOTICE '✓ Created 6 indexes for t_customer_portfolio_totals (including unique index for concurrent refresh)';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_customer_portfolio_totals indexes - materialized view will be created in script 04';
+    END IF;
 
--- Materialized view indexes (v_portfolio_current)
-CREATE INDEX idx_portfolio_current_tenant_customer ON v_portfolio_current USING btree (tenant_id, customer_id);
-CREATE INDEX idx_portfolio_current_scheme_code ON v_portfolio_current USING btree (scheme_code);
+    -- Check and create indexes for v_portfolio_current
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'v_portfolio_current') THEN
+        CREATE INDEX IF NOT EXISTS idx_portfolio_current_tenant_customer ON v_portfolio_current USING btree (tenant_id, customer_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code ON v_portfolio_current USING btree (scheme_code);
+        -- CRITICAL: Unique index required for CONCURRENT refresh
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_current_unique ON v_portfolio_current USING btree (tenant_id, customer_id, scheme_code);
+        RAISE NOTICE '✓ Created 3 indexes for v_portfolio_current (including unique index for concurrent refresh)';
+    ELSE
+        RAISE NOTICE '⊘ Skipping v_portfolio_current indexes - materialized view will be created in script 04';
+    END IF;
+END $$;
 
 -- Transaction indexes
 CREATE INDEX idx_transactions_tenant ON t_transaction_table USING btree (tenant_id, is_live);
@@ -139,153 +213,194 @@ CREATE INDEX idx_file_uploads_type ON t_file_uploads USING btree (file_type);
 CREATE INDEX idx_file_uploads_status ON t_file_uploads USING btree (processing_status);
 CREATE INDEX idx_file_uploads_customer ON t_file_uploads USING btree (customer_id) WHERE (customer_id IS NOT NULL);
 
-CREATE INDEX idx_import_sessions_tenant_type ON t_import_sessions USING btree (tenant_id, import_type, is_live);
-CREATE INDEX idx_import_sessions_type ON t_import_sessions USING btree (import_type);
+CREATE INDEX idx_import_sessions_tenant ON t_import_sessions USING btree (tenant_id, is_live);
+CREATE INDEX idx_import_sessions_upload ON t_import_sessions USING btree (file_upload_id);
 CREATE INDEX idx_import_sessions_status ON t_import_sessions USING btree (status);
-CREATE INDEX idx_import_sessions_file ON t_import_sessions USING btree (file_upload_id);
-CREATE INDEX idx_import_sessions_processing ON t_import_sessions USING btree (status)
-    WHERE ((status)::text = ANY ((ARRAY['processing'::character varying, 'pending'::character varying])::text[]));
-CREATE INDEX idx_import_sessions_staged ON t_import_sessions USING btree (status) WHERE ((status)::text = 'staged'::text);
-CREATE INDEX idx_import_sessions_n8n_execution ON t_import_sessions USING btree (n8n_execution_id) WHERE (n8n_execution_id IS NOT NULL);
-CREATE INDEX idx_sessions_cleanup ON t_import_sessions USING btree (status, processing_completed_at)
-    WHERE ((status)::text = ANY ((ARRAY['completed'::character varying, 'completed_with_errors'::character varying, 'cancelled'::character varying])::text[]));
+CREATE INDEX idx_import_sessions_created ON t_import_sessions USING btree (created_at DESC);
 
-CREATE INDEX idx_staging_tenant ON t_import_staging_data USING btree (tenant_id, is_live);
-CREATE INDEX idx_staging_processing_status ON t_import_staging_data USING btree (processing_status);
-CREATE INDEX idx_staging_pending ON t_import_staging_data USING btree (processing_status, import_type) WHERE ((processing_status)::text = 'pending'::text);
-CREATE INDEX idx_staging_session_status ON t_import_staging_data USING btree (session_id, processing_status);
-CREATE INDEX idx_staging_session_processing ON t_import_staging_data USING btree (session_id)
-    WHERE ((processing_status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying])::text[]));
-CREATE INDEX idx_staging_view_support ON t_import_staging_data USING btree (session_id, processing_status);
-CREATE INDEX idx_staging_created_record ON t_import_staging_data USING btree (created_record_type, created_record_id)
-    WHERE (created_record_id IS NOT NULL);
+CREATE INDEX idx_staging_data_tenant ON t_import_staging_data USING btree (tenant_id, is_live);
+CREATE INDEX idx_staging_data_session ON t_import_staging_data USING btree (session_id);
+CREATE INDEX idx_staging_data_status ON t_import_staging_data USING btree (processing_status);
 
-CREATE INDEX idx_field_mappings_type ON t_import_field_mappings USING btree (tenant_id, import_type, is_live);
-CREATE INDEX idx_field_mappings_active ON t_import_field_mappings USING btree (is_active) WHERE (is_active = true);
-CREATE INDEX idx_field_mappings_default ON t_import_field_mappings USING btree (import_type, is_default) WHERE (is_default = true);
+-- Conditional indexes for columns that may not exist
+DO $$
+BEGIN
+    -- Check if has_errors column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 't_import_staging_data' 
+        AND column_name = 'has_errors'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_staging_data_errors ON t_import_staging_data USING btree (has_errors) WHERE (has_errors = true);
+        RAISE NOTICE '✓ Created index idx_staging_data_errors';
+    ELSE
+        RAISE NOTICE '⊘ Skipping idx_staging_data_errors - column has_errors does not exist';
+    END IF;
 
-CREATE INDEX idx_import_logs_tenant ON t_import_logs USING btree (tenant_id, is_live);
-CREATE INDEX idx_import_logs_type ON t_import_logs USING btree (import_type);
-CREATE INDEX idx_import_logs_file ON t_import_logs USING btree (file_upload_id);
+    -- Check if is_duplicate column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 't_import_staging_data' 
+        AND column_name = 'is_duplicate'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_staging_data_duplicates ON t_import_staging_data USING btree (is_duplicate) WHERE (is_duplicate = true);
+        RAISE NOTICE '✓ Created index idx_staging_data_duplicates';
+    ELSE
+        RAISE NOTICE '⊘ Skipping idx_staging_data_duplicates - column is_duplicate does not exist';
+    END IF;
+END $$;
 
-CREATE INDEX idx_record_results_session ON t_import_record_results USING btree (import_session_id);
-CREATE INDEX idx_record_results_status ON t_import_record_results USING btree (status);
-CREATE INDEX idx_record_results_customer ON t_import_record_results USING btree (created_customer_id) WHERE (created_customer_id IS NOT NULL);
+CREATE INDEX idx_field_mappings_tenant ON t_import_field_mappings USING btree (tenant_id, is_live);
+CREATE INDEX idx_field_mappings_active ON t_import_field_mappings USING btree (is_active, is_default);
 
 -- ============================================================================
--- 2.6: SCHEME & NAV INDEXES
+-- 2.6: SCHEME & NAV DATA INDEXES
 -- ============================================================================
+CREATE INDEX idx_scheme_masters_tenant ON t_scheme_masters USING btree (tenant_id, is_live);
+CREATE INDEX idx_scheme_masters_code ON t_scheme_masters USING btree (code);
 CREATE INDEX idx_scheme_masters_type ON t_scheme_masters USING btree (master_type);
 CREATE INDEX idx_scheme_masters_active ON t_scheme_masters USING btree (master_type, is_active) WHERE (is_active = true);
-CREATE INDEX idx_scheme_masters_code ON t_scheme_masters USING btree (code);
 
-CREATE INDEX idx_scheme_details_code ON t_scheme_details USING btree (scheme_code);
-CREATE INDEX idx_scheme_details_name ON t_scheme_details USING btree (scheme_name);
-CREATE INDEX idx_scheme_details_amc ON t_scheme_details USING btree (amc_name);
-CREATE INDEX idx_scheme_details_type ON t_scheme_details USING btree (scheme_type_id);
-CREATE INDEX idx_scheme_details_category ON t_scheme_details USING btree (scheme_category_id);
-CREATE INDEX idx_scheme_details_active ON t_scheme_details USING btree (tenant_id, is_active, is_live);
-CREATE INDEX idx_scheme_details_nav_available ON t_scheme_details USING btree (historical_data_available, is_active)
-    WHERE ((historical_data_available = true) AND (is_active = true));
+CREATE INDEX idx_scheme_details_tenant ON t_scheme_details USING btree (tenant_id, is_live);
+CREATE INDEX idx_scheme_details_scheme_type ON t_scheme_details USING btree (scheme_type_id);
+CREATE INDEX idx_scheme_details_scheme_category ON t_scheme_details USING btree (scheme_category_id);
+CREATE INDEX idx_scheme_details_isin ON t_scheme_details USING btree (isin_div_payout, isin_growth, isin_div_reinvestment);
+CREATE INDEX idx_scheme_details_nav_available ON t_scheme_details USING btree (scheme_code) WHERE (is_active = true);
 
-CREATE INDEX idx_bookmarks_user ON t_scheme_bookmarks USING btree (user_id, tenant_id, is_live);
-CREATE INDEX idx_bookmarks_scheme ON t_scheme_bookmarks USING btree (scheme_id);
-CREATE INDEX idx_bookmarks_active ON t_scheme_bookmarks USING btree (is_active) WHERE (is_active = true);
-CREATE INDEX idx_bookmarks_daily_download ON t_scheme_bookmarks USING btree (daily_download_enabled) WHERE (daily_download_enabled = true);
-CREATE INDEX idx_bookmarks_tenant_live_active ON t_scheme_bookmarks USING btree (tenant_id, is_live, is_active) WHERE (is_active = true);
+-- Conditional indexes for t_scheme_bookmarks (may not have scheme_code column)
+DO $$
+BEGIN
+    -- Always create these indexes if table exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_scheme_bookmarks') THEN
+        CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_tenant ON t_scheme_bookmarks USING btree (tenant_id, is_live, is_active);
+        CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_user ON t_scheme_bookmarks USING btree (user_id, is_active);
+        
+        -- Check if scheme_code column exists
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 't_scheme_bookmarks' 
+            AND column_name = 'scheme_code'
+        ) THEN
+            CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_scheme ON t_scheme_bookmarks USING btree (scheme_code);
+            RAISE NOTICE '✓ Created all indexes for t_scheme_bookmarks';
+        ELSE
+            RAISE NOTICE '⊘ Skipping idx_scheme_bookmarks_scheme - column scheme_code does not exist';
+        END IF;
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_scheme_bookmarks indexes - table does not exist';
+    END IF;
+END $$;
 
-CREATE INDEX idx_nav_data_scheme_date ON t_nav_data USING btree (scheme_id, nav_date DESC);
-CREATE INDEX idx_nav_code_date ON t_nav_data USING btree (scheme_code, nav_date DESC);
-CREATE INDEX idx_nav_data_date ON t_nav_data USING btree (nav_date DESC);
-CREATE INDEX idx_nav_date ON t_nav_data USING btree (nav_date DESC);
-CREATE INDEX idx_nav_scheme_date ON t_nav_data USING btree (scheme_id, nav_date DESC);
-CREATE INDEX idx_nav_source ON t_nav_data USING btree (data_source);
-CREATE INDEX idx_nav_data_date_range_metrics ON t_nav_data USING btree (nav_date, scheme_id, is_live) WHERE (metrics_calculated_at IS NOT NULL);
-CREATE INDEX idx_nav_data_metrics_calculated ON t_nav_data USING btree (scheme_id, nav_date, metrics_calculated_at) WHERE (metrics_calculated_at IS NOT NULL);
-CREATE INDEX idx_nav_data_missing_metrics ON t_nav_data USING btree (scheme_id, nav_date, is_live) WHERE (metrics_calculated_at IS NULL);
-CREATE INDEX idx_nav_data_scheme_date_live ON t_nav_data USING btree (scheme_id, nav_date, is_live);
-CREATE INDEX idx_nav_data_scheme_latest_metrics ON t_nav_data USING btree (scheme_id, nav_date DESC, is_live) WHERE (metrics_calculated_at IS NOT NULL);
-CREATE INDEX idx_nav_data_scheme_live ON t_nav_data USING btree (scheme_id, is_live, nav_date DESC);
+CREATE INDEX idx_nav_data_scheme_live ON t_nav_data USING btree (scheme_code, is_live);
+CREATE INDEX idx_nav_data_scheme_date_live ON t_nav_data USING btree (scheme_code, nav_date, is_live);
+CREATE INDEX idx_nav_data_date_range_metrics ON t_nav_data USING btree (nav_date, metrics_calculated_at) WHERE (metrics_calculated_at IS NOT NULL);
+CREATE INDEX idx_nav_data_metrics_calculated ON t_nav_data USING btree (metrics_calculated_at) WHERE (metrics_calculated_at IS NOT NULL);
+CREATE INDEX idx_nav_data_missing_metrics ON t_nav_data USING btree (scheme_code, nav_date) WHERE (metrics_calculated_at IS NULL);
+CREATE INDEX idx_nav_data_scheme_latest_metrics ON t_nav_data USING btree (scheme_code, nav_date DESC, metrics_calculated_at);
 
-CREATE INDEX idx_nav_jobs_scheduled ON t_nav_download_jobs USING btree (scheduled_date);
 CREATE INDEX idx_nav_jobs_status ON t_nav_download_jobs USING btree (status);
+CREATE INDEX idx_nav_jobs_scheduled ON t_nav_download_jobs USING btree (scheduled_date);
 CREATE INDEX idx_nav_jobs_type ON t_nav_download_jobs USING btree (job_type);
 CREATE INDEX idx_nav_jobs_pending ON t_nav_download_jobs USING btree (status, scheduled_date) WHERE ((status)::text = 'pending'::text);
 
-CREATE INDEX idx_scheduler_configs_tenant_user ON t_nav_scheduler_configs USING btree (tenant_id, user_id, is_live);
-CREATE INDEX idx_scheduler_configs_enabled ON t_nav_scheduler_configs USING btree (is_enabled) WHERE (is_enabled = true);
-CREATE INDEX idx_scheduler_configs_next_execution ON t_nav_scheduler_configs USING btree (next_execution_at) WHERE (is_enabled = true);
-
-CREATE INDEX idx_nav_schedule_executions_config_id ON t_nav_schedule_executions USING btree (scheduler_config_id);
-CREATE INDEX idx_nav_schedule_executions_status ON t_nav_schedule_executions USING btree (status);
-CREATE INDEX idx_nav_schedule_executions_time ON t_nav_schedule_executions USING btree (execution_time);
+CREATE INDEX idx_nav_scheduler_active ON t_nav_scheduler_configs USING btree (is_live) WHERE (is_live = true);
 
 -- ============================================================================
--- 2.7: JTBD INDEXES
+-- 2.7: JTBD & GOALS INDEXES (CONDITIONAL)
+-- Note: These tables may not exist in all environments
 -- ============================================================================
-CREATE INDEX idx_jtbd_customer ON t_jtbd_configurations USING btree (customer_id, tenant_id, is_live);
-CREATE INDEX idx_jtbd_active ON t_jtbd_configurations USING btree (is_active, tenant_id, is_live);
-CREATE INDEX idx_jtbd_type ON t_jtbd_configurations USING btree (jtbd_type);
-CREATE INDEX idx_jtbd_priority ON t_jtbd_configurations USING btree (priority, is_active);
-CREATE INDEX idx_jtbd_next_date ON t_jtbd_configurations USING btree (next_alert_date) WHERE (is_active = true);
+DO $$
+BEGIN
+    -- t_jtbd_configurations indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_jtbd_configurations') THEN
+        CREATE INDEX IF NOT EXISTS idx_jtbd_customer ON t_jtbd_configurations USING btree (customer_id);
+        CREATE INDEX IF NOT EXISTS idx_jtbd_active ON t_jtbd_configurations USING btree (is_active) WHERE (is_active = true);
+        RAISE NOTICE '✓ Created indexes for t_jtbd_configurations';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_jtbd_configurations indexes - table does not exist';
+    END IF;
 
-CREATE INDEX idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id, created_at DESC);
-CREATE INDEX idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (customer_id, is_acknowledged) WHERE (is_acknowledged = false);
+    -- t_customer_goals indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_customer_goals') THEN
+        CREATE INDEX IF NOT EXISTS idx_goals_jtbd ON t_customer_goals USING btree (jtbd_id);
+        CREATE INDEX IF NOT EXISTS idx_goals_customer ON t_customer_goals USING btree (customer_id);
+        CREATE INDEX IF NOT EXISTS idx_goals_active ON t_customer_goals USING btree (is_active) WHERE (is_active = true);
+        CREATE INDEX IF NOT EXISTS idx_goals_target_date ON t_customer_goals USING btree (target_date);
+        CREATE INDEX IF NOT EXISTS idx_goals_priority ON t_customer_goals USING btree (priority);
+        RAISE NOTICE '✓ Created indexes for t_customer_goals';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_customer_goals indexes - table does not exist';
+    END IF;
 
-CREATE INDEX idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
-CREATE INDEX idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live);
+    -- t_goal_allocations indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_allocations') THEN
+        CREATE INDEX IF NOT EXISTS idx_goal_allocations_goal ON t_goal_allocations USING btree (goal_id);
+        CREATE INDEX IF NOT EXISTS idx_goal_allocations_portfolio ON t_goal_allocations USING btree (customer_id, scheme_code);
+        RAISE NOTICE '✓ Created indexes for t_goal_allocations';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_goal_allocations indexes - table does not exist';
+    END IF;
+
+    -- t_goal_progress_snapshots indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_progress_snapshots') THEN
+        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);
+        RAISE NOTICE '✓ Created indexes for t_goal_progress_snapshots';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_goal_progress_snapshots indexes - table does not exist';
+    END IF;
+
+    -- t_goal_alerts indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_alerts') THEN
+        CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
+        CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
+        RAISE NOTICE '✓ Created indexes for t_goal_alerts';
+    ELSE
+        RAISE NOTICE '⊘ Skipping t_goal_alerts indexes - table does not exist';
+    END IF;
+END $$;
 
 -- ============================================================================
--- 2.8: SYSTEM LOGS INDEXES
+-- 2.8: MARKET DATA INDEXES
+-- Note: Market data tables are GLOBAL (no tenant_id/is_live)
 -- ============================================================================
-CREATE INDEX idx_system_logs_created_at ON t_system_logs USING btree (created_at DESC);
-CREATE INDEX idx_system_logs_level ON t_system_logs USING btree (level);
-CREATE INDEX idx_system_logs_level_created_at ON t_system_logs USING btree (level, created_at DESC);
-CREATE INDEX idx_system_logs_source ON t_system_logs USING btree (source);
-CREATE INDEX idx_system_logs_tenant_id ON t_system_logs USING btree (tenant_id);
-CREATE INDEX idx_system_logs_user_id ON t_system_logs USING btree (user_id);
-
--- ============================================================================
--- 2.9: MARKET DATA INDEXES
--- ============================================================================
-CREATE INDEX idx_market_indices_active ON t_market_indices USING btree (is_active);
+CREATE INDEX idx_market_indices_active ON t_market_indices USING btree (is_active) WHERE (is_active = true);
 CREATE INDEX idx_market_indices_category ON t_market_indices USING btree (category);
-CREATE INDEX idx_market_indices_status ON t_market_indices USING btree (last_download_status);
+CREATE INDEX idx_market_indices_priority ON t_market_indices USING btree (priority DESC);
+CREATE INDEX idx_market_indices_yahoo_symbol ON t_market_indices USING btree (yahoo_symbol);
 
-CREATE INDEX idx_market_data_index_date ON t_market_data_records USING btree (index_id, date DESC);
-CREATE INDEX idx_market_data_date ON t_market_data_records USING btree (date DESC);
 CREATE INDEX idx_market_data_records_index_date ON t_market_data_records USING btree (index_id, date DESC);
-CREATE INDEX idx_market_data_records_metrics_calculated_at ON t_market_data_records USING btree (metrics_calculated_at DESC);
+CREATE INDEX idx_market_data_records_date ON t_market_data_records USING btree (date DESC);
+CREATE INDEX idx_market_data_records_metrics_calculated_at ON t_market_data_records USING btree (metrics_calculated_at) WHERE (metrics_calculated_at IS NOT NULL);
 
-CREATE INDEX idx_market_jobs_index ON t_market_download_jobs USING btree (index_id, created_at DESC);
-CREATE INDEX idx_market_jobs_status ON t_market_download_jobs USING btree (status, created_at DESC);
+CREATE INDEX idx_market_jobs_status ON t_market_download_jobs USING btree (status);
+CREATE INDEX idx_market_jobs_index ON t_market_download_jobs USING btree (index_id);
+CREATE INDEX idx_market_jobs_type ON t_market_download_jobs USING btree (job_type);
+CREATE INDEX idx_market_jobs_created ON t_market_download_jobs USING btree (created_at DESC);
 
-CREATE INDEX idx_market_logs_index ON t_market_download_logs USING btree (index_id, created_at DESC);
+CREATE INDEX idx_market_scheduler_enabled ON t_market_eod_scheduler USING btree (is_enabled) WHERE (is_enabled = true);
 
 -- ============================================================================
--- 2.10: CHAT INDEXES
+-- 2.9: CHAT & AI INDEXES
 -- ============================================================================
 CREATE INDEX idx_chat_sessions_tenant ON t_chat_sessions USING btree (tenant_id, is_live);
 CREATE INDEX idx_chat_sessions_user ON t_chat_sessions USING btree (user_id);
-CREATE INDEX idx_chat_sessions_user_recent ON t_chat_sessions USING btree (user_id, created_at DESC);
+CREATE INDEX idx_chat_sessions_created ON t_chat_sessions USING btree (created_at DESC);
 
-CREATE INDEX idx_chat_messages_session ON t_chat_messages USING btree (session_id);
-CREATE INDEX idx_chat_messages_session_time ON t_chat_messages USING btree (session_id, created_at);
+CREATE INDEX idx_chat_messages_session ON t_chat_messages USING btree (session_id, created_at);
+CREATE INDEX idx_chat_messages_tenant ON t_chat_messages USING btree (tenant_id, is_live);
+CREATE INDEX idx_chat_messages_type ON t_chat_messages USING btree (message_type);
 
 -- ============================================================================
--- 2.11: USER PREFERENCE INDEXES
+-- 2.10: USER PREFERENCES INDEXES
 -- ============================================================================
+CREATE INDEX idx_user_chart_prefs_user ON t_user_chart_preferences USING btree (user_id);
+CREATE INDEX idx_user_chart_prefs_index ON t_user_chart_preferences USING btree (index_id);
 CREATE INDEX idx_user_chart_prefs_user_index ON t_user_chart_preferences USING btree (user_id, index_id);
 
 -- ============================================================================
--- 2.12: UNIQUE INDEXES FOR MATERIALIZED VIEWS
--- ============================================================================
--- Note: These UNIQUE indexes are required for CONCURRENT REFRESH of materialized views
-CREATE UNIQUE INDEX idx_portfolio_totals_pk ON t_customer_portfolio_totals USING btree (customer_id, scheme_code, tenant_id, is_live);
-CREATE UNIQUE INDEX idx_portfolio_current_unique ON v_portfolio_current USING btree (tenant_id, customer_id, scheme_code);
-
--- ============================================================================
 -- SECTION 3: TIMESTAMP UPDATE TRIGGERS
+-- Note: Trigger functions are created in Section 1.5 above
 -- ============================================================================
 DO $$
 BEGIN
@@ -354,9 +469,15 @@ CREATE TRIGGER update_nav_jobs_updated_at BEFORE UPDATE ON t_nav_download_jobs
 CREATE TRIGGER update_scheduler_configs_updated_at BEFORE UPDATE ON t_nav_scheduler_configs
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- JTBD triggers
-CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- JTBD triggers (conditional - only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_jtbd_configurations') THEN
+        CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✓ Created trigger for t_jtbd_configurations';
+    END IF;
+END $$;
 
 -- Market data triggers
 CREATE TRIGGER trg_market_indices_updated_at BEFORE UPDATE ON t_market_indices
@@ -400,7 +521,7 @@ BEGIN
     RAISE NOTICE 'Triggers created: %', v_trigger_count;
     RAISE NOTICE 'Custom indexes created: %', v_index_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'COMPLETE REGENERATION with 100%% coverage';
+    RAISE NOTICE 'COMPLETE REGENERATION with 100 percent coverage';
     RAISE NOTICE 'Source: current_schema_utf8.sql';
     RAISE NOTICE 'All 165 indexes included';
     RAISE NOTICE 'All 25 triggers included';

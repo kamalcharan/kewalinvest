@@ -1497,6 +1497,51 @@ export class NavController {
     }
   };
 
+  /**
+   * Delete all NAV data for a scheme
+   * DELETE /api/nav/data/:schemeId
+   */
+  deleteAllData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schemeId = parseInt(req.params.schemeId);
+      const isLive = req.environment === 'live';
+
+      if (isNaN(schemeId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid scheme ID'
+        });
+        return;
+      }
+
+      const deletedCount = await this.navService.deleteAllData(schemeId, isLive);
+
+      SimpleLogger.info('NavController', 'All NAV data deleted for scheme', 'deleteAllData', {
+        schemeId,
+        isLive,
+        deletedCount
+      });
+
+      res.json({
+        success: true,
+        message: `Deleted ${deletedCount} NAV records`,
+        data: {
+          deleted_count: deletedCount
+        }
+      });
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to delete NAV data', 'deleteAllData', {
+        schemeId: req.params.schemeId,
+        error: error.message
+      }, undefined, undefined, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to delete NAV data'
+      });
+    }
+  };
+
   private generateCronExpression(scheduleType: string, downloadTime: string): string {
     const [hours, minutes] = downloadTime.split(':').map(Number);
 
