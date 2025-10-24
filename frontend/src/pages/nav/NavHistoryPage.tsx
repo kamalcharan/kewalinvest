@@ -13,8 +13,10 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
+import { navService } from '../../services/nav.service';
 import type { SchemeBookmark } from '../../types/nav.types';
 import type { DownloadProgress } from '../../services/nav.service';
 
@@ -28,6 +30,7 @@ const NavHistoryPage: React.FC = () => {
   // Refs
   const hasInitializedRef = useRef(false);
   const isMountedRef = useRef(true);
+  const deletePollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hooks - NAV Downloads
   const { 
@@ -80,6 +83,13 @@ const NavHistoryPage: React.FC = () => {
   const [showMetricsPreCheckModal, setShowMetricsPreCheckModal] = useState(false);
   const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
 
+  // Modal state - Delete Confirmation
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [bookmarkToDelete, setBookmarkToDelete] = useState<SchemeBookmark | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingSchemeId, setDeletingSchemeId] = useState<number | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState<string>('');
+
   // Prevent multiple fetches on mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
@@ -90,6 +100,9 @@ const NavHistoryPage: React.FC = () => {
     return () => {
       isMountedRef.current = false;
       stopPolling();
+      if (deletePollingRef.current) {
+        clearInterval(deletePollingRef.current);
+      }
       FrontendErrorLogger.info('NavHistoryPage unmounted', 'NavHistoryPage', {});
     };
   }, [stopPolling]);
@@ -362,6 +375,144 @@ const NavHistoryPage: React.FC = () => {
       }
     }, 500);
   }, [refetch]);
+
+  // ==================== DELETE HANDLERS ====================
+
+  // Start polling for delete completion
+  const startDeletePolling = useCallback((schemeId: number, schemeName: string, initialRecordCount: number) => {
+    let pollCount = 0;
+    const maxPolls = 24; // 2 minutes max (24 * 5 seconds)
+
+    setDeletingSchemeId(schemeId);
+    setDeleteProgress(`Deleting ${initialRecordCount.toLocaleString()} records for ${schemeName}...`);
+
+    // Clear any existing polling
+    if (deletePollingRef.current) {
+      clearInterval(deletePollingRef.current);
+    }
+
+    // Poll every 5 seconds
+    deletePollingRef.current = setInterval(() => {
+      pollCount++;
+
+      // Update progress message
+      const elapsed = pollCount * 5;
+      setDeleteProgress(`Deleting ${schemeName}... (${elapsed}s elapsed)`);
+
+      // Refetch data to check if deletion completed
+      refetch();
+
+      // Check if we should stop polling
+      if (pollCount >= maxPolls) {
+        clearInterval(deletePollingRef.current!);
+        deletePollingRef.current = null;
+        setDeletingSchemeId(null);
+        setDeleteProgress('');
+        toastService.info('Deletion is taking longer than expected. Please refresh the page in a few moments.');
+      }
+    }, 5000);
+
+    // Also do an immediate refetch after 2 seconds (for fast deletions)
+    setTimeout(() => {
+      refetch();
+    }, 2000);
+  }, [refetch]);
+
+  // Stop polling when data updates (record count becomes 0)
+  useEffect(() => {
+    if (deletingSchemeId && bookmarks.length > 0) {
+      const deletingBookmark = bookmarks.find(b => b.scheme_id === deletingSchemeId);
+      if (deletingBookmark && deletingBookmark.nav_records_count === 0) {
+        // Deletion completed!
+        if (deletePollingRef.current) {
+          clearInterval(deletePollingRef.current);
+          deletePollingRef.current = null;
+        }
+        setDeletingSchemeId(null);
+        setDeleteProgress('');
+        toastService.success(`Successfully deleted all NAV data for ${deletingBookmark.scheme_name}`);
+      }
+    }
+  }, [deletingSchemeId, bookmarks]);
+
+  // Handle Delete click
+  const handleDelete = useCallback((bookmark: SchemeBookmark) => {
+    setBookmarkToDelete(bookmark);
+    setShowDeleteDialog(true);
+
+    FrontendErrorLogger.info(
+      'Opening delete confirmation',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name,
+        recordCount: bookmark.nav_records_count
+      }
+    );
+  }, []);
+
+  // Handle Delete Confirm
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!bookmarkToDelete) return;
+
+    setIsDeleting(true);
+
+    FrontendErrorLogger.info(
+      'Deleting NAV data',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmarkToDelete.id,
+        schemeId: bookmarkToDelete.scheme_id,
+        schemeName: bookmarkToDelete.scheme_name,
+        recordCount: bookmarkToDelete.nav_records_count
+      }
+    );
+
+    try {
+      // Call delete NAV data API
+      const response = await navService.deleteNavData(bookmarkToDelete.scheme_id);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete NAV data');
+      }
+
+      FrontendErrorLogger.info(
+        'NAV data deletion initiated',
+        'NavHistoryPage',
+        {
+          schemeId: bookmarkToDelete.scheme_id,
+          deletedCount: response.data?.deleted_count
+        }
+      );
+
+      setShowDeleteDialog(false);
+      setIsDeleting(false);
+
+      // Start polling to check when record count becomes 0
+      startDeletePolling(
+        bookmarkToDelete.scheme_id,
+        bookmarkToDelete.scheme_name,
+        bookmarkToDelete.nav_records_count || 0
+      );
+
+      setBookmarkToDelete(null);
+
+    } catch (err: any) {
+      FrontendErrorLogger.error(
+        'Delete NAV data failed',
+        'NavHistoryPage',
+        {
+          bookmarkId: bookmarkToDelete.id,
+          error: err.message
+        },
+        err.stack
+      );
+      toastService.error(`Delete failed: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [bookmarkToDelete, startDeletePolling]);
 
   // ==================== OTHER HANDLERS ====================
 
@@ -1053,7 +1204,9 @@ const NavHistoryPage: React.FC = () => {
                   onDashboardClick={handleDashboardClick}
                   onHistoricalDownload={handleHistoricalDownload}
                   onCalculateMetrics={handleCalculateMetrics}
+                  onDelete={handleDelete}
                   showActions={true}
+                  showDeleteButton={isAdminView}
                   isCalculating={calculatingSchemeId === bookmark.scheme_id}
                 />
               ))}
@@ -1181,6 +1334,89 @@ const NavHistoryPage: React.FC = () => {
           toastService.info('Download NAV data first, then calculate metrics');
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete All NAV Data"
+        description={`Are you sure you want to delete all ${(bookmarkToDelete?.nav_records_count || 0).toLocaleString()} NAV records for ${bookmarkToDelete?.scheme_name}? This action cannot be undone and will also remove all calculated metrics.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="error"
+        isLoading={isDeleting}
+      />
+
+      {/* Delete Progress Overlay */}
+      {deletingSchemeId && deleteProgress && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              padding: '32px',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div style={{ textAlign: 'center' }}>
+              {/* Spinner */}
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  border: `4px solid ${colors.utility.secondaryText}40`,
+                  borderTop: `4px solid ${colors.semantic.error}`,
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  margin: '0 auto 24px'
+                }}
+              />
+
+              {/* Progress Text */}
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '12px',
+                color: colors.utility.primaryText
+              }}>
+                Deleting NAV Data
+              </h3>
+
+              <p style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px'
+              }}>
+                {deleteProgress}
+              </p>
+
+              <p style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText,
+                fontStyle: 'italic'
+              }}>
+                Please wait while we delete the records...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NEW: Bulk Metrics Progress Modal */}
       <BulkMetricsProgress

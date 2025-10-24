@@ -185,5 +185,6 @@ router.delete('/file/:fileId', authenticate, importController.deleteFile);
 router.get('/staging/:sessionId/status', authenticate, importController.getStagingStatus);
 router.get('/staging/:sessionId/records', authenticate, importController.getStagingRecords);
 router.post('/staging/:sessionId/retry', authenticate, importController.reprocessFailedRecords);
+router.delete('/staging/:sessionId', authenticate, importController.deleteStagingData);
 
 export default router;

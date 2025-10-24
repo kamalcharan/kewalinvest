@@ -6,6 +6,7 @@ import { FileImportType } from '../../types/import.types';
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from '../../constants/fileImportTypes';
 import { toastService } from '../../services/toast.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface FileUploadComponentProps {
   importType: FileImportType;
@@ -29,12 +30,19 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   const { theme, isDarkMode } = useTheme();
   const { tenantId, environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showTransactionWarning, setShowTransactionWarning] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // Debug: Log when showTransactionWarning changes
+  React.useEffect(() => {
+    console.log('🔔 showTransactionWarning state changed:', showTransactionWarning);
+  }, [showTransactionWarning]);
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -89,7 +97,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       // Handle response
       xhr.onload = () => {
         toastService.dismiss(loadingToastId);
-        
+
         if (xhr.status === 200) {
           try {
             const response = JSON.parse(xhr.responseText);
@@ -124,9 +132,14 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
             onError(errorMsg);
           }
         }
+
+        // Reset all states
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('✅ Upload complete - all states reset');
       };
 
       // Handle network errors
@@ -138,6 +151,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('❌ Upload error - all states reset');
       };
 
       // Handle timeout
@@ -149,6 +165,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('⏱️ Upload timeout - all states reset');
       };
 
       // Configure request - IMPORTANT: importType is in query parameter
@@ -190,10 +209,16 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       setIsUploading(false);
       setUploadProgress(null);
       setSelectedFile(null);
+      setShowTransactionWarning(false);
+      setPendingFile(null);
+      console.log('💥 Upload exception - all states reset');
     }
   };
 
   const handleFileSelect = useCallback((file: File) => {
+    console.log('🔍 handleFileSelect called - importType:', importType);
+    console.log('🔍 File selected:', file.name);
+
     const validationError = validateFile(file);
     if (validationError) {
       toastService.error(validationError);
@@ -201,9 +226,37 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       return;
     }
 
+    // Check if transaction data and show warning
+    console.log('🔍 Checking import type - is TransactionData?', importType === 'TransactionData');
+    if (importType === 'TransactionData') {
+      console.log('✅ Transaction data detected - showing warning dialog');
+      setPendingFile(file);
+      setShowTransactionWarning(true);
+      return;
+    }
+
+    console.log('⏭️  Not transaction data, proceeding with direct upload');
     setSelectedFile(file);
     uploadFile(file);
   }, [importType]);
+
+  const handleTransactionWarningConfirm = () => {
+    console.log('✅ User confirmed - proceeding with upload');
+    if (pendingFile) {
+      setShowTransactionWarning(false);
+      setSelectedFile(pendingFile);
+      uploadFile(pendingFile);
+      setPendingFile(null);
+    } else {
+      console.error('❌ No pending file found');
+    }
+  };
+
+  const handleTransactionWarningCancel = () => {
+    console.log('❌ User cancelled - upload aborted');
+    setShowTransactionWarning(false);
+    setPendingFile(null);
+  };
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -511,6 +564,18 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
           </li>
         </ul>
       </div>
+
+      {/* Transaction Data Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showTransactionWarning}
+        onClose={handleTransactionWarningCancel}
+        onConfirm={handleTransactionWarningConfirm}
+        title="⚠️ Bookmark All Schemes Before Import"
+        description="Before importing transaction data, ensure you have bookmarked ALL mutual fund schemes in your transaction file. Orphan Records are transactions for schemes that are NOT bookmarked - they will be flagged and will NOT appear in your customers' portfolios. To avoid orphans: 1) Go to Schemes page and bookmark all relevant schemes 2) Verify schemes in your file match your bookmarks 3) Then proceed. Confirm you have bookmarked all schemes to continue."
+        confirmText="Yes, I've Bookmarked All Schemes"
+        cancelText="Cancel - Need to Bookmark"
+        type="warning"
+      />
 
       <style>{`
         @keyframes spin {

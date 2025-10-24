@@ -451,18 +451,38 @@ export class NavService {
 
   async deleteBookmark(id: number): Promise<ApiResponse<void>> {
     const url = NAV_URLS.deleteBookmark(id, this.getEnvironment());
-    
+
     const response = await this.handleRequest<void>(url, {
       method: 'DELETE'
     });
-    
+
     if (response.success) {
       toastService.success('Bookmark removed successfully');
     } else {
       toastService.error(response.error || 'Failed to remove bookmark');
     }
-    
+
     return response as ApiResponse<void>;
+  }
+
+  /**
+   * Delete all NAV data for a scheme
+   */
+  async deleteNavData(schemeId: number): Promise<ApiResponse<{ deleted_count: number }>> {
+    const url = NAV_URLS.deleteNavData(schemeId, this.getEnvironment());
+
+    const response = await this.handleRequest<{ deleted_count: number }>(url, {
+      method: 'DELETE'
+    });
+
+    if (response.success) {
+      const deletedCount = response.data?.deleted_count || 0;
+      toastService.success(`Successfully deleted ${deletedCount.toLocaleString()} NAV records`);
+    } else {
+      toastService.error(response.error || 'Failed to delete NAV data');
+    }
+
+    return response as ApiResponse<{ deleted_count: number }>;
   }
 
   // ==================== ENHANCED BOOKMARK METHODS ====================

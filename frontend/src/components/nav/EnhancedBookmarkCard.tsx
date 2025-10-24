@@ -17,7 +17,9 @@ interface EnhancedBookmarkCardProps {
   onDownloadLatest?: (bookmark: SchemeBookmark) => void;
   onCalculateMetrics?: (bookmark: SchemeBookmark) => void;
   onDashboardClick?: (bookmark: SchemeBookmark) => void;
+  onDelete?: (bookmark: SchemeBookmark) => void;
   showActions?: boolean;
+  showDeleteButton?: boolean;
   isCalculating?: boolean;
 }
 
@@ -28,7 +30,9 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   onDownloadLatest,
   onCalculateMetrics,
   onDashboardClick,
+  onDelete,
   showActions = true,
+  showDeleteButton = false,
   isCalculating = false,
 }) => {
   const { theme, isDarkMode } = useTheme();
@@ -397,10 +401,47 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
                   Calculating
                 </>
               ) : metricsStatus === 'available' ? (
-                '🔄 Recalc'
+                '🔄 Recalculate'
               ) : (
-                '📊 Metrics'
+                '📊 Calculate'
               )}
+            </button>
+          )}
+
+          {/* DELETE ALL BUTTON */}
+          {onDelete && showDeleteButton && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(bookmark);
+              }}
+              disabled={(bookmark.nav_records_count || 0) === 0}
+              title={
+                (bookmark.nav_records_count || 0) === 0
+                  ? 'No NAV data to delete'
+                  : `Delete all ${(bookmark.nav_records_count || 0).toLocaleString()} NAV records for this scheme`
+              }
+              style={{
+                backgroundColor: 'transparent',
+                color: (bookmark.nav_records_count || 0) === 0
+                  ? colors.utility.secondaryText
+                  : colors.semantic.error,
+                border: `1px solid ${(bookmark.nav_records_count || 0) === 0
+                  ? colors.utility.secondaryText + '40'
+                  : colors.semantic.error + '40'}`,
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                cursor: (bookmark.nav_records_count || 0) === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                opacity: (bookmark.nav_records_count || 0) === 0 ? 0.5 : 1,
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🗑️ Delete All
             </button>
           )}
         </div>

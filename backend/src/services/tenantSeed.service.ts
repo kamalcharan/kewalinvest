@@ -47,7 +47,9 @@ async function seedBookmarkReasons(
     { code: 'ATTENTION', label: 'Requires Attention', display_order: 5 },
     { code: 'PORTFOLIO_REVIEW', label: 'Portfolio Review Due', display_order: 6 },
     { code: 'TAX_PLANNING', label: 'Tax Planning', display_order: 7 },
-    { code: 'OTHER', label: 'Other (Custom)', display_order: 99 }
+    { code: 'OTHER', label: 'Other (Custom)', display_order: 99 },
+    
+
   ];
 
   for (const reason of bookmarkReasons) {

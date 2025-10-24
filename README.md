@@ -34,10 +34,6 @@ docker push vikuna/kewalinvest-frontend:latest
 
 
 
-
-
-]
-
 N8N
 
 userid - nikhil@kevalinvest.com
