@@ -97,7 +97,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       // Handle response
       xhr.onload = () => {
         toastService.dismiss(loadingToastId);
-        
+
         if (xhr.status === 200) {
           try {
             const response = JSON.parse(xhr.responseText);
@@ -132,9 +132,14 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
             onError(errorMsg);
           }
         }
+
+        // Reset all states
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('✅ Upload complete - all states reset');
       };
 
       // Handle network errors
@@ -146,6 +151,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('❌ Upload error - all states reset');
       };
 
       // Handle timeout
@@ -157,6 +165,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        setShowTransactionWarning(false);
+        setPendingFile(null);
+        console.log('⏱️ Upload timeout - all states reset');
       };
 
       // Configure request - IMPORTANT: importType is in query parameter
@@ -198,6 +209,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       setIsUploading(false);
       setUploadProgress(null);
       setSelectedFile(null);
+      setShowTransactionWarning(false);
+      setPendingFile(null);
+      console.log('💥 Upload exception - all states reset');
     }
   };
 
@@ -227,15 +241,19 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   }, [importType]);
 
   const handleTransactionWarningConfirm = () => {
+    console.log('✅ User confirmed - proceeding with upload');
     if (pendingFile) {
       setShowTransactionWarning(false);
       setSelectedFile(pendingFile);
       uploadFile(pendingFile);
       setPendingFile(null);
+    } else {
+      console.error('❌ No pending file found');
     }
   };
 
   const handleTransactionWarningCancel = () => {
+    console.log('❌ User cancelled - upload aborted');
     setShowTransactionWarning(false);
     setPendingFile(null);
   };
