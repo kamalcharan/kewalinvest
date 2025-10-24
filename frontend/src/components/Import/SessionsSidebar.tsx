@@ -13,6 +13,7 @@ interface SessionsSidebarProps {
   selectedType: FileImportType | null;
   selectedSessionId: number | null;
   onSessionSelect: (session: ExtendedImportSession) => void;
+  refreshTrigger?: number;
 }
 
 // API Response type - flexible to handle different structures
@@ -22,21 +23,22 @@ interface SessionsResponse {
   message?: string;
 }
 
-const SessionsSidebar: React.FC<SessionsSidebarProps> = ({ 
-  selectedType, 
+const SessionsSidebar: React.FC<SessionsSidebarProps> = ({
+  selectedType,
   selectedSessionId,
-  onSessionSelect 
+  onSessionSelect,
+  refreshTrigger = 0
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const [sessions, setSessions] = useState<ExtendedImportSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSessions();
-  }, [selectedType]);
+  }, [selectedType, refreshTrigger]);
 
   const fetchSessions = async () => {
     try {
