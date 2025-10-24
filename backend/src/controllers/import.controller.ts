@@ -793,10 +793,19 @@ export class ImportController {
 
       const result = await this.db.query(query, params);
 
+      // Extract orphan_records from processing_metadata and add as top-level field
+      const sessionsWithOrphans = result.rows.map((session: any) => {
+        const orphanRecords = session.processing_metadata?.orphan_records || 0;
+        return {
+          ...session,
+          orphan_records: orphanRecords
+        };
+      });
+
       // Get total count
       let countQuery = `
-        SELECT COUNT(*) as total 
-        FROM t_import_sessions 
+        SELECT COUNT(*) as total
+        FROM t_import_sessions
         WHERE tenant_id = $1 AND is_live = $2
       `;
       const countParams: any[] = [user.tenant_id, isLive];
@@ -812,7 +821,7 @@ export class ImportController {
       res.json({
         success: true,
         data: {
-          sessions: result.rows,
+          sessions: sessionsWithOrphans,
           pagination: {
             page: parseInt(page as string),
             pageSize: parseInt(pageSize as string),
