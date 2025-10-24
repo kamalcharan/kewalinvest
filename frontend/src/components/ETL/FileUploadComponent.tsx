@@ -39,6 +39,11 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   const [showTransactionWarning, setShowTransactionWarning] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
+  // Debug: Log when showTransactionWarning changes
+  React.useEffect(() => {
+    console.log('🔔 showTransactionWarning state changed:', showTransactionWarning);
+  }, [showTransactionWarning]);
+
   // File validation
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_FILE_SIZE) {
@@ -197,6 +202,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   };
 
   const handleFileSelect = useCallback((file: File) => {
+    console.log('🔍 handleFileSelect called - importType:', importType);
+    console.log('🔍 File selected:', file.name);
+
     const validationError = validateFile(file);
     if (validationError) {
       toastService.error(validationError);
@@ -205,12 +213,15 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     }
 
     // Check if transaction data and show warning
+    console.log('🔍 Checking import type - is TransactionData?', importType === 'TransactionData');
     if (importType === 'TransactionData') {
+      console.log('✅ Transaction data detected - showing warning dialog');
       setPendingFile(file);
       setShowTransactionWarning(true);
       return;
     }
 
+    console.log('⏭️  Not transaction data, proceeding with direct upload');
     setSelectedFile(file);
     uploadFile(file);
   }, [importType]);
@@ -541,10 +552,10 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         isOpen={showTransactionWarning}
         onClose={handleTransactionWarningCancel}
         onConfirm={handleTransactionWarningConfirm}
-        title="Transaction Data Import - Important Notice"
-        description={`Before importing transaction data, please ensure you have bookmarked ALL the mutual fund schemes present in your transaction file.\n\nWhat are Orphan Records?\nOrphan records are transaction entries where the associated mutual fund scheme is NOT bookmarked in your account. These records will be flagged as "orphans" and will NOT appear in your customers' transaction data or portfolio.\n\nWhy does this happen?\nOur system only processes transactions for schemes that you've bookmarked. If a scheme isn't bookmarked, its transactions cannot be linked to your customers' portfolios.\n\nTo avoid orphan records:\n1. Go to the Schemes page and bookmark all relevant schemes\n2. Verify that schemes in your transaction file match your bookmarks\n3. Then proceed with this import\n\nConfirm that you have bookmarked all schemes before proceeding.`}
+        title="⚠️ Bookmark All Schemes Before Import"
+        description="Before importing transaction data, ensure you have bookmarked ALL mutual fund schemes in your transaction file. Orphan Records are transactions for schemes that are NOT bookmarked - they will be flagged and will NOT appear in your customers' portfolios. To avoid orphans: 1) Go to Schemes page and bookmark all relevant schemes 2) Verify schemes in your file match your bookmarks 3) Then proceed. Confirm you have bookmarked all schemes to continue."
         confirmText="Yes, I've Bookmarked All Schemes"
-        cancelText="Cancel and Bookmark Schemes"
+        cancelText="Cancel - Need to Bookmark"
         type="warning"
       />
 
