@@ -1141,4 +1141,99 @@ export class ImportController {
       res.status(500).json({ success: false, error: error.message });
     }
   };
+
+  /**
+   * Delete staging data for a session
+   * DELETE /api/import/staging/:sessionId
+   */
+  deleteStagingData = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { sessionId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      // Verify session belongs to user's tenant
+      const sessionCheck = await this.db.query(
+        `SELECT id, session_name, total_records, status, staging_data_deleted
+         FROM t_import_sessions
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [parseInt(sessionId), user.tenant_id, isLive]
+      );
+
+      if (sessionCheck.rows.length === 0) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      const session = sessionCheck.rows[0];
+
+      // Check if already deleted
+      if (session.staging_data_deleted) {
+        res.status(400).json({
+          success: false,
+          error: 'Staging data already deleted for this session'
+        });
+        return;
+      }
+
+      // Don't allow deletion if processing is in progress
+      if (session.status === 'processing' || session.status === 'pending') {
+        res.status(400).json({
+          success: false,
+          error: 'Cannot delete staging data while session is processing'
+        });
+        return;
+      }
+
+      // Delete staging records
+      const deleteResult = await this.db.query(
+        `DELETE FROM t_import_staging_data
+         WHERE session_id = $1
+         RETURNING id`,
+        [parseInt(sessionId)]
+      );
+
+      const deletedCount = deleteResult.rowCount || 0;
+
+      // Update session to mark staging as deleted
+      await this.db.query(
+        `UPDATE t_import_sessions
+         SET
+           staging_data_deleted = true,
+           staging_deleted_at = CURRENT_TIMESTAMP,
+           staging_deleted_by = $1,
+           staging_deleted_reason = 'User deleted',
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [user.user_id, parseInt(sessionId)]
+      );
+
+      console.log(`User ${user.user_id} deleted ${deletedCount} staging records for session ${sessionId}`);
+
+      res.json({
+        success: true,
+        data: {
+          message: `Successfully deleted ${deletedCount} staging records`,
+          deleted_count: deletedCount,
+          session_id: parseInt(sessionId),
+          session_name: session.session_name
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error deleting staging data:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to delete staging data'
+      });
+    }
+  };
 }

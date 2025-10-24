@@ -14,9 +14,10 @@ interface ExtendedImportSession extends ImportSession {
 const ImportDashboard: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const [selectedType, setSelectedType] = useState<FileImportType | null>('CustomerData');
   const [selectedSession, setSelectedSession] = useState<ExtendedImportSession | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleTypeChange = (type: FileImportType) => {
     setSelectedType(type);
@@ -26,6 +27,11 @@ const ImportDashboard: React.FC = () => {
 
   const handleSessionSelect = (session: ExtendedImportSession) => {
     setSelectedSession(session);
+  };
+
+  const handleRefreshSessions = () => {
+    // Trigger a refresh by incrementing the trigger
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -79,6 +85,7 @@ const ImportDashboard: React.FC = () => {
             selectedType={selectedType}
             selectedSessionId={selectedSession?.id || null}
             onSessionSelect={handleSessionSelect}
+            refreshTrigger={refreshTrigger}
           />
         )}
 
@@ -88,7 +95,10 @@ const ImportDashboard: React.FC = () => {
           overflowY: 'auto',
           paddingRight: '4px' // Small padding for scrollbar
         }}>
-          <SessionDetails session={selectedSession} />
+          <SessionDetails
+            session={selectedSession}
+            onRefreshSessions={handleRefreshSessions}
+          />
         </div>
       </div>
 

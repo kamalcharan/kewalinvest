@@ -73,6 +73,10 @@
     error_summary?: string;
     n8n_webhook_id?: string;
     n8n_execution_id?: string;
+    staging_data_deleted?: boolean;
+    staging_deleted_at?: string;
+    staging_deleted_by?: number;
+    staging_deleted_reason?: string;
     created_at: string;
     updated_at: string;
   }

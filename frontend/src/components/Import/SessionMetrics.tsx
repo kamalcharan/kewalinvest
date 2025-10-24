@@ -1,15 +1,25 @@
 // frontend/src/components/Import/SessionMetrics.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ImportSession } from '../../types/import.types';
+import { apiService } from '../../services/api.service';
+import { toastService } from '../../services/toast.service';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface SessionMetricsProps {
   session: ImportSession | null;
+  onStagingDeleted?: () => void;
 }
 
-const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
+// Get retention days from environment or default to 45
+const STAGING_RETENTION_DAYS = 45;
+
+const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDeleted }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!session) {
     return (
@@ -61,7 +71,7 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
     const start = new Date(session.processing_started_at).getTime();
     const end = new Date(session.processing_completed_at).getTime();
     const duration = end - start;
-    
+
     if (duration < 60000) {
       return `${Math.round(duration / 1000)}s`;
     } else if (duration < 3600000) {
@@ -70,6 +80,45 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
       return `${Math.round(duration / 3600000)}h`;
     }
   };
+
+  const getSessionAging = (): { daysOld: number; daysUntilDeletion: number; isExpiringSoon: boolean } => {
+    const createdAt = new Date(session.created_at).getTime();
+    const now = Date.now();
+    const ageInDays = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+    const daysUntilDeletion = Math.max(0, STAGING_RETENTION_DAYS - ageInDays);
+    const isExpiringSoon = daysUntilDeletion <= 15 && daysUntilDeletion > 0;
+
+    return { daysOld: ageInDays, daysUntilDeletion, isExpiringSoon };
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      setIsDeleting(true);
+      const response = await apiService.delete(`/import/staging/${session.id}`);
+
+      if (response && response.success) {
+        toastService.success(response.data?.message || 'Staging data deleted successfully');
+        setShowDeleteDialog(false);
+        if (onStagingDeleted) {
+          onStagingDeleted();
+        }
+      } else {
+        throw new Error(response?.error || 'Failed to delete staging data');
+      }
+    } catch (error: any) {
+      console.error('Error deleting staging data:', error);
+      toastService.error(error.message || 'Failed to delete staging data');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const aging = getSessionAging();
+  const stagingDeleted = (session as any).staging_data_deleted === true;
 
   const metrics = [
     {
@@ -228,25 +277,119 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
               {getProcessingDuration()}
             </span>
           </div>
+
+          {!stagingDeleted && (
+            <div>
+              <span style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText
+              }}>
+                Staging Age:
+              </span>
+              <span style={{
+                fontSize: '14px',
+                color: aging.isExpiringSoon ? colors.semantic.warning : colors.utility.primaryText,
+                marginLeft: '8px',
+                fontWeight: aging.isExpiringSoon ? '600' : '400'
+              }}>
+                {aging.daysOld} {aging.daysOld === 1 ? 'day' : 'days'} old
+              </span>
+              <span style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginLeft: '4px'
+              }}>
+                (auto-delete in {aging.daysUntilDeletion} {aging.daysUntilDeletion === 1 ? 'day' : 'days'})
+              </span>
+            </div>
+          )}
+
+          {stagingDeleted && (
+            <div>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: '600',
+                backgroundColor: colors.utility.secondaryText + '20',
+                color: colors.utility.secondaryText
+              }}>
+                ✓ STAGING DELETED
+              </span>
+            </div>
+          )}
         </div>
 
         <div style={{
-          fontSize: '24px',
-          fontWeight: '700',
-          color: getSuccessRate() > 80 
-            ? colors.semantic.success
-            : getSuccessRate() > 50
-              ? colors.semantic.warning
-              : colors.semantic.error
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px'
         }}>
-          {getSuccessRate()}%
           <div style={{
-            fontSize: '10px',
-            fontWeight: '400',
-            color: colors.utility.secondaryText
+            fontSize: '24px',
+            fontWeight: '700',
+            color: getSuccessRate() > 80
+              ? colors.semantic.success
+              : getSuccessRate() > 50
+                ? colors.semantic.warning
+                : colors.semantic.error
           }}>
-            Success Rate
+            {getSuccessRate()}%
+            <div style={{
+              fontSize: '10px',
+              fontWeight: '400',
+              color: colors.utility.secondaryText
+            }}>
+              Success Rate
+            </div>
           </div>
+
+          {!stagingDeleted && session.status !== 'processing' && session.status !== 'pending' && (
+            <button
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: colors.semantic.error + '10',
+                color: colors.semantic.error,
+                border: `1px solid ${colors.semantic.error}30`,
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.6 : 1,
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onMouseEnter={(e) => {
+                if (!isDeleting) {
+                  e.currentTarget.style.backgroundColor = colors.semantic.error + '20';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isDeleting) {
+                  e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <span style={{ fontSize: '12px' }}>⏳</span>
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: '12px' }}>🗑️</span>
+                  Delete Staging
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -334,6 +477,43 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
           </div>
         ))}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteDialog}
+        title="Delete Staging Data"
+        message={
+          <div>
+            <p style={{ marginBottom: '12px' }}>
+              Are you sure you want to delete all staging data for this session?
+            </p>
+            <div style={{
+              padding: '12px',
+              backgroundColor: colors.semantic.warning + '10',
+              borderRadius: '6px',
+              border: `1px solid ${colors.semantic.warning}30`,
+              fontSize: '13px',
+              color: colors.utility.primaryText
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '8px', color: colors.semantic.warning }}>
+                ⚠️ Warning
+              </div>
+              <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '0' }}>
+                <li>This will permanently delete <strong>{session?.total_records.toLocaleString()}</strong> staging records</li>
+                <li>You will NOT be able to reprocess failed records</li>
+                <li>Metrics and import results will remain intact</li>
+                <li>This action cannot be undone</li>
+              </ul>
+            </div>
+          </div>
+        }
+        confirmText={isDeleting ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setShowDeleteDialog(false)}
+        confirmButtonColor={colors.semantic.error}
+        isLoading={isDeleting}
+      />
     </div>
   );
 };
