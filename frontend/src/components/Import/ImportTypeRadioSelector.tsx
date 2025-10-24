@@ -1,6 +1,7 @@
 // frontend/src/components/Import/ImportTypeRadioSelector.tsx
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { FileImportType } from '../../types/import.types';
 
 interface ImportTypeRadioSelectorProps {
@@ -8,33 +9,40 @@ interface ImportTypeRadioSelectorProps {
   onTypeChange: (type: FileImportType) => void;
 }
 
-const ImportTypeRadioSelector: React.FC<ImportTypeRadioSelectorProps> = ({ 
-  selectedType, 
-  onTypeChange 
+const ImportTypeRadioSelector: React.FC<ImportTypeRadioSelectorProps> = ({
+  selectedType,
+  onTypeChange
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const { isSuperAdmin } = useAuth();
 
   const importTypes = [
     {
       value: 'CustomerData' as FileImportType,
       label: 'Customer Data',
       icon: '👥',
-      description: 'Customer information including names, contact details, and PAN'
+      description: 'Customer information including names, contact details, and PAN',
+      adminOnly: false
     },
     {
       value: 'SchemeData' as FileImportType,
       label: 'Scheme Data',
       icon: '📊',
-      description: 'Import mutual fund scheme details and NAV information'
+      description: 'Import mutual fund scheme details and NAV information',
+      adminOnly: true
     },
     {
       value: 'TransactionData' as FileImportType,
       label: 'Transaction Data',
       icon: '💰',
-      description: 'Import transaction history and financial movements'
+      description: 'Import transaction history and financial movements',
+      adminOnly: false
     }
   ];
+
+  // Filter out admin-only types for non-admin users
+  const availableTypes = importTypes.filter(type => !type.adminOnly || isSuperAdmin);
 
   return (
     <div style={{
@@ -50,7 +58,7 @@ const ImportTypeRadioSelector: React.FC<ImportTypeRadioSelectorProps> = ({
         alignItems: 'center',
         flexWrap: 'wrap'
       }}>
-        {importTypes.map((type) => (
+        {availableTypes.map((type) => (
           <label
             key={type.value}
             style={{

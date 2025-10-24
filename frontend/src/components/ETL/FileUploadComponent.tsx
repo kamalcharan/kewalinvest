@@ -6,6 +6,7 @@ import { FileImportType } from '../../types/import.types';
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from '../../constants/fileImportTypes';
 import { toastService } from '../../services/toast.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface FileUploadComponentProps {
   importType: FileImportType;
@@ -29,12 +30,14 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   const { theme, isDarkMode } = useTheme();
   const { tenantId, environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showTransactionWarning, setShowTransactionWarning] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -201,9 +204,30 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       return;
     }
 
+    // Check if transaction data and show warning
+    if (importType === 'TransactionData') {
+      setPendingFile(file);
+      setShowTransactionWarning(true);
+      return;
+    }
+
     setSelectedFile(file);
     uploadFile(file);
   }, [importType]);
+
+  const handleTransactionWarningConfirm = () => {
+    if (pendingFile) {
+      setShowTransactionWarning(false);
+      setSelectedFile(pendingFile);
+      uploadFile(pendingFile);
+      setPendingFile(null);
+    }
+  };
+
+  const handleTransactionWarningCancel = () => {
+    setShowTransactionWarning(false);
+    setPendingFile(null);
+  };
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -511,6 +535,18 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
           </li>
         </ul>
       </div>
+
+      {/* Transaction Data Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showTransactionWarning}
+        onClose={handleTransactionWarningCancel}
+        onConfirm={handleTransactionWarningConfirm}
+        title="Transaction Data Import - Important Notice"
+        description={`Before importing transaction data, please ensure you have bookmarked ALL the mutual fund schemes present in your transaction file.\n\nWhat are Orphan Records?\nOrphan records are transaction entries where the associated mutual fund scheme is NOT bookmarked in your account. These records will be flagged as "orphans" and will NOT appear in your customers' transaction data or portfolio.\n\nWhy does this happen?\nOur system only processes transactions for schemes that you've bookmarked. If a scheme isn't bookmarked, its transactions cannot be linked to your customers' portfolios.\n\nTo avoid orphan records:\n1. Go to the Schemes page and bookmark all relevant schemes\n2. Verify that schemes in your transaction file match your bookmarks\n3. Then proceed with this import\n\nConfirm that you have bookmarked all schemes before proceeding.`}
+        confirmText="Yes, I've Bookmarked All Schemes"
+        cancelText="Cancel and Bookmark Schemes"
+        type="warning"
+      />
 
       <style>{`
         @keyframes spin {
