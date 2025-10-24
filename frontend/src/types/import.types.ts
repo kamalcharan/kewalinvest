@@ -67,6 +67,7 @@
     successful_records: number;
     failed_records: number;
     duplicate_records: number;
+    orphan_records: number; // Records where scheme not found in bookmarks (TransactionData only)
     processing_started_at?: string;
     processing_completed_at?: string;
     error_summary?: string;

@@ -112,6 +112,17 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session }) => {
       color: colors.semantic.warning,
       bgColor: colors.semantic.warning + '10',
       borderColor: colors.semantic.warning + '30'
+    },
+    {
+      label: 'Orphans',
+      value: (session.orphan_records || 0).toLocaleString(),
+      percentage: session.total_records > 0
+        ? `${Math.round(((session.orphan_records || 0) / session.total_records) * 100)}%`
+        : '0%',
+      icon: '👻',
+      color: colors.utility.secondaryText,
+      bgColor: colors.utility.primaryText + '08',
+      borderColor: colors.utility.primaryText + '15'
     }
   ];
 
