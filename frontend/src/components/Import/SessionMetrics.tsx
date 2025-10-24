@@ -195,67 +195,55 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '12px 16px',
+        padding: '16px 20px',
         backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '8px',
         marginBottom: '20px',
         border: `1px solid ${colors.utility.primaryText}10`
       }}>
+        {/* Left side: Session info fields */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '24px'
+          gap: '32px',
+          flex: 1
         }}>
+          {/* Session ID */}
           <div>
             <span style={{
               fontSize: '12px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              display: 'block',
+              marginBottom: '4px'
             }}>
-              Session ID:
+              Session ID
             </span>
             <span style={{
-              fontSize: '14px',
+              fontSize: '16px',
               fontWeight: '600',
-              color: colors.brand.primary,
-              marginLeft: '8px'
+              color: colors.brand.primary
             }}>
               #{session.id}
             </span>
           </div>
-          
-          {session.session_name && (
-            <div>
-              <span style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText
-              }}>
-                Name:
-              </span>
-              <span style={{
-                fontSize: '14px',
-                color: colors.utility.primaryText,
-                marginLeft: '8px'
-              }}>
-                {session.session_name}
-              </span>
-            </div>
-          )}
 
+          {/* Status */}
           <div>
             <span style={{
               fontSize: '12px',
-              color: colors.utility.secondaryText
+              color: colors.utility.secondaryText,
+              display: 'block',
+              marginBottom: '4px'
             }}>
-              Status:
+              Status
             </span>
             <span style={{
               display: 'inline-block',
-              marginLeft: '8px',
-              padding: '2px 8px',
+              padding: '4px 12px',
               borderRadius: '4px',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: '600',
-              backgroundColor: session.status === 'completed' 
+              backgroundColor: session.status === 'completed'
                 ? colors.semantic.success + '20'
                 : session.status === 'failed'
                   ? colors.semantic.error + '20'
@@ -275,135 +263,105 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
             </span>
           </div>
 
-          <div>
-            <span style={{
-              fontSize: '12px',
-              color: colors.utility.secondaryText
-            }}>
-              Duration:
-            </span>
-            <span style={{
-              fontSize: '14px',
-              color: colors.utility.primaryText,
-              marginLeft: '8px'
-            }}>
-              {getProcessingDuration()}
-            </span>
-          </div>
-
-          {!stagingDeleted && (
+          {/* Staging Age or Deleted Badge */}
+          {!stagingDeleted ? (
             <div>
               <span style={{
                 fontSize: '12px',
-                color: colors.utility.secondaryText
-              }}>
-                Staging Age:
-              </span>
-              <span style={{
-                fontSize: '14px',
-                color: aging.isExpiringSoon ? colors.semantic.warning : colors.utility.primaryText,
-                marginLeft: '8px',
-                fontWeight: aging.isExpiringSoon ? '600' : '400'
-              }}>
-                {aging.daysOld} {aging.daysOld === 1 ? 'day' : 'days'} old
-              </span>
-              <span style={{
-                fontSize: '11px',
                 color: colors.utility.secondaryText,
-                marginLeft: '4px'
+                display: 'block',
+                marginBottom: '4px'
               }}>
-                (auto-delete in {aging.daysUntilDeletion} {aging.daysUntilDeletion === 1 ? 'day' : 'days'})
+                Staging Age
               </span>
+              <div>
+                <span style={{
+                  fontSize: '16px',
+                  color: aging.isExpiringSoon ? colors.semantic.warning : colors.utility.primaryText,
+                  fontWeight: aging.isExpiringSoon ? '600' : '500'
+                }}>
+                  {aging.daysOld} {aging.daysOld === 1 ? 'day' : 'days'}
+                </span>
+                <span style={{
+                  fontSize: '11px',
+                  color: colors.utility.secondaryText,
+                  marginLeft: '6px'
+                }}>
+                  (deletes in {aging.daysUntilDeletion} {aging.daysUntilDeletion === 1 ? 'day' : 'days'})
+                </span>
+              </div>
             </div>
-          )}
-
-          {stagingDeleted && (
+          ) : (
             <div>
               <span style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText,
+                display: 'block',
+                marginBottom: '4px'
+              }}>
+                Staging Status
+              </span>
+              <span style={{
                 display: 'inline-block',
-                padding: '4px 8px',
+                padding: '4px 12px',
                 borderRadius: '4px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: '600',
                 backgroundColor: colors.utility.secondaryText + '20',
                 color: colors.utility.secondaryText
               }}>
-                ✓ STAGING DELETED
+                ✓ DELETED
               </span>
             </div>
           )}
         </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
-          <div style={{
-            fontSize: '24px',
-            fontWeight: '700',
-            color: getSuccessRate() > 80
-              ? colors.semantic.success
-              : getSuccessRate() > 50
-                ? colors.semantic.warning
-                : colors.semantic.error
-          }}>
-            {getSuccessRate()}%
-            <div style={{
-              fontSize: '10px',
-              fontWeight: '400',
-              color: colors.utility.secondaryText
-            }}>
-              Success Rate
-            </div>
-          </div>
-
-          {!stagingDeleted && session.status !== 'processing' && session.status !== 'pending' && (
-            <button
-              onClick={handleDeleteClick}
-              disabled={isDeleting}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: colors.semantic.error + '10',
-                color: colors.semantic.error,
-                border: `1px solid ${colors.semantic.error}30`,
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isDeleting ? 0.6 : 1,
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              onMouseEnter={(e) => {
-                if (!isDeleting) {
-                  e.currentTarget.style.backgroundColor = colors.semantic.error + '20';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isDeleting) {
-                  e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }
-              }}
-            >
-              {isDeleting ? (
-                <>
-                  <span style={{ fontSize: '12px' }}>⏳</span>
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: '12px' }}>🗑️</span>
-                  Delete Staging
-                </>
-              )}
-            </button>
-          )}
-        </div>
+        {/* Right side: Delete button */}
+        {!stagingDeleted && session.status !== 'processing' && session.status !== 'pending' && (
+          <button
+            onClick={handleDeleteClick}
+            disabled={isDeleting}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: colors.semantic.error + '10',
+              color: colors.semantic.error,
+              border: `1px solid ${colors.semantic.error}30`,
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              opacity: isDeleting ? 0.6 : 1,
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            onMouseEnter={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.backgroundColor = colors.semantic.error + '20';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }
+            }}
+          >
+            {isDeleting ? (
+              <>
+                <span style={{ fontSize: '12px' }}>⏳</span>
+                Deleting...
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '12px' }}>🗑️</span>
+                Delete Staging
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Metric Cards */}
