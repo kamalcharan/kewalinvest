@@ -98,7 +98,20 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
   const handleDeleteConfirm = async () => {
     try {
       setIsDeleting(true);
-      const response = await apiService.delete(`/import/staging/${session.id}`);
+
+      // Define response type
+      interface DeleteResponse {
+        success: boolean;
+        data?: {
+          message: string;
+          deleted_count: number;
+          session_id: number;
+          session_name: string;
+        };
+        error?: string;
+      }
+
+      const response = await apiService.delete<DeleteResponse>(`/import/staging/${session.id}`);
 
       if (response && response.success) {
         toastService.success(response.data?.message || 'Staging data deleted successfully');
@@ -482,36 +495,12 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
       <ConfirmationDialog
         isOpen={showDeleteDialog}
         title="Delete Staging Data"
-        message={
-          <div>
-            <p style={{ marginBottom: '12px' }}>
-              Are you sure you want to delete all staging data for this session?
-            </p>
-            <div style={{
-              padding: '12px',
-              backgroundColor: colors.semantic.warning + '10',
-              borderRadius: '6px',
-              border: `1px solid ${colors.semantic.warning}30`,
-              fontSize: '13px',
-              color: colors.utility.primaryText
-            }}>
-              <div style={{ fontWeight: '600', marginBottom: '8px', color: colors.semantic.warning }}>
-                ⚠️ Warning
-              </div>
-              <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '0' }}>
-                <li>This will permanently delete <strong>{session?.total_records.toLocaleString()}</strong> staging records</li>
-                <li>You will NOT be able to reprocess failed records</li>
-                <li>Metrics and import results will remain intact</li>
-                <li>This action cannot be undone</li>
-              </ul>
-            </div>
-          </div>
-        }
+        description={`Are you sure you want to permanently delete all ${session?.total_records.toLocaleString()} staging records for this session? You will NOT be able to reprocess failed records after deletion. This action cannot be undone.`}
         confirmText={isDeleting ? 'Deleting...' : 'Delete'}
         cancelText="Cancel"
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setShowDeleteDialog(false)}
-        confirmButtonColor={colors.semantic.error}
+        onClose={() => setShowDeleteDialog(false)}
+        type="error"
         isLoading={isDeleting}
       />
     </div>
