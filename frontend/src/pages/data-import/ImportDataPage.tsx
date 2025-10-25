@@ -199,11 +199,37 @@ const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
 
     if (result.success) {
       console.log('Session created successfully:', result.data);
-      const sessionId = result.data.sessionId || result.data.id;
+      const sessionData = result.data;
+      const sessionId = sessionData.sessionId || sessionData.id;
+      const sessionName = sessionData.session_name || `${importState.selectedImportType}_${new Date().toISOString().slice(0,10)}`;
 
       // Store mappings and sessionId for later use
       setPendingMappings(mappings);
       setPendingSessionId(sessionId);
+
+      // Store minimal session data to prevent step 5 error
+      // Full session data will be fetched by ProcessingStatus component
+      setImportState((prev: ImportState) => ({
+        ...prev,
+        importSession: {
+          id: sessionId,
+          session_name: sessionName,
+          status: 'pending',
+          // Add minimal required fields
+          file_upload_id: prev.uploadedFile?.id || 0,
+          import_type: prev.selectedImportType || 'CustomerData',
+          total_records: 0,
+          processed_records: 0,
+          successful_records: 0,
+          failed_records: 0,
+          duplicate_records: 0,
+          created_by: 0,
+          created_at: new Date(),
+          updated_at: new Date(),
+          tenant_id: tenantId || 0,
+          is_live: environment === 'live'
+        } as any
+      }));
 
       // Check for session-level duplicates (for customer imports only)
       try {
@@ -255,7 +281,7 @@ const proceedWithImport = async (sessionId: number, mappings: FieldMappingData[]
   setImportState((prev: ImportState) => ({
     ...prev,
     fieldMappings: mappings
-    // Note: importSession will be populated by ProcessingStatus component when it fetches full session data
+    // importSession already set in handleMappingConfirmed - keep it!
   }));
 
   completeStep(4, { mappings, sessionId });
