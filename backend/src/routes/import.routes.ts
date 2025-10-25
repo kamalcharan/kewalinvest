@@ -12,23 +12,19 @@ const multer = require('multer');
 // Configuration for import types and their folder structure
 const IMPORT_TYPE_CONFIG: Record<FileImportType, {
   folderName: string;
-  pendingPath: string;
-  processedPath: string;
+  uploadPath: string;
 }> = {
   CustomerData: {
     folderName: 'customers',
-    pendingPath: 'UserFiles/customers/pending',
-    processedPath: 'UserFiles/customers/processed'
+    uploadPath: 'UserFiles/customers'
   },
   TransactionData: {
     folderName: 'transactions',
-    pendingPath: 'UserFiles/transactions/pending',
-    processedPath: 'UserFiles/transactions/processed'
+    uploadPath: 'UserFiles/transactions'
   },
   SchemeData: {
     folderName: 'schemes',
-    pendingPath: 'UserFiles/schemes/pending',
-    processedPath: 'UserFiles/schemes/processed'
+    uploadPath: 'UserFiles/schemes'
   }
 };
 
@@ -53,8 +49,7 @@ const ensureDirectoryExists = (dirPath: string) => {
 
 // Create all required directories for all import types
 Object.values(IMPORT_TYPE_CONFIG).forEach(config => {
-  ensureDirectoryExists(config.pendingPath);
-  ensureDirectoryExists(config.processedPath);
+  ensureDirectoryExists(config.uploadPath);
 });
 
 // Configure multer for file uploads
@@ -140,7 +135,7 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
 
     // Get configuration for this import type
     const config = IMPORT_TYPE_CONFIG[importType];
-    const uploadPath = config.pendingPath;
+    const uploadPath = config.uploadPath;
 
     // Ensure the upload directory exists
     ensureDirectoryExists(uploadPath);
