@@ -123,7 +123,7 @@ export const NAVIGATION_MENU: NavigationSection[] = [
       {
         id: 'nav_tracking',
         name: 'NAV Tracking',
-        path: '/nav/dashboard',
+        path: '/nav/bookmarks',
         icon: Target
       },
       {
@@ -192,7 +192,7 @@ export const QUICK_ACCESS_ITEMS: NavigationItem[] = [
   {
     id: 'nav_tracking',
     name: 'NAV Tracking',
-    path: '/nav/dashboard',
+    path: '/nav/bookmarks',
     icon: Target
   },
   {
@@ -238,7 +238,7 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
   }
   
   // Handle NAV routes
-  if (itemPath === '/nav/dashboard') {
+  if (itemPath === '/nav/bookmarks') {
     return currentPath.startsWith('/nav');
   }
   
@@ -292,11 +292,11 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
       icon: Briefcase
     });
     
-    if (currentPath.startsWith('/nav/dashboard')) {
+    if (currentPath.startsWith('/nav/bookmarks') || currentPath.startsWith('/nav/search') || currentPath.startsWith('/nav/scheduler')) {
       breadcrumbs.push({
         id: 'nav_tracking',
         name: 'NAV Tracking',
-        path: '/nav/dashboard',
+        path: '/nav/bookmarks',
         icon: Target
       });
     }

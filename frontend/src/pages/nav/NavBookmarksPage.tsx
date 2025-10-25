@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useBookmarks, useDownloads, useDownloadProgress } from '../../hooks/useNavData';
+import { useBookmarks, useDownloads, useDownloadProgress, useNavStatistics } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
@@ -65,6 +65,7 @@ const NavBookmarksPage: React.FC = () => {
 
   const { triggerHistoricalDownload } = useDownloads();
   const { startPolling, stopPolling } = useDownloadProgress();
+  const { statistics } = useNavStatistics();
 
   // Hooks - Metrics operations
   const bulkMetrics = useBulkMetricsCalculation({
@@ -419,10 +420,6 @@ const NavBookmarksPage: React.FC = () => {
   };
 
   // Navigation handlers
-  const handleBackToDashboard = () => {
-    navigate('/nav/dashboard');
-  };
-
   const handleNavigateToSearch = () => {
     navigate('/nav/search');
   };
@@ -480,51 +477,135 @@ const NavBookmarksPage: React.FC = () => {
               color: colors.utility.primaryText,
               margin: '0 0 4px 0'
             }}>
-              Bookmarked Schemes
+              NAV Tracking
             </h1>
             <p style={{
               fontSize: '14px',
               color: colors.utility.secondaryText,
               margin: 0
             }}>
-              Manage your tracked schemes, NAV downloads, and metrics calculation
+              Track and manage scheme NAV data, downloads, and metrics calculation
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={handleNavigateToSearch}
-              style={{
-                padding: '12px 20px',
-                backgroundColor: colors.brand.secondary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
-              🔍 Add More Schemes
-            </button>
-            
-            <button
-              onClick={handleBackToDashboard}
-              style={{
-                padding: '12px 20px',
-                backgroundColor: 'transparent',
-                color: colors.brand.primary,
-                border: `1px solid ${colors.brand.primary}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          </div>
+          <button
+            onClick={handleNavigateToSearch}
+            style={{
+              padding: '12px 20px',
+              backgroundColor: colors.brand.secondary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            🔍 Search Schemes
+          </button>
         </div>
+
+        {/* Statistics Cards */}
+        {statistics && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.utility.border}`
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
+                Schemes Tracked
+              </div>
+              <div style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: colors.brand.primary
+              }}>
+                {statistics.total_schemes_tracked}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.utility.border}`
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
+                Daily Download Enabled
+              </div>
+              <div style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: colors.accent.success
+              }}>
+                {statistics.schemes_with_daily_download}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.utility.border}`
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
+                Historical Data Available
+              </div>
+              <div style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: colors.brand.secondary
+              }}>
+                {statistics.schemes_with_historical_data}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.utility.border}`
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
+                Downloads Today
+              </div>
+              <div style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: colors.utility.primaryText
+              }}>
+                {statistics.download_jobs_today}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div style={{

@@ -46,126 +46,17 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
- * Get user's bookmarked schemes with NAV statistics
- * ADMIN MODE: Returns ALL schemes from master database
- * USER MODE: Returns only user's bookmarked schemes
- */
-async getUserBookmarks(
-  tenantId: number,
-  isLive: boolean,
-  userId: number,
-  params: SchemeBookmarkSearchParams = {},
-  isAdmin: boolean = false
-): Promise<SchemeBookmarkListResponse> {
-  try {
-    const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
-    const offset = (page - 1) * page_size;
-
-    // ====================================================================
-    // ADMIN MODE: Query ALL schemes from master database
-    // ====================================================================
-    if (isAdmin) {
-      let baseQuery = `
-        FROM t_scheme_details sd
-        WHERE sd.is_active = true
-      `;
-
-      const queryParams: any[] = [];
-      let paramIndex = 1;
-
-      if (search) {
-        baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.amc_name ILIKE $${paramIndex})`;
-        queryParams.push(`%${search}%`);
-        paramIndex++;
-      }
-
-      if (amc_name) {
-        baseQuery += ` AND sd.amc_name = $${paramIndex}`;
-        queryParams.push(amc_name);
-        paramIndex++;
-      }
-
-      const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
-      const countResult = await this.db.query(countQuery, queryParams);
-      const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
-        parseInt(countResult.rows[0].total) : 0;
-
-      if (total === 0) {
-        return {
-          bookmarks: [],
-          total: 0,
-          page,
-          page_size,
-          total_pages: 0,
-          has_next: false,
-          has_prev: false
-        };
-      }
-
-      const dataQuery = `
-        SELECT 
-          sd.id,
-          0 as tenant_id,
-          0 as user_id,
-          sd.id as scheme_id,
-          sd.scheme_code,
-          sd.scheme_name,
-          sd.amc_name,
-          NULL as alias_name,
-          true as is_live,
-          true as is_active,
-          false as daily_download_enabled,
-          '22:00' as download_time,
-          false as historical_download_completed,
-          sd.created_at,
-          sd.updated_at,
-          sd.launch_date,
-          sd.last_nav_download_date,
-          sd.last_nav_download_status,
-          sd.last_nav_download_error,
-          sd.historical_data_available,
-          sd.earliest_nav_date,
-          sd.latest_nav_date,
-          sd.total_nav_records as nav_records_count,
-          (SELECT nav_value 
-           FROM t_nav_data nd 
-           WHERE nd.scheme_id = sd.id 
-             AND nd.is_live = true
-           ORDER BY nav_date DESC 
-           LIMIT 1
-          ) as latest_nav_value
-        ${baseQuery}
-        ORDER BY sd.scheme_name ASC 
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-      `;
-
-      queryParams.push(page_size, offset);
-      const result = await this.db.query(dataQuery, queryParams);
-      const total_pages = Math.ceil(total / page_size);
-
-      SimpleLogger.info('NavService', 'Admin - All schemes retrieved successfully', 'getUserBookmarks', {
-        tenantId, 
-        userId, 
-        isAdmin: true,
-        total, 
-        page, 
-        schemesReturned: result.rows.length
-      });
-
-      return {
-        bookmarks: result.rows || [],
-        total,
-        page,
-        page_size,
-        total_pages,
-        has_next: page < total_pages,
-        has_prev: page > 1
-      };
-    }
-
-    // ====================================================================
-    // USER MODE: Query only user's bookmarked schemes
-    // ====================================================================
+   * Get user's bookmarked schemes with NAV statistics (tenant-scoped)
+   */
+  async getUserBookmarks(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    params: SchemeBookmarkSearchParams = {}
+  ): Promise<SchemeBookmarkListResponse> {
+    try {
+      const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
+      const offset = (page - 1) * page_size;
     let baseQuery = `
       FROM t_scheme_bookmarks sb
       JOIN t_scheme_details sd ON sb.scheme_id = sd.id
@@ -252,11 +143,10 @@ async getUserBookmarks(
     const total_pages = Math.ceil(total / page_size);
 
     SimpleLogger.info('NavService', 'User bookmarks retrieved successfully', 'getUserBookmarks', {
-      tenantId, 
-      userId, 
-      isAdmin: false,
-      total, 
-      page, 
+      tenantId,
+      userId,
+      total,
+      page,
       bookmarksReturned: result.rows.length
     });
 
@@ -272,7 +162,7 @@ async getUserBookmarks(
 
   } catch (error: any) {
     SimpleLogger.error('NavService', 'Failed to get user bookmarks', 'getUserBookmarks', {
-      tenantId, userId, isAdmin, params, error: error.message
+      tenantId, userId, params, error: error.message
     }, userId, tenantId, error.stack);
     
     return {
@@ -1109,14 +999,13 @@ async getUserBookmarks(
   // ==================== STATISTICS ====================
 
   /**
-   * Get NAV statistics for dashboard
+   * Get NAV statistics for dashboard (tenant-scoped)
    */
   async getNavStatistics(tenantId: number, isLive: boolean, userId: number): Promise<NavStatistics> {
     try {
       const statsQuery = `
-        SELECT 
+        SELECT
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
-          COALESCE((SELECT COUNT(*) FROM t_nav_data WHERE is_live = $2), 0) as total_nav_records,
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND historical_download_completed = true), 0) as schemes_with_historical_data,
           (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
@@ -1130,7 +1019,6 @@ async getUserBookmarks(
 
       return {
         total_schemes_tracked: parseInt(stats.total_schemes_tracked) || 0,
-        total_nav_records: parseInt(stats.total_nav_records) || 0,
         schemes_with_daily_download: parseInt(stats.schemes_with_daily_download) || 0,
         schemes_with_historical_data: parseInt(stats.schemes_with_historical_data) || 0,
         latest_nav_date: stats.latest_nav_date || new Date(),
@@ -1142,10 +1030,9 @@ async getUserBookmarks(
       SimpleLogger.error('NavService', 'Failed to get NAV statistics', 'getNavStatistics', {
         tenantId, userId, error: error.message
       }, userId, tenantId, error.stack);
-      
+
       return {
         total_schemes_tracked: 0,
-        total_nav_records: 0,
         schemes_with_daily_download: 0,
         schemes_with_historical_data: 0,
         latest_nav_date: new Date(),
