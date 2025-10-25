@@ -72,7 +72,6 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
     }
 
     const importType = req.query.importType || req.body.importType;
-    const skipDuplicateCheck = req.query.skipDuplicateCheck === 'true';
 
     // Validate import type using type guard
     if (!importType || !isValidImportType(importType)) {
@@ -87,8 +86,8 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
     const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const isLive = req.headers['x-environment'] === 'live';
 
-    // Check for duplicate file unless explicitly skipped
-    if (!skipDuplicateCheck) {
+    // ALWAYS check for duplicate file - no bypass allowed
+    {
       try {
         const db = (importService as any).db;
         const duplicateCheck = await db.query(`
@@ -115,8 +114,9 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
           const duplicate = duplicateCheck.rows[0];
           res.status(409).json({
             success: false,
-            error: 'DUPLICATE_FILE',
+            error: 'DUPLICATE_FILE_BLOCKED',
             isDuplicate: true,
+            isBlocked: true, // Hard restriction - cannot proceed
             duplicateInfo: {
               fileId: duplicate.id,
               originalFilename: duplicate.original_filename,
@@ -128,7 +128,7 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
               successfulRecords: duplicate.successful_records,
               duplicateRecords: duplicate.duplicate_records
             },
-            message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates.`
+            message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates. Duplicate file uploads are not allowed.`
           });
           return;
         }
