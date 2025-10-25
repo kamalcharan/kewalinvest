@@ -17,7 +17,6 @@ import ImportResults from '../../components/ETL/ImportResults';
 // Import duplicate detection modals
 import { SessionDuplicateModal } from '../../components/ETL/SessionDuplicateModal';
 import { ImportProgressModal } from '../../components/ETL/ImportProgressModal';
-import api from '../../utils/api';
 
 // Define FieldMapping interface locally to avoid conflicts
 interface FieldMappingData {
@@ -208,10 +207,20 @@ const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
 
       // Check for session-level duplicates (for customer imports only)
       try {
-        const duplicateResponse = await api.get(`/api/import/check-session-duplicates/${sessionId}`);
+        const token = localStorage.getItem('access_token');
+        const duplicateResponse = await fetch(API_ENDPOINTS.IMPORT.CHECK_SESSION_DUPLICATES(sessionId), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId?.toString() || '',
+            'X-Environment': environment || 'live'
+          }
+        });
 
-        if (duplicateResponse.data.success) {
-          const duplicateCheck = duplicateResponse.data.data;
+        const result = await duplicateResponse.json();
+
+        if (result.success) {
+          const duplicateCheck = result.data;
 
           console.log('Duplicate check result:', duplicateCheck);
 
@@ -243,15 +252,11 @@ const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
 
 // Proceed with import after duplicate check/decision
 const proceedWithImport = async (sessionId: number, mappings: FieldMappingData[]) => {
-  setImportState((prev: ImportState) => {
-    const newState = {
-      ...prev,
-      fieldMappings: mappings,
-      importSession: { sessionId, id: sessionId }
-    };
-    console.log('New import state:', newState);
-    return newState;
-  });
+  setImportState((prev: ImportState) => ({
+    ...prev,
+    fieldMappings: mappings
+    // Note: importSession will be populated by ProcessingStatus component when it fetches full session data
+  }));
 
   completeStep(4, { mappings, sessionId });
 
@@ -269,9 +274,19 @@ const handleDuplicateDecision = async (classification: 'user_marked_duplicate' |
 
   try {
     // Save user's decision
-    await api.post(`/api/import/save-duplicate-decision/${pendingSessionId}`, {
-      classification,
-      duplicateCheckResult: sessionDuplicateData
+    const token = localStorage.getItem('access_token');
+    await fetch(API_ENDPOINTS.IMPORT.SAVE_DUPLICATE_DECISION(pendingSessionId), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId?.toString() || '',
+        'X-Environment': environment || 'live'
+      },
+      body: JSON.stringify({
+        classification,
+        duplicateCheckResult: sessionDuplicateData
+      })
     });
 
     console.log(`User classified import as: ${classification}`);
