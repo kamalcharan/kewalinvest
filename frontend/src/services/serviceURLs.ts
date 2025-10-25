@@ -151,6 +151,8 @@ export const API_ENDPOINTS = {
     N8N_CALLBACK: `${API_BASE}/import/n8n-callback`,
     FILE_INFO: (fileId: number) => `${API_BASE}/import/file-info/${fileId}`,
     DELETE_FILE: (fileId: number) => `${API_BASE}/import/file/${fileId}`,
+    CHECK_SESSION_DUPLICATES: (sessionId: number) => `${API_BASE}/import/check-session-duplicates/${sessionId}`,
+    SAVE_DUPLICATE_DECISION: (sessionId: number) => `${API_BASE}/import/save-duplicate-decision/${sessionId}`,
   },
   
   // NAV Tracking endpoints
