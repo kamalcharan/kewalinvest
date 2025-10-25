@@ -443,17 +443,21 @@ export class StagingService {
       const { status = null, offset = 0, limit = 100 } = filters || {};
 
       let query = `
-        SELECT * FROM t_import_staging_data
-        WHERE session_id = $1 AND tenant_id = $2 AND is_live = $3
+        SELECT
+          s.*,
+          t.portfolio_flag as transaction_portfolio_flag
+        FROM t_import_staging_data s
+        LEFT JOIN t_transaction_table t ON s.created_record_id = t.id
+        WHERE s.session_id = $1 AND s.tenant_id = $2 AND s.is_live = $3
       `;
       const params: any[] = [sessionId, tenantId, isLive];
 
       if (status) {
         params.push(status);
-        query += ` AND processing_status = $${params.length}`;
+        query += ` AND s.processing_status = $${params.length}`;
       }
 
-      query += ` ORDER BY row_number ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      query += ` ORDER BY s.row_number ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(limit, offset);
 
       const recordsResult = await this.db.query(query, params);

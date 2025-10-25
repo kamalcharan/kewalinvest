@@ -13,10 +13,7 @@ import HeaderPreview from '../../components/ETL/HeaderPreview';
 import FieldMappingComponent from '../../components/ETL/FieldMapping';
 import ProcessingStatus from '../../components/ETL/ProcessingStatus';
 import ImportResults from '../../components/ETL/ImportResults';
-
-// Import duplicate detection modals
-import { SessionDuplicateModal } from '../../components/ETL/SessionDuplicateModal';
-import { ImportProgressModal } from '../../components/ETL/ImportProgressModal';
+import ProcessingModal from '../../components/ETL/ProcessingModal';
 
 // Define FieldMapping interface locally to avoid conflicts
 interface FieldMappingData {
@@ -54,12 +51,13 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
     ]
   });
 
-  // Duplicate detection modals state
-  const [showSessionDuplicateModal, setShowSessionDuplicateModal] = useState(false);
-  const [sessionDuplicateData, setSessionDuplicateData] = useState<any>(null);
-  const [showProgressModal, setShowProgressModal] = useState(false);
-  const [pendingMappings, setPendingMappings] = useState<FieldMappingData[] | null>(null);
-  const [pendingSessionId, setPendingSessionId] = useState<number | null>(null);
+  // Processing modal state
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStage, setProcessingStage] = useState<'preparing' | 'staging' | 'processing' | 'completing' | 'completed' | 'error'>('preparing');
+  const [processingMessage, setProcessingMessage] = useState('');
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [processedRecords, setProcessedRecords] = useState(0);
 
   // Map URL params to step numbers
   const stepMapping = {
@@ -89,6 +87,20 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
       currentStep: stepNumber
     }));
   }, [currentStepParam]);
+
+  // Block navigation when processing modal is shown
+  useEffect(() => {
+    if (showProcessingModal && processingStage !== 'completed' && processingStage !== 'error') {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = 'Import is in progress. Are you sure you want to leave?';
+        return 'Import is in progress. Are you sure you want to leave?';
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, [showProcessingModal, processingStage]);
 
   // Navigation helpers
   const goToStep = (stepNumber: number) => {
@@ -169,175 +181,154 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
     // You can add toast notification here
   };
 
-  // Handle mapping confirmed - WITH DUPLICATE CHECK
-const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
-  try {
-    console.log('Starting mapping confirmation...');
-    console.log('File ID:', importState.uploadedFile?.id);
-    console.log('Mappings:', mappings);
+  // Handle mapping confirmed with processing modal
+  const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
+    try {
+      // Show processing modal immediately
+      setShowProcessingModal(true);
+      setProcessingStage('preparing');
+      setProcessingMessage('Creating import session and validating mappings...');
 
-    // Create import session with the field mappings (staging phase)
+      console.log('Starting mapping confirmation...');
+      console.log('File ID:', importState.uploadedFile?.id);
+      console.log('Mappings:', mappings);
+
+      // Create import session with the field mappings
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(API_ENDPOINTS.IMPORT.PROCESS, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': String(tenantId),
+          'X-Environment': environment || 'test'
+        },
+        body: JSON.stringify({
+          fileId: importState.uploadedFile?.id,
+          mappings: mappings,
+          sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`
+        })
+      });
+
+      console.log('Response status:', response.status);
+      const result = await response.json();
+      console.log('Response data:', result);
+
+      if (result.success) {
+        console.log('Session created successfully:', result.data);
+
+        // Update to staging stage
+        setProcessingStage('staging');
+        setProcessingMessage('Reading file and preparing records...');
+
+        setImportState((prev: ImportState) => {
+          const newState = {
+            ...prev,
+            fieldMappings: mappings,
+            importSession: result.data
+          };
+          console.log('New import state:', newState);
+          return newState;
+        });
+
+        completeStep(4, { mappings, sessionId: result.data.sessionId });
+
+        // Start polling for processing status
+        startProcessingPolling(result.data.id || result.data.sessionId);
+      } else {
+        console.error('Failed to create session:', result.error);
+        setProcessingStage('error');
+        setProcessingMessage(result.error || 'Failed to start processing');
+        setTimeout(() => {
+          setShowProcessingModal(false);
+          handleMappingError(result.error || 'Failed to start processing');
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error('Error in handleMappingConfirmed:', error);
+      setProcessingStage('error');
+      setProcessingMessage('Network error while starting processing');
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        handleMappingError('Network error while starting processing');
+      }, 2000);
+    }
+  };
+
+  // Poll processing status and update modal
+  const startProcessingPolling = async (sessionId: number) => {
     const token = localStorage.getItem('access_token');
-    const response = await fetch(API_ENDPOINTS.IMPORT.PROCESS, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': String(tenantId),
-        'X-Environment': environment || 'test'
-      },
-      body: JSON.stringify({
-        fileId: importState.uploadedFile?.id,
-        mappings: mappings,
-        sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`
-      })
-    });
+    let pollCount = 0;
+    const maxPolls = 150; // 5 minutes max (150 * 2 seconds)
 
-    console.log('Response status:', response.status);
-    const result = await response.json();
-    console.log('Response data:', result);
-
-    if (result.success) {
-      console.log('Session created successfully:', result.data);
-      const sessionData = result.data;
-      const sessionId = sessionData.sessionId || sessionData.id;
-      const sessionName = sessionData.session_name || `${importState.selectedImportType}_${new Date().toISOString().slice(0,10)}`;
-
-      // Store mappings and sessionId for later use
-      setPendingMappings(mappings);
-      setPendingSessionId(sessionId);
-
-      // Store minimal session data to prevent step 5 error
-      // Full session data will be fetched by ProcessingStatus component
-      setImportState((prev: ImportState) => ({
-        ...prev,
-        importSession: {
-          id: sessionId,
-          session_name: sessionName,
-          status: 'pending',
-          // Add minimal required fields
-          file_upload_id: prev.uploadedFile?.id || 0,
-          import_type: prev.selectedImportType || 'CustomerData',
-          total_records: 0,
-          processed_records: 0,
-          successful_records: 0,
-          failed_records: 0,
-          duplicate_records: 0,
-          created_by: 0,
-          created_at: new Date(),
-          updated_at: new Date(),
-          tenant_id: tenantId || 0,
-          is_live: environment === 'live'
-        } as any
-      }));
-
-      // Check for session-level duplicates (for customer imports only)
+    const poll = async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        const duplicateResponse = await fetch(API_ENDPOINTS.IMPORT.CHECK_SESSION_DUPLICATES(sessionId), {
+        const response = await fetch(API_ENDPOINTS.IMPORT.STATUS(sessionId), {
+          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId?.toString() || '',
-            'X-Environment': environment || 'live'
+            'X-Tenant-ID': String(tenantId),
+            'X-Environment': environment || 'test'
           }
         });
 
-        const result = await duplicateResponse.json();
+        const result = await response.json();
 
-        if (result.success) {
-          const duplicateCheck = result.data;
+        if (result.success && result.data) {
+          const { status, totalRecords, processedRecords, successfulRecords, failedRecords, duplicateRecords } = result.data;
 
-          console.log('Duplicate check result:', duplicateCheck);
+          // Update modal based on status
+          if (status === 'staged') {
+            setProcessingStage('processing');
+            setProcessingMessage('Processing records...');
+            setTotalRecords(totalRecords || 0);
+          } else if (status === 'processing') {
+            setProcessingStage('processing');
+            setTotalRecords(totalRecords || 0);
+            setProcessedRecords(processedRecords || 0);
+          } else if (status === 'completed' || status === 'completed_with_errors') {
+            setProcessingStage('completed');
+            setProcessingMessage(`Import completed! ${successfulRecords || 0} successful, ${failedRecords || 0} failed, ${duplicateRecords || 0} duplicates.`);
 
-          // If duplicates detected and requires user decision
-          if (duplicateCheck.checked && (duplicateCheck.requiresUserDecision || duplicateCheck.shouldBlock)) {
-            setSessionDuplicateData(duplicateCheck);
-            setShowSessionDuplicateModal(true);
-            // Don't proceed - wait for user decision
-            return;
+            // Auto-close modal and navigate to results after 2 seconds
+            setTimeout(() => {
+              setShowProcessingModal(false);
+              completeStep(5, result.data);
+              nextStep();
+            }, 2000);
+            return; // Stop polling
+          } else if (status === 'failed') {
+            setProcessingStage('error');
+            setProcessingMessage('Import failed. Please check the error details.');
+            setTimeout(() => {
+              setShowProcessingModal(false);
+            }, 3000);
+            return; // Stop polling
+          }
+
+          // Continue polling
+          pollCount++;
+          if (pollCount < maxPolls) {
+            setTimeout(poll, 2000); // Poll every 2 seconds
+          } else {
+            setProcessingStage('error');
+            setProcessingMessage('Processing timeout. Please check import status.');
+            setTimeout(() => setShowProcessingModal(false), 3000);
           }
         }
-      } catch (duplicateError) {
-        console.error('Error checking duplicates (non-blocking):', duplicateError);
-        // Non-blocking error - proceed anyway
+      } catch (error) {
+        console.error('Error polling status:', error);
+        pollCount++;
+        if (pollCount < maxPolls) {
+          setTimeout(poll, 2000);
+        }
       }
+    };
 
-      // If no duplicates or customer decided, proceed with processing
-      await proceedWithImport(sessionId, mappings);
-
-    } else {
-      console.error('Failed to create session:', result.error);
-      handleMappingError(result.error || 'Failed to start processing');
-    }
-  } catch (error: any) {
-    console.error('Error in handleMappingConfirmed:', error);
-    handleMappingError('Network error while starting processing');
-  }
-};
-
-// Proceed with import after duplicate check/decision
-const proceedWithImport = async (sessionId: number, mappings: FieldMappingData[]) => {
-  setImportState((prev: ImportState) => ({
-    ...prev,
-    fieldMappings: mappings
-    // importSession already set in handleMappingConfirmed - keep it!
-  }));
-
-  completeStep(4, { mappings, sessionId });
-
-  // Show progress modal
-  setShowProgressModal(true);
-  setPendingSessionId(sessionId);
-
-  // Move to processing step
-  nextStep();
-};
-
-// Handle user decision from duplicate modal
-const handleDuplicateDecision = async (classification: 'user_marked_duplicate' | 'user_marked_legitimate') => {
-  if (!pendingSessionId || !sessionDuplicateData) return;
-
-  try {
-    // Save user's decision
-    const token = localStorage.getItem('access_token');
-    await fetch(API_ENDPOINTS.IMPORT.SAVE_DUPLICATE_DECISION(pendingSessionId), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantId?.toString() || '',
-        'X-Environment': environment || 'live'
-      },
-      body: JSON.stringify({
-        classification,
-        duplicateCheckResult: sessionDuplicateData
-      })
-    });
-
-    console.log(`User classified import as: ${classification}`);
-
-    // Close modal
-    setShowSessionDuplicateModal(false);
-
-    // Proceed with import
-    if (pendingMappings) {
-      await proceedWithImport(pendingSessionId, pendingMappings);
-    }
-  } catch (error: any) {
-    console.error('Error saving duplicate decision:', error);
-    handleMappingError('Failed to save duplicate classification');
-  }
-};
-
-// Handle cancel from duplicate modal
-const handleDuplicateCancel = () => {
-  setShowSessionDuplicateModal(false);
-  setSessionDuplicateData(null);
-  setPendingMappings(null);
-  setPendingSessionId(null);
-  // Stay on mapping step - user can modify and try again
-};
+    // Start polling
+    poll();
+  };
 
   // Handle mapping error
   const handleMappingError = (error: string) => {
@@ -726,25 +717,21 @@ const handleDuplicateCancel = () => {
         </div>
       </div>
 
-      {/* Duplicate Detection Modals */}
-      {sessionDuplicateData && (
-        <SessionDuplicateModal
-          isOpen={showSessionDuplicateModal}
-          duplicateCheck={sessionDuplicateData}
-          onCancel={handleDuplicateCancel}
-          onProceed={handleDuplicateDecision}
-        />
-      )}
-
-      {/* Progress Modal */}
-      <ImportProgressModal
-        isOpen={showProgressModal}
-        sessionId={pendingSessionId}
-        sessionName={importState.importSession?.session_name || `${importState.selectedImportType}_Import`}
-        onClose={() => setShowProgressModal(false)}
-        onViewDashboard={() => {
-          setShowProgressModal(false);
-          navigate('/import-dashboard');
+      {/* Processing Modal */}
+      <ProcessingModal
+        isOpen={showProcessingModal}
+        stage={processingStage}
+        message={processingMessage}
+        progress={processingProgress}
+        totalRecords={totalRecords}
+        processedRecords={processedRecords}
+        onClose={() => {
+          if (processingStage === 'completed' || processingStage === 'error') {
+            setShowProcessingModal(false);
+            if (processingStage === 'completed') {
+              nextStep(); // Navigate to results
+            }
+          }
         }}
       />
     </div>
