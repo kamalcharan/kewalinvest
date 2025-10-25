@@ -140,16 +140,12 @@ export class NavController {
   // ==================== BOOKMARK MANAGEMENT ====================
 
   /**
-   * Get user's bookmarked schemes
-   * UPDATED: Returns all bookmarks for admin users (is_admin = true)
+   * Get user's bookmarked schemes (tenant-scoped)
    */
   getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
-
-      // Check if user is admin
-      const isAdmin = user?.tenant?.is_admin === true;
 
       const params: SchemeBookmarkSearchParams = {
         page: req.query.page ? Number(req.query.page) : 1,
@@ -159,39 +155,21 @@ export class NavController {
         amc_name: req.query.amc_name as string
       };
 
-      // Call service with admin flag
       const result = await this.navService.getUserBookmarks(
         user!.tenant_id,
         isLive,
         user!.user_id,
-        params,
-        isAdmin  // Pass admin flag
+        params
       );
-
-      // Log admin access for security audit
-      if (isAdmin) {
-        SimpleLogger.info('NavController', 'Admin accessed all bookmarks', 'getBookmarks', {
-          tenantId: user!.tenant_id,
-          userId: user!.user_id,
-          totalBookmarks: result.total,
-          page: params.page,
-          pageSize: params.page_size,
-          searchQuery: params.search || 'none'
-        }, user!.user_id, user!.tenant_id);
-      }
 
       res.json({
         success: true,
-        data: result,
-        meta: {
-          is_admin_view: isAdmin  // Include in response so frontend knows
-        }
+        data: result
       });
     } catch (error: any) {
       SimpleLogger.error('NavController', 'Failed to get bookmarks', 'getBookmarks', {
         tenantId: req.user?.tenant_id,
         userId: req.user?.user_id,
-        isAdmin: req.user?.tenant?.is_admin === true,
         params: req.query,
         error: error.message
       }, req.user?.user_id, req.user?.tenant_id, error.stack);

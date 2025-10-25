@@ -216,7 +216,6 @@ export interface DownloadProgress {
 
 export interface NavStatistics {
   total_schemes_tracked: number;
-  total_nav_records: number;
   schemes_with_daily_download: number;
   schemes_with_historical_data: number;
   latest_nav_date: string;

@@ -20,7 +20,6 @@ import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/Dashboard';
 
 // NAV Pages
-import NavDashboardPage from './pages/nav/NavDashboardPage';
 import NavSearchPage from './pages/nav/NavSearchPage';
 import NavSchedulerPage from './pages/nav/NavSchedulerPage';
 import NavBookmarksPage from './pages/nav/NavBookmarksPage';
@@ -95,9 +94,8 @@ function App() {
                 <Route path="data-import/results/:sessionId" element={<ImportDataPage />} />
                 
                 {/* NAV Tracking Routes */}
-                <Route path="nav/dashboard" element={<NavDashboardPage />} />
-                <Route path="nav/search" element={<NavSearchPage />} />
                 <Route path="nav/bookmarks" element={<NavBookmarksPage />} />
+                <Route path="nav/search" element={<NavSearchPage />} />
                 <Route path="nav/scheduler" element={<NavSchedulerPage />} />
                 <Route path="nav/history" element={<NavHistoryPage />} />
                 <Route path="nav/market-history" element={<MarketHistoryPage />} />

@@ -382,7 +382,6 @@ export interface UseBookmarksReturn {
     hasPrev: boolean;
   } | null;
   downloadStatus: { [bookmarkId: number]: any };
-  isAdminView: boolean;
 }
 
 export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarksReturn => {
@@ -390,7 +389,6 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<UseBookmarksReturn['pagination']>(null);
-  const [isAdminView, setIsAdminView] = useState(false);
   const lastParamsRef = useRef<BookmarkSearchParams>(initialParams || {});
   const hasInitializedRef = useRef(false);
 
@@ -401,7 +399,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
 
     try {
       const response = await navService.getBookmarks(params);
-      
+
       if (response.success && response.data) {
         setBookmarks(response.data.bookmarks || []);
         setPagination({
@@ -412,19 +410,10 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
           hasNext: response.data.has_next || false,
           hasPrev: response.data.has_prev || false,
         });
-
-        setIsAdminView((response as any).meta?.is_admin_view || false);
-
-         // ADD THIS: Console log for debugging
-        console.log('🔍 Admin View Status:', (response as any).meta?.is_admin_view);
-        console.log('📊 Total Bookmarks:', response.data.total);
-        // console.log('📋 First Bookmark Tenant ID:', response.data.bookmarks?.[0]?.tenant_id);
-
       } else {
         console.warn('Bookmarks API error:', response.error);
         setError(response.error || 'Failed to fetch bookmarks');
         setBookmarks([]);
-        setIsAdminView(false);
         setPagination({
           total: 0,
           page: params.page || 1,
@@ -438,7 +427,6 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
       console.error('Fetch bookmarks error:', err);
       setError(err.message || 'Failed to fetch bookmarks');
       setBookmarks([]);
-      setIsAdminView(false);
       setPagination({
         total: 0,
         page: params.page || 1,
@@ -542,8 +530,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
     deleteBookmark,
     refetch,
     pagination,
-    downloadStatus: statusMap,
-     isAdminView,
+    downloadStatus: statusMap
   };
 };
 
@@ -1190,7 +1177,6 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
         console.warn('Statistics API error:', response.error);
         setStatistics({
           total_schemes_tracked: 0,
-          total_nav_records: 0,
           schemes_with_daily_download: 0,
           schemes_with_historical_data: 0,
           latest_nav_date: new Date().toISOString(),
@@ -1203,7 +1189,6 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
       console.error('Fetch statistics error:', err);
       setStatistics({
         total_schemes_tracked: 0,
-        total_nav_records: 0,
         schemes_with_daily_download: 0,
         schemes_with_historical_data: 0,
         latest_nav_date: new Date().toISOString(),
