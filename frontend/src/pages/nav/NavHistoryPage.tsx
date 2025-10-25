@@ -33,11 +33,10 @@ const NavHistoryPage: React.FC = () => {
   const deletePollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hooks - NAV Downloads
-  const { 
-    bookmarks, 
-    isLoading, 
-    error, 
-    isAdminView,
+  const {
+    bookmarks,
+    isLoading,
+    error,
     fetchBookmarks,
     refetch,
     pagination
