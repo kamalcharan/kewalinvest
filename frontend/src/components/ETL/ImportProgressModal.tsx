@@ -1,7 +1,7 @@
 // frontend/src/components/ETL/ImportProgressModal.tsx
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader2, X } from 'lucide-react';
-import api from '../../utils/api';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 
 interface ImportProgressModalProps {
   isOpen: boolean;
@@ -45,10 +45,23 @@ export const ImportProgressModal: React.FC<ImportProgressModalProps> = ({
 
     const fetchProgress = async () => {
       try {
-        const response = await api.get(`/api/import/status/${sessionId}`);
+        const token = localStorage.getItem('access_token');
+        const tenantId = localStorage.getItem('tenant_id');
+        const environment = localStorage.getItem('environment') || 'live';
 
-        if (response.data.success) {
-          const data = response.data.data;
+        const response = await fetch(API_ENDPOINTS.IMPORT.STATUS(sessionId), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId || '',
+            'X-Environment': environment
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          const data = result.data;
           setProgress(data);
 
           // Check if processing is complete
@@ -64,7 +77,7 @@ export const ImportProgressModal: React.FC<ImportProgressModalProps> = ({
       } catch (error: any) {
         console.error('Error fetching progress:', error);
         setHasError(true);
-        setErrorMessage(error.response?.data?.error || 'Failed to fetch progress');
+        setErrorMessage(error.message || 'Failed to fetch progress');
         clearInterval(intervalId);
       }
     };
