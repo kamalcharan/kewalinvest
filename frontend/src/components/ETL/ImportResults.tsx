@@ -40,6 +40,7 @@ interface ImportRecord {
   created_record_id?: number;
   created_record_type?: string;
   processed_at: string;
+  transaction_portfolio_flag?: boolean; // Actual portfolio_flag from t_transaction_table
 }
 
 interface ResultsData {
@@ -434,9 +435,9 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                 lineHeight: '1.5',
                 marginBottom: '8px'
               }}>
-                {resultsData.summary.duplicateRows} potential duplicate transaction(s) have been flagged. 
-                These are currently <strong>included</strong> in portfolio totals. You can exclude duplicates 
-                from calculations by toggling the "Include in Portfolio" switch below.
+                {resultsData.summary.duplicateRows} potential duplicate transaction(s) have been flagged.
+                These are <strong>EXCLUDED from portfolio totals by default</strong> to prevent double-counting.
+                You can include specific duplicates by toggling the "Include in Portfolio" switch below if they are legitimate transactions.
               </p>
             </div>
           </div>
@@ -771,9 +772,12 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           ) : (
             resultsData.records.map((record, index) => {
               const recordId = record.created_record_id || 0;
-              const currentPortfolioFlag = portfolioFlagToggles[recordId] !== undefined 
-                ? portfolioFlagToggles[recordId] 
-                : true;
+              // Use the actual portfolio_flag from database, or fallback to toggle state, or default to false for duplicates
+              const currentPortfolioFlag = portfolioFlagToggles[recordId] !== undefined
+                ? portfolioFlagToggles[recordId]
+                : (record.transaction_portfolio_flag !== undefined
+                    ? record.transaction_portfolio_flag
+                    : (record.processing_status === 'duplicate' ? false : true));
               const isDuplicate = record.processing_status === 'duplicate';
               
               return (
