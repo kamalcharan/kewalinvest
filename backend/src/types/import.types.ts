@@ -39,7 +39,6 @@ export interface ImportSession {
   is_live: boolean;
   import_type: string;
   status: ImportStatus;
-  status: string;
   total_records: number;
   processed_records: number;
   successful_records: number;
@@ -48,10 +47,10 @@ export interface ImportSession {
   n8n_execution_id?: string;
   n8n_webhook_id?: string;
   staging_completed_at?: Date;
-  staging_total_rows?: number;  
+  staging_total_rows?: number;
   batch_size?: number;
-  current_batch?: number;        
-  total_batches?: number;        
+  current_batch?: number;
+  total_batches?: number;
   last_processed_row?: number;
   processing_metadata?: any;
   processing_started_at?: Date;
@@ -60,6 +59,14 @@ export interface ImportSession {
   created_by: number;
   created_at: Date;
   updated_at: Date;
+
+  // Duplicate detection fields
+  file_hash?: string;
+  current_stage?: string;
+  duplicate_check_result?: any;
+  duplicate_classification?: string;
+  duplicate_user_decision_at?: Date;
+  filename_duplicate_check?: any;
 }
 export interface ImportFieldMapping {
   id: number;
