@@ -25,7 +25,6 @@ export interface FileUpload {
   failed_records: number;
   error_details?: string;
   is_processed: boolean;
-  processed_folder_path?: string;
   uploaded_by: number;
   created_at: Date;
   processed_at?: Date;
