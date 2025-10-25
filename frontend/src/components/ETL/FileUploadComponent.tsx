@@ -66,7 +66,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   };
 
   // Upload file to server
-  const uploadFile = async (file: File, skipDuplicateCheck: boolean = false) => {
+  const uploadFile = async (file: File) => {
     const loadingToastId = toastService.loading('Uploading file...', { autoClose: false });
     
     // Create FormData with only the file
@@ -196,7 +196,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       };
 
       // Configure request - IMPORTANT: importType is in query parameter
-      const uploadUrl = `${API_ENDPOINTS.IMPORT.UPLOAD}?importType=${importType}${skipDuplicateCheck ? '&skipDuplicateCheck=true' : ''}`;
+      const uploadUrl = `${API_ENDPOINTS.IMPORT.UPLOAD}?importType=${importType}`;
       console.log('Uploading to:', uploadUrl);
 
       xhr.open('POST', uploadUrl);
@@ -283,21 +283,8 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     setPendingFile(null);
   };
 
-  const handleDuplicateWarningContinue = () => {
-    console.log('✅ User chose to continue with duplicate file');
-    if (pendingFile) {
-      setShowDuplicateWarning(false);
-      setDuplicateFileInfo(null);
-      setSelectedFile(pendingFile);
-      uploadFile(pendingFile, true); // Skip duplicate check
-      setPendingFile(null);
-    } else {
-      console.error('❌ No pending file found');
-    }
-  };
-
-  const handleDuplicateWarningCancel = () => {
-    console.log('❌ User cancelled duplicate file upload');
+  const handleDuplicateWarningClose = () => {
+    console.log('User acknowledged duplicate file - upload blocked');
     setShowDuplicateWarning(false);
     setDuplicateFileInfo(null);
     setPendingFile(null);
@@ -623,18 +610,105 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         type="warning"
       />
 
-      {/* Duplicate File Warning Dialog */}
-      {duplicateFileInfo && (
-        <ConfirmationDialog
-          isOpen={showDuplicateWarning}
-          onClose={handleDuplicateWarningCancel}
-          onConfirm={handleDuplicateWarningContinue}
-          title="⚠️ Duplicate File Detected"
-          description={`This exact file "${duplicateFileInfo.duplicateInfo?.originalFilename}" was already uploaded on ${duplicateFileInfo.duplicateInfo?.uploadedAt ? new Date(duplicateFileInfo.duplicateInfo.uploadedAt).toLocaleString() : 'unknown date'}. The previous import processed ${duplicateFileInfo.duplicateInfo?.totalRecords || 0} records with ${duplicateFileInfo.duplicateInfo?.successfulRecords || 0} successful and ${duplicateFileInfo.duplicateInfo?.duplicateRecords || 0} duplicates. If you continue, this will likely create duplicate records. Do you want to continue anyway?`}
-          confirmText="Yes, Continue Anyway"
-          cancelText="Cancel Upload"
-          type="warning"
-        />
+      {/* Duplicate File Blocked Dialog */}
+      {duplicateFileInfo && showDuplicateWarning && (
+        <div style={{
+          position: 'fixed' as const,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: colors.utility.primaryBackground,
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+            border: `2px solid ${colors.semantic.error}`
+          }}>
+            {/* Icon */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '16px',
+              color: colors.semantic.error
+            }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '700',
+              color: colors.utility.primaryText,
+              marginBottom: '16px',
+              margin: 0,
+              textAlign: 'center' as const
+            }}>
+              🚫 Duplicate File Upload Blocked
+            </h3>
+
+            {/* Description */}
+            <div style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              marginBottom: '24px',
+              lineHeight: '1.6'
+            }}>
+              <p style={{ margin: '0 0 12px 0' }}>
+                This exact file <strong>"{duplicateFileInfo.duplicateInfo?.originalFilename}"</strong> was already uploaded on{' '}
+                <strong>{duplicateFileInfo.duplicateInfo?.uploadedAt ? new Date(duplicateFileInfo.duplicateInfo.uploadedAt).toLocaleString() : 'unknown date'}</strong>.
+              </p>
+              <p style={{ margin: '0 0 12px 0' }}>
+                Previous import results:
+              </p>
+              <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px' }}>
+                <li>Total Records: {duplicateFileInfo.duplicateInfo?.totalRecords || 0}</li>
+                <li>Successful: {duplicateFileInfo.duplicateInfo?.successfulRecords || 0}</li>
+                <li>Duplicates: {duplicateFileInfo.duplicateInfo?.duplicateRecords || 0}</li>
+              </ul>
+              <p style={{ margin: 0, color: colors.semantic.error, fontWeight: '600' }}>
+                Duplicate file uploads are not allowed to prevent duplicate records.
+              </p>
+            </div>
+
+            {/* Close Button */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={handleDuplicateWarningClose}
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 32px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+                onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style>{`
