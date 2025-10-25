@@ -975,7 +975,7 @@ BEGIN
                 v_staging_record.id,
                 p_session_id,
                 v_is_duplicate,
-                true, -- portfolio_flag defaults to true
+                NOT v_is_duplicate, -- portfolio_flag: EXCLUDED for duplicates by default, included for normal records
                 CASE WHEN v_is_duplicate THEN 'Duplicate transaction detected: same customer, scheme, date, amount, and type' ELSE NULL END
             );
             
