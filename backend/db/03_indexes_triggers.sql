@@ -78,7 +78,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating performance indexes...';
-    RAISE NOTICE 'Total indexes to create: 178 (165 base + 13 duplicate detection)';
+    RAISE NOTICE 'Total indexes to create: 179 (165 base + 14 duplicate detection)';
 END $$;
 
 -- ============================================================================
@@ -212,6 +212,12 @@ CREATE INDEX idx_file_uploads_tenant ON t_file_uploads USING btree (tenant_id, i
 CREATE INDEX idx_file_uploads_type ON t_file_uploads USING btree (file_type);
 CREATE INDEX idx_file_uploads_status ON t_file_uploads USING btree (processing_status);
 CREATE INDEX idx_file_uploads_customer ON t_file_uploads USING btree (customer_id) WHERE (customer_id IS NOT NULL);
+-- Hash-based duplicate detection (from migration_001)
+CREATE INDEX IF NOT EXISTS idx_file_uploads_hash 
+ON t_file_uploads(file_hash, tenant_id, is_live) 
+WHERE file_hash IS NOT NULL;
+
+COMMENT ON INDEX idx_file_uploads_hash IS 'Fast hash-based duplicate file detection';
 
 CREATE INDEX idx_import_sessions_tenant ON t_import_sessions USING btree (tenant_id, is_live);
 CREATE INDEX idx_import_sessions_upload ON t_import_sessions USING btree (file_upload_id);
@@ -487,7 +493,7 @@ COMMENT ON INDEX idx_staging_mapped_data_gin IS 'GIN index for fast JSONB field 
 
 DO $$
 BEGIN
-    RAISE NOTICE '✓ Created 13 duplicate detection indexes';
+    RAISE NOTICE '✓ Created 14 duplicate detection indexes (13 from migration 006 + 1 hash-based from migration 001)';
 END $$;
 
 -- ============================================================================
@@ -617,6 +623,7 @@ BEGIN
         indexname LIKE '%duplicate%' 
         OR indexname IN (
             'idx_file_uploads_duplicate_check',
+            'idx_file_uploads_hash',
             'idx_customers_pan_upper',
             'idx_contact_channels_email_lower',
             'idx_contact_channels_mobile',
@@ -638,7 +645,9 @@ BEGIN
     RAISE NOTICE 'Duplicate detection indexes: %', v_duplicate_index_count;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Migration Updates Included:';
-    RAISE NOTICE '  ✓ Added 13 duplicate detection indexes (Migration 006)';
+    RAISE NOTICE '  ✓ Added 14 duplicate detection indexes';
+    RAISE NOTICE '    - 13 from Migration 006 (filename, PAN, email, mobile, transaction)';
+    RAISE NOTICE '    - 1 from Migration 001 (file_hash for content-based detection)';
     RAISE NOTICE '  ✓ Indexes are tenant-scoped and optimized';
     RAISE NOTICE '  ✓ GIN index for JSONB mapped_data queries';
     RAISE NOTICE '========================================';
