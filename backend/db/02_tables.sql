@@ -225,6 +225,7 @@ CREATE TABLE t_file_uploads (
     folder_path VARCHAR(500),
     file_size BIGINT,
     mime_type VARCHAR(100),
+    file_hash VARCHAR(64), -- SHA256 hash for duplicate detection
     customer_id INTEGER REFERENCES t_customers(id),
     processing_status VARCHAR(50) DEFAULT 'pending' CHECK (
         processing_status IN ('pending', 'processing', 'completed', 'failed')
@@ -242,7 +243,11 @@ CREATE TABLE t_file_uploads (
 
 COMMENT ON TABLE t_file_uploads IS 'Track all uploaded files for import and document management';
 COMMENT ON COLUMN t_file_uploads.file_type IS 'Type: customer_import, transaction_import, customer_document, scheme_import';
+COMMENT ON COLUMN t_file_uploads.file_hash IS 'SHA256 hash of file content for duplicate detection';
 COMMENT ON COLUMN t_file_uploads.updated_at IS 'Timestamp of last update to this record';
+
+-- Index for fast duplicate file lookups
+CREATE INDEX IF NOT EXISTS idx_file_uploads_hash ON t_file_uploads(file_hash, tenant_id, is_live) WHERE file_hash IS NOT NULL;
 
 -- TABLE: t_import_sessions
 CREATE TABLE t_import_sessions (

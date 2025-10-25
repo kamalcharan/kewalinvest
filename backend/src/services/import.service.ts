@@ -24,6 +24,7 @@ interface CreateFileUploadParams {
   fileSize: number;
   mimeType: string;
   uploadedBy: number;
+  fileHash?: string; // Optional SHA256 hash for duplicate detection
 }
 
 interface CreateImportSessionParams {
@@ -87,9 +88,9 @@ export class ImportService {
       const query = `
         INSERT INTO t_file_uploads (
           tenant_id, is_live, file_type, original_filename, stored_filename,
-          file_path, folder_path, file_size, mime_type, uploaded_by,
+          file_path, folder_path, file_size, mime_type, file_hash, uploaded_by,
           processing_status, processed_records, failed_records
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
 
@@ -103,6 +104,7 @@ export class ImportService {
         params.folderPath,
         params.fileSize,
         params.mimeType,
+        params.fileHash || null, // file_hash (optional)
         params.uploadedBy,
         'pending', // processing_status
         0, // processed_records
