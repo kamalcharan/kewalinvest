@@ -84,7 +84,7 @@ export const NAVIGATION_MENU: NavigationSection[] = [
     items: [
       {
         id: 'etl_dashboard',
-        name: 'ETL Dashboard',
+        name: 'Import Dashboard',
         path: '/import-dashboard',
         icon: FileSpreadsheet
       },
@@ -198,7 +198,7 @@ export const QUICK_ACCESS_ITEMS: NavigationItem[] = [
   {
     id: 'etl_upload',
     name: 'Import Data',
-    path: '/etl/upload',
+    path: '/data-import',
     icon: Upload
   },
   {
@@ -242,13 +242,13 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
     return currentPath.startsWith('/nav');
   }
   
-  // Handle ETL routes
-  if (itemPath === '/etl') {
-    return currentPath === '/etl' || (currentPath.startsWith('/etl') && !currentPath.startsWith('/etl/upload'));
+  // Handle Import routes
+  if (itemPath === '/import-dashboard') {
+    return currentPath === '/import-dashboard' || currentPath.startsWith('/import-dashboard');
   }
-  
-  if (itemPath === '/etl/upload') {
-    return currentPath === '/etl/upload';
+
+  if (itemPath === '/data-import') {
+    return currentPath === '/data-import' || currentPath.startsWith('/data-import');
   }
   
   // For customers route, make sure it's exact match or starts with /customers/
@@ -301,23 +301,29 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
       });
     }
   }
-  // Handle ETL routes
-  else if (currentPath.startsWith('/etl')) {
+  // Handle Import routes
+  else if (currentPath.startsWith('/import-dashboard')) {
     breadcrumbs.push({
       id: 'etl_dashboard',
-      name: 'ETL Dashboard',
-      path: '/etl',
+      name: 'Import Dashboard',
+      path: '/import-dashboard',
       icon: FileSpreadsheet
     });
-    
-    if (currentPath === '/etl/upload') {
-      breadcrumbs.push({
-        id: 'etl_upload',
-        name: 'Import Data',
-        path: '/etl/upload',
-        icon: Upload
-      });
-    }
+  }
+  else if (currentPath.startsWith('/data-import')) {
+    breadcrumbs.push({
+      id: 'data_operations',
+      name: 'Data Operations',
+      path: '/data-import',
+      icon: Database
+    });
+
+    breadcrumbs.push({
+      id: 'etl_upload',
+      name: 'Import Data',
+      path: '/data-import',
+      icon: Upload
+    });
   } 
   // Handle admin routes
   else if (currentPath.startsWith('/admin/')) {
