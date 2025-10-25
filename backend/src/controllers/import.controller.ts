@@ -1236,4 +1236,174 @@ export class ImportController {
       });
     }
   };
+
+  /**
+   * Check for filename duplicates (before upload)
+   */
+  checkFilenameDuplicate = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { filename, fileSize } = req.body;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!filename || !fileSize) {
+        res.status(400).json({
+          success: false,
+          error: 'Filename and file size are required'
+        });
+        return;
+      }
+
+      const duplicateCheck = await this.importService.checkFilenameDuplicate(
+        user.tenant_id,
+        isLive,
+        filename,
+        parseInt(fileSize)
+      );
+
+      res.json({
+        success: true,
+        data: duplicateCheck
+      });
+
+    } catch (error: any) {
+      console.error('Error checking filename duplicate:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to check filename duplicate'
+      });
+    }
+  };
+
+  /**
+   * Check for session-level duplicates (after staging)
+   */
+  checkSessionDuplicates = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { sessionId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!sessionId) {
+        res.status(400).json({
+          success: false,
+          error: 'Session ID is required'
+        });
+        return;
+      }
+
+      // Verify session ownership
+      const session = await this.importService.getImportSession(
+        user.tenant_id,
+        isLive,
+        parseInt(sessionId)
+      );
+
+      if (!session) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      const duplicateCheck = await this.importService.checkSessionDuplicatePercentage(
+        parseInt(sessionId)
+      );
+
+      res.json({
+        success: true,
+        data: duplicateCheck
+      });
+
+    } catch (error: any) {
+      console.error('Error checking session duplicates:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to check session duplicates'
+      });
+    }
+  };
+
+  /**
+   * Save user's duplicate classification decision
+   */
+  saveDuplicateDecision = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { sessionId } = req.params;
+      const { classification, duplicateCheckResult } = req.body;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!sessionId || !classification) {
+        res.status(400).json({
+          success: false,
+          error: 'Session ID and classification are required'
+        });
+        return;
+      }
+
+      if (!['user_marked_duplicate', 'user_marked_legitimate'].includes(classification)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid classification. Must be "user_marked_duplicate" or "user_marked_legitimate"'
+        });
+        return;
+      }
+
+      // Verify session ownership
+      const session = await this.importService.getImportSession(
+        user.tenant_id,
+        isLive,
+        parseInt(sessionId)
+      );
+
+      if (!session) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      await this.importService.saveDuplicateClassification(
+        user.tenant_id,
+        isLive,
+        parseInt(sessionId),
+        classification,
+        duplicateCheckResult
+      );
+
+      res.json({
+        success: true,
+        data: {
+          message: 'Duplicate classification saved successfully',
+          sessionId: parseInt(sessionId),
+          classification
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error saving duplicate decision:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to save duplicate decision'
+      });
+    }
+  };
 }

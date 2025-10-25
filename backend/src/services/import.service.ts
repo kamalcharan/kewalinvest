@@ -77,6 +77,35 @@ export class ImportService {
   }
 
   /**
+   * Check for filename duplicates before upload
+   */
+  async checkFilenameDuplicate(
+    tenantId: number,
+    isLive: boolean,
+    filename: string,
+    fileSize: number
+  ): Promise<any> {
+    try {
+      const query = `SELECT check_filename_duplicate($1, $2, $3, $4) as result`;
+
+      const result = await this.db.query(query, [
+        tenantId,
+        isLive,
+        filename,
+        fileSize
+      ]);
+
+      return result.rows[0].result;
+    } catch (error: any) {
+      console.error('Error checking filename duplicate:', error);
+      SimpleLogger.error('ImportService', 'Filename duplicate check failed', 'checkFilenameDuplicate', {
+        tenantId, isLive, filename, fileSize, error: error.message
+      }, undefined, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Create file upload record
    */
   async createFileUpload(params: CreateFileUploadParams): Promise<FileUpload> {
@@ -118,11 +147,11 @@ export class ImportService {
       return fileUpload;
     } catch (error: any) {
       console.error('Error creating file upload:', error);
-      SimpleLogger.error('ImportService', 'Failed to create file upload record', 'createFileUpload', { 
-        tenantId: params.tenantId, 
+      SimpleLogger.error('ImportService', 'Failed to create file upload record', 'createFileUpload', {
+        tenantId: params.tenantId,
         fileType: params.fileType,
         filename: params.originalFilename,
-        error: error.message 
+        error: error.message
       }, params.uploadedBy, params.tenantId, error.stack);
       throw error;
     }
@@ -552,6 +581,50 @@ export class ImportService {
   }
 
   /**
+   * Check for session-level duplicates (for customer imports only)
+   */
+  async checkSessionDuplicatePercentage(sessionId: number): Promise<any> {
+    try {
+      const query = `SELECT check_session_duplicate_percentage($1) as result`;
+
+      const result = await this.db.query(query, [sessionId]);
+
+      return result.rows[0].result;
+    } catch (error: any) {
+      console.error('Error checking session duplicate percentage:', error);
+      SimpleLogger.error('ImportService', 'Session duplicate check failed', 'checkSessionDuplicatePercentage', {
+        sessionId, error: error.message
+      }, undefined, undefined, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Save duplicate classification decision by user
+   */
+  async saveDuplicateClassification(
+    tenantId: number,
+    isLive: boolean,
+    sessionId: number,
+    classification: 'user_marked_duplicate' | 'user_marked_legitimate',
+    duplicateCheckResult: any
+  ): Promise<void> {
+    try {
+      await this.updateImportSession(tenantId, isLive, sessionId, {
+        duplicate_classification: classification,
+        duplicate_check_result: duplicateCheckResult,
+        duplicate_user_decision_at: new Date()
+      });
+    } catch (error: any) {
+      console.error('Error saving duplicate classification:', error);
+      SimpleLogger.error('ImportService', 'Failed to save duplicate classification', 'saveDuplicateClassification', {
+        sessionId, tenantId, classification, error: error.message
+      }, undefined, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Populate staging table from uploaded file
    */
   async populateStagingTable(params: {
@@ -565,12 +638,22 @@ export class ImportService {
   }): Promise<StagingResult> {
     try {
       console.log(`[ImportService] Starting staging population for session ${params.sessionId}`);
-      
+
+      // Update current stage: parsing
+      await this.updateImportSession(params.tenantId, params.isLive, params.sessionId, {
+        current_stage: 'parsing'
+      });
+
       // Validate file exists
       const fileRecord = await this.getFileUpload(params.tenantId, params.isLive, params.fileId);
       if (!fileRecord) {
         throw new Error(`File upload record ${params.fileId} not found`);
       }
+
+      // Update current stage: staging
+      await this.updateImportSession(params.tenantId, params.isLive, params.sessionId, {
+        current_stage: 'staging'
+      });
 
       // Call staging service to populate table
       const result = await this.stagingService.populateStagingTable({
@@ -587,28 +670,35 @@ export class ImportService {
 
       // Update file upload status
       await this.db.query(`
-        UPDATE t_file_uploads 
-        SET 
+        UPDATE t_file_uploads
+        SET
           processing_status = 'processing',
           processed_records = $1,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $2 AND tenant_id = $3 AND is_live = $4
       `, [result.totalRows, params.fileId, params.tenantId, params.isLive]);
 
+      // Update current stage: validating
+      await this.updateImportSession(params.tenantId, params.isLive, params.sessionId, {
+        current_stage: 'validating',
+        status: 'staged'
+      });
+
       return result;
 
     } catch (error: any) {
       console.error('[ImportService] Staging population failed:', error);
-      SimpleLogger.error('ImportService', 'Staging table population failed', 'populateStagingTable', { 
+      SimpleLogger.error('ImportService', 'Staging table population failed', 'populateStagingTable', {
         sessionId: params.sessionId,
         importType: params.importType,
         filePath: params.filePath,
-        error: error.message 
+        error: error.message
       }, undefined, params.tenantId, error.stack);
-      
+
       // Update session with error
       await this.updateImportSession(params.tenantId, params.isLive, params.sessionId, {
         status: 'failed',
+        current_stage: 'failed',
         error_summary: `Staging failed: ${error.message}`,
         processing_completed_at: new Date()
       });
@@ -936,27 +1026,39 @@ async triggerDatabaseProcessing(
   targetDurationMs: number = 30000
 ): Promise<{ success: boolean; error?: string }> {
   const client = await this.db.connect();
-  
+
   try {
     // Start processing asynchronously - don't wait for completion
-    
+
     // First, verify session exists and is ready
     const sessionCheck = await client.query(
       'SELECT status, staging_total_rows, tenant_id, is_live FROM t_import_sessions WHERE id = $1',
       [sessionId]
     );
-    
+
     if (sessionCheck.rows.length === 0) {
       throw new Error('Session not found');
     }
-    
+
     if (sessionCheck.rows[0].staging_total_rows === 0) {
       throw new Error('No records to process');
     }
-    
+
+    // Update current stage: processing
+    await this.updateImportSession(
+      sessionCheck.rows[0].tenant_id,
+      sessionCheck.rows[0].is_live,
+      sessionId,
+      {
+        current_stage: 'processing',
+        status: 'processing',
+        processing_started_at: new Date()
+      }
+    );
+
     // Select the correct database function based on import type
     let processingFunction: string;
-    
+
     switch(importType) {
       case 'SchemeData':
         processingFunction = 'process_scheme_import_with_timing';
@@ -969,16 +1071,16 @@ async triggerDatabaseProcessing(
         break;
       default:
         console.error(`Unknown import type: ${importType}, defaulting to customer`);
-        SimpleLogger.warn('ImportService', 'Unknown import type, using default', 'triggerDatabaseProcessing', { 
-          sessionId, importType, defaulting: 'process_customer_import_with_timing' 
+        SimpleLogger.warn('ImportService', 'Unknown import type, using default', 'triggerDatabaseProcessing', {
+          sessionId, importType, defaulting: 'process_customer_import_with_timing'
         }, undefined, sessionCheck.rows[0].tenant_id);
         processingFunction = 'process_customer_import_with_timing';
     }
-    
+
     console.log(`Calling database function: ${processingFunction} for session ${sessionId}`);
 
 
-    
+
     // Execute processing function - this will run synchronously
     // In production, you might want to use pg_background or a job queue
     const processingPromise = client.query(
@@ -986,8 +1088,8 @@ async triggerDatabaseProcessing(
       [sessionId, targetDurationMs]
     ).catch(error => {
       console.error(`Processing error for session ${sessionId}:`, error);
-      SimpleLogger.error('ImportService', 'Database processing function failed', 'triggerDatabaseProcessing', { 
-        sessionId, processingFunction, error: error.message 
+      SimpleLogger.error('ImportService', 'Database processing function failed', 'triggerDatabaseProcessing', {
+        sessionId, processingFunction, error: error.message
       }, undefined, sessionCheck.rows[0].tenant_id, error.stack);
       // Update session with error
       this.updateImportSession(
@@ -996,29 +1098,39 @@ async triggerDatabaseProcessing(
         sessionId,
         {
           status: 'failed',
+          current_stage: 'failed',
           error_summary: error.message,
           processing_completed_at: new Date()
         }
       );
     });
-    
+
     // Don't await - let it run in background
     processingPromise.then(result => {
       if (result && result.rows[0]) {
         console.log(`Processing completed for session ${sessionId}:`, result.rows[0]);
+        // Update stage to completed
+        this.updateImportSession(
+          sessionCheck.rows[0].tenant_id,
+          sessionCheck.rows[0].is_live,
+          sessionId,
+          {
+            current_stage: 'completed'
+          }
+        );
       }
     });
-    
+
     return { success: true };
-    
+
   } catch (error: any) {
     console.error('Error triggering database processing:', error);
-    SimpleLogger.error('ImportService', 'Failed to trigger database processing', 'triggerDatabaseProcessing', { 
-      sessionId, importType, error: error.message 
+    SimpleLogger.error('ImportService', 'Failed to trigger database processing', 'triggerDatabaseProcessing', {
+      sessionId, importType, error: error.message
     }, undefined, undefined, error.stack);
-    return { 
-      success: false, 
-      error: error.message || 'Failed to start processing' 
+    return {
+      success: false,
+      error: error.message || 'Failed to start processing'
     };
   } finally {
     client.release();
