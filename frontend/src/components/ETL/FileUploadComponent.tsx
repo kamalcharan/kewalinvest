@@ -38,6 +38,8 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showTransactionWarning, setShowTransactionWarning] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateFileInfo, setDuplicateFileInfo] = useState<any>(null);
 
   // Debug: Log when showTransactionWarning changes
   React.useEffect(() => {
@@ -64,7 +66,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   };
 
   // Upload file to server
-  const uploadFile = async (file: File) => {
+  const uploadFile = async (file: File, skipDuplicateCheck: boolean = false) => {
     const loadingToastId = toastService.loading('Uploading file...', { autoClose: false });
     
     // Create FormData with only the file
@@ -120,6 +122,29 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
             toastService.error(errorMsg);
             onError(errorMsg);
           }
+        } else if (xhr.status === 409) {
+          // Handle duplicate file
+          try {
+            const errorResponse = JSON.parse(xhr.responseText);
+            if (errorResponse.isDuplicate && errorResponse.duplicateInfo) {
+              // Store the file for potential re-upload with skip flag
+              setPendingFile(file);
+              setDuplicateFileInfo(errorResponse);
+              setShowDuplicateWarning(true);
+              // Don't reset states yet - user needs to decide
+              setIsUploading(false);
+              setUploadProgress(null);
+              setSelectedFile(null);
+              return; // Exit early, don't reset pendingFile
+            } else {
+              const errorMsg = errorResponse.message || 'Duplicate file detected';
+              toastService.warning(errorMsg);
+              onError(errorMsg);
+            }
+          } catch (e) {
+            toastService.error('Duplicate file detected');
+            onError('Duplicate file detected');
+          }
         } else {
           try {
             const errorResponse = JSON.parse(xhr.responseText);
@@ -171,9 +196,9 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       };
 
       // Configure request - IMPORTANT: importType is in query parameter
-      const uploadUrl = `${API_ENDPOINTS.IMPORT.UPLOAD}?importType=${importType}`;
+      const uploadUrl = `${API_ENDPOINTS.IMPORT.UPLOAD}?importType=${importType}${skipDuplicateCheck ? '&skipDuplicateCheck=true' : ''}`;
       console.log('Uploading to:', uploadUrl);
-      
+
       xhr.open('POST', uploadUrl);
       xhr.timeout = 60000; // 60 second timeout
       
@@ -256,6 +281,27 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     console.log('❌ User cancelled - upload aborted');
     setShowTransactionWarning(false);
     setPendingFile(null);
+  };
+
+  const handleDuplicateWarningContinue = () => {
+    console.log('✅ User chose to continue with duplicate file');
+    if (pendingFile) {
+      setShowDuplicateWarning(false);
+      setDuplicateFileInfo(null);
+      setSelectedFile(pendingFile);
+      uploadFile(pendingFile, true); // Skip duplicate check
+      setPendingFile(null);
+    } else {
+      console.error('❌ No pending file found');
+    }
+  };
+
+  const handleDuplicateWarningCancel = () => {
+    console.log('❌ User cancelled duplicate file upload');
+    setShowDuplicateWarning(false);
+    setDuplicateFileInfo(null);
+    setPendingFile(null);
+    setSelectedFile(null);
   };
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -576,6 +622,20 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         cancelText="Cancel - Need to Bookmark"
         type="warning"
       />
+
+      {/* Duplicate File Warning Dialog */}
+      {duplicateFileInfo && (
+        <ConfirmationDialog
+          isOpen={showDuplicateWarning}
+          onClose={handleDuplicateWarningCancel}
+          onConfirm={handleDuplicateWarningContinue}
+          title="⚠️ Duplicate File Detected"
+          description={`This exact file "${duplicateFileInfo.duplicateInfo?.originalFilename}" was already uploaded on ${duplicateFileInfo.duplicateInfo?.uploadedAt ? new Date(duplicateFileInfo.duplicateInfo.uploadedAt).toLocaleString() : 'unknown date'}. The previous import processed ${duplicateFileInfo.duplicateInfo?.totalRecords || 0} records with ${duplicateFileInfo.duplicateInfo?.successfulRecords || 0} successful and ${duplicateFileInfo.duplicateInfo?.duplicateRecords || 0} duplicates. If you continue, this will likely create duplicate records. Do you want to continue anyway?`}
+          confirmText="Yes, Continue Anyway"
+          cancelText="Cancel Upload"
+          type="warning"
+        />
+      )}
 
       <style>{`
         @keyframes spin {

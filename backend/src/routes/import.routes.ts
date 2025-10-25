@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { ImportController } from '../controllers/import.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { ImportService } from '../services/import.service';
@@ -71,20 +72,76 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
     }
 
     const importType = req.query.importType || req.body.importType;
-    
+    const skipDuplicateCheck = req.query.skipDuplicateCheck === 'true';
+
     // Validate import type using type guard
     if (!importType || !isValidImportType(importType)) {
-      res.status(400).json({ 
-        success: false, 
-        error: `Invalid import type. Valid types are: ${VALID_IMPORT_TYPES.join(', ')}` 
+      res.status(400).json({
+        success: false,
+        error: `Invalid import type. Valid types are: ${VALID_IMPORT_TYPES.join(', ')}`
       });
       return;
+    }
+
+    // Calculate file hash (SHA256) for duplicate detection
+    const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+    const isLive = req.headers['x-environment'] === 'live';
+
+    // Check for duplicate file unless explicitly skipped
+    if (!skipDuplicateCheck) {
+      try {
+        const db = (importService as any).db;
+        const duplicateCheck = await db.query(`
+          SELECT
+            f.id,
+            f.original_filename,
+            f.file_size,
+            f.created_at,
+            s.session_name,
+            s.status as session_status,
+            s.total_records,
+            s.successful_records,
+            s.duplicate_records
+          FROM t_file_uploads f
+          LEFT JOIN t_import_sessions s ON s.file_upload_id = f.id
+          WHERE f.file_hash = $1
+            AND f.tenant_id = $2
+            AND f.is_live = $3
+          ORDER BY f.created_at DESC
+          LIMIT 1
+        `, [fileHash, req.user.tenant_id, isLive]);
+
+        if (duplicateCheck.rows.length > 0) {
+          const duplicate = duplicateCheck.rows[0];
+          res.status(409).json({
+            success: false,
+            error: 'DUPLICATE_FILE',
+            isDuplicate: true,
+            duplicateInfo: {
+              fileId: duplicate.id,
+              originalFilename: duplicate.original_filename,
+              fileSize: duplicate.file_size,
+              uploadedAt: duplicate.created_at,
+              sessionName: duplicate.session_name,
+              sessionStatus: duplicate.session_status,
+              totalRecords: duplicate.total_records,
+              successfulRecords: duplicate.successful_records,
+              duplicateRecords: duplicate.duplicate_records
+            },
+            message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates.`
+          });
+          return;
+        }
+      } catch (dbError) {
+        console.warn('Could not check for duplicate file:', dbError);
+        // Continue with upload if duplicate check fails
+      }
     }
 
     // Get configuration for this import type
     const config = IMPORT_TYPE_CONFIG[importType];
     const uploadPath = config.pendingPath;
-    
+
     // Ensure the upload directory exists
     ensureDirectoryExists(uploadPath);
 
@@ -98,9 +155,7 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
     // Save file to disk
     fs.writeFileSync(filePath, req.file.buffer);
 
-    // Create database record
-    const isLive = req.headers['x-environment'] === 'live';
-    
+    // Create database record with file hash
     try {
       const fileRecord = await importService.createFileUpload({
         tenantId: req.user.tenant_id,
@@ -112,7 +167,8 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
         folderPath: uploadPath,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
-        uploadedBy: req.user.user_id
+        uploadedBy: req.user.user_id,
+        fileHash: fileHash
       });
 
       res.json({
@@ -132,7 +188,8 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
           stored_filename: filename,
           file_path: filePath,
           file_size: req.file.size,
-          mime_type: req.file.mimetype
+          mime_type: req.file.mimetype,
+          file_hash: fileHash
         }
       });
       return;
