@@ -13,6 +13,7 @@ import HeaderPreview from '../../components/ETL/HeaderPreview';
 import FieldMappingComponent from '../../components/ETL/FieldMapping';
 import ProcessingStatus from '../../components/ETL/ProcessingStatus';
 import ImportResults from '../../components/ETL/ImportResults';
+import ProcessingModal from '../../components/ETL/ProcessingModal';
 
 // Import duplicate detection modals
 import { SessionDuplicateModal } from '../../components/ETL/SessionDuplicateModal';
@@ -54,12 +55,22 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
     ]
   });
 
+<<<<<<< HEAD
   // Duplicate detection modals state
   const [showSessionDuplicateModal, setShowSessionDuplicateModal] = useState(false);
   const [sessionDuplicateData, setSessionDuplicateData] = useState<any>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [pendingMappings, setPendingMappings] = useState<FieldMappingData[] | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<number | null>(null);
+=======
+  // Processing modal state
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStage, setProcessingStage] = useState<'preparing' | 'staging' | 'processing' | 'completing' | 'completed' | 'error'>('preparing');
+  const [processingMessage, setProcessingMessage] = useState('');
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [processedRecords, setProcessedRecords] = useState(0);
+>>>>>>> claude/improve-duplicate-prevention-011CUU4ZTS2Axc1MzQm51wH1
 
   // Map URL params to step numbers
   const stepMapping = {
@@ -89,6 +100,20 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
       currentStep: stepNumber
     }));
   }, [currentStepParam]);
+
+  // Block navigation when processing modal is shown
+  useEffect(() => {
+    if (showProcessingModal && processingStage !== 'completed' && processingStage !== 'error') {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = 'Import is in progress. Are you sure you want to leave?';
+        return 'Import is in progress. Are you sure you want to leave?';
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, [showProcessingModal, processingStage]);
 
   // Navigation helpers
   const goToStep = (stepNumber: number) => {
@@ -169,6 +194,7 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
     // You can add toast notification here
   };
 
+<<<<<<< HEAD
   // Handle mapping confirmed - WITH DUPLICATE CHECK
 const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
   try {
@@ -192,11 +218,21 @@ const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
         sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`
       })
     });
+=======
+  // Handle mapping confirmed with processing modal
+  const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
+    try {
+      // Show processing modal immediately
+      setShowProcessingModal(true);
+      setProcessingStage('preparing');
+      setProcessingMessage('Creating import session and validating mappings...');
+>>>>>>> claude/improve-duplicate-prevention-011CUU4ZTS2Axc1MzQm51wH1
 
-    console.log('Response status:', response.status);
-    const result = await response.json();
-    console.log('Response data:', result);
+      console.log('Starting mapping confirmation...');
+      console.log('File ID:', importState.uploadedFile?.id);
+      console.log('Mappings:', mappings);
 
+<<<<<<< HEAD
     if (result.success) {
       console.log('Session created successfully:', result.data);
       const sessionData = result.data;
@@ -269,12 +305,144 @@ const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
     } else {
       console.error('Failed to create session:', result.error);
       handleMappingError(result.error || 'Failed to start processing');
+=======
+      // Create import session with the field mappings
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(API_ENDPOINTS.IMPORT.PROCESS, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': String(tenantId),
+          'X-Environment': environment || 'test'
+        },
+        body: JSON.stringify({
+          fileId: importState.uploadedFile?.id,
+          mappings: mappings,
+          sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`
+        })
+      });
+
+      console.log('Response status:', response.status);
+      const result = await response.json();
+      console.log('Response data:', result);
+
+      if (result.success) {
+        console.log('Session created successfully:', result.data);
+
+        // Update to staging stage
+        setProcessingStage('staging');
+        setProcessingMessage('Reading file and preparing records...');
+
+        setImportState((prev: ImportState) => {
+          const newState = {
+            ...prev,
+            fieldMappings: mappings,
+            importSession: result.data
+          };
+          console.log('New import state:', newState);
+          return newState;
+        });
+
+        completeStep(4, { mappings, sessionId: result.data.sessionId });
+
+        // Start polling for processing status
+        startProcessingPolling(result.data.id || result.data.sessionId);
+      } else {
+        console.error('Failed to create session:', result.error);
+        setProcessingStage('error');
+        setProcessingMessage(result.error || 'Failed to start processing');
+        setTimeout(() => {
+          setShowProcessingModal(false);
+          handleMappingError(result.error || 'Failed to start processing');
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error('Error in handleMappingConfirmed:', error);
+      setProcessingStage('error');
+      setProcessingMessage('Network error while starting processing');
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        handleMappingError('Network error while starting processing');
+      }, 2000);
+>>>>>>> claude/improve-duplicate-prevention-011CUU4ZTS2Axc1MzQm51wH1
     }
-  } catch (error: any) {
-    console.error('Error in handleMappingConfirmed:', error);
-    handleMappingError('Network error while starting processing');
-  }
-};
+  };
+
+  // Poll processing status and update modal
+  const startProcessingPolling = async (sessionId: number) => {
+    const token = localStorage.getItem('access_token');
+    let pollCount = 0;
+    const maxPolls = 150; // 5 minutes max (150 * 2 seconds)
+
+    const poll = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.IMPORT.STATUS(sessionId), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': String(tenantId),
+            'X-Environment': environment || 'test'
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          const { status, totalRecords, processedRecords, successfulRecords, failedRecords, duplicateRecords } = result.data;
+
+          // Update modal based on status
+          if (status === 'staged') {
+            setProcessingStage('processing');
+            setProcessingMessage('Processing records...');
+            setTotalRecords(totalRecords || 0);
+          } else if (status === 'processing') {
+            setProcessingStage('processing');
+            setTotalRecords(totalRecords || 0);
+            setProcessedRecords(processedRecords || 0);
+          } else if (status === 'completed' || status === 'completed_with_errors') {
+            setProcessingStage('completed');
+            setProcessingMessage(`Import completed! ${successfulRecords || 0} successful, ${failedRecords || 0} failed, ${duplicateRecords || 0} duplicates.`);
+
+            // Auto-close modal and navigate to results after 2 seconds
+            setTimeout(() => {
+              setShowProcessingModal(false);
+              completeStep(5, result.data);
+              nextStep();
+            }, 2000);
+            return; // Stop polling
+          } else if (status === 'failed') {
+            setProcessingStage('error');
+            setProcessingMessage('Import failed. Please check the error details.');
+            setTimeout(() => {
+              setShowProcessingModal(false);
+            }, 3000);
+            return; // Stop polling
+          }
+
+          // Continue polling
+          pollCount++;
+          if (pollCount < maxPolls) {
+            setTimeout(poll, 2000); // Poll every 2 seconds
+          } else {
+            setProcessingStage('error');
+            setProcessingMessage('Processing timeout. Please check import status.');
+            setTimeout(() => setShowProcessingModal(false), 3000);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling status:', error);
+        pollCount++;
+        if (pollCount < maxPolls) {
+          setTimeout(poll, 2000);
+        }
+      }
+    };
+
+    // Start polling
+    poll();
+  };
 
 // Proceed with import after duplicate check/decision
 const proceedWithImport = async (sessionId: number, mappings: FieldMappingData[]) => {
@@ -726,6 +894,7 @@ const handleDuplicateCancel = () => {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Duplicate Detection Modals */}
       {sessionDuplicateData && (
         <SessionDuplicateModal
@@ -745,6 +914,23 @@ const handleDuplicateCancel = () => {
         onViewDashboard={() => {
           setShowProgressModal(false);
           navigate('/import-dashboard');
+=======
+      {/* Processing Modal */}
+      <ProcessingModal
+        isOpen={showProcessingModal}
+        stage={processingStage}
+        message={processingMessage}
+        progress={processingProgress}
+        totalRecords={totalRecords}
+        processedRecords={processedRecords}
+        onClose={() => {
+          if (processingStage === 'completed' || processingStage === 'error') {
+            setShowProcessingModal(false);
+            if (processingStage === 'completed') {
+              nextStep(); // Navigate to results
+            }
+          }
+>>>>>>> claude/improve-duplicate-prevention-011CUU4ZTS2Axc1MzQm51wH1
         }}
       />
     </div>
