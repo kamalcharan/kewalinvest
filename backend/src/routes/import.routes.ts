@@ -187,4 +187,9 @@ router.get('/staging/:sessionId/records', authenticate, importController.getStag
 router.post('/staging/:sessionId/retry', authenticate, importController.reprocessFailedRecords);
 router.delete('/staging/:sessionId', authenticate, importController.deleteStagingData);
 
+// Duplicate detection endpoints
+router.post('/check-filename-duplicate', authenticate, importController.checkFilenameDuplicate);
+router.get('/check-session-duplicates/:sessionId', authenticate, importController.checkSessionDuplicates);
+router.post('/save-duplicate-decision/:sessionId', authenticate, importController.saveDuplicateDecision);
+
 export default router;
