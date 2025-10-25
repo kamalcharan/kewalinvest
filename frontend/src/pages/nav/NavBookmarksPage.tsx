@@ -517,7 +517,7 @@ const NavBookmarksPage: React.FC = () => {
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
               padding: '20px',
-              border: `1px solid ${colors.utility.border}`
+              border: `1px solid ${colors.utility.secondaryText}20`
             }}>
               <div style={{
                 fontSize: '14px',
@@ -540,7 +540,7 @@ const NavBookmarksPage: React.FC = () => {
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
               padding: '20px',
-              border: `1px solid ${colors.utility.border}`
+              border: `1px solid ${colors.utility.secondaryText}20`
             }}>
               <div style={{
                 fontSize: '14px',
@@ -553,7 +553,7 @@ const NavBookmarksPage: React.FC = () => {
               <div style={{
                 fontSize: '32px',
                 fontWeight: '700',
-                color: colors.accent.success
+                color: colors.semantic.success
               }}>
                 {statistics.schemes_with_daily_download}
               </div>
@@ -563,7 +563,7 @@ const NavBookmarksPage: React.FC = () => {
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
               padding: '20px',
-              border: `1px solid ${colors.utility.border}`
+              border: `1px solid ${colors.utility.secondaryText}20`
             }}>
               <div style={{
                 fontSize: '14px',
@@ -586,7 +586,7 @@ const NavBookmarksPage: React.FC = () => {
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
               padding: '20px',
-              border: `1px solid ${colors.utility.border}`
+              border: `1px solid ${colors.utility.secondaryText}20`
             }}>
               <div style={{
                 fontSize: '14px',
