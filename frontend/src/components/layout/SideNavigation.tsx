@@ -1,10 +1,9 @@
 // frontend/src/components/layout/SideNavigation.tsx
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
+import {
   ChevronRight,
-  ChevronLeft,
-  HelpCircle
+  ChevronLeft
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -326,54 +325,6 @@ const SideNavigation: React.FC<SideNavigationProps> = ({ isOpen, onToggle }) => 
           />
         ))}
       </nav>
-
-      {/* Help Section */}
-      {!collapsed && FEATURE_FLAGS.notifications && (
-        <div style={{
-          padding: '16px',
-          borderTop: `1px solid ${colors.utility.secondaryText}20`
-        }}>
-          <div style={{
-            padding: '12px',
-            borderRadius: '8px',
-            backgroundColor: `${colors.brand.primary}10`
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '8px'
-            }}>
-              <HelpCircle size={16} style={{ color: colors.brand.primary }} />
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: colors.utility.primaryText
-              }}>
-                Need help?
-              </span>
-            </div>
-            <p style={{
-              fontSize: '12px',
-              color: colors.utility.secondaryText,
-              margin: '0 0 8px 0'
-            }}>
-              Check our documentation or contact support
-            </p>
-            <button style={{
-              fontSize: '12px',
-              color: colors.brand.primary,
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}>
-              View Documentation →
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Collapse Toggle */}
       <button
