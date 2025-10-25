@@ -5,7 +5,7 @@
 -- Execution: Run THIRD after 01_init.sql and 02_tables.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-24 (FIXED - Conditional materialized view indexes)
+-- Updated: 2025-10-25 (Added duplicate detection indexes from migration 006)
 -- ============================================================================
 
 -- ============================================================================
@@ -16,7 +16,7 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Creating Indexes and Triggers';
     RAISE NOTICE 'Database: kewalinvest';
-    RAISE NOTICE 'Complete regeneration with 100 percent coverage';
+    RAISE NOTICE 'Complete regeneration with duplicate detection';
     RAISE NOTICE '========================================';
 END $$;
 
@@ -78,7 +78,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating performance indexes...';
-    RAISE NOTICE 'Total indexes to create: 165';
+    RAISE NOTICE 'Total indexes to create: 178 (165 base + 13 duplicate detection)';
 END $$;
 
 -- ============================================================================
@@ -399,6 +399,98 @@ CREATE INDEX idx_user_chart_prefs_index ON t_user_chart_preferences USING btree 
 CREATE INDEX idx_user_chart_prefs_user_index ON t_user_chart_preferences USING btree (user_id, index_id);
 
 -- ============================================================================
+-- 2.11: DUPLICATE DETECTION INDEXES (NEW - Migration 006)
+-- Purpose: Optimize duplicate check queries for filename, customer, and transaction detection
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating duplicate detection indexes...';
+END $$;
+
+-- Filename duplicate check (tenant + filename + size + created_at)
+CREATE INDEX IF NOT EXISTS idx_file_uploads_duplicate_check 
+ON t_file_uploads(tenant_id, is_live, original_filename, file_size, created_at DESC);
+
+COMMENT ON INDEX idx_file_uploads_duplicate_check IS 'Optimizes filename duplicate check queries';
+
+-- Customer PAN duplicate check (tenant-scoped, case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_customers_pan_upper 
+ON t_customers(tenant_id, is_live, UPPER(pan))
+WHERE pan IS NOT NULL AND is_active = true;
+
+COMMENT ON INDEX idx_customers_pan_upper IS 'Optimizes customer PAN duplicate checks (tenant-scoped, case-insensitive)';
+
+-- Email duplicate check (lowercase)
+CREATE INDEX IF NOT EXISTS idx_contact_channels_email_lower 
+ON t_contact_channels(channel_type, LOWER(channel_value))
+WHERE channel_type = 'email' AND is_active = true;
+
+COMMENT ON INDEX idx_contact_channels_email_lower IS 'Optimizes email duplicate checks (case-insensitive)';
+
+-- Mobile duplicate check
+CREATE INDEX IF NOT EXISTS idx_contact_channels_mobile 
+ON t_contact_channels(channel_type, channel_value)
+WHERE channel_type = 'mobile' AND is_active = true;
+
+COMMENT ON INDEX idx_contact_channels_mobile IS 'Optimizes mobile duplicate checks';
+
+-- Link contact_channels to contacts (for tenant filtering)
+CREATE INDEX IF NOT EXISTS idx_contact_channels_contact_tenant 
+ON t_contact_channels(contact_id, channel_type, is_active);
+
+COMMENT ON INDEX idx_contact_channels_contact_tenant IS 'Optimizes join between contact_channels and contacts for duplicate checks';
+
+-- Recent customers by tenant (for session duplicate check)
+CREATE INDEX IF NOT EXISTS idx_customers_recent_by_tenant 
+ON t_customers(tenant_id, is_live, created_at DESC, is_active);
+
+COMMENT ON INDEX idx_customers_recent_by_tenant IS 'Optimizes session-level duplicate checks (ordered by creation date)';
+
+-- Customer contact_id lookup
+CREATE INDEX IF NOT EXISTS idx_customers_contact_id 
+ON t_customers(contact_id, tenant_id, is_live, is_active);
+
+COMMENT ON INDEX idx_customers_contact_id IS 'Optimizes customer lookup by contact_id for duplicate checks';
+
+-- Transaction strict duplicate check (all match fields)
+CREATE INDEX IF NOT EXISTS idx_transaction_strict_duplicate 
+ON t_transaction_table(tenant_id, is_live, customer_id, scheme_code, txn_date, total_amount, units, nav)
+WHERE is_active = true;
+
+COMMENT ON INDEX idx_transaction_strict_duplicate IS 'Optimizes strict transaction duplicate checks (tenant-scoped)';
+
+-- Folio_no in transaction duplicate check
+CREATE INDEX IF NOT EXISTS idx_transaction_folio 
+ON t_transaction_table(tenant_id, is_live, folio_no, txn_date)
+WHERE folio_no IS NOT NULL AND is_active = true;
+
+COMMENT ON INDEX idx_transaction_folio IS 'Optimizes transaction duplicate checks that include folio number';
+
+-- Transaction potential duplicate check (partial match fields)
+CREATE INDEX IF NOT EXISTS idx_transaction_potential_duplicate 
+ON t_transaction_table(tenant_id, is_live, customer_id, scheme_code, txn_date, total_amount)
+WHERE is_active = true;
+
+COMMENT ON INDEX idx_transaction_potential_duplicate IS 'Optimizes potential transaction duplicate checks (tenant-scoped)';
+
+-- Staging data session lookup
+CREATE INDEX IF NOT EXISTS idx_staging_session_lookup 
+ON t_import_staging_data(session_id, id);
+
+COMMENT ON INDEX idx_staging_session_lookup IS 'Optimizes staging data lookups during duplicate checking';
+
+-- GIN index for JSONB mapped_data (supports all JSONB operators)
+CREATE INDEX IF NOT EXISTS idx_staging_mapped_data_gin 
+ON t_import_staging_data USING GIN (mapped_data);
+
+COMMENT ON INDEX idx_staging_mapped_data_gin IS 'GIN index for fast JSONB field access in duplicate checking';
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Created 13 duplicate detection indexes';
+END $$;
+
+-- ============================================================================
 -- SECTION 3: TIMESTAMP UPDATE TRIGGERS
 -- Note: Trigger functions are created in Section 1.5 above
 -- ============================================================================
@@ -503,6 +595,7 @@ DO $$
 DECLARE
     v_trigger_count INTEGER;
     v_index_count INTEGER;
+    v_duplicate_index_count INTEGER;
 BEGIN
     -- Count triggers
     SELECT COUNT(*) INTO v_trigger_count
@@ -516,31 +609,38 @@ BEGIN
     WHERE schemaname = 'public'
     AND (indexname LIKE 'idx_%' OR indexname LIKE 'trg_%');
 
+    -- Count duplicate detection indexes
+    SELECT COUNT(*) INTO v_duplicate_index_count
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+    AND (
+        indexname LIKE '%duplicate%' 
+        OR indexname IN (
+            'idx_file_uploads_duplicate_check',
+            'idx_customers_pan_upper',
+            'idx_contact_channels_email_lower',
+            'idx_contact_channels_mobile',
+            'idx_contact_channels_contact_tenant',
+            'idx_customers_recent_by_tenant',
+            'idx_customers_contact_id',
+            'idx_transaction_strict_duplicate',
+            'idx_transaction_folio',
+            'idx_transaction_potential_duplicate',
+            'idx_staging_session_lookup',
+            'idx_staging_mapped_data_gin'
+        )
+    );
+
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Indexes and Triggers Complete';
     RAISE NOTICE 'Triggers created: %', v_trigger_count;
-    RAISE NOTICE 'Custom indexes created: %', v_index_count;
+    RAISE NOTICE 'Total indexes created: %', v_index_count;
+    RAISE NOTICE 'Duplicate detection indexes: %', v_duplicate_index_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'COMPLETE REGENERATION with 100 percent coverage';
-    RAISE NOTICE 'Source: current_schema_utf8.sql';
-    RAISE NOTICE 'All 165 indexes included';
-    RAISE NOTICE 'All 25 triggers included';
-    RAISE NOTICE 'Missing indexes from gap analysis: INCLUDED';
-    RAISE NOTICE '  - idx_bookmarks_tenant_live_active';
-    RAISE NOTICE '  - idx_goal_alerts_unacknowledged';
-    RAISE NOTICE '  - idx_goal_snapshots_tenant';
-    RAISE NOTICE '  - idx_market_data_records_index_date';
-    RAISE NOTICE '  - idx_market_data_records_metrics_calculated_at';
-    RAISE NOTICE '  - idx_monthly_snapshots';
-    RAISE NOTICE '  - idx_nav_data_date_range_metrics';
-    RAISE NOTICE '  - idx_nav_data_metrics_calculated';
-    RAISE NOTICE '  - idx_nav_data_missing_metrics';
-    RAISE NOTICE '  - idx_nav_data_scheme_date_live';
-    RAISE NOTICE '  - idx_nav_data_scheme_latest_metrics';
-    RAISE NOTICE '  - idx_nav_data_scheme_live';
-    RAISE NOTICE '  - idx_scheme_details_nav_available';
-    RAISE NOTICE '  - idx_tenants_is_admin';
-    RAISE NOTICE '  - idx_user_chart_prefs_user_index';
+    RAISE NOTICE 'Migration Updates Included:';
+    RAISE NOTICE '  ✓ Added 13 duplicate detection indexes (Migration 006)';
+    RAISE NOTICE '  ✓ Indexes are tenant-scoped and optimized';
+    RAISE NOTICE '  ✓ GIN index for JSONB mapped_data queries';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Performance optimizations ready!';
     RAISE NOTICE 'Next: Run 04_functions_views_policies.sql';

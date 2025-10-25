@@ -5,7 +5,7 @@
 -- Execution: Run FIRST before any other migration files
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-22 (Synced with live database schema - current_schema.sql)
+-- Updated: 2025-10-25 (Incorporated duplicate detection migrations)
 -- ============================================================================
 
 -- ============================================================================
@@ -53,6 +53,9 @@ DROP FUNCTION IF EXISTS update_market_updated_at() CASCADE;
 -- Customer import functions
 DROP FUNCTION IF EXISTS process_customer_import_with_timing(INTEGER, INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS process_single_customer_record(INTEGER) CASCADE;
+-- UPDATED: New signature with tenant_id and is_live parameters
+DROP FUNCTION IF EXISTS check_customer_duplicate(INTEGER, BOOLEAN, VARCHAR, VARCHAR, VARCHAR) CASCADE;
+-- OLD: Keep for backwards compatibility cleanup
 DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, VARCHAR, VARCHAR) CASCADE;
 
 -- Scheme import functions
@@ -61,6 +64,12 @@ DROP FUNCTION IF EXISTS process_scheme_import_with_timing(INTEGER, INTEGER) CASC
 
 -- Transaction import functions
 DROP FUNCTION IF EXISTS process_transaction_import_with_timing(INTEGER, INTEGER) CASCADE;
+
+-- Duplicate detection functions (NEW from migrations)
+DROP FUNCTION IF EXISTS check_filename_duplicate(INTEGER, BOOLEAN, VARCHAR, BIGINT) CASCADE;
+DROP FUNCTION IF EXISTS check_session_duplicate_percentage(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS check_transaction_duplicate_strict(INTEGER, BOOLEAN, INTEGER, VARCHAR, DATE, NUMERIC, NUMERIC, NUMERIC, VARCHAR) CASCADE;
+DROP FUNCTION IF EXISTS check_transaction_duplicate_potential(INTEGER, BOOLEAN, INTEGER, VARCHAR, DATE, NUMERIC) CASCADE;
 
 -- Cleanup functions
 DROP FUNCTION IF EXISTS cleanup_old_staging_data(INTEGER) CASCADE;
@@ -375,6 +384,9 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Database initialization completed!';
     RAISE NOTICE 'Database is now ready for table creation';
+    RAISE NOTICE 'Updates in this version:';
+    RAISE NOTICE '  - Updated check_customer_duplicate signature (tenant-scoped)';
+    RAISE NOTICE '  - Added duplicate detection function drops';
     RAISE NOTICE 'Next: Run 02_tables.sql';
     RAISE NOTICE '========================================';
 END $$;
