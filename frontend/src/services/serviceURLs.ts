@@ -90,8 +90,13 @@ export const API_ENDPOINTS = {
     REFRESH: `${API_BASE}/portfolio/refresh`,
     CUSTOMER_PORTFOLIO: (customerId: number) => `${API_BASE}/portfolio/${customerId}`,
     CUSTOMER_TOTALS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/totals`,
-    SCHEME_DETAILS: (customerId: number, schemeCode: string) => 
+    SCHEME_DETAILS: (customerId: number, schemeCode: string) =>
       `${API_BASE}/portfolio/${customerId}/scheme/${schemeCode}`,
+
+    // Monthly Tracking
+    GET_MONTHLY_UNITS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-units`,
+    GET_MONTHLY_NAV: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-nav`,
+    GET_MONTHLY_MARKET_VALUE: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-market-value`,
   },
   
   // JTBD (Jobs To Be Done) endpoints
