@@ -10,6 +10,14 @@ import {
   MeetingFilters
 } from '../types/meeting.types';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    tenant_id: number;
+  };
+  environment?: 'live' | 'test';
+}
+
 export class MeetingController {
   private meetingService: MeetingService;
 
@@ -23,7 +31,7 @@ export class MeetingController {
    * Create new meeting
    * POST /api/meetings
    */
-  createMeeting = async (req: Request, res: Response): Promise<void> => {
+  createMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -65,7 +73,7 @@ export class MeetingController {
    * Get meeting by ID
    * GET /api/meetings/:id
    */
-  getMeeting = async (req: Request, res: Response): Promise<void> => {
+  getMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -110,7 +118,7 @@ export class MeetingController {
    * Get meetings with filters
    * GET /api/meetings
    */
-  getMeetings = async (req: Request, res: Response): Promise<void> => {
+  getMeetings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -148,7 +156,7 @@ export class MeetingController {
    * Get customer meeting summary
    * GET /api/meetings/customer/:customerId/summary
    */
-  getCustomerMeetingSummary = async (req: Request, res: Response): Promise<void> => {
+  getCustomerMeetingSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -185,7 +193,7 @@ export class MeetingController {
    * Get upcoming meetings dashboard
    * GET /api/meetings/upcoming
    */
-  getUpcomingMeetings = async (req: Request, res: Response): Promise<void> => {
+  getUpcomingMeetings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -216,7 +224,7 @@ export class MeetingController {
    * Update meeting
    * PUT /api/meetings/:id
    */
-  updateMeeting = async (req: Request, res: Response): Promise<void> => {
+  updateMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -255,7 +263,7 @@ export class MeetingController {
    * Complete meeting
    * POST /api/meetings/:id/complete
    */
-  completeMeeting = async (req: Request, res: Response): Promise<void> => {
+  completeMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -295,7 +303,7 @@ export class MeetingController {
    * Cancel meeting
    * POST /api/meetings/:id/cancel
    */
-  cancelMeeting = async (req: Request, res: Response): Promise<void> => {
+  cancelMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -345,7 +353,7 @@ export class MeetingController {
    * Delete meeting
    * DELETE /api/meetings/:id
    */
-  deleteMeeting = async (req: Request, res: Response): Promise<void> => {
+  deleteMeeting = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
