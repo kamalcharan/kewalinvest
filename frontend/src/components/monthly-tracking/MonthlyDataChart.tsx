@@ -29,7 +29,8 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
   showGrid = true,
   showTooltip = true,
 }) => {
-  const { colors, isDarkMode } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   // Chart dimensions
   const padding = { top: 40, right: 20, bottom: 60, left: 60 };
