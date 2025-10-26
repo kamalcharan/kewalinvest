@@ -44,7 +44,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
   const fetchIndices = async () => {
     setIsLoading(true);
     try {
-      const response = await MarketService.getAllIndices({ is_active: true });
+      const response = await MarketService.getAllIndices();
       if (response.success && response.data) {
         // Sort by priority and name
         const sorted = [...response.data.indices].sort((a, b) => {

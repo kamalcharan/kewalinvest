@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Download as DownloadIcon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { FamilyMembersPopover } from './FamilyMembersPopover';
+import FamilyMembersPopover from './FamilyMembersPopover';
 import { IndividualFamilySwitch } from './IndividualFamilySwitch';
 import type { CustomerWithContact } from '../../types/customer.types';
 import type { CustomerPortfolioResponse } from '../../types/portfolio.types';
