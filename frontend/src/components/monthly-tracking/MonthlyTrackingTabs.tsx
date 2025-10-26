@@ -21,7 +21,8 @@ export const MonthlyTrackingTabs: React.FC<MonthlyTrackingTabsProps> = ({
   schemeCode,
   months = 12,
 }) => {
-  const { colors, isDarkMode } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   const [activeTab, setActiveTab] = useState<TabType>('units');
 
   const tabs: Array<{
