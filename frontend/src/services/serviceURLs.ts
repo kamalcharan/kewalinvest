@@ -150,7 +150,20 @@ export const API_ENDPOINTS = {
     GET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
     SET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
   },
-  
+
+  // Customer Meetings endpoints
+  MEETINGS: {
+    CREATE: `${API_BASE}/meetings`,
+    GET_ALL: `${API_BASE}/meetings`,
+    GET: (id: number) => `${API_BASE}/meetings/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/meetings/${id}`,
+    DELETE: (id: number) => `${API_BASE}/meetings/${id}`,
+    COMPLETE: (id: number) => `${API_BASE}/meetings/${id}/complete`,
+    CANCEL: (id: number) => `${API_BASE}/meetings/${id}/cancel`,
+    GET_UPCOMING: `${API_BASE}/meetings/upcoming`,
+    GET_CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/meetings/customer/${customerId}/summary`,
+  },
+
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
