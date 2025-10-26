@@ -124,6 +124,18 @@ export const API_ENDPOINTS = {
     RECALCULATE_CUSTOMER: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/recalculate`,
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/summary`,
     HISTORY: (id: number) => `${API_BASE}/goals/${id}/history`,
+
+    // Tracking Status
+    GET_TRACKING_STATUS: (id: number) => `${API_BASE}/goals/${id}/tracking-status`,
+    GET_CUSTOMER_TRACKING_STATUS: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/tracking-status`,
+
+    // Asset Allocation
+    GET_ALLOCATION_UTILIZATION: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/allocation-utilization`,
+
+    // Watchlist
+    ADD_TO_WATCHLIST: (id: number) => `${API_BASE}/goals/${id}/watchlist`,
+    REMOVE_FROM_WATCHLIST: (id: number) => `${API_BASE}/goals/${id}/watchlist`,
+    GET_WATCHLIST: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/watchlist`,
   },
   
   // User Preferences endpoints
