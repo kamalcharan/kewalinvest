@@ -2,7 +2,7 @@
 // Reusable table component for monthly tracking data
 
 import React from 'react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface ColumnDefinition {
   header: string;
@@ -19,7 +19,7 @@ interface MonthlyDataTableProps {
   summary?: Array<{
     label: string;
     value: string | number;
-    formatter?: (value: any) => string;
+    formatter?: (value: any) => string | React.ReactNode;
   }>;
 }
 
