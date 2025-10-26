@@ -23,4 +23,11 @@ router.post('/chart/:indexId', userPreferencesController.saveChartPreference);
 // Delete chart preference for specific index (revert to theme default)
 router.delete('/chart/:indexId', userPreferencesController.deleteChartPreference);
 
+// Default comparison index routes
+// Get default comparison index for authenticated user
+router.get('/default-comparison-index', userPreferencesController.getDefaultComparisonIndex);
+
+// Set default comparison index for authenticated user
+router.post('/default-comparison-index', userPreferencesController.setDefaultComparisonIndex);
+
 export default router;
