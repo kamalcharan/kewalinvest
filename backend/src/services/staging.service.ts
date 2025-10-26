@@ -232,6 +232,10 @@ export class StagingService {
           // Just uppercase - NO encryption
           value = value.toUpperCase();
           console.log(`[StagingService] IWELL code: ${value.substring(0, 3)}***`);
+        } else if (mapping.targetField === 'family_head_iwell_code' && value !== '') {
+          // Uppercase family head iwell code for consistency
+          value = value.toUpperCase();
+          console.log(`[StagingService] Family Head IWELL code: ${value.substring(0, 3)}***`);
         } else if (mapping.targetField === 'prefix') {
           if (value === '') {
             value = 'Sri';
@@ -339,6 +343,19 @@ export class StagingService {
         mappedData[mapping.targetField] = value;
       }
     });
+
+    // Debug logging for customer imports - check if family fields are present
+    if (mappedData.hasOwnProperty('name')) {
+      console.log(`[StagingService] Customer mapped data keys:`, Object.keys(mappedData));
+      if (mappedData.family_head_name || mappedData.family_head_iwell_code) {
+        console.log(`[StagingService] Family fields found:`, {
+          family_head_name: mappedData.family_head_name,
+          family_head_iwell_code: mappedData.family_head_iwell_code
+        });
+      } else {
+        console.log(`[StagingService] WARNING: No family fields in mapped data for customer:`, mappedData.name);
+      }
+    }
 
     return mappedData;
   }
