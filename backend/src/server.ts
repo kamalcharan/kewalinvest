@@ -23,6 +23,7 @@ import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
+import meetingRoutes from './routes/meeting.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -129,6 +130,8 @@ app.get('/health', (_req: Request, res: Response) => {
       user_preferences: true,
       chart_preferences: true,
       default_comparison_index: true, // NEW: Default index for performance charts
+      customer_meetings: true, // NEW: Customer meeting management
+      meeting_summary: true, // NEW: Meeting summary and upcoming
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -165,7 +168,8 @@ app.get('/api', (_req: Request, res: Response) => {
       scheme_analysis: '/api/scheme-analysis',
       jtbd: '/api/jtbd',
       goals: '/api/goals',
-      user_preferences: '/api/user-preferences'
+      user_preferences: '/api/user-preferences',
+      meetings: '/api/meetings'
     }
   });
 });
@@ -185,6 +189,7 @@ app.use('/api/scheme-analysis', schemeAnalysisRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
