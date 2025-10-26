@@ -220,7 +220,7 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
               margin: 0,
               fontSize: '18px',
               fontWeight: 600,
-              color: colors.text.primary,
+              color: colors.utility.primaryText,
             }}
           >
             NAV Performance
@@ -242,8 +242,8 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
             display: 'flex',
             gap: '8px',
             backgroundColor: isDarkMode
-              ? colors.backgrounds.elevated
-              : colors.backgrounds.surface,
+              ? colors.utility.secondaryBackground
+              : colors.utility.secondaryBackground,
             borderRadius: '6px',
             padding: '4px',
             border: `1px solid ${colors.utility.secondaryText}20`,
@@ -256,7 +256,7 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
               border: 'none',
               borderRadius: '4px',
               backgroundColor:
-                viewMode === 'chart' ? colors.primary.main : 'transparent',
+                viewMode === 'chart' ? colors.brand.primary : 'transparent',
               color:
                 viewMode === 'chart'
                   ? '#fff'
@@ -280,7 +280,7 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
               border: 'none',
               borderRadius: '4px',
               backgroundColor:
-                viewMode === 'table' ? colors.primary.main : 'transparent',
+                viewMode === 'table' ? colors.brand.primary : 'transparent',
               color:
                 viewMode === 'table'
                   ? '#fff'
@@ -306,7 +306,7 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
           data={chartData}
           title="Monthly NAV Trend"
           valueFormatter={(value) => `₹${value.toFixed(4)}`}
-          color={colors.accent.blue}
+          color={colors.brand.primary}
         />
       ) : (
         <MonthlyDataTable

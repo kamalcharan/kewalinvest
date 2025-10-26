@@ -40,8 +40,8 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
           textAlign: 'center',
           color: colors.utility.secondaryText,
           backgroundColor: isDarkMode
-            ? colors.backgrounds.elevated
-            : colors.backgrounds.surface,
+            ? colors.utility.secondaryBackground
+            : colors.utility.secondaryBackground,
           borderRadius: '8px',
           border: `1px solid ${colors.utility.secondaryText}20`,
         }}
@@ -55,8 +55,8 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
     <div
       style={{
         backgroundColor: isDarkMode
-          ? colors.backgrounds.elevated
-          : colors.backgrounds.surface,
+          ? colors.utility.secondaryBackground
+          : colors.utility.secondaryBackground,
         borderRadius: '8px',
         border: `1px solid ${colors.utility.secondaryText}20`,
         overflow: 'hidden',
@@ -74,7 +74,7 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
               margin: 0,
               fontSize: '16px',
               fontWeight: 600,
-              color: colors.text.primary,
+              color: colors.utility.primaryText,
             }}
           >
             {title}
@@ -94,8 +94,8 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
             <tr
               style={{
                 backgroundColor: isDarkMode
-                  ? colors.backgrounds.base
-                  : colors.backgrounds.subtle,
+                  ? colors.utility.primaryBackground
+                  : colors.utility.primaryBackground,
               }}
             >
               {columns.map((col, i) => (
@@ -156,7 +156,7 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
                         padding: '12px 16px',
                         textAlign: col.align || 'left',
                         fontSize: '14px',
-                        color: colors.text.primary,
+                        color: colors.utility.primaryText,
                         borderBottom: `1px solid ${colors.utility.secondaryText}10`,
                       }}
                     >
@@ -177,8 +177,8 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
             padding: '16px 20px',
             borderTop: `2px solid ${colors.utility.secondaryText}20`,
             backgroundColor: isDarkMode
-              ? colors.backgrounds.base
-              : colors.backgrounds.subtle,
+              ? colors.utility.primaryBackground
+              : colors.utility.primaryBackground,
           }}
         >
           <div
@@ -203,7 +203,7 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
                   style={{
                     fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: colors.utility.primaryText,
                   }}
                 >
                   {item.formatter
