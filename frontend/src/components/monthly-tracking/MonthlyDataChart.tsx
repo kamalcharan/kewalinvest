@@ -2,7 +2,7 @@
 // Reusable line chart component for monthly tracking data
 
 import React, { useMemo } from 'react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface DataPoint {
   month_display: string; // "Jan 2025"

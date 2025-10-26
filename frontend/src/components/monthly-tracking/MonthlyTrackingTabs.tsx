@@ -2,7 +2,7 @@
 // Container component with tabs for monthly tracking views
 
 import React, { useState } from 'react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Package, TrendingUp, DollarSign } from 'lucide-react';
 import { UnitsPerMonthView } from './UnitsPerMonthView';
 import { NAVPerformanceView } from './NAVPerformanceView';
