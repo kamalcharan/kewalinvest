@@ -123,8 +123,12 @@ app.get('/health', (_req: Request, res: Response) => {
       goals: true,
       goal_recalculation: true,
       goal_history: true,
+      goal_tracking_status: true, // NEW: Goal tracking with performance %
+      goal_watchlist: true, // NEW: Auto-watchlist for underperforming goals
+      asset_allocation_utilization: true, // NEW: Show scheme allocation to goals
       user_preferences: true,
       chart_preferences: true,
+      default_comparison_index: true, // NEW: Default index for performance charts
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });

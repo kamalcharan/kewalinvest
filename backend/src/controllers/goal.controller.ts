@@ -410,4 +410,242 @@ export class GoalController {
       });
     }
   };
+
+  // ==================== GOAL TRACKING STATUS ====================
+
+  /**
+   * Get tracking status for a single goal
+   * GET /api/goals/:id/tracking-status
+   */
+  getGoalTrackingStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const goalId = parseInt(req.params.id);
+
+      if (isNaN(goalId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid goal ID'
+        });
+        return;
+      }
+
+      const status = await this.goalService.getGoalTrackingStatus(
+        user!.tenant_id,
+        isLive,
+        goalId
+      );
+
+      res.json({
+        success: true,
+        data: status
+      });
+    } catch (error: any) {
+      console.error('Error getting goal tracking status:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get goal tracking status'
+      });
+    }
+  };
+
+  /**
+   * Get tracking status for all customer goals
+   * GET /api/goals/customer/:customerId/tracking-status
+   */
+  getCustomerGoalTrackingStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.customerId);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const statuses = await this.goalService.getCustomerGoalTrackingStatus(
+        user!.tenant_id,
+        isLive,
+        customerId
+      );
+
+      res.json({
+        success: true,
+        data: statuses
+      });
+    } catch (error: any) {
+      console.error('Error getting customer goal tracking status:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get customer goal tracking status'
+      });
+    }
+  };
+
+  // ==================== ASSET ALLOCATION UTILIZATION ====================
+
+  /**
+   * Get asset allocation utilization for a customer
+   * GET /api/goals/customer/:customerId/allocation-utilization
+   */
+  getAssetAllocationUtilization = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.customerId);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const utilization = await this.goalService.getAssetAllocationUtilization(
+        user!.tenant_id,
+        isLive,
+        customerId
+      );
+
+      res.json({
+        success: true,
+        data: utilization
+      });
+    } catch (error: any) {
+      console.error('Error getting asset allocation utilization:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get asset allocation utilization'
+      });
+    }
+  };
+
+  // ==================== WATCHLIST ====================
+
+  /**
+   * Add goal to watchlist
+   * POST /api/goals/:id/watchlist
+   */
+  addToWatchlist = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const goalId = parseInt(req.params.id);
+      const { reason } = req.body;
+
+      if (isNaN(goalId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid goal ID'
+        });
+        return;
+      }
+
+      if (!reason) {
+        res.status(400).json({
+          success: false,
+          error: 'Watchlist reason is required'
+        });
+        return;
+      }
+
+      await this.goalService.addToWatchlist(
+        user!.tenant_id,
+        isLive,
+        goalId,
+        reason
+      );
+
+      res.json({
+        success: true,
+        message: 'Goal added to watchlist'
+      });
+    } catch (error: any) {
+      console.error('Error adding goal to watchlist:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to add goal to watchlist'
+      });
+    }
+  };
+
+  /**
+   * Remove goal from watchlist
+   * DELETE /api/goals/:id/watchlist
+   */
+  removeFromWatchlist = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const goalId = parseInt(req.params.id);
+
+      if (isNaN(goalId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid goal ID'
+        });
+        return;
+      }
+
+      await this.goalService.removeFromWatchlist(
+        user!.tenant_id,
+        isLive,
+        goalId
+      );
+
+      res.json({
+        success: true,
+        message: 'Goal removed from watchlist'
+      });
+    } catch (error: any) {
+      console.error('Error removing goal from watchlist:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to remove goal from watchlist'
+      });
+    }
+  };
+
+  /**
+   * Get all watchlist goals for a customer
+   * GET /api/goals/customer/:customerId/watchlist
+   */
+  getWatchlistGoals = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.customerId);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const goals = await this.goalService.getWatchlistGoals(
+        user!.tenant_id,
+        isLive,
+        customerId
+      );
+
+      res.json({
+        success: true,
+        data: goals
+      });
+    } catch (error: any) {
+      console.error('Error getting watchlist goals:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get watchlist goals'
+      });
+    }
+  };
 }

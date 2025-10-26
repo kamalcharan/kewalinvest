@@ -171,3 +171,46 @@ export interface GoalSummary {
   total_current_value: number;
   average_progress: number;
 }
+
+// ==================== GOAL TRACKING STATUS ====================
+export interface GoalTrackingStatus {
+  goal_id: number;
+  customer_id: number;
+  goal_name: string;
+  goal_type: GoalTrackingType;
+
+  // Performance tracking
+  current_value: number;
+  expected_value: number; // What should be there at this point
+  performance_percentage: number; // current / expected * 100
+
+  // Status
+  is_on_track: boolean; // performance >= 100%
+  variance_percentage: number; // performance - 100
+
+  // Watchlist
+  is_in_watchlist: boolean;
+  watchlist_added_at?: string;
+  watchlist_reason?: string;
+
+  // Last updated
+  last_calculated_at: string;
+}
+
+// ==================== ASSET ALLOCATION UTILIZATION ====================
+export interface SchemeAllocationUtilization {
+  scheme_code: string;
+  scheme_name: string;
+  total_portfolio_value: number;
+  allocated_value: number;
+  allocated_percentage: number;
+  available_value: number;
+  available_percentage: number;
+  is_fully_allocated: boolean;
+  allocation_breakdown: {
+    goal_id: number;
+    goal_name: string;
+    allocation_percentage: number;
+    allocation_value: number;
+  }[];
+}
