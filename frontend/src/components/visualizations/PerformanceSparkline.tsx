@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { PortfolioPerformanceMetric } from '../../types/portfolio.types';
+import { IndexComparisonOverlay } from '../performance/IndexComparisonOverlay';
 
 interface PerformanceSparklineProps {
   performanceData?: PortfolioPerformanceMetric[];  // Raw performance data with dates
@@ -19,6 +20,10 @@ interface PerformanceSparklineProps {
   timeframe?: '1M' | '3M' | '6M' | '1Y' | 'ALL';  // Component handles filtering
   showTimelineMarkers?: boolean;                   // Enable/disable timeline markers
   timelineMarkerSize?: number;
+  // Comparison props
+  comparisonData?: number[];                       // Index comparison data
+  comparisonIndexName?: string;                    // Name of comparison index
+  showComparison?: boolean;                        // Enable/disable comparison overlay
 }
 
 const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
@@ -35,7 +40,10 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   showTooltip = true,
   timeframe = 'ALL',
   showTimelineMarkers = true,
-  timelineMarkerSize = 5
+  timelineMarkerSize = 5,
+  comparisonData,
+  comparisonIndexName,
+  showComparison = false
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -301,6 +309,18 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
           />
         )}
       </svg>
+
+      {/* Index Comparison Overlay */}
+      {showComparison && comparisonData && comparisonData.length > 0 && (
+        <IndexComparisonOverlay
+          portfolioData={data}
+          indexData={comparisonData}
+          width={width}
+          height={height}
+          indexName={comparisonIndexName}
+          showLabel={true}
+        />
+      )}
 
       {/* Tooltip */}
       {showTooltip && interactive && hoveredIndex !== null && points[hoveredIndex] && (
