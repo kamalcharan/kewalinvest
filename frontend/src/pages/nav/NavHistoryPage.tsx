@@ -676,38 +676,6 @@ const NavHistoryPage: React.FC = () => {
         maxWidth: '1400px',
         margin: '0 auto'
       }}>
-        {/* Admin View Banner */}
-        {isAdminView && (
-          <div style={{
-            backgroundColor: colors.semantic.warning + '20',
-            border: `2px solid ${colors.semantic.warning}`,
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}>
-            <div style={{ fontSize: '24px' }}>👑</div>
-            <div>
-              <div style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '4px'
-              }}>
-                Admin View - All Tenants
-              </div>
-              <div style={{
-                fontSize: '14px',
-                color: colors.utility.secondaryText
-              }}>
-                You're viewing bookmarks from all tenants across the system ({pagination?.total || bookmarks.length} total)
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -1205,7 +1173,7 @@ const NavHistoryPage: React.FC = () => {
                   onCalculateMetrics={handleCalculateMetrics}
                   onDelete={handleDelete}
                   showActions={true}
-                  showDeleteButton={isAdminView}
+                  showDeleteButton={true}
                   isCalculating={calculatingSchemeId === bookmark.scheme_id}
                 />
               ))}
