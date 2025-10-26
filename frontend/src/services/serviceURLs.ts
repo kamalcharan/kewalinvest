@@ -90,8 +90,13 @@ export const API_ENDPOINTS = {
     REFRESH: `${API_BASE}/portfolio/refresh`,
     CUSTOMER_PORTFOLIO: (customerId: number) => `${API_BASE}/portfolio/${customerId}`,
     CUSTOMER_TOTALS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/totals`,
-    SCHEME_DETAILS: (customerId: number, schemeCode: string) => 
+    SCHEME_DETAILS: (customerId: number, schemeCode: string) =>
       `${API_BASE}/portfolio/${customerId}/scheme/${schemeCode}`,
+
+    // Monthly Tracking
+    GET_MONTHLY_UNITS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-units`,
+    GET_MONTHLY_NAV: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-nav`,
+    GET_MONTHLY_MARKET_VALUE: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-market-value`,
   },
   
   // JTBD (Jobs To Be Done) endpoints
@@ -124,6 +129,18 @@ export const API_ENDPOINTS = {
     RECALCULATE_CUSTOMER: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/recalculate`,
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/summary`,
     HISTORY: (id: number) => `${API_BASE}/goals/${id}/history`,
+
+    // Tracking Status
+    GET_TRACKING_STATUS: (id: number) => `${API_BASE}/goals/${id}/tracking-status`,
+    GET_CUSTOMER_TRACKING_STATUS: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/tracking-status`,
+
+    // Asset Allocation
+    GET_ALLOCATION_UTILIZATION: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/allocation-utilization`,
+
+    // Watchlist
+    ADD_TO_WATCHLIST: (id: number) => `${API_BASE}/goals/${id}/watchlist`,
+    REMOVE_FROM_WATCHLIST: (id: number) => `${API_BASE}/goals/${id}/watchlist`,
+    GET_WATCHLIST: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/watchlist`,
   },
   
   // User Preferences endpoints
@@ -133,8 +150,25 @@ export const API_ENDPOINTS = {
     GET_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     SAVE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     DELETE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+
+    // Default comparison index
+    GET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
+    SET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
   },
-  
+
+  // Customer Meetings endpoints
+  MEETINGS: {
+    CREATE: `${API_BASE}/meetings`,
+    GET_ALL: `${API_BASE}/meetings`,
+    GET: (id: number) => `${API_BASE}/meetings/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/meetings/${id}`,
+    DELETE: (id: number) => `${API_BASE}/meetings/${id}`,
+    COMPLETE: (id: number) => `${API_BASE}/meetings/${id}/complete`,
+    CANCEL: (id: number) => `${API_BASE}/meetings/${id}/cancel`,
+    GET_UPCOMING: `${API_BASE}/meetings/upcoming`,
+    GET_CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/meetings/customer/${customerId}/summary`,
+  },
+
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,

@@ -27,4 +27,16 @@ router.post('/customer/:customerId/recalculate', goalController.recalculateCusto
 router.get('/customer/:customerId/summary', goalController.getCustomerGoalSummary);
 router.get('/:id/history', goalController.getGoalHistory);
 
+// Tracking Status
+router.get('/:id/tracking-status', goalController.getGoalTrackingStatus);
+router.get('/customer/:customerId/tracking-status', goalController.getCustomerGoalTrackingStatus);
+
+// Asset Allocation Utilization
+router.get('/customer/:customerId/allocation-utilization', goalController.getAssetAllocationUtilization);
+
+// Watchlist
+router.post('/:id/watchlist', goalController.addToWatchlist);
+router.delete('/:id/watchlist', goalController.removeFromWatchlist);
+router.get('/customer/:customerId/watchlist', goalController.getWatchlistGoals);
+
 export default router;

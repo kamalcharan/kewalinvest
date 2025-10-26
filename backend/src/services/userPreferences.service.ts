@@ -308,6 +308,77 @@ export class UserPreferencesService {
       throw error;
     }
   }
+
+  // ==================== DEFAULT COMPARISON INDEX ====================
+
+  /**
+   * Get default comparison index for user
+   * Returns null if not set
+   */
+  async getDefaultComparisonIndex(userId: number): Promise<number | null> {
+    try {
+      const query = `
+        SELECT default_comparison_index_id
+        FROM t_users
+        WHERE id = $1
+      `;
+
+      const result = await pool.query(query, [userId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return result.rows[0].default_comparison_index_id || null;
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'UserPreferencesService',
+        'Failed to get default comparison index',
+        'getDefaultComparisonIndex',
+        { userId, error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Set default comparison index for user
+   */
+  async setDefaultComparisonIndex(userId: number, indexId: number): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_users
+        SET default_comparison_index_id = $1,
+            updated_at = NOW()
+        WHERE id = $2
+      `;
+
+      await pool.query(query, [indexId, userId]);
+
+      SimpleLogger.info(
+        'UserPreferencesService',
+        'Default comparison index set',
+        'setDefaultComparisonIndex',
+        { userId, indexId }
+      );
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'UserPreferencesService',
+        'Failed to set default comparison index',
+        'setDefaultComparisonIndex',
+        { userId, indexId, error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

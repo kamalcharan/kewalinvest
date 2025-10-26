@@ -454,6 +454,88 @@ export class UserPreferencesService {
 
     return 'An unexpected error occurred';
   }
+
+  /**
+   * Get default comparison index for portfolio performance charts
+   * Returns null if no default index is set
+   *
+   * GET /api/user-preferences/default-comparison-index
+   */
+  static async getDefaultComparisonIndex(): Promise<{
+    success: boolean;
+    data?: { default_comparison_index_id: number | null };
+    error?: string;
+  }> {
+    try {
+      const url = API_ENDPOINTS.USER_PREFERENCES.GET_DEFAULT_COMPARISON_INDEX;
+      const response = await apiService.get<{
+        success: boolean;
+        default_comparison_index_id: number | null;
+      }>(url);
+
+      return {
+        success: response.success ?? true,
+        data: {
+          default_comparison_index_id: response.default_comparison_index_id ?? null
+        }
+      };
+
+    } catch (error: any) {
+      console.error('Get default comparison index failed:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch default comparison index'
+      };
+    }
+  }
+
+  /**
+   * Set default comparison index for portfolio performance charts
+   *
+   * POST /api/user-preferences/default-comparison-index
+   */
+  static async setDefaultComparisonIndex(indexId: number): Promise<{
+    success: boolean;
+    data?: { default_comparison_index_id: number };
+    error?: string;
+  }> {
+    try {
+      if (!indexId || indexId <= 0) {
+        throw new PreferenceError('Invalid index ID', 400);
+      }
+
+      const url = API_ENDPOINTS.USER_PREFERENCES.SET_DEFAULT_COMPARISON_INDEX;
+      const body = { default_comparison_index_id: indexId };
+
+      const response = await apiService.post<{
+        success: boolean;
+        default_comparison_index_id: number;
+      }>(url, body);
+
+      return {
+        success: response.success ?? true,
+        data: {
+          default_comparison_index_id: response.default_comparison_index_id
+        }
+      };
+
+    } catch (error: any) {
+      console.error('Set default comparison index failed:', error);
+
+      // Re-throw PreferenceError as-is
+      if (error instanceof PreferenceError) {
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+
+      return {
+        success: false,
+        error: error.message || 'Failed to save default comparison index'
+      };
+    }
+  }
 }
 
 // Export singleton instance for convenience

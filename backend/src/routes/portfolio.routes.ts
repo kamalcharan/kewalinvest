@@ -73,4 +73,35 @@ router.get('/:customerId/totals', portfolioController.getPortfolioTotals);
  */
 router.get('/:customerId/scheme/:schemeCode', portfolioController.getSchemePortfolioDetails);
 
+/**
+ * GET /api/portfolio/:customerId/monthly-units
+ * Get monthly units tracking for a customer/scheme
+ * Query params:
+ *   - scheme_code: Required - Scheme code to track
+ *   - months: Optional - Number of months (default: 12)
+ * Returns monthly units movement (opening, closing, added, redeemed)
+ */
+router.get('/:customerId/monthly-units', portfolioController.getMonthlyUnits);
+
+/**
+ * GET /api/portfolio/:customerId/monthly-nav
+ * Get monthly NAV performance for a customer/scheme
+ * Query params:
+ *   - scheme_code: Required - Scheme code to track
+ *   - months: Optional - Number of months (default: 12)
+ * Returns monthly NAV statistics (opening, closing, high, low, change %)
+ */
+router.get('/:customerId/monthly-nav', portfolioController.getMonthlyNAV);
+
+/**
+ * GET /api/portfolio/:customerId/monthly-market-value
+ * Get monthly market value for a customer/scheme
+ * Formula: Previous Month NAV × Current Month Units
+ * Query params:
+ *   - scheme_code: Required - Scheme code to track
+ *   - months: Optional - Number of months (default: 12)
+ * Returns monthly market values, invested amounts, and profit/loss
+ */
+router.get('/:customerId/monthly-market-value', portfolioController.getMonthlyMarketValue);
+
 export default router;

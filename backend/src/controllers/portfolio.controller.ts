@@ -3,6 +3,8 @@
 import { Request, Response } from 'express';
 import { PortfolioService } from '../services/portfolio.service';
 import { PortfolioFilters } from '../types/portfolio.types';
+import { MonthlyTrackingService } from '../services/monthlyTracking.service';
+import { MonthlyTrackingFilters } from '../types/monthlyTracking.types';
 
 interface AuthRequest extends Request {
   user?: {
@@ -15,9 +17,11 @@ interface AuthRequest extends Request {
 
 export class PortfolioController {
   private portfolioService: PortfolioService;
+  private monthlyTrackingService: MonthlyTrackingService;
 
   constructor() {
     this.portfolioService = new PortfolioService();
+    this.monthlyTrackingService = new MonthlyTrackingService();
   }
 
   /**
@@ -286,6 +290,179 @@ export class PortfolioController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to refresh portfolio totals'
+      });
+    }
+  };
+
+  // ==================== MONTHLY TRACKING ====================
+
+  /**
+   * GET /api/portfolio/:customerId/monthly-units
+   * Get monthly units tracking for a customer/scheme
+   */
+  getMonthlyUnits = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { customerId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!customerId || isNaN(parseInt(customerId))) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const schemeCode = req.query.scheme_code as string;
+      if (!schemeCode) {
+        res.status(400).json({
+          success: false,
+          error: 'scheme_code query parameter is required'
+        });
+        return;
+      }
+
+      const filters: MonthlyTrackingFilters = {
+        customer_id: parseInt(customerId),
+        scheme_code: schemeCode,
+        months: req.query.months ? parseInt(req.query.months as string) : 12
+      };
+
+      const data = await this.monthlyTrackingService.getMonthlyUnits(
+        user.tenant_id,
+        isLive,
+        filters
+      );
+
+      res.json({
+        success: true,
+        data
+      });
+    } catch (error: any) {
+      console.error('Error getting monthly units:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get monthly units'
+      });
+    }
+  };
+
+  /**
+   * GET /api/portfolio/:customerId/monthly-nav
+   * Get monthly NAV performance for a customer/scheme
+   */
+  getMonthlyNAV = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { customerId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!customerId || isNaN(parseInt(customerId))) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const schemeCode = req.query.scheme_code as string;
+      if (!schemeCode) {
+        res.status(400).json({
+          success: false,
+          error: 'scheme_code query parameter is required'
+        });
+        return;
+      }
+
+      const filters: MonthlyTrackingFilters = {
+        customer_id: parseInt(customerId),
+        scheme_code: schemeCode,
+        months: req.query.months ? parseInt(req.query.months as string) : 12
+      };
+
+      const data = await this.monthlyTrackingService.getMonthlyNAVPerformance(
+        user.tenant_id,
+        isLive,
+        filters
+      );
+
+      res.json({
+        success: true,
+        data
+      });
+    } catch (error: any) {
+      console.error('Error getting monthly NAV:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get monthly NAV'
+      });
+    }
+  };
+
+  /**
+   * GET /api/portfolio/:customerId/monthly-market-value
+   * Get monthly market value for a customer/scheme
+   */
+  getMonthlyMarketValue = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { customerId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!customerId || isNaN(parseInt(customerId))) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const schemeCode = req.query.scheme_code as string;
+      if (!schemeCode) {
+        res.status(400).json({
+          success: false,
+          error: 'scheme_code query parameter is required'
+        });
+        return;
+      }
+
+      const filters: MonthlyTrackingFilters = {
+        customer_id: parseInt(customerId),
+        scheme_code: schemeCode,
+        months: req.query.months ? parseInt(req.query.months as string) : 12
+      };
+
+      const data = await this.monthlyTrackingService.getMonthlyMarketValue(
+        user.tenant_id,
+        isLive,
+        filters
+      );
+
+      res.json({
+        success: true,
+        data
+      });
+    } catch (error: any) {
+      console.error('Error getting monthly market value:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get monthly market value'
       });
     }
   };
