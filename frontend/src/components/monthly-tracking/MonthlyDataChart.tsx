@@ -39,7 +39,7 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
   const chartHeight = height - padding.top - padding.bottom;
 
   // Default color
-  const lineColor = color || colors.primary.main;
+  const lineColor = color || colors.brand.primary;
 
   // Calculate min/max values
   const { minValue, maxValue } = useMemo(() => {
@@ -143,8 +143,8 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
           textAlign: 'center',
           color: colors.utility.secondaryText,
           backgroundColor: isDarkMode
-            ? colors.backgrounds.elevated
-            : colors.backgrounds.surface,
+            ? colors.utility.secondaryBackground
+            : colors.utility.secondaryBackground,
           borderRadius: '8px',
           border: `1px solid ${colors.utility.secondaryText}20`,
         }}
@@ -158,8 +158,8 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
     <div
       style={{
         backgroundColor: isDarkMode
-          ? colors.backgrounds.elevated
-          : colors.backgrounds.surface,
+          ? colors.utility.secondaryBackground
+          : colors.utility.secondaryBackground,
         borderRadius: '8px',
         padding: '20px',
         border: `1px solid ${colors.utility.secondaryText}20`,
@@ -170,7 +170,7 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
           margin: '0 0 20px 0',
           fontSize: '16px',
           fontWeight: 600,
-          color: colors.text.primary,
+          color: colors.utility.primaryText,
         }}
       >
         {title}
@@ -244,7 +244,7 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
               cy={y}
               r={4}
               fill={lineColor}
-              stroke={colors.backgrounds.surface}
+              stroke={colors.utility.secondaryBackground}
               strokeWidth={2}
             />
           );
@@ -291,7 +291,7 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
               y={tooltipData.y - 50}
               width={140}
               height={40}
-              fill={isDarkMode ? colors.backgrounds.surface : '#fff'}
+              fill={isDarkMode ? colors.utility.secondaryBackground : '#fff'}
               stroke={colors.utility.secondaryText}
               strokeWidth={1}
               rx={4}
@@ -304,7 +304,7 @@ export const MonthlyDataChart: React.FC<MonthlyDataChartProps> = ({
               textAnchor="middle"
               fontSize={12}
               fontWeight={600}
-              fill={colors.text.primary}
+              fill={colors.utility.primaryText}
             >
               {tooltipData.data.month_display}
             </text>
