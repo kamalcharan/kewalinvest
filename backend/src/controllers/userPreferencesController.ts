@@ -292,11 +292,11 @@ export class UserPreferencesController {
    * Get default comparison index for authenticated user
    * GET /api/user-preferences/default-comparison-index
    */
-  getDefaultComparisonIndex = async (req: Request, res: Response): Promise<void> => {
+  getDefaultComparisonIndex = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const startTime = Date.now();
 
     try {
-      const userId = req.user!.id;
+      const userId = req.user!.user_id;
 
       SimpleLogger.info(
         'UserPreferencesController',
@@ -336,11 +336,11 @@ export class UserPreferencesController {
    * POST /api/user-preferences/default-comparison-index
    * Body: { default_comparison_index_id: number }
    */
-  setDefaultComparisonIndex = async (req: Request, res: Response): Promise<void> => {
+  setDefaultComparisonIndex = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const startTime = Date.now();
 
     try {
-      const userId = req.user!.id;
+      const userId = req.user!.user_id;
       const { default_comparison_index_id } = req.body;
 
       // Validation
