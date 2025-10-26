@@ -51,8 +51,8 @@ export const MonthlyTrackingTabs: React.FC<MonthlyTrackingTabsProps> = ({
     <div
       style={{
         backgroundColor: isDarkMode
-          ? colors.backgrounds.base
-          : colors.backgrounds.subtle,
+          ? colors.utility.primaryBackground
+          : colors.utility.primaryBackground,
         borderRadius: '8px',
         padding: '20px',
         marginTop: '24px',
@@ -79,7 +79,7 @@ export const MonthlyTrackingTabs: React.FC<MonthlyTrackingTabsProps> = ({
                 padding: '12px 20px',
                 border: 'none',
                 borderBottom: isActive
-                  ? `3px solid ${colors.primary.main}`
+                  ? `3px solid ${colors.brand.primary}`
                   : '3px solid transparent',
                 backgroundColor: 'transparent',
                 cursor: 'pointer',
@@ -89,7 +89,7 @@ export const MonthlyTrackingTabs: React.FC<MonthlyTrackingTabsProps> = ({
                 fontSize: '15px',
                 fontWeight: isActive ? 600 : 500,
                 color: isActive
-                  ? colors.primary.main
+                  ? colors.brand.primary
                   : colors.utility.secondaryText,
                 transition: 'all 0.2s',
                 position: 'relative',
@@ -97,7 +97,7 @@ export const MonthlyTrackingTabs: React.FC<MonthlyTrackingTabsProps> = ({
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.color = colors.text.primary;
+                  e.currentTarget.style.color = colors.utility.primaryText;
                 }
               }}
               onMouseLeave={(e) => {
