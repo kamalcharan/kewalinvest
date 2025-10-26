@@ -198,7 +198,7 @@ export const UnitsPerMonthView: React.FC<UnitsPerMonthViewProps> = ({
               margin: 0,
               fontSize: '18px',
               fontWeight: 600,
-              color: colors.text.primary,
+              color: colors.utility.primaryText,
             }}
           >
             Units Per Month
@@ -220,8 +220,8 @@ export const UnitsPerMonthView: React.FC<UnitsPerMonthViewProps> = ({
             display: 'flex',
             gap: '8px',
             backgroundColor: isDarkMode
-              ? colors.backgrounds.elevated
-              : colors.backgrounds.surface,
+              ? colors.utility.secondaryBackground
+              : colors.utility.secondaryBackground,
             borderRadius: '6px',
             padding: '4px',
             border: `1px solid ${colors.utility.secondaryText}20`,
@@ -234,7 +234,7 @@ export const UnitsPerMonthView: React.FC<UnitsPerMonthViewProps> = ({
               border: 'none',
               borderRadius: '4px',
               backgroundColor:
-                viewMode === 'chart' ? colors.primary.main : 'transparent',
+                viewMode === 'chart' ? colors.brand.primary : 'transparent',
               color:
                 viewMode === 'chart'
                   ? '#fff'
@@ -258,7 +258,7 @@ export const UnitsPerMonthView: React.FC<UnitsPerMonthViewProps> = ({
               border: 'none',
               borderRadius: '4px',
               backgroundColor:
-                viewMode === 'table' ? colors.primary.main : 'transparent',
+                viewMode === 'table' ? colors.brand.primary : 'transparent',
               color:
                 viewMode === 'table'
                   ? '#fff'
@@ -284,7 +284,7 @@ export const UnitsPerMonthView: React.FC<UnitsPerMonthViewProps> = ({
           data={chartData}
           title="Monthly Units Trend"
           valueFormatter={(value) => value.toFixed(3)}
-          color={colors.primary.main}
+          color={colors.brand.primary}
         />
       ) : (
         <MonthlyDataTable
