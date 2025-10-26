@@ -18,6 +18,7 @@ import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfo
 import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
+import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,6 +34,7 @@ const CustomerViewPage: React.FC = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
+  const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -88,6 +90,13 @@ const CustomerViewPage: React.FC = () => {
       fetchTransactions();
     }
   }, [activeTab, customerId]);
+
+  // Auto-select first scheme for monthly tracking
+  useEffect(() => {
+    if (portfolio?.holdings && portfolio.holdings.length > 0 && !selectedSchemeForTracking) {
+      setSelectedSchemeForTracking(portfolio.holdings[0].scheme_code);
+    }
+  }, [portfolio]);
 
   useEffect(() => {
     setSearchParams({ tab: activeTab });
@@ -824,6 +833,59 @@ const CustomerViewPage: React.FC = () => {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {/* Monthly Tracking Section */}
+                {portfolio.holdings && portfolio.holdings.length > 0 && selectedSchemeForTracking && (
+                  <div>
+                    {/* Scheme Selector for Monthly Tracking */}
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '16px 24px',
+                      marginBottom: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px'
+                    }}>
+                      <label style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: colors.utility.primaryText,
+                        whiteSpace: 'nowrap'
+                      }}>
+                        Monthly Tracking for:
+                      </label>
+                      <select
+                        value={selectedSchemeForTracking}
+                        onChange={(e) => setSelectedSchemeForTracking(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 14px',
+                          fontSize: '14px',
+                          color: colors.utility.primaryText,
+                          backgroundColor: colors.utility.primaryBackground,
+                          border: `1px solid ${colors.utility.primaryText}20`,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        {portfolio.holdings.map((holding) => (
+                          <option key={holding.scheme_code} value={holding.scheme_code}>
+                            {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Monthly Tracking Tabs */}
+                    <MonthlyTrackingTabs
+                      customerId={customerId}
+                      schemeCode={selectedSchemeForTracking}
+                      months={12}
+                    />
                   </div>
                 )}
               </div>
