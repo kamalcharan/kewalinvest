@@ -417,7 +417,7 @@ export class GoalController {
    * Get tracking status for a single goal
    * GET /api/goals/:id/tracking-status
    */
-  getGoalTrackingStatus = async (req: Request, res: Response): Promise<void> => {
+  getGoalTrackingStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -454,7 +454,7 @@ export class GoalController {
    * Get tracking status for all customer goals
    * GET /api/goals/customer/:customerId/tracking-status
    */
-  getCustomerGoalTrackingStatus = async (req: Request, res: Response): Promise<void> => {
+  getCustomerGoalTrackingStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -493,7 +493,7 @@ export class GoalController {
    * Get asset allocation utilization for a customer
    * GET /api/goals/customer/:customerId/allocation-utilization
    */
-  getAssetAllocationUtilization = async (req: Request, res: Response): Promise<void> => {
+  getAssetAllocationUtilization = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -532,7 +532,7 @@ export class GoalController {
    * Add goal to watchlist
    * POST /api/goals/:id/watchlist
    */
-  addToWatchlist = async (req: Request, res: Response): Promise<void> => {
+  addToWatchlist = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -579,7 +579,7 @@ export class GoalController {
    * Remove goal from watchlist
    * DELETE /api/goals/:id/watchlist
    */
-  removeFromWatchlist = async (req: Request, res: Response): Promise<void> => {
+  removeFromWatchlist = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
@@ -616,7 +616,7 @@ export class GoalController {
    * Get all watchlist goals for a customer
    * GET /api/goals/customer/:customerId/watchlist
    */
-  getWatchlistGoals = async (req: Request, res: Response): Promise<void> => {
+  getWatchlistGoals = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
