@@ -133,6 +133,10 @@ export const API_ENDPOINTS = {
     GET_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     SAVE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     DELETE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+
+    // Default comparison index
+    GET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
+    SET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
   },
   
   // Data Import endpoints

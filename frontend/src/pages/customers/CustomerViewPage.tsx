@@ -16,6 +16,8 @@ import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
 import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
+import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
+import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ const CustomerViewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
 
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -422,209 +425,20 @@ const CustomerViewPage: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.utility.primaryBackground }}>
       {/* Header */}
-      <div style={{
-        background: `linear-gradient(135deg, ${colors.brand.primary}15 0%, ${colors.brand.secondary}10 100%)`,
-        borderBottom: `1px solid ${colors.utility.primaryText}10`,
-        padding: '24px'
-      }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-          <button
-            onClick={() => navigate('/customers')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 12px',
-              marginBottom: '20px',
-              backgroundColor: colors.utility.secondaryBackground,
-              border: 'none',
-              borderRadius: '8px',
-              color: colors.utility.primaryText,
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            <ArrowLeftIcon /> Back to Customers
-          </button>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h1 style={{
-                fontSize: '32px',
-                fontWeight: '700',
-                color: colors.utility.primaryText,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                margin: 0,
-                marginBottom: '8px'
-              }}>
-                {customer.prefix} {customer.name}
-                {returnPercentage > 10 && (
-                  <span style={{ color: '#FCD34D' }}><StarIcon /></span>
-                )}
-              </h1>
-              <div style={{
-                display: 'flex',
-                gap: '24px',
-                fontSize: '14px',
-                color: colors.utility.secondaryText,
-                alignItems: 'center'
-              }}>
-                <span>Customer ID: {customer.id}</span>
-                {customer.iwell_code && <span>IWell: {customer.iwell_code}</span>}
-                {/* Family Badge - Only show for customers actually in a family */}
-                {customer.family_code && (
-                  <FamilyMembersPopover
-                    familyCode={customer.family_code}
-                    isFamilyHead={customer.is_family_head || false}
-                  >
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 10px',
-                      backgroundColor: colors.brand.secondary + '15',
-                      color: colors.brand.secondary,
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.brand.secondary + '25';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.brand.secondary + '15';
-                    }}
-                    >
-                      {customer.is_family_head
-                        ? `Family Head: ${customer.family_code}`
-                        : `Family: ${customer.family_code}`
-                      }
-                    </span>
-                  </FamilyMembersPopover>
-                )}
-                {portfolio && <span>Schemes: {portfolio.summary.total_schemes ?? 0}</span>}
-                <span>Member Since: 2016</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                style={{
-                  padding: '10px 16px',
-                  backgroundColor: colors.utility.secondaryBackground,
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  borderRadius: '8px',
-                  color: colors.utility.primaryText,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <DownloadIcon /> Export Report
-              </button>
-              <button
-                onClick={() => navigate(`/customers/${customerId}/edit`)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: colors.brand.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                Edit Customer
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CustomerViewHeader
+        customer={customer}
+        portfolio={portfolio}
+        customerId={customer.id}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
       {/* Key Metrics Bar */}
       {portfolio && (
-        <div style={{
-          backgroundColor: colors.utility.secondaryBackground,
-          borderBottom: `1px solid ${colors.utility.primaryText}10`,
-          padding: '20px 24px'
-        }}>
-          <div style={{
-            maxWidth: '1400px',
-            margin: '0 auto',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, 1fr)',
-            gap: '24px'
-          }}>
-            <div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
-                {formatCurrency(portfolio.summary.current_value)}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                CURRENT VALUE
-              </div>
-            </div>
-            
-            <div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(profitLoss) }}>
-                {formatCurrency(Math.abs(profitLoss))}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                {profitLoss >= 0 ? 'TOTAL PROFIT' : 'TOTAL LOSS'}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ 
-                fontSize: '24px', 
-                fontWeight: '700', 
-                color: getValueColor(dayChangePercentage),
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                {formatPercentage(dayChangePercentage)}
-                {dayChangePercentage >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                TODAY'S CHANGE
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: getValueColor(returnPercentage) }}>
-                {formatPercentage(returnPercentage)}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                OVERALL RETURN
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
-                {portfolio.holdings?.length || portfolio.summary.total_schemes || 0}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                TOTAL FUNDS
-              </div>
-            </div>
-
-            <div>
-              <div style={{ 
-                fontSize: '24px', 
-                fontWeight: '700', 
-                color: jtbds && jtbds.length > 0 ? colors.semantic.success : colors.utility.secondaryText
-              }}>
-                {jtbds?.length || 0}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                ACTIVE ALERTS
-              </div>
-            </div>
-          </div>
-        </div>
+        <CustomerMetricsBar
+          portfolio={portfolio}
+          jtbds={jtbds}
+        />
       )}
 
       {/* Tabs */}
