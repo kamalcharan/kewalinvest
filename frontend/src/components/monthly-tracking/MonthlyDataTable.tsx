@@ -29,7 +29,8 @@ export const MonthlyDataTable: React.FC<MonthlyDataTableProps> = ({
   title,
   summary,
 }) => {
-  const { colors, isDarkMode } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   if (data.length === 0) {
     return (

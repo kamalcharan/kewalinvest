@@ -21,7 +21,8 @@ export const NAVPerformanceView: React.FC<NAVPerformanceViewProps> = ({
   schemeCode,
   months = 12,
 }) => {
-  const { colors, isDarkMode } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
