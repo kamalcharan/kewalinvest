@@ -285,6 +285,106 @@ export class UserPreferencesController {
       });
     }
   };
+
+  // ==================== DEFAULT COMPARISON INDEX ====================
+
+  /**
+   * Get default comparison index for authenticated user
+   * GET /api/user-preferences/default-comparison-index
+   */
+  getDefaultComparisonIndex = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      const userId = req.user!.id;
+
+      SimpleLogger.info(
+        'UserPreferencesController',
+        'Fetching default comparison index',
+        'getDefaultComparisonIndex',
+        { userId }
+      );
+
+      const result = await userPreferencesService.getDefaultComparisonIndex(userId);
+
+      res.json({
+        success: true,
+        default_comparison_index_id: result,
+        execution_time_ms: Date.now() - startTime
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'UserPreferencesController',
+        'Failed to get default comparison index',
+        'getDefaultComparisonIndex',
+        { error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get default comparison index'
+      });
+    }
+  };
+
+  /**
+   * Set default comparison index for authenticated user
+   * POST /api/user-preferences/default-comparison-index
+   * Body: { default_comparison_index_id: number }
+   */
+  setDefaultComparisonIndex = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      const userId = req.user!.id;
+      const { default_comparison_index_id } = req.body;
+
+      // Validation
+      if (!default_comparison_index_id || typeof default_comparison_index_id !== 'number') {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid default_comparison_index_id. Must be a number.'
+        });
+        return;
+      }
+
+      SimpleLogger.info(
+        'UserPreferencesController',
+        'Setting default comparison index',
+        'setDefaultComparisonIndex',
+        { userId, default_comparison_index_id }
+      );
+
+      await userPreferencesService.setDefaultComparisonIndex(userId, default_comparison_index_id);
+
+      res.json({
+        success: true,
+        default_comparison_index_id,
+        message: 'Default comparison index saved successfully',
+        execution_time_ms: Date.now() - startTime
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'UserPreferencesController',
+        'Failed to set default comparison index',
+        'setDefaultComparisonIndex',
+        { error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to set default comparison index'
+      });
+    }
+  };
 }
 
 // Export singleton instance

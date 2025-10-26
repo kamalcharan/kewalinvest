@@ -978,4 +978,283 @@ private async getGoalPortfolioValue(
 
     return result;
   }
+
+  // ==================== GOAL TRACKING STATUS ====================
+
+  /**
+   * Get tracking status for a single goal
+   */
+  async getGoalTrackingStatus(
+    tenantId: number,
+    isLive: boolean,
+    goalId: number
+  ): Promise<any> {
+    const client = await this.db.connect();
+    try {
+      // Get goal data
+      const goalQuery = `
+        SELECT id, customer_id, title, jtbd_type, config_data,
+               is_in_watchlist, watchlist_added_at, watchlist_reason,
+               updated_at
+        FROM t_jtbd_configurations
+        WHERE tenant_id = $1 AND is_live = $2 AND id = $3
+          AND jtbd_type = 'goal_tracking' AND is_active = true
+      `;
+      const goalResult = await client.query(goalQuery, [tenantId, isLive, goalId]);
+
+      if (goalResult.rows.length === 0) {
+        throw new Error('Goal not found');
+      }
+
+      const goal = goalResult.rows[0];
+      const config = goal.config_data as any;
+
+      // Calculate expected value
+      const expectedValue = await this.calculateExpectedValue(config);
+      const currentValue = config.current_value || 0;
+      const performancePercentage = expectedValue > 0
+        ? (currentValue / expectedValue) * 100
+        : 100;
+
+      return {
+        goal_id: goal.id,
+        customer_id: goal.customer_id,
+        goal_name: config.goal_name,
+        goal_type: config.goal_type,
+        current_value: currentValue,
+        expected_value: expectedValue,
+        performance_percentage: Math.round(performancePercentage * 100) / 100,
+        is_on_track: performancePercentage >= 100,
+        variance_percentage: Math.round((performancePercentage - 100) * 100) / 100,
+        is_in_watchlist: goal.is_in_watchlist || false,
+        watchlist_added_at: goal.watchlist_added_at,
+        watchlist_reason: goal.watchlist_reason,
+        last_calculated_at: new Date().toISOString()
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Get tracking status for all goals of a customer
+   */
+  async getCustomerGoalTrackingStatus(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<any[]> {
+    const client = await this.db.connect();
+    try {
+      const query = `
+        SELECT id
+        FROM t_jtbd_configurations
+        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
+          AND jtbd_type = 'goal_tracking' AND is_active = true
+      `;
+      const result = await client.query(query, [tenantId, isLive, customerId]);
+
+      const trackingStatuses = [];
+      for (const row of result.rows) {
+        const status = await this.getGoalTrackingStatus(tenantId, isLive, row.id);
+        trackingStatuses.push(status);
+      }
+
+      return trackingStatuses;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Calculate expected value at current point in time
+   * Based on monthly contributions and expected return rate
+   */
+  private async calculateExpectedValue(config: any): Promise<number> {
+    const startDate = new Date(config.created_at || new Date());
+    const currentDate = new Date();
+    const monthsElapsed = this.getMonthsDifference(startDate, currentDate);
+
+    // If no time has passed, expected value is the initial value
+    if (monthsElapsed <= 0) {
+      return config.current_value || 0;
+    }
+
+    const monthlyContribution = config.monthly_contribution || 0;
+    const annualRate = config.expected_return_rate || 12;
+    const monthlyRate = annualRate / 12 / 100;
+
+    // Future Value of Series calculation
+    // FV = PMT × (((1 + r)^n - 1) / r)
+    let expectedValue = 0;
+    if (monthlyRate > 0) {
+      expectedValue = monthlyContribution *
+        (Math.pow(1 + monthlyRate, monthsElapsed) - 1) / monthlyRate;
+    } else {
+      expectedValue = monthlyContribution * monthsElapsed;
+    }
+
+    // Add initial value with growth
+    const initialValue = config.current_value || 0;
+    expectedValue += initialValue * Math.pow(1 + monthlyRate, monthsElapsed);
+
+    return Math.round(expectedValue);
+  }
+
+  /**
+   * Get months difference between two dates
+   */
+  private getMonthsDifference(startDate: Date, endDate: Date): number {
+    const years = endDate.getFullYear() - startDate.getFullYear();
+    const months = endDate.getMonth() - startDate.getMonth();
+    return years * 12 + months;
+  }
+
+  // ==================== ASSET ALLOCATION UTILIZATION ====================
+
+  /**
+   * Get asset allocation utilization for a customer
+   * Shows how much of each scheme is allocated to goals
+   */
+  async getAssetAllocationUtilization(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<any[]> {
+    const client = await this.db.connect();
+    try {
+      // Get all customer's goals
+      const goalsQuery = `
+        SELECT id, title, config_data
+        FROM t_jtbd_configurations
+        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
+          AND jtbd_type = 'goal_tracking' AND is_active = true
+      `;
+      const goalsResult = await client.query(goalsQuery, [tenantId, isLive, customerId]);
+
+      // Get customer's portfolio holdings
+      const portfolioQuery = `
+        SELECT scheme_code, scheme_name, current_value
+        FROM t_portfolio_holdings
+        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
+      `;
+      const portfolioResult = await client.query(portfolioQuery, [tenantId, isLive, customerId]);
+
+      // Build scheme map
+      const schemeMap = new Map<string, any>();
+      for (const holding of portfolioResult.rows) {
+        schemeMap.set(holding.scheme_code, {
+          scheme_code: holding.scheme_code,
+          scheme_name: holding.scheme_name,
+          total_portfolio_value: holding.current_value,
+          allocated_value: 0,
+          allocated_percentage: 0,
+          available_value: holding.current_value,
+          available_percentage: 100,
+          is_fully_allocated: false,
+          allocation_breakdown: []
+        });
+      }
+
+      // Calculate allocations from goals
+      for (const goal of goalsResult.rows) {
+        const config = goal.config_data as any;
+        const linkedSchemes = config.linked_schemes || [];
+
+        for (const linkedScheme of linkedSchemes) {
+          const scheme = schemeMap.get(linkedScheme.scheme_code);
+          if (scheme) {
+            const allocationValue =
+              (scheme.total_portfolio_value * linkedScheme.allocation_percentage) / 100;
+
+            scheme.allocated_value += allocationValue;
+            scheme.allocation_breakdown.push({
+              goal_id: goal.id,
+              goal_name: config.goal_name,
+              allocation_percentage: linkedScheme.allocation_percentage,
+              allocation_value: allocationValue
+            });
+          }
+        }
+      }
+
+      // Calculate final percentages
+      const utilization = [];
+      for (const scheme of schemeMap.values()) {
+        scheme.allocated_percentage =
+          (scheme.allocated_value / scheme.total_portfolio_value) * 100;
+        scheme.available_value =
+          scheme.total_portfolio_value - scheme.allocated_value;
+        scheme.available_percentage = 100 - scheme.allocated_percentage;
+        scheme.is_fully_allocated = scheme.allocated_percentage >= 100;
+
+        utilization.push(scheme);
+      }
+
+      return utilization;
+    } finally {
+      client.release();
+    }
+  }
+
+  // ==================== WATCHLIST MANAGEMENT ====================
+
+  /**
+   * Add goal to watchlist
+   */
+  async addToWatchlist(
+    tenantId: number,
+    isLive: boolean,
+    goalId: number,
+    reason: string
+  ): Promise<void> {
+    const query = `
+      UPDATE t_jtbd_configurations
+      SET is_in_watchlist = true,
+          watchlist_added_at = NOW(),
+          watchlist_reason = $1,
+          updated_at = NOW()
+      WHERE tenant_id = $2 AND is_live = $3 AND id = $4
+    `;
+    await this.db.query(query, [reason, tenantId, isLive, goalId]);
+  }
+
+  /**
+   * Remove goal from watchlist
+   */
+  async removeFromWatchlist(
+    tenantId: number,
+    isLive: boolean,
+    goalId: number
+  ): Promise<void> {
+    const query = `
+      UPDATE t_jtbd_configurations
+      SET is_in_watchlist = false,
+          watchlist_added_at = NULL,
+          watchlist_reason = NULL,
+          updated_at = NOW()
+      WHERE tenant_id = $2 AND is_live = $3 AND id = $4
+    `;
+    await this.db.query(query, [tenantId, isLive, goalId]);
+  }
+
+  /**
+   * Get all watchlist goals for a customer
+   */
+  async getWatchlistGoals(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<any[]> {
+    const query = `
+      SELECT id, title, config_data, watchlist_added_at, watchlist_reason
+      FROM t_jtbd_configurations
+      WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
+        AND jtbd_type = 'goal_tracking' AND is_active = true
+        AND is_in_watchlist = true
+      ORDER BY watchlist_added_at DESC
+    `;
+    const result = await this.db.query(query, [tenantId, isLive, customerId]);
+    return result.rows;
+  }
 }
