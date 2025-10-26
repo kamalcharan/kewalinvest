@@ -51,7 +51,7 @@ export class MeetingController {
         user!.tenant_id,
         isLive,
         data,
-        user!.id
+        user!.user_id
       );
 
       res.status(201).json({
