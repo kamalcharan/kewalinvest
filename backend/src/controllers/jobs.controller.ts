@@ -32,7 +32,7 @@ export class JobsController {
   getConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId) {
@@ -51,7 +51,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
       const config = await this.schedulerService.getConfig(tenantId, isLive, jobType);
 
       if (!config) {
@@ -84,7 +84,7 @@ export class JobsController {
     try {
       const tenantId = req.user?.tenant_id;
       const userId = req.user?.user_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId || !userId) {
@@ -103,7 +103,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       // Check if config already exists
       const existing = await this.schedulerService.getConfig(tenantId, isLive, jobType);
@@ -148,7 +148,7 @@ export class JobsController {
   updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId) {
@@ -167,7 +167,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       const request: UpdateJobConfigRequest = {
         schedule_type: req.body.schedule_type,
@@ -203,7 +203,7 @@ export class JobsController {
   triggerManual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId) {
@@ -222,7 +222,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       console.log(`[JobsController] Manual trigger requested for ${jobType}, tenant ${tenantId} (${environment})`);
 
@@ -254,7 +254,7 @@ export class JobsController {
   getExecutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.page_size as string) || 20;
@@ -275,7 +275,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       const { executions, total } = await this.schedulerService.getExecutions(
         tenantId,
@@ -316,7 +316,7 @@ export class JobsController {
   getStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId) {
@@ -335,7 +335,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       const statistics = await this.schedulerService.getStatistics(tenantId, isLive, jobType);
 
@@ -404,7 +404,7 @@ export class JobsController {
   healthCheck = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
       if (!tenantId) {
@@ -423,7 +423,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = environment === 'live';
+      const isLive = isLiveParam === 'true';
 
       const config = await this.schedulerService.getConfig(tenantId, isLive, jobType);
       const stats = await this.schedulerService.getStatistics(tenantId, isLive, jobType);
