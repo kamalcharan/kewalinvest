@@ -2,7 +2,7 @@
 // Service for Portfolio Snapshot Scheduler API calls
 
 import apiService from './api.service';
-import { buildQueryParams } from './serviceURLs';
+import { CRUISE_CONTROL_URLS } from './serviceURLs';
 import {
   PortfolioSnapshotConfig,
   SnapshotStatistics,
@@ -10,8 +10,6 @@ import {
   UpdateConfigRequest,
   ExecutionHistoryResponse
 } from '../types/portfolioSnapshot.types';
-
-const BASE_URL = '/api/cruise-control/snapshots';
 
 export class PortfolioSnapshotService {
   /**
@@ -23,7 +21,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/config${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.getSnapshotConfig(environment);
       return await apiService.get(url);
     } catch (error: any) {
       console.error('Error getting snapshot config:', error);
@@ -47,7 +45,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/config${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.updateSnapshotConfig(environment);
       return await apiService.put(url, updates);
     } catch (error: any) {
       console.error('Error updating snapshot config:', error);
@@ -71,7 +69,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/execute${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.executeSnapshot(environment);
       return await apiService.post(url, {});
     } catch (error: any) {
       console.error('Error triggering snapshot:', error);
@@ -95,7 +93,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/executions${buildQueryParams({ page, page_size: pageSize }, environment)}`;
+      const url = CRUISE_CONTROL_URLS.getSnapshotExecutions({ page, page_size: pageSize }, environment);
       return await apiService.get(url);
     } catch (error: any) {
       console.error('Error getting executions:', error);
@@ -115,7 +113,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/statistics${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.getSnapshotStatistics(environment);
       return await apiService.get(url);
     } catch (error: any) {
       console.error('Error getting statistics:', error);
@@ -135,7 +133,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/health${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.getSnapshotHealth(environment);
       return await apiService.get(url);
     } catch (error: any) {
       console.error('Error checking health:', error);
@@ -159,7 +157,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/backfill-smart${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.smartBackfill(environment);
       return await apiService.post(url, {
         customer_ids: customerIds
       });
@@ -187,7 +185,7 @@ export class PortfolioSnapshotService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/backfill${buildQueryParams({}, environment)}`;
+      const url = CRUISE_CONTROL_URLS.backfill({}, environment);
       return await apiService.post(url, {
         start_month: startMonth,
         end_month: endMonth,
