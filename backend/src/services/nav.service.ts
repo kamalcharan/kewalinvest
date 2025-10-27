@@ -87,12 +87,23 @@ export class NavService {
     // Filter by historical data availability (NAV records count)
     if (has_historical_data === 'true') {
       baseQuery += ` AND sd.total_nav_records > 0`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITH historical data', 'getUserBookmarks', {
+        has_historical_data, tenantId, page
+      });
     } else if (has_historical_data === 'false') {
       baseQuery += ` AND (sd.total_nav_records IS NULL OR sd.total_nav_records = 0)`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITHOUT historical data', 'getUserBookmarks', {
+        has_historical_data, tenantId, page
+      });
     }
     // 'all' or undefined = no filter, show all
 
     const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+    SimpleLogger.info('NavService', 'Executing count query', 'getUserBookmarks', {
+      countQuery: countQuery.substring(0, 200),
+      params: queryParams,
+      has_historical_data
+    });
     const countResult = await this.db.query(countQuery, queryParams);
     const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
       parseInt(countResult.rows[0].total) : 0;
