@@ -1,0 +1,406 @@
+// backend/src/services/portfolioSnapshot.service.ts
+// Service for generating and managing portfolio snapshots
+
+import { Pool } from 'pg';
+import { pool } from '../config/database';
+import {
+  SnapshotGenerationRequest,
+  SnapshotGenerationResult,
+  PortfolioSnapshotData,
+  PortfolioCalculationInput,
+  SnapshotCustomerError,
+  BackfillRequest,
+  BackfillResult,
+  BackfillMonthError
+} from '../types/portfolioSnapshot.types';
+
+export class PortfolioSnapshotService {
+  private db: Pool;
+
+  constructor() {
+    this.db = pool;
+  }
+
+  /**
+   * Generate portfolio snapshots for all customers in a tenant
+   * Snapshots are created for the end of the previous month
+   */
+  async generateSnapshots(request: SnapshotGenerationRequest): Promise<SnapshotGenerationResult> {
+    const startTime = Date.now();
+    const errors: SnapshotCustomerError[] = [];
+
+    let customersProcessed = 0;
+    let customersFailed = 0;
+    let snapshotsCreated = 0;
+    let snapshotsUpdated = 0;
+
+    try {
+      // Determine snapshot date (end of previous month if not specified)
+      const snapshotDate = request.snapshot_month_end || this.getEndOfPreviousMonth();
+
+      console.log(`[SnapshotService] Starting snapshot generation for tenant ${request.tenant_id}, month-end: ${snapshotDate.toISOString().split('T')[0]}`);
+
+      // Get all active customers for this tenant
+      const customers = await this.getActiveCustomers(request.tenant_id, request.is_live);
+
+      console.log(`[SnapshotService] Found ${customers.length} active customers`);
+
+      // Process each customer
+      for (const customer of customers) {
+        try {
+          const snapshotData = await this.calculatePortfolioValue({
+            customer_id: customer.id,
+            tenant_id: request.tenant_id,
+            is_live: request.is_live,
+            as_of_date: snapshotDate
+          });
+
+          // Save snapshot to database
+          const isUpdate = await this.saveSnapshot(snapshotData);
+
+          if (isUpdate) {
+            snapshotsUpdated++;
+          } else {
+            snapshotsCreated++;
+          }
+
+          customersProcessed++;
+
+        } catch (error: any) {
+          customersFailed++;
+          errors.push({
+            customer_id: customer.id,
+            customer_name: customer.name,
+            error_message: error.message,
+            error_code: error.code
+          });
+
+          console.error(`[SnapshotService] Failed to generate snapshot for customer ${customer.id}:`, error.message);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+
+      console.log(`[SnapshotService] Snapshot generation complete. Processed: ${customersProcessed}, Failed: ${customersFailed}, Created: ${snapshotsCreated}, Updated: ${snapshotsUpdated}, Duration: ${duration}ms`);
+
+      return {
+        success: customersFailed === 0,
+        snapshot_month_end: snapshotDate,
+        customers_processed: customersProcessed,
+        customers_failed: customersFailed,
+        snapshots_created: snapshotsCreated,
+        snapshots_updated: snapshotsUpdated,
+        execution_duration_ms: duration,
+        errors
+      };
+
+    } catch (error: any) {
+      console.error('[SnapshotService] Fatal error during snapshot generation:', error);
+      throw new Error(`Snapshot generation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calculate portfolio value for a specific customer as of a specific date
+   */
+  private async calculatePortfolioValue(input: PortfolioCalculationInput): Promise<PortfolioSnapshotData> {
+    const { customer_id, tenant_id, is_live, as_of_date } = input;
+
+    // Query to calculate portfolio metrics as of the snapshot date
+    const query = `
+      WITH transactions_up_to_date AS (
+        SELECT
+          t.scheme_code,
+          t.scheme_name,
+          SUM(CASE WHEN t.transaction_type_id IN (
+            SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
+          ) THEN t.units ELSE 0 END) as total_units_purchased,
+          SUM(CASE WHEN t.transaction_type_id IN (
+            SELECT id FROM m_transaction_types WHERE txn_type = 'redemption'
+          ) THEN t.units ELSE 0 END) as total_units_redeemed,
+          SUM(CASE WHEN t.transaction_type_id IN (
+            SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
+          ) THEN t.amount ELSE 0 END) as total_invested
+        FROM t_transaction_table t
+        WHERE t.customer_id = $1
+          AND t.tenant_id = $2
+          AND t.is_live = $3
+          AND t.txn_date <= $4
+        GROUP BY t.scheme_code, t.scheme_name
+      ),
+      portfolio_with_nav AS (
+        SELECT
+          t.*,
+          (t.total_units_purchased - t.total_units_redeemed) as net_units,
+          COALESCE(
+            (SELECT nav
+             FROM t_nav_history n
+             WHERE n.scheme_code = t.scheme_code
+               AND n.nav_date <= $4
+             ORDER BY n.nav_date DESC
+             LIMIT 1
+            ), 0
+          ) as latest_nav
+        FROM transactions_up_to_date t
+        WHERE (t.total_units_purchased - t.total_units_redeemed) > 0.001  -- Only schemes with positive units
+      )
+      SELECT
+        COUNT(*) as total_schemes,
+        SUM(total_invested) as total_invested,
+        SUM(net_units) as total_units,
+        SUM(net_units * latest_nav) as current_value
+      FROM portfolio_with_nav
+    `;
+
+    const result = await this.db.query(query, [customer_id, tenant_id, is_live, as_of_date]);
+    const row = result.rows[0];
+
+    const totalInvested = parseFloat(row.total_invested) || 0;
+    const currentValue = parseFloat(row.current_value) || 0;
+    const totalReturns = currentValue - totalInvested;
+    const returnPercentage = totalInvested > 0 ? (totalReturns / totalInvested) * 100 : 0;
+
+    return {
+      customer_id,
+      snapshot_month_end: as_of_date,
+      total_invested: totalInvested,
+      current_value: currentValue,
+      total_returns: totalReturns,
+      return_percentage: returnPercentage,
+      total_units: parseFloat(row.total_units) || 0,
+      total_schemes: parseInt(row.total_schemes) || 0
+    };
+  }
+
+  /**
+   * Save snapshot to database (INSERT or UPDATE if exists)
+   */
+  private async saveSnapshot(snapshot: PortfolioSnapshotData): Promise<boolean> {
+    const query = `
+      INSERT INTO t_monthly_portfolio_snapshots (
+        tenant_id,
+        is_live,
+        customer_id,
+        snapshot_month_end,
+        total_invested,
+        current_value,
+        total_returns,
+        return_percentage,
+        total_units,
+        total_schemes,
+        created_at,
+        updated_at
+      )
+      SELECT
+        t.tenant_id,
+        c.is_live,
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      FROM t_customers c
+      JOIN t_tenants t ON c.tenant_id = t.id
+      WHERE c.id = $1
+      ON CONFLICT (tenant_id, is_live, customer_id, snapshot_month_end)
+      DO UPDATE SET
+        total_invested = EXCLUDED.total_invested,
+        current_value = EXCLUDED.current_value,
+        total_returns = EXCLUDED.total_returns,
+        return_percentage = EXCLUDED.return_percentage,
+        total_units = EXCLUDED.total_units,
+        total_schemes = EXCLUDED.total_schemes,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING (xmax = 0) AS is_insert
+    `;
+
+    const result = await this.db.query(query, [
+      snapshot.customer_id,
+      snapshot.snapshot_month_end,
+      snapshot.total_invested,
+      snapshot.current_value,
+      snapshot.total_returns,
+      snapshot.return_percentage,
+      snapshot.total_units,
+      snapshot.total_schemes
+    ]);
+
+    // is_insert will be true for INSERT, false for UPDATE
+    return !result.rows[0]?.is_insert;
+  }
+
+  /**
+   * Get all active customers for a tenant
+   */
+  private async getActiveCustomers(tenantId: number, isLive: boolean): Promise<Array<{ id: number; name: string }>> {
+    const query = `
+      SELECT c.id, ct.name
+      FROM t_customers c
+      JOIN t_contacts ct ON c.contact_id = ct.id
+      WHERE c.tenant_id = $1
+        AND c.is_live = $2
+        AND c.is_active = true
+      ORDER BY c.id
+    `;
+
+    const result = await this.db.query(query, [tenantId, isLive]);
+    return result.rows;
+  }
+
+  /**
+   * Get end of previous month date
+   */
+  private getEndOfPreviousMonth(): Date {
+    const now = new Date();
+    const lastDayOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    return lastDayOfPrevMonth;
+  }
+
+  /**
+   * Backfill historical snapshots for multiple months
+   */
+  async backfillSnapshots(request: BackfillRequest): Promise<BackfillResult> {
+    const startTime = Date.now();
+    const errors: BackfillMonthError[] = [];
+    let monthsProcessed = 0;
+    let totalSnapshotsCreated = 0;
+    let totalSnapshotsUpdated = 0;
+
+    try {
+      console.log(`[SnapshotService] Starting backfill from ${request.start_month.toISOString().split('T')[0]} to ${request.end_month.toISOString().split('T')[0]}`);
+
+      // Generate list of month-end dates between start and end
+      const monthEnds = this.generateMonthEndDates(request.start_month, request.end_month);
+
+      for (const monthEnd of monthEnds) {
+        try {
+          const result = await this.generateSnapshots({
+            tenant_id: request.tenant_id,
+            is_live: request.is_live,
+            snapshot_month_end: monthEnd,
+            trigger_source: 'manual'
+          });
+
+          totalSnapshotsCreated += result.snapshots_created;
+          totalSnapshotsUpdated += result.snapshots_updated;
+          monthsProcessed++;
+
+          // Collect errors from this month
+          result.errors.forEach(err => {
+            errors.push({
+              month: monthEnd,
+              customer_id: err.customer_id,
+              error_message: err.error_message
+            });
+          });
+
+        } catch (error: any) {
+          errors.push({
+            month: monthEnd,
+            error_message: error.message
+          });
+        }
+      }
+
+      const duration = Date.now() - startTime;
+
+      console.log(`[SnapshotService] Backfill complete. Months: ${monthsProcessed}, Created: ${totalSnapshotsCreated}, Updated: ${totalSnapshotsUpdated}, Duration: ${duration}ms`);
+
+      return {
+        success: errors.length === 0,
+        months_processed: monthsProcessed,
+        total_snapshots_created: totalSnapshotsCreated,
+        total_snapshots_updated: totalSnapshotsUpdated,
+        execution_duration_ms: duration,
+        errors
+      };
+
+    } catch (error: any) {
+      console.error('[SnapshotService] Fatal error during backfill:', error);
+      throw new Error(`Backfill failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate array of month-end dates between start and end
+   */
+  private generateMonthEndDates(start: Date, end: Date): Date[] {
+    const dates: Date[] = [];
+    const current = new Date(start.getFullYear(), start.getMonth() + 1, 0); // End of start month
+
+    while (current <= end) {
+      dates.push(new Date(current));
+      // Move to end of next month
+      current.setMonth(current.getMonth() + 2);
+      current.setDate(0);
+    }
+
+    return dates;
+  }
+
+  /**
+   * Check if snapshot exists for a specific month and customer
+   */
+  async snapshotExists(customerId: number, tenantId: number, isLive: boolean, monthEnd: Date): Promise<boolean> {
+    const query = `
+      SELECT 1
+      FROM t_monthly_portfolio_snapshots
+      WHERE customer_id = $1
+        AND tenant_id = $2
+        AND is_live = $3
+        AND snapshot_month_end = $4
+      LIMIT 1
+    `;
+
+    const result = await this.db.query(query, [customerId, tenantId, isLive, monthEnd]);
+    return result.rows.length > 0;
+  }
+
+  /**
+   * Get missing snapshot months for a customer
+   */
+  async getMissingMonths(customerId: number, tenantId: number, isLive: boolean): Promise<Date[]> {
+    // Get first transaction date
+    const firstTxnQuery = `
+      SELECT MIN(txn_date) as first_date
+      FROM t_transaction_table
+      WHERE customer_id = $1
+        AND tenant_id = $2
+        AND is_live = $3
+    `;
+
+    const firstResult = await this.db.query(firstTxnQuery, [customerId, tenantId, isLive]);
+    const firstDate = firstResult.rows[0]?.first_date;
+
+    if (!firstDate) {
+      return []; // No transactions yet
+    }
+
+    // Get all existing snapshot months
+    const snapshotsQuery = `
+      SELECT snapshot_month_end
+      FROM t_monthly_portfolio_snapshots
+      WHERE customer_id = $1
+        AND tenant_id = $2
+        AND is_live = $3
+      ORDER BY snapshot_month_end
+    `;
+
+    const snapshotsResult = await this.db.query(snapshotsQuery, [customerId, tenantId, isLive]);
+    const existingMonths = new Set(snapshotsResult.rows.map(r => r.snapshot_month_end.toISOString()));
+
+    // Generate expected months from first transaction to previous month
+    const expectedMonths = this.generateMonthEndDates(
+      new Date(firstDate),
+      this.getEndOfPreviousMonth()
+    );
+
+    // Filter out months that already have snapshots
+    return expectedMonths.filter(month => !existingMonths.has(month.toISOString()));
+  }
+}
