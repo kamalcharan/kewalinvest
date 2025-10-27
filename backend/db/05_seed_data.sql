@@ -285,7 +285,27 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- SECTION 5: VERIFICATION & SUMMARY
+-- SECTION 5: SEED JOB TYPES
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seeding Job Types';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- Insert job types
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active) VALUES
+('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true)
+ON CONFLICT (code) DO NOTHING;
+
+DO $$
+BEGIN
+    RAISE NOTICE 'Job types seeded successfully';
+END $$;
+
+-- ============================================================================
+-- SECTION 6: VERIFICATION & SUMMARY
 -- ============================================================================
 DO $$
 DECLARE
@@ -296,6 +316,8 @@ DECLARE
     v_bookmark_count INTEGER;
     v_active_bookmark INTEGER;
     v_unique_reasons INTEGER;
+    v_job_types_count INTEGER;
+    v_active_job_types INTEGER;
 BEGIN
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
     INTO v_txn_count, v_active_txn
@@ -308,6 +330,10 @@ BEGIN
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true), COUNT(DISTINCT reason_code)
     INTO v_bookmark_count, v_active_bookmark, v_unique_reasons
     FROM m_bookmark_reasons;
+
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
+    INTO v_job_types_count, v_active_job_types
+    FROM m_job_types;
 
     RAISE NOTICE '========================================';
     RAISE NOTICE '     SEED DATA SUMMARY';
@@ -323,6 +349,10 @@ BEGIN
     RAISE NOTICE 'Bookmark Reasons:';
     RAISE NOTICE '  - Total: % (% unique reasons × % tenants × 2 environments)', v_bookmark_count, v_unique_reasons, v_tenant_count;
     RAISE NOTICE '  - Active: %', v_active_bookmark;
+    RAISE NOTICE '';
+    RAISE NOTICE 'Job Types:';
+    RAISE NOTICE '  - Total: %', v_job_types_count;
+    RAISE NOTICE '  - Active: %', v_active_job_types;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
     RAISE NOTICE '========================================';

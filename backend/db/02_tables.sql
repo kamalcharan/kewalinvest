@@ -741,6 +741,128 @@ COMMENT ON COLUMN t_monthly_portfolio_snapshots.current_value IS 'Portfolio valu
 COMMENT ON COLUMN t_monthly_portfolio_snapshots.total_returns IS 'Total returns (gains/losses) as of this snapshot date';
 COMMENT ON COLUMN t_monthly_portfolio_snapshots.return_percentage IS 'Return percentage as of this snapshot date';
 
+-- TABLE: t_portfolio_snapshot_configs
+CREATE TABLE t_portfolio_snapshot_configs (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    user_id INTEGER NOT NULL REFERENCES t_users(id),
+    is_live BOOLEAN NOT NULL,
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    cron_expression VARCHAR(100) NOT NULL DEFAULT '0 21 * * 5',
+    is_enabled BOOLEAN NOT NULL DEFAULT true,
+    last_executed_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_snapshot_scheduler UNIQUE(tenant_id, is_live),
+    CONSTRAINT valid_schedule_type CHECK (schedule_type IN ('weekly', 'monthly', 'custom'))
+);
+
+COMMENT ON TABLE t_portfolio_snapshot_configs IS 'Scheduler configurations for automated portfolio snapshot generation - tenant isolated';
+COMMENT ON COLUMN t_portfolio_snapshot_configs.schedule_type IS 'Type of schedule: weekly (default: Friday 9 PM), monthly, or custom cron';
+COMMENT ON COLUMN t_portfolio_snapshot_configs.cron_expression IS 'Cron expression for schedule. Default: 0 21 * * 5 (Friday 9 PM)';
+COMMENT ON COLUMN t_portfolio_snapshot_configs.max_retries IS 'Maximum retry attempts on failure. Default: 3';
+
+-- TABLE: t_portfolio_snapshot_executions
+CREATE TABLE t_portfolio_snapshot_executions (
+    id SERIAL PRIMARY KEY,
+    scheduler_config_id INTEGER NOT NULL REFERENCES t_portfolio_snapshot_configs(id) ON DELETE CASCADE,
+    tenant_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    execution_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL,
+    trigger_source VARCHAR(20) NOT NULL,
+    snapshot_month_end DATE,
+    customers_processed INTEGER DEFAULT 0,
+    customers_failed INTEGER DEFAULT 0,
+    snapshots_created INTEGER DEFAULT 0,
+    snapshots_updated INTEGER DEFAULT 0,
+    retry_attempt INTEGER DEFAULT 0,
+    error_message TEXT,
+    error_details JSONB,
+    execution_duration_ms INTEGER,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+);
+
+COMMENT ON TABLE t_portfolio_snapshot_executions IS 'Execution history and audit log for portfolio snapshot jobs';
+COMMENT ON COLUMN t_portfolio_snapshot_executions.snapshot_month_end IS 'The month-end date for which snapshots were generated';
+COMMENT ON COLUMN t_portfolio_snapshot_executions.retry_attempt IS 'Which retry attempt this is (0 = first attempt, 1-3 = retries)';
+COMMENT ON COLUMN t_portfolio_snapshot_executions.trigger_source IS 'Whether this was scheduled or manually triggered';
+
+-- TABLE: m_job_types (Master Registry)
+CREATE TABLE m_job_types (
+    code VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    default_cron_expression VARCHAR(100),
+    default_max_retries INTEGER DEFAULT 3,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE m_job_types IS 'Registry of all available job types in the system';
+COMMENT ON COLUMN m_job_types.code IS 'Unique job type identifier (e.g., PORTFOLIO_SNAPSHOT)';
+COMMENT ON COLUMN m_job_types.default_cron_expression IS 'Default schedule for this job type';
+
+-- TABLE: t_job_scheduler_configs (Generic Scheduler)
+CREATE TABLE t_job_scheduler_configs (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
+    user_id INTEGER NOT NULL REFERENCES t_users(id),
+    is_live BOOLEAN NOT NULL,
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    cron_expression VARCHAR(100) NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT true,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    job_config JSONB,
+    last_executed_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER DEFAULT 0,
+    failure_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_job_scheduler_config UNIQUE(tenant_id, job_type, is_live),
+    CONSTRAINT valid_schedule_type CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'custom'))
+);
+
+COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types - tenant isolated';
+COMMENT ON COLUMN t_job_scheduler_configs.job_type IS 'Type of job (references m_job_types.code)';
+COMMENT ON COLUMN t_job_scheduler_configs.job_config IS 'Job-specific configuration as JSON (flexible per job type)';
+
+-- TABLE: t_job_executions (Generic Execution History)
+CREATE TABLE t_job_executions (
+    id SERIAL PRIMARY KEY,
+    scheduler_config_id INTEGER NOT NULL REFERENCES t_job_scheduler_configs(id) ON DELETE CASCADE,
+    job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
+    tenant_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    execution_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL,
+    trigger_source VARCHAR(20) NOT NULL,
+    retry_attempt INTEGER DEFAULT 0,
+    execution_data JSONB,
+    error_message TEXT,
+    error_details JSONB,
+    execution_duration_ms INTEGER,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+);
+
+COMMENT ON TABLE t_job_executions IS 'Execution history and audit log for all job types';
+COMMENT ON COLUMN t_job_executions.execution_data IS 'Job-specific execution results/metrics as JSON (flexible per job type)';
+
 -- ============================================================================
 -- SECTION 7: JTBD (JOBS TO BE DONE) TABLES
 -- ============================================================================
