@@ -3,6 +3,7 @@
 
 import { Request, Response } from 'express';
 import { JobSchedulerService } from '../services/jobScheduler.service';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   JobType,
   CreateJobConfigRequest,
@@ -14,15 +15,6 @@ import {
   GetStatisticsResponse,
   GetJobTypesResponse
 } from '../types/jobs.types';
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    user_id: number;
-    userId: number;
-    tenant_id: number;
-    tenantId: number;
-  };
-}
 
 export class JobsController {
   private schedulerService: JobSchedulerService;
@@ -39,7 +31,7 @@ export class JobsController {
    */
   getConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 
@@ -90,8 +82,8 @@ export class JobsController {
    */
   createConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
-      const userId = req.user?.userId;
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 
@@ -155,7 +147,7 @@ export class JobsController {
    */
   updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 
@@ -210,7 +202,7 @@ export class JobsController {
    */
   triggerManual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 
@@ -261,7 +253,7 @@ export class JobsController {
    */
   getExecutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
       const page = parseInt(req.query.page as string) || 1;
@@ -323,7 +315,7 @@ export class JobsController {
    */
   getStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 
@@ -377,7 +369,7 @@ export class JobsController {
    */
   getJobTypes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
 
       if (!tenantId) {
         res.status(401).json({
@@ -411,7 +403,7 @@ export class JobsController {
    */
   healthCheck = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const jobType = req.params.jobType as JobType;
 

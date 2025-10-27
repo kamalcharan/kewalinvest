@@ -1,7 +1,8 @@
 // backend/src/controllers/portfolioSnapshot.controller.ts
 // Controller for Portfolio Snapshot Scheduler API endpoints
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { PortfolioSnapshotSchedulerService } from '../services/portfolioSnapshotScheduler.service';
 import { PortfolioSnapshotService } from '../services/portfolioSnapshot.service';
 import {
@@ -29,9 +30,9 @@ export class PortfolioSnapshotController {
    * GET /api/cruise-control/snapshots/config
    * Get scheduler configuration for current tenant
    */
-  getConfig = async (req: Request, res: Response): Promise<void> => {
+  getConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
@@ -71,10 +72,10 @@ export class PortfolioSnapshotController {
    * POST /api/cruise-control/snapshots/config
    * Create scheduler configuration for current tenant
    */
-  createConfig = async (req: Request, res: Response): Promise<void> => {
+  createConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
-      const userId = req.user?.userId;
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
       const environment = req.query.environment as string;
 
       if (!tenantId || !userId) {
@@ -128,7 +129,7 @@ export class PortfolioSnapshotController {
    */
   updateConfig = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
@@ -173,7 +174,7 @@ export class PortfolioSnapshotController {
    */
   triggerManual = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
@@ -211,7 +212,7 @@ export class PortfolioSnapshotController {
    */
   getExecutions = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.page_size as string) || 20;
@@ -263,7 +264,7 @@ export class PortfolioSnapshotController {
    */
   getStatistics = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
@@ -308,7 +309,7 @@ export class PortfolioSnapshotController {
    */
   backfillSnapshots = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
@@ -361,7 +362,7 @@ export class PortfolioSnapshotController {
    */
   healthCheck = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
 
       if (!tenantId) {
