@@ -77,11 +77,12 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
       return;
     }
 
-    // Calculate file hash (SHA256) for duplicate detection
+    // Calculate file hash (SHA256) for reference only - NOT used for duplicate detection
     const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const isLive = req.headers['x-environment'] === 'live';
 
-    // ALWAYS check for duplicate file - no bypass allowed
+    // Check for duplicate FILENAME (NOT content) - Production requirement
+    // Users can rename files to bypass, which is expected behavior
     {
       try {
         const db = (importService as any).db;
@@ -98,20 +99,20 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
             s.duplicate_records
           FROM t_file_uploads f
           LEFT JOIN t_import_sessions s ON s.file_upload_id = f.id
-          WHERE f.file_hash = $1
+          WHERE f.original_filename = $1
             AND f.tenant_id = $2
             AND f.is_live = $3
           ORDER BY f.created_at DESC
           LIMIT 1
-        `, [fileHash, req.user.tenant_id, isLive]);
+        `, [req.file.originalname, req.user.tenant_id, isLive]);
 
         if (duplicateCheck.rows.length > 0) {
           const duplicate = duplicateCheck.rows[0];
 
-          // CRITICAL FIX: Allow re-upload if previous import was cancelled or failed
+          // CRITICAL: Allow re-upload if previous import was cancelled or failed
           const allowedStatuses = ['cancelled', 'failed', null]; // null = no session created yet
           if (allowedStatuses.includes(duplicate.session_status)) {
-            console.log(`[Upload] Allowing re-upload - previous session status: ${duplicate.session_status || 'no session'}`);
+            console.log(`[Upload] Allowing re-upload of "${req.file.originalname}" - previous session status: ${duplicate.session_status || 'no session'}`);
             // Delete the old file record to allow fresh upload
             await db.query(`DELETE FROM t_file_uploads WHERE id = $1`, [duplicate.id]);
             console.log(`[Upload] Deleted old file record ID: ${duplicate.id}`);
@@ -122,7 +123,7 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
               success: false,
               error: 'DUPLICATE_FILE_BLOCKED',
               isDuplicate: true,
-              isBlocked: true, // Hard restriction - cannot proceed
+              isBlocked: true,
               duplicateInfo: {
                 fileId: duplicate.id,
                 originalFilename: duplicate.original_filename,
@@ -134,7 +135,7 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
                 successfulRecords: duplicate.successful_records,
                 duplicateRecords: duplicate.duplicate_records
               },
-              message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates. Duplicate file uploads are not allowed.`
+              message: `A file named "${duplicate.original_filename}" was already successfully imported on ${new Date(duplicate.created_at).toLocaleString()}. The import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful. To upload again, either rename your file or delete the previous import session.`
             });
             return;
           }
