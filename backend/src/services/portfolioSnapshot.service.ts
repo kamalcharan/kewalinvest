@@ -134,7 +134,7 @@ export class PortfolioSnapshotService {
           (t.total_units_purchased - t.total_units_redeemed) as net_units,
           COALESCE(
             (SELECT nav
-             FROM t_nav_history n
+             FROM t_nav_data n
              WHERE n.scheme_code = t.scheme_code
                AND n.nav_date <= $4
              ORDER BY n.nav_date DESC
