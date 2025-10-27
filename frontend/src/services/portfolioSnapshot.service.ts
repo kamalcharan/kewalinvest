@@ -147,7 +147,33 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Backfill historical snapshots
+   * Smart backfill - auto-detects date range from customer transactions
+   */
+  static async smartBackfill(
+    environment: 'live' | 'test',
+    customerIds?: number[]
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const url = `${BASE_URL}/backfill-smart${buildQueryParams({}, environment)}`;
+      return await apiService.post(url, {
+        customer_ids: customerIds
+      });
+    } catch (error: any) {
+      console.error('Error during smart backfill:', error);
+      return {
+        success: false,
+        error: error.message || 'Smart backfill failed'
+      };
+    }
+  }
+
+  /**
+   * Manual backfill with date range (for advanced use)
    */
   static async backfill(
     environment: 'live' | 'test',
