@@ -55,7 +55,7 @@ export class NavService {
     params: SchemeBookmarkSearchParams = {}
   ): Promise<SchemeBookmarkListResponse> {
     try {
-      const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data } = params;
+      const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data, has_calculations } = params;
       const offset = (page - 1) * page_size;
     let baseQuery = `
       FROM t_scheme_bookmarks sb
@@ -94,6 +94,32 @@ export class NavService {
       baseQuery += ` AND (sd.total_nav_records IS NULL OR sd.total_nav_records = 0)`;
       SimpleLogger.info('NavService', 'Filtering for schemes WITHOUT historical data', 'getUserBookmarks', {
         has_historical_data, tenantId, page
+      });
+    }
+    // 'all' or undefined = no filter, show all
+
+    // Filter by calculations availability (check if ANY NAV records have calculated metrics)
+    if (has_calculations === 'true') {
+      baseQuery += ` AND EXISTS (
+        SELECT 1 FROM t_nav_data nd
+        WHERE nd.scheme_id = sb.scheme_id
+          AND nd.is_live = $2
+          AND nd.metrics_calculated_at IS NOT NULL
+        LIMIT 1
+      )`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITH calculations', 'getUserBookmarks', {
+        has_calculations, tenantId, page
+      });
+    } else if (has_calculations === 'false') {
+      baseQuery += ` AND sd.total_nav_records > 0 AND NOT EXISTS (
+        SELECT 1 FROM t_nav_data nd
+        WHERE nd.scheme_id = sb.scheme_id
+          AND nd.is_live = $2
+          AND nd.metrics_calculated_at IS NOT NULL
+        LIMIT 1
+      )`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITHOUT calculations', 'getUserBookmarks', {
+        has_calculations, tenantId, page
       });
     }
     // 'all' or undefined = no filter, show all
