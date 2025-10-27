@@ -1027,14 +1027,14 @@ export class NavService {
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
           COALESCE((
-            SELECT COUNT(DISTINCT sb.scheme_code)
+            SELECT COUNT(DISTINCT sb.scheme_id)
             FROM t_scheme_bookmarks sb
             WHERE sb.tenant_id = $1
               AND sb.is_live = $2
               AND sb.is_active = true
               AND EXISTS (
                 SELECT 1 FROM t_nav_data nd
-                WHERE nd.scheme_code = sb.scheme_code
+                WHERE nd.scheme_id = sb.scheme_id
                   AND nd.is_live = $2
                 LIMIT 1
               )
