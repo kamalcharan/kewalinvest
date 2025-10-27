@@ -169,6 +169,16 @@ export const API_ENDPOINTS = {
     GET_CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/meetings/customer/${customerId}/summary`,
   },
 
+  // Generic Jobs Scheduler endpoints
+  JOBS: {
+    TYPES: `${API_BASE}/jobs/types`,
+    CONFIG: (jobType: string) => `${API_BASE}/jobs/${jobType}/config`,
+    EXECUTE: (jobType: string) => `${API_BASE}/jobs/${jobType}/execute`,
+    EXECUTIONS: (jobType: string) => `${API_BASE}/jobs/${jobType}/executions`,
+    STATISTICS: (jobType: string) => `${API_BASE}/jobs/${jobType}/statistics`,
+    HEALTH: (jobType: string) => `${API_BASE}/jobs/${jobType}/health`,
+  },
+
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
