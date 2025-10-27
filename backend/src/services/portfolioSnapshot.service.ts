@@ -177,6 +177,22 @@ export class PortfolioSnapshotService {
    * Save snapshot to database (INSERT or UPDATE if exists)
    */
   private async saveSnapshot(snapshot: PortfolioSnapshotData): Promise<boolean> {
+    // First, get tenant_id and is_live from customer record
+    const customerQuery = `
+      SELECT c.tenant_id, c.is_live
+      FROM t_customers c
+      WHERE c.id = $1
+    `;
+
+    const customerResult = await this.db.query(customerQuery, [snapshot.customer_id]);
+
+    if (customerResult.rows.length === 0) {
+      throw new Error(`Customer ${snapshot.customer_id} not found`);
+    }
+
+    const { tenant_id, is_live } = customerResult.rows[0];
+
+    // UPSERT query - insert or update if snapshot already exists
     const query = `
       INSERT INTO t_monthly_portfolio_snapshots (
         tenant_id,
@@ -192,26 +208,22 @@ export class PortfolioSnapshotService {
         created_at,
         updated_at
       )
-      SELECT
-        t.id,
-        c.is_live,
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-      FROM t_customers c
-      JOIN t_tenants t ON c.tenant_id = t.id
-      WHERE c.id = $1
-      RETURNING id
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (tenant_id, is_live, customer_id, snapshot_month_end)
+      DO UPDATE SET
+        total_invested = EXCLUDED.total_invested,
+        current_value = EXCLUDED.current_value,
+        total_returns = EXCLUDED.total_returns,
+        return_percentage = EXCLUDED.return_percentage,
+        total_units = EXCLUDED.total_units,
+        total_schemes = EXCLUDED.total_schemes,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING (xmax = 0) AS inserted
     `;
 
     const result = await this.db.query(query, [
+      tenant_id,
+      is_live,
       snapshot.customer_id,
       snapshot.snapshot_month_end,
       snapshot.total_invested,
@@ -222,8 +234,8 @@ export class PortfolioSnapshotService {
       snapshot.total_schemes
     ]);
 
-    // Return false since we're always inserting (no update logic)
-    return false;
+    // Return true if updated (xmax != 0), false if inserted (xmax = 0)
+    return !result.rows[0].inserted;
   }
 
   /**
