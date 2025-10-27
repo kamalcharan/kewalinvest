@@ -285,7 +285,12 @@ BEGIN
         
         -- Extract iwell_code (already uppercase from transformation)
         v_iwell_code := NULLIF(TRIM(v_mapped_data->>'iwell_code'), '');
-        
+
+        -- DEBUG: Log family field values before INSERT
+        RAISE NOTICE '[DEBUG] About to INSERT customer - family_head_name: %, family_head_iwell_code: %',
+            v_mapped_data->>'family_head_name',
+            v_mapped_data->>'family_head_iwell_code';
+
         -- Create customer record with PLAIN TEXT fields
         INSERT INTO t_customers (
             contact_id,
@@ -312,7 +317,10 @@ BEGIN
             v_mapped_data->>'referred_by_name',
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_customer_id;
-        
+
+        -- DEBUG: Verify what was actually inserted
+        RAISE NOTICE '[DEBUG] Customer % created', v_customer_id;
+
         -- Create address if provided
         IF (v_mapped_data->>'address_line1' IS NOT NULL AND TRIM(v_mapped_data->>'address_line1') != '') OR 
            (v_mapped_data->>'city' IS NOT NULL AND TRIM(v_mapped_data->>'city') != '') THEN
