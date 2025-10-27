@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { JobsController } from '../controllers/jobs.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 import { JobSchedulerService } from '../services/jobScheduler.service';
 
 const router = Router();
@@ -19,7 +19,7 @@ const controller = new JobsController(schedulerService);
  * @desc    Get all available job types
  * @access  Private (Authenticated users)
  */
-router.get('/types', authenticateToken, controller.getJobTypes);
+router.get('/types', authenticate, controller.getJobTypes);
 
 // ==================== CONFIGURATION ROUTES ====================
 
@@ -30,7 +30,7 @@ router.get('/types', authenticateToken, controller.getJobTypes);
  * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
  * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/config', authenticateToken, controller.getConfig);
+router.get('/:jobType/config', authenticate, controller.getConfig);
 
 /**
  * @route   POST /api/jobs/:jobType/config
@@ -40,7 +40,7 @@ router.get('/:jobType/config', authenticateToken, controller.getConfig);
  * @query   environment - 'live' or 'test'
  * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries?, job_config? }
  */
-router.post('/:jobType/config', authenticateToken, controller.createConfig);
+router.post('/:jobType/config', authenticate, controller.createConfig);
 
 /**
  * @route   PUT /api/jobs/:jobType/config
@@ -50,7 +50,7 @@ router.post('/:jobType/config', authenticateToken, controller.createConfig);
  * @query   environment - 'live' or 'test'
  * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries?, job_config? }
  */
-router.put('/:jobType/config', authenticateToken, controller.updateConfig);
+router.put('/:jobType/config', authenticate, controller.updateConfig);
 
 // ==================== EXECUTION ROUTES ====================
 
@@ -62,7 +62,7 @@ router.put('/:jobType/config', authenticateToken, controller.updateConfig);
  * @query   environment - 'live' or 'test'
  * @returns 202 Accepted - Processing started in background
  */
-router.post('/:jobType/execute', authenticateToken, controller.triggerManual);
+router.post('/:jobType/execute', authenticate, controller.triggerManual);
 
 /**
  * @route   GET /api/jobs/:jobType/executions
@@ -73,7 +73,7 @@ router.post('/:jobType/execute', authenticateToken, controller.triggerManual);
  * @query   page - Page number (default: 1)
  * @query   page_size - Items per page (default: 20)
  */
-router.get('/:jobType/executions', authenticateToken, controller.getExecutions);
+router.get('/:jobType/executions', authenticate, controller.getExecutions);
 
 /**
  * @route   GET /api/jobs/:jobType/statistics
@@ -82,7 +82,7 @@ router.get('/:jobType/executions', authenticateToken, controller.getExecutions);
  * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
  * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/statistics', authenticateToken, controller.getStatistics);
+router.get('/:jobType/statistics', authenticate, controller.getStatistics);
 
 // ==================== UTILITY ROUTES ====================
 
@@ -93,7 +93,7 @@ router.get('/:jobType/statistics', authenticateToken, controller.getStatistics);
  * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
  * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/health', authenticateToken, controller.healthCheck);
+router.get('/:jobType/health', authenticate, controller.healthCheck);
 
 // Export both router and scheduler service (for server initialization)
 export default router;
