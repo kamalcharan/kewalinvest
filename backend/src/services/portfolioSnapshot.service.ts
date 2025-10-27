@@ -208,16 +208,7 @@ export class PortfolioSnapshotService {
       FROM t_customers c
       JOIN t_tenants t ON c.tenant_id = t.id
       WHERE c.id = $1
-      ON CONFLICT (tenant_id, is_live, customer_id, snapshot_month_end)
-      DO UPDATE SET
-        total_invested = EXCLUDED.total_invested,
-        current_value = EXCLUDED.current_value,
-        total_returns = EXCLUDED.total_returns,
-        return_percentage = EXCLUDED.return_percentage,
-        total_units = EXCLUDED.total_units,
-        total_schemes = EXCLUDED.total_schemes,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING (xmax = 0) AS is_insert
+      RETURNING id
     `;
 
     const result = await this.db.query(query, [
@@ -231,8 +222,8 @@ export class PortfolioSnapshotService {
       snapshot.total_schemes
     ]);
 
-    // is_insert will be true for INSERT, false for UPDATE
-    return !result.rows[0]?.is_insert;
+    // Return false since we're always inserting (no update logic)
+    return false;
   }
 
   /**
