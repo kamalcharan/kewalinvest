@@ -1049,7 +1049,13 @@ export class NavService {
                 SELECT 1 FROM t_nav_data nd
                 WHERE nd.scheme_id = sb.scheme_id
                   AND nd.is_live = $2
-                  AND nd.metrics_calculated_at IS NULL
+                LIMIT 1
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_id = sb.scheme_id
+                  AND nd.is_live = $2
+                  AND nd.metrics_calculated_at IS NOT NULL
                 LIMIT 1
               )
           ), 0) as schemes_without_calculations,
