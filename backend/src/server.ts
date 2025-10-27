@@ -24,7 +24,7 @@ import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
-import portfolioSnapshotRoutes from './routes/portfolioSnapshot.routes';
+import jobsRoutes from './routes/jobs.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -45,7 +45,7 @@ const PORT = process.env.PORT || 8080;
 
 // CHANGED: Declare without import
 let navScheduler: any;
-let portfolioSnapshotScheduler: any;
+let jobScheduler: any;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -134,7 +134,7 @@ app.get('/health', (_req: Request, res: Response) => {
       default_comparison_index: true, // NEW: Default index for performance charts
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
-      portfolio_snapshot_scheduler: !!portfolioSnapshotScheduler, // NEW: Automated monthly snapshot generation
+      jobs_scheduler: !!jobScheduler, // NEW: Generic jobs scheduler system
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -173,7 +173,7 @@ app.get('/api', (_req: Request, res: Response) => {
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
       meetings: '/api/meetings',
-      cruise_control_snapshots: '/api/cruise-control/snapshots'
+      jobs: '/api/jobs'
     }
   });
 });
@@ -194,7 +194,7 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
-app.use('/api/cruise-control/snapshots', portfolioSnapshotRoutes);
+app.use('/api/jobs', jobsRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -464,28 +464,36 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction): void => {
 
 // CHANGED: Updated graceful shutdown handlers
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down NAV scheduler gracefully...');
+  console.log('SIGTERM received, shutting down schedulers gracefully...');
   try {
     if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
       console.log('NAV Scheduler shut down successfully');
     }
+    if (jobScheduler && jobScheduler.stopAllTimers) {
+      jobScheduler.stopAllTimers();
+      console.log('Jobs Scheduler shut down successfully');
+    }
   } catch (error) {
-    console.error('Error shutting down NAV scheduler:', error);
+    console.error('Error shutting down schedulers:', error);
   } finally {
     process.exit(0);
   }
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down NAV scheduler gracefully...');
+  console.log('SIGINT received, shutting down schedulers gracefully...');
   try {
     if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
       console.log('NAV Scheduler shut down successfully');
     }
+    if (jobScheduler && jobScheduler.stopAllTimers) {
+      jobScheduler.stopAllTimers();
+      console.log('Jobs Scheduler shut down successfully');
+    }
   } catch (error) {
-    console.error('Error shutting down NAV scheduler:', error);
+    console.error('Error shutting down schedulers:', error);
   } finally {
     process.exit(0);
   }
@@ -744,18 +752,26 @@ app.listen(PORT, async () => {
       // Don't fail server startup if scheduler fails - just log the error
     }
 
-    // Initialize Portfolio Snapshot Scheduler Service
+    // Initialize Generic Jobs Scheduler Service
     try {
-      console.log('📸 Initializing Portfolio Snapshot Scheduler Service...');
+      console.log('⚙️  Initializing Generic Jobs Scheduler Service...');
 
-      const { PortfolioSnapshotSchedulerService } = await import('./services/portfolioSnapshotScheduler.service');
-      portfolioSnapshotScheduler = new PortfolioSnapshotSchedulerService();
-      await portfolioSnapshotScheduler.initializeScheduler();
+      const { schedulerService } = await import('./routes/jobs.routes');
+      const { PortfolioSnapshotJob } = await import('./services/jobs/portfolioSnapshot.job');
 
-      console.log('✅ Portfolio Snapshot Scheduler Service initialized successfully');
+      jobScheduler = schedulerService;
+
+      // Register job executors
+      jobScheduler.registerJob(new PortfolioSnapshotJob());
+      console.log('✅ Registered job: PORTFOLIO_SNAPSHOT');
+
+      // Initialize scheduler (load configs and start timers)
+      await jobScheduler.initializeScheduler();
+
+      console.log('✅ Generic Jobs Scheduler Service initialized successfully');
     } catch (schedulerError: any) {
-      console.error('⚠️  Portfolio Snapshot Scheduler initialization failed:', schedulerError.message);
-      console.log('📸 Portfolio Snapshot Scheduler will be available but no active schedules will run');
+      console.error('⚠️  Jobs Scheduler initialization failed:', schedulerError.message);
+      console.log('⚙️  Jobs Scheduler will be available but no active schedules will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
 
@@ -832,7 +848,7 @@ app.listen(PORT, async () => {
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
-║  Portfolio Snapshots: ${portfolioSnapshotScheduler ? '✅' : '⚠️ '} ${portfolioSnapshotScheduler ? 'Active' : 'Failed'}   ║
+║  Jobs Scheduler: ${jobScheduler ? '✅' : '⚠️ '} ${jobScheduler ? 'Active' : 'Failed'}       ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║
 ╚════════════════════════════════════════╝
