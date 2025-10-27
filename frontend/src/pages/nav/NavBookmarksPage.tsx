@@ -127,13 +127,35 @@ const NavBookmarksPage: React.FC = () => {
 
   // Filter card click handlers
   const handleFilterByHistoricalData = (filter: 'with_data' | 'without_data') => {
-    setHistoricalDataFilter(prev => prev === filter ? 'all' : filter);
+    const newFilter = historicalDataFilter === filter ? 'all' : filter;
+    setHistoricalDataFilter(newFilter);
     setCurrentPage(1);
+
+    // Immediately fetch with new filter
+    fetchBookmarks({
+      page: 1,
+      page_size: pageSize,
+      search: searchQuery || undefined,
+      amc_name: amcFilter || undefined,
+      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      has_historical_data: newFilter === 'all' ? undefined : newFilter === 'with_data' ? 'true' : 'false'
+    });
   };
 
   const handleFilterByDailyDownload = (filter: 'enabled' | 'disabled') => {
-    setDailyDownloadFilter(prev => prev === filter ? 'all' : filter);
+    const newFilter = dailyDownloadFilter === filter ? 'all' : filter;
+    setDailyDownloadFilter(newFilter);
     setCurrentPage(1);
+
+    // Immediately fetch with new filter
+    fetchBookmarks({
+      page: 1,
+      page_size: pageSize,
+      search: searchQuery || undefined,
+      amc_name: amcFilter || undefined,
+      daily_download_only: newFilter === 'enabled' ? true : undefined,
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
+    });
   };
 
   const handleShowAllSchemes = () => {
