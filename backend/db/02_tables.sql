@@ -48,6 +48,7 @@ CREATE TABLE t_users (
     theme_preference VARCHAR(50) DEFAULT 'techy-simple',
     environment_preference VARCHAR(10) DEFAULT 'live',
     is_live BOOLEAN DEFAULT true,
+    default_comparison_index VARCHAR(50),
     CONSTRAINT unique_email_per_tenant UNIQUE (tenant_id, email)
 );
 
@@ -203,6 +204,28 @@ CREATE TABLE t_customer_addresses (
 
 COMMENT ON TABLE t_customer_addresses IS 'Multiple addresses per customer with type classification';
 COMMENT ON COLUMN t_customer_addresses.is_primary IS 'Primary address for the customer';
+
+-- TABLE: t_customer_meetings
+CREATE TABLE t_customer_meetings (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    meeting_date TIMESTAMP NOT NULL,
+    meeting_type VARCHAR(50) NOT NULL,
+    meeting_mode VARCHAR(20) NOT NULL CHECK (meeting_mode IN ('in-person', 'video-call', 'phone-call', 'email')),
+    agenda TEXT,
+    notes TEXT,
+    follow_up_required BOOLEAN DEFAULT FALSE,
+    follow_up_date DATE,
+    created_by INTEGER NOT NULL REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE t_customer_meetings IS 'Customer meeting tracking and follow-up management';
+COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: in-person, video-call, phone-call, email';
+COMMENT ON COLUMN t_customer_meetings.follow_up_required IS 'Flag indicating if follow-up action is needed';
 
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
@@ -738,6 +761,9 @@ CREATE TABLE t_jtbd_configurations (
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
     is_active BOOLEAN NOT NULL DEFAULT true,
     config_data JSONB NOT NULL,
+    is_watchlisted BOOLEAN DEFAULT FALSE,
+    watchlist_auto_added BOOLEAN DEFAULT FALSE,
+    watchlist_added_at TIMESTAMP,
     next_alert_date DATE,
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -787,6 +813,23 @@ CREATE TABLE t_goal_progress_snapshots (
 );
 
 COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement over time';
+
+-- TABLE: t_goal_scheme_allocations
+CREATE TABLE t_goal_scheme_allocations (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+    scheme_id INTEGER NOT NULL REFERENCES t_schemes(id),
+    allocation_percentage NUMERIC(5,2) NOT NULL CHECK (allocation_percentage >= 0 AND allocation_percentage <= 100),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_goal_scheme_allocation UNIQUE (goal_id, scheme_id)
+);
+
+COMMENT ON TABLE t_goal_scheme_allocations IS 'Goal scheme allocation tracking for portfolio recommendations';
+COMMENT ON COLUMN t_goal_scheme_allocations.allocation_percentage IS 'Recommended allocation percentage for this scheme in the goal';
 
 -- ============================================================================
 -- SECTION 8: BOOKMARK TABLES & REASON MASTERS
