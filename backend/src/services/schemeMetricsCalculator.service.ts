@@ -199,13 +199,13 @@ export class SchemeMetricsCalculator {
 
   /**
    * Calculate metrics for multiple schemes in batch
-   * Processes schemes in batches with delay to prevent database overload
-   * 
+   * Processes schemes in batches without delays for maximum throughput
+   *
    * @param schemeIds Array of scheme IDs to calculate
    * @param asOfDate Date to calculate metrics for (defaults to latest available)
    * @param isLive Whether to use live or test data
    * @param batchSize Number of schemes to process in each batch (default: 100)
-   * @param delayMs Delay between batches in milliseconds (default: 5000)
+   * @param delayMs Delay between batches in milliseconds (deprecated, no longer used)
    * @returns Batch calculation result
    */
   async batchCalculateSchemes(
@@ -213,7 +213,7 @@ export class SchemeMetricsCalculator {
     asOfDate?: Date,
     isLive: boolean = true,
     batchSize: number = 100,
-    delayMs: number = 5000
+    delayMs: number = 0  // Deprecated: no longer applies delays
   ): Promise<BatchCalculationResult> {
     const startTime = Date.now();
 
@@ -296,20 +296,17 @@ export class SchemeMetricsCalculator {
         }
       }
 
-      // Delay between batches (except for last batch)
-      if (i + batchSize < schemeIds.length) {
-        SimpleLogger.info(
-          'SchemeMetricsCalculator',
-          `Batch ${batchNumber} complete, waiting ${delayMs}ms before next batch`,
-          'batchCalculateSchemes',
-          {
-            successfulSoFar: result.successful,
-            failedSoFar: result.failed
-          }
-        );
-
-        await this.delay(delayMs);
-      }
+      // NOTE: Rate limiter removed as per user request
+      // No delay between batches for maximum throughput
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        `Batch ${batchNumber} complete`,
+        'batchCalculateSchemes',
+        {
+          successfulSoFar: result.successful,
+          failedSoFar: result.failed
+        }
+      );
     }
 
     result.executionTimeMs = Date.now() - startTime;
