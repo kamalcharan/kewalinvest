@@ -304,8 +304,51 @@ export class PortfolioSnapshotController {
   // ==================== UTILITY ENDPOINTS ====================
 
   /**
+   * POST /api/cruise-control/snapshots/backfill-smart
+   * Smart backfill - automatically detects missing months per customer
+   */
+  smartBackfill = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const environment = req.query.environment as string;
+
+      if (!tenantId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      const isLive = environment === 'live';
+      const { customer_ids } = req.body;
+
+      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
+
+      const result = await this.snapshotService.smartBackfill({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: customer_ids
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: `Smart backfill completed. Created ${result.total_snapshots_created} snapshots across ${result.months_processed} months.`
+      });
+
+    } catch (error: any) {
+      console.error('[SnapshotController] Error during smart backfill:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to perform smart backfill'
+      });
+    }
+  };
+
+  /**
    * POST /api/cruise-control/snapshots/backfill
-   * Backfill historical snapshots (Admin only - for initial setup)
+   * Backfill historical snapshots with manual date range (Admin only)
    */
   backfillSnapshots = async (req: Request, res: Response): Promise<void> => {
     try {

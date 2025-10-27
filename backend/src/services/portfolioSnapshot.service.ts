@@ -267,7 +267,103 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Backfill historical snapshots for multiple months
+   * Smart backfill - automatically detects missing months for each customer
+   * and generates snapshots from first transaction to previous month
+   */
+  async smartBackfill(request: { tenant_id: number; is_live: boolean; customer_ids?: number[] }): Promise<BackfillResult> {
+    const startTime = Date.now();
+    const errors: BackfillMonthError[] = [];
+    let totalSnapshotsCreated = 0;
+    let totalSnapshotsUpdated = 0;
+    const monthsProcessedSet = new Set<string>();
+
+    try {
+      // Get customers to process
+      const customers = await this.getActiveCustomers(request.tenant_id, request.is_live, request.customer_ids);
+
+      const customerInfo = request.customer_ids
+        ? `${request.customer_ids.length} customer(s)`
+        : `all ${customers.length} customers`;
+
+      console.log(`[SnapshotService] Starting smart backfill for ${customerInfo}`);
+
+      // Process each customer
+      for (const customer of customers) {
+        try {
+          // Get missing months for this customer
+          const missingMonths = await this.getMissingMonths(customer.id, request.tenant_id, request.is_live);
+
+          if (missingMonths.length === 0) {
+            console.log(`[SnapshotService] Customer ${customer.id} (${customer.name}) - No missing snapshots`);
+            continue;
+          }
+
+          console.log(`[SnapshotService] Customer ${customer.id} (${customer.name}) - Generating ${missingMonths.length} missing snapshots`);
+
+          // Generate snapshots for missing months
+          for (const monthEnd of missingMonths) {
+            try {
+              const snapshotData = await this.calculatePortfolioValue({
+                customer_id: customer.id,
+                tenant_id: request.tenant_id,
+                is_live: request.is_live,
+                as_of_date: monthEnd
+              });
+
+              // Save snapshot
+              const isUpdate = await this.saveSnapshot(snapshotData);
+
+              if (isUpdate) {
+                totalSnapshotsUpdated++;
+              } else {
+                totalSnapshotsCreated++;
+              }
+
+              // Track unique months processed
+              monthsProcessedSet.add(monthEnd.toISOString().slice(0, 7));
+
+            } catch (error: any) {
+              errors.push({
+                month: monthEnd,
+                customer_id: customer.id,
+                error_message: error.message
+              });
+              console.error(`[SnapshotService] Failed to generate snapshot for customer ${customer.id}, month ${monthEnd.toISOString().slice(0, 7)}:`, error.message);
+            }
+          }
+
+        } catch (error: any) {
+          errors.push({
+            month: new Date(),
+            customer_id: customer.id,
+            error_message: `Failed to process customer: ${error.message}`
+          });
+          console.error(`[SnapshotService] Failed to process customer ${customer.id}:`, error.message);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      const monthsProcessed = monthsProcessedSet.size;
+
+      console.log(`[SnapshotService] Smart backfill complete. Customers: ${customers.length}, Unique months: ${monthsProcessed}, Created: ${totalSnapshotsCreated}, Updated: ${totalSnapshotsUpdated}, Duration: ${duration}ms`);
+
+      return {
+        success: errors.length === 0,
+        months_processed: monthsProcessed,
+        total_snapshots_created: totalSnapshotsCreated,
+        total_snapshots_updated: totalSnapshotsUpdated,
+        execution_duration_ms: duration,
+        errors
+      };
+
+    } catch (error: any) {
+      console.error('[SnapshotService] Fatal error during smart backfill:', error);
+      throw new Error(`Smart backfill failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Backfill historical snapshots for multiple months (manual date range)
    */
   async backfillSnapshots(request: BackfillRequest): Promise<BackfillResult> {
     const startTime = Date.now();
