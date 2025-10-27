@@ -3,18 +3,22 @@ import { PoolClient } from 'pg';
 
 /**
  * Seeds all necessary master data for a new tenant
- * This includes bookmark reasons for both live and test environments
+ * This includes bookmark reasons and job scheduler configs for both live and test environments
  *
- * NOTE: Transaction types are GLOBAL (not tenant-specific) and should be
- * seeded once in the database initialization scripts (02_tables.sql)
+ * NOTE: Global master data (Transaction types, Job types) are seeded once
+ * in the database initialization scripts (05_seed_data.sql)
  *
  * @param tenantId - The ID of the newly created tenant
+ * @param userId - The ID of the first user (admin) for this tenant
  * @param client - Database client (should be within a transaction)
  */
-export async function seedTenantData(tenantId: number, client: PoolClient): Promise<void> {
+export async function seedTenantData(tenantId: number, userId: number, client: PoolClient): Promise<void> {
   console.log(`🌱 SEED: Starting seed data for tenant ${tenantId}...`);
 
   try {
+    // Seed global job types first (if not already seeded)
+    await seedGlobalJobTypes(client);
+
     // Seed for both environments
     for (const isLive of [true, false]) {
       const envLabel = isLive ? 'LIVE' : 'TEST';
@@ -22,6 +26,9 @@ export async function seedTenantData(tenantId: number, client: PoolClient): Prom
 
       // ========== SEED BOOKMARK REASONS ==========
       await seedBookmarkReasons(tenantId, isLive, client);
+
+      // ========== SEED JOB SCHEDULER CONFIGS ==========
+      await seedJobSchedulerConfigs(tenantId, userId, isLive, client);
     }
 
     console.log(`✅ SEED: Completed seed data for tenant ${tenantId}`);
@@ -76,4 +83,89 @@ async function seedBookmarkReasons(
   }
 
   console.log(`  ✅ Seeded ${bookmarkReasons.length} bookmark reasons (is_live=${isLive})`);
+}
+
+/**
+ * Seeds global job types (if they don't already exist)
+ * Job types are global master data shared across all tenants
+ */
+async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
+  const jobTypes = [
+    {
+      code: 'PORTFOLIO_SNAPSHOT',
+      name: 'Portfolio Snapshot Generation',
+      description: 'Generate monthly portfolio snapshots for all customers to enable performance tracking',
+      default_cron_expression: '0 21 * * 5', // Friday 9 PM
+      default_max_retries: 3
+    }
+  ];
+
+  for (const jobType of jobTypes) {
+    await client.query(
+      `INSERT INTO m_job_types (
+        code, name, description, default_cron_expression,
+        default_max_retries, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (code) DO NOTHING`,
+      [
+        jobType.code,
+        jobType.name,
+        jobType.description,
+        jobType.default_cron_expression,
+        jobType.default_max_retries,
+        true
+      ]
+    );
+  }
+
+  console.log(`  ✅ Ensured ${jobTypes.length} job types exist globally`);
+}
+
+/**
+ * Seeds default job scheduler configurations for a tenant environment
+ * Creates enabled scheduler configs for all active job types
+ */
+async function seedJobSchedulerConfigs(
+  tenantId: number,
+  userId: number,
+  isLive: boolean,
+  client: PoolClient
+): Promise<void> {
+  // Get all active job types
+  const jobTypesResult = await client.query(
+    `SELECT code, default_cron_expression, default_max_retries
+     FROM m_job_types
+     WHERE is_active = true`
+  );
+
+  const jobTypes = jobTypesResult.rows;
+
+  for (const jobType of jobTypes) {
+    // Create default scheduler config for this job type
+    await client.query(
+      `INSERT INTO t_job_scheduler_configs (
+        tenant_id, job_type, user_id, is_live,
+        schedule_type, cron_expression, is_enabled, max_retries,
+        job_config
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (tenant_id, job_type, is_live)
+      DO UPDATE SET
+        cron_expression = EXCLUDED.cron_expression,
+        max_retries = EXCLUDED.max_retries,
+        updated_at = CURRENT_TIMESTAMP`,
+      [
+        tenantId,
+        jobType.code,
+        userId,
+        isLive,
+        'weekly', // Default to weekly schedule
+        jobType.default_cron_expression || '0 21 * * 5', // Default Friday 9 PM
+        true, // Enabled by default
+        jobType.default_max_retries || 3,
+        '{}' // Empty job config (can be customized later)
+      ]
+    );
+  }
+
+  console.log(`  ✅ Seeded ${jobTypes.length} job scheduler configs (is_live=${isLive})`);
 }
