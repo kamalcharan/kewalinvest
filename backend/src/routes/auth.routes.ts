@@ -182,7 +182,7 @@ router.post('/register', async (req: Request, res: Response): Promise<Response> 
 
     // ========== SEED TENANT DATA ==========
     console.log('🌱 REGISTER: Seeding master data for new tenant...');
-    await seedTenantData(tenant.id, client);
+    await seedTenantData(tenant.id, user.id, client);
     console.log('✅ REGISTER: Tenant data seeded successfully');
 
     // ========== COMMIT TRANSACTION ==========
