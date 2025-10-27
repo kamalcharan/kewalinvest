@@ -224,7 +224,7 @@ export class JobsController {
 
       const isLive = isLiveParam === 'true';
 
-      console.log(`[JobsController] Manual trigger requested for ${jobType}, tenant ${tenantId} (${environment})`);
+      console.log(`[JobsController] Manual trigger requested for ${jobType}, tenant ${tenantId} (${isLive ? 'live' : 'test'})`);
 
       // Trigger job in background
       await this.schedulerService.triggerManual(tenantId, isLive, jobType);
