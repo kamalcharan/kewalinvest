@@ -665,7 +665,10 @@ if (type === 'TransactionData') {
 
         {/* Mapping Rows */}
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          {console.log('🎨 [FieldMapping] Rendering mappings:', { mappingsCount: mappings.length, mappings })}
+          {(() => {
+            console.log('🎨 [FieldMapping] Rendering mappings:', { mappingsCount: mappings.length, mappings });
+            return null;
+          })()}
           {mappings.length === 0 ? (
             <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
               ⚠️ No mappings found. Check console for details.
