@@ -27,46 +27,46 @@ Successfully completed Phases 1-4 of Customer Dashboard Enhancement project. All
 
 ### Features Implemented:
 1. **Compact Header Design**
-   - Reduced height by ~30% from original
+   - Reduced height by ~30% from originl
    - Customer name, IWELL code, contact info
-   - Family badge with member count
+   - Family badge with member count 
 
 2. **Family Members Popover**
-   - Shows family head information
+   - Shows family head information 
    - Lists all family members
    - Click on family badge to open
 
 3. **Performance Graph**
-   - Line chart showing portfolio value over time
-   - Interactive tooltips on hover
-   - Responsive design
+   - Line chart showing portfolio value over time 
+   - Interactive tooltips on hover 
+   - Responsive design 
 
 ### Exit Criteria Checklist:
 
 **Location:** Navigate to `/customers/:id`
 
 - [ ] **Header Display**
-  - [ ] Customer name displays correctly
-  - [ ] IWELL code is visible
-  - [ ] Contact info (email, mobile) shows
-  - [ ] Header height is noticeably reduced
+  - [ ] Customer name displays correctly (CK-working)
+  - [ ] IWELL code is visible (CK- working)
+  - [ ] Contact info (email, mobile) shows(CK-working)
+  - [ ] Header height is noticeably reduced (CK - working)
 
 - [ ] **Family Badge**
-  - [ ] Badge appears for family members (shows "3 Members" etc.)
-  - [ ] Badge does NOT appear for individual customers
-  - [ ] Click badge opens popover
+  - [ ] Badge appears for family members (shows "3 Members" etc.) (CK- not working)
+  - [ ] Badge does NOT appear for individual customers (CK- not working)
+  - [ ] Click badge opens popover(CK- not working)
 
 - [ ] **Family Members Popover**
-  - [ ] Shows family head name and IWELL code
-  - [ ] Lists all family members with names
-  - [ ] Click outside closes popover
-  - [ ] Popover positioning is correct
+  - [ ] Shows family head name and IWELL code(CK- not working)
+  - [ ] Lists all family members with names(CK- not working)
+  - [ ] Click outside closes popover(CK- not working)
+  - [ ] Popover positioning is correct(CK- not working)
 
 - [ ] **Performance Graph**
-  - [ ] Chart renders with portfolio data
-  - [ ] Hover shows tooltip with date and value
-  - [ ] Chart is responsive (resizes with window)
-  - [ ] Shows "No data" message if no portfolio history
+  - [ ] Chart renders with portfolio data(CK- not working - chart not seen)
+  - [ ] Hover shows tooltip with date and value(CK- not working)
+  - [ ] Chart is responsive (resizes with window)(CK- not working)
+  - [ ] Shows "No data" message if no portfolio history(CK- not working)
 
 - [ ] **Theme Compatibility**
   - [ ] Works correctly in light mode
