@@ -489,12 +489,10 @@ export class NavDownloadService {
             processedSchemes: processedSchemes,
             processedRecords: totalRecordsInserted + totalRecordsUpdated
           });
-          
-          // Rate limiting: wait 500ms before next scheme (except for last)
-          if (i < schemeIds.length - 1) {
-            await this.sleep(500);
-          }
-          
+
+          // NOTE: Rate limiter removed as per user request
+          // No delay between schemes for maximum throughput
+
         } catch (schemeError: any) {
           SimpleLogger.error('NavDownload', 'Failed to process scheme, continuing with others', 'executeHistoricalDownload', {
             jobId, schemeId, schemeCode, error: schemeError.message

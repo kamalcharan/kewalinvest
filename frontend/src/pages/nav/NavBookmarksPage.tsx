@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useBookmarks, useDownloads, useDownloadProgress, useNavStatistics } from '../../hooks/useNavData';
+import { useBookmarks, useDownloads, useDownloadProgress, useNavStatistics, useBulkDownload } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
@@ -13,6 +13,7 @@ import { NavDataViewerModal } from '../../components/nav/NavDataViewerModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
+import { BulkDownloadProgress } from '../../components/nav/BulkDownloadProgress';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
@@ -66,6 +67,9 @@ const NavBookmarksPage: React.FC = () => {
   const { triggerHistoricalDownload } = useDownloads();
   const { startPolling, stopPolling } = useDownloadProgress();
   const { statistics } = useNavStatistics();
+
+  // Hooks - Bulk Download operations
+  const bulkDownload = useBulkDownload();
 
   // Hooks - Metrics operations
   const bulkMetrics = useBulkMetricsCalculation({
@@ -176,7 +180,7 @@ const NavBookmarksPage: React.FC = () => {
   // Historical download handler
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
     console.log('Historical download started with job ID:', jobId);
-    
+
     if (!jobId || jobId <= 0) {
       toastService.error('Invalid download job ID received');
       return;
@@ -187,7 +191,7 @@ const NavBookmarksPage: React.FC = () => {
 
     startPolling(jobId, (progressData: DownloadProgress) => {
       setCurrentProgress(progressData);
-      
+
       FrontendErrorLogger.info(
         'Progress update',
         'NavBookmarksPage',
@@ -199,12 +203,27 @@ const NavBookmarksPage: React.FC = () => {
           totalSchemes: progressData.totalSchemes
         }
       );
+    }).then(() => {
+      // Refresh bookmarks after download completes to update card status in real-time
+      FrontendErrorLogger.info(
+        'Download completed, refreshing bookmarks',
+        'NavBookmarksPage',
+        { jobId }
+      );
+      setTimeout(() => {
+        fetchBookmarks({
+          page: currentPage,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          amc_name: amcFilter || undefined,
+        });
+      }, 1000);
     }).catch((error) => {
       console.error('Progress polling failed:', error);
       toastService.error('Failed to track download progress: ' + error.message);
       setShowProgressModal(false);
     });
-  }, [startPolling]);
+  }, [startPolling, fetchBookmarks, currentPage, searchQuery, amcFilter]);
 
   const handleCloseHistoricalModal = () => {
     setShowHistoricalModal(false);
@@ -340,14 +359,65 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  const handleBulkHistoricalDownload = () => {
+  // NEW: Sequential bulk historical download
+  const handleBulkHistoricalDownload = useCallback(async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
-    if (selectedBookmarks.length === 0) return;
 
-    setSelectedBookmark(selectedBookmarks[0]);
-    setShowHistoricalModal(true);
-    toastService.info('Bulk historical download - showing single scheme for now. Full bulk support coming soon.');
-  };
+    if (selectedBookmarks.length === 0) {
+      toastService.warning('Please select schemes to download');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Start sequential download for ${selectedBookmarks.length} selected schemes?\n\n` +
+      `This will download historical NAV data one scheme at a time. You can cancel anytime.`
+    );
+
+    if (!confirmed) return;
+
+    FrontendErrorLogger.info(
+      'Starting sequential bulk historical download',
+      'NavBookmarksPage',
+      { totalSchemes: selectedBookmarks.length }
+    );
+
+    // Clear selection
+    setSelectedBookmarkIds(new Set());
+    setShowBulkActions(false);
+
+    try {
+      // Start sequential download
+      const result = await bulkDownload.processSchemes(selectedBookmarks);
+
+      // Refresh bookmarks after completion
+      setTimeout(() => {
+        fetchBookmarks({
+          page: currentPage,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          amc_name: amcFilter || undefined,
+        });
+      }, 1000);
+
+      FrontendErrorLogger.info(
+        'Sequential bulk download completed',
+        'NavBookmarksPage',
+        {
+          successful: result.successful,
+          failed: result.failed,
+          skipped: result.skipped,
+        }
+      );
+
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Sequential bulk download failed',
+        'NavBookmarksPage',
+        { error: error.message },
+        error.stack
+      );
+    }
+  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, searchQuery, amcFilter]);
 
   // NEW: Bulk metrics calculation
   const handleBulkCalculateMetrics = useCallback(() => {
@@ -825,7 +895,7 @@ const NavBookmarksPage: React.FC = () => {
                     fontWeight: '500'
                   }}
                 >
-                  Historical Download
+                  📥 Sequential Download
                 </button>
                 
                 {/* NEW: Bulk Calculate Metrics */}
@@ -1165,6 +1235,15 @@ const NavBookmarksPage: React.FC = () => {
         errors={bulkMetrics.progress.errors}
         onCancel={bulkMetrics.cancel}
         onClose={() => bulkMetrics.reset()}
+      />
+
+      {/* NEW: Bulk Download Progress Modal */}
+      <BulkDownloadProgress
+        isOpen={bulkDownload.isProcessing}
+        current={bulkDownload.progress.current}
+        total={bulkDownload.progress.total}
+        currentScheme={bulkDownload.progress.currentScheme}
+        onCancel={bulkDownload.cancel}
       />
 
       {/* CSS Animation */}

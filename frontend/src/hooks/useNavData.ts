@@ -1535,10 +1535,8 @@ export const useBulkDownload = (): UseBulkDownloadReturn => {
         stopPolling();
       }
 
-      // Optional: Small delay between schemes (can be 0 or removed)
-      if (i < schemes.length - 1 && !isCancelled) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      // NOTE: Rate limiter removed as per user request
+      // No delay between schemes for maximum throughput
     }
 
     // All done!
