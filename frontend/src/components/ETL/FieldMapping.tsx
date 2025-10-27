@@ -273,10 +273,9 @@ if (type === 'TransactionData') {
       { patterns: ['sb code', 'sb_code', 'subbroker'], field: 'sb_code' },
       { patterns: ['applicant'], field: 'applicant' },
 
-      // Customer family fields (must come before generic 'family head' pattern for proper matching)
-      { patterns: ['family head name', 'family_head_name'], field: 'family_head_name' },
-      { patterns: ['family head code', 'family_head_code', 'family head iwell code', 'family_head_iwell_code'], field: 'family_head_iwell_code' },
-      { patterns: ['family head', 'family_head'], field: 'family_head' }
+      // Customer family fields - 'family head' alone maps to family_head_name
+      { patterns: ['family head name', 'family_head_name', 'family head', 'family_head'], field: 'family_head_name' },
+      { patterns: ['family head code', 'family_head_code', 'family head iwell code', 'family_head_iwell_code'], field: 'family_head_iwell_code' }
     ];
     
     for (const match of fuzzyMatches) {
