@@ -24,6 +24,7 @@ import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
+import portfolioSnapshotRoutes from './routes/portfolioSnapshot.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -44,6 +45,7 @@ const PORT = process.env.PORT || 8080;
 
 // CHANGED: Declare without import
 let navScheduler: any;
+let portfolioSnapshotScheduler: any;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -132,6 +134,7 @@ app.get('/health', (_req: Request, res: Response) => {
       default_comparison_index: true, // NEW: Default index for performance charts
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
+      portfolio_snapshot_scheduler: !!portfolioSnapshotScheduler, // NEW: Automated monthly snapshot generation
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -169,7 +172,8 @@ app.get('/api', (_req: Request, res: Response) => {
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
-      meetings: '/api/meetings'
+      meetings: '/api/meetings',
+      cruise_control_snapshots: '/api/cruise-control/snapshots'
     }
   });
 });
@@ -190,6 +194,7 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/cruise-control/snapshots', portfolioSnapshotRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -738,7 +743,22 @@ app.listen(PORT, async () => {
       console.log('📅 NAV Scheduler will be available but no active schedules will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
-    
+
+    // Initialize Portfolio Snapshot Scheduler Service
+    try {
+      console.log('📸 Initializing Portfolio Snapshot Scheduler Service...');
+
+      const { PortfolioSnapshotSchedulerService } = await import('./services/portfolioSnapshotScheduler.service');
+      portfolioSnapshotScheduler = new PortfolioSnapshotSchedulerService();
+      await portfolioSnapshotScheduler.initializeScheduler();
+
+      console.log('✅ Portfolio Snapshot Scheduler Service initialized successfully');
+    } catch (schedulerError: any) {
+      console.error('⚠️  Portfolio Snapshot Scheduler initialization failed:', schedulerError.message);
+      console.log('📸 Portfolio Snapshot Scheduler will be available but no active schedules will run');
+      // Don't fail server startup if scheduler fails - just log the error
+    }
+
     // Check N8N configuration
     if (process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_URL) {
       console.log('✅ N8N integration configured');
@@ -812,6 +832,7 @@ app.listen(PORT, async () => {
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
+║  Portfolio Snapshots: ${portfolioSnapshotScheduler ? '✅' : '⚠️ '} ${portfolioSnapshotScheduler ? 'Active' : 'Failed'}   ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║
 ╚════════════════════════════════════════╝
