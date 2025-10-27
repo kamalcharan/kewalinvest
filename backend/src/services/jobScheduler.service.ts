@@ -519,16 +519,23 @@ export class JobSchedulerService {
       WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
     `;
 
-    const [recentResult, statsResult] = await Promise.all([
+    const runningQuery = `
+      SELECT COUNT(*) as count FROM t_job_executions
+      WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
+      AND status IN ('running', 'retrying')
+    `;
+
+    const [recentResult, statsResult, runningResult] = await Promise.all([
       this.db.query(recentQuery, [tenantId, isLive, jobType]),
-      this.db.query(statsQuery, [tenantId, isLive, jobType])
+      this.db.query(statsQuery, [tenantId, isLive, jobType]),
+      this.db.query(runningQuery, [tenantId, isLive, jobType])
     ]);
 
     const stats = statsResult.rows[0];
     const successRate = stats.total_count > 0 ? (stats.success_count / stats.total_count) * 100 : 0;
 
-    const key = this.getTimerKey(tenantId, isLive, jobType);
-    const isRunning = this.activeTimers.has(key) && this.activeTimers.get(key)!.isActive;
+    // Check if there's an actual running execution (not just a scheduled timer)
+    const isRunning = parseInt(runningResult.rows[0].count) > 0;
 
     return {
       config,
