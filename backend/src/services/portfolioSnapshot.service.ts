@@ -193,7 +193,7 @@ export class PortfolioSnapshotService {
         updated_at
       )
       SELECT
-        t.tenant_id,
+        t.id,
         c.is_live,
         $1,
         $2,
