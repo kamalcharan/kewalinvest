@@ -1,7 +1,7 @@
 // frontend/src/pages/cruiseControl/PortfolioSnapshotsTab.tsx
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
 import JobsService from '../../services/jobs.service';
 import { toastService } from '../../services/toast.service';
