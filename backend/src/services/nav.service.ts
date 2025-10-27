@@ -55,7 +55,7 @@ export class NavService {
     params: SchemeBookmarkSearchParams = {}
   ): Promise<SchemeBookmarkListResponse> {
     try {
-      const { page = 1, page_size = 20, search, daily_download_only, amc_name } = params;
+      const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data } = params;
       const offset = (page - 1) * page_size;
     let baseQuery = `
       FROM t_scheme_bookmarks sb
@@ -83,6 +83,14 @@ export class NavService {
       queryParams.push(amc_name);
       paramIndex++;
     }
+
+    // Filter by historical data availability (NAV records count)
+    if (has_historical_data === 'true') {
+      baseQuery += ` AND sd.total_nav_records > 0`;
+    } else if (has_historical_data === 'false') {
+      baseQuery += ` AND (sd.total_nav_records IS NULL OR sd.total_nav_records = 0)`;
+    }
+    // 'all' or undefined = no filter, show all
 
     const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
     const countResult = await this.db.query(countQuery, queryParams);

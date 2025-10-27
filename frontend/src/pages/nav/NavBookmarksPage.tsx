@@ -62,7 +62,8 @@ const NavBookmarksPage: React.FC = () => {
     page_size: pageSize,
     search: searchQuery || undefined,
     amc_name: amcFilter || undefined,
-    daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined
+    daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+    has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
   });
 
   const { startPolling, stopPolling } = useDownloadProgress();
@@ -96,19 +97,8 @@ const NavBookmarksPage: React.FC = () => {
     }
   });
 
-  // Filter bookmarks based on daily download and historical data filters
-  const filteredBookmarks = bookmarks.filter(bookmark => {
-    // Daily download filter
-    if (dailyDownloadFilter === 'enabled' && !bookmark.daily_download_enabled) return false;
-    if (dailyDownloadFilter === 'disabled' && bookmark.daily_download_enabled) return false;
-
-    // Historical data filter
-    const hasHistoricalData = (bookmark.nav_records_count || 0) > 0;
-    if (historicalDataFilter === 'with_data' && !hasHistoricalData) return false;
-    if (historicalDataFilter === 'without_data' && hasHistoricalData) return false;
-
-    return true;
-  });
+  // No client-side filtering needed - all filtering is done server-side
+  const filteredBookmarks = bookmarks;
 
   // Get unique AMCs for filter dropdown
   const uniqueAmcs = [...new Set(bookmarks.map(b => b.amc_name))].sort();
@@ -121,9 +111,10 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined
+      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
     });
-  }, [searchQuery, amcFilter, dailyDownloadFilter, fetchBookmarks]);
+  }, [searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, fetchBookmarks]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -161,7 +152,8 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined
+      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
     });
   };
 
@@ -1100,34 +1092,16 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 margin: 0
               }}>
-                {/* Show filtered count when client-side filters active */}
-                {historicalDataFilter !== 'all' ? (
-                  <>
-                    {filteredBookmarks.length} of {bookmarks.length} schemes on this page
-                    <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
-                      {' '}(filtered
-                      {historicalDataFilter === 'without_data' && ' • No Historical Data'}
-                      {historicalDataFilter === 'with_data' && ' • With Historical Data'}
-                      )
-                    </span>
-                    {filteredBookmarks.length === 0 && bookmarks.length > 0 && (
-                      <span style={{ color: colors.semantic.warning, display: 'block', marginTop: '4px' }}>
-                        Try another page or clear filters
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {pagination?.total || 0} schemes found • Showing 25 per page
-                    {(searchQuery || amcFilter || dailyDownloadFilter !== 'all') && (
-                      <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
-                        {' '}(filtered
-                        {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
-                        {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
-                        )
-                      </span>
-                    )}
-                  </>
+                {pagination?.total || 0} schemes found • Showing 25 per page
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+                  <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
+                    {' '}(filtered
+                    {historicalDataFilter === 'without_data' && ' • No Historical Data'}
+                    {historicalDataFilter === 'with_data' && ' • With Historical Data'}
+                    {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
+                    {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
+                    )
+                  </span>
                 )}
               </p>
             </div>
@@ -1180,7 +1154,7 @@ const NavBookmarksPage: React.FC = () => {
               color: colors.utility.secondaryText
             }}>
               <div style={{ fontSize: '64px', marginBottom: '20px' }}>
-                {historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all' ? '🔍' : '📚'}
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' ? '🔍' : '📚'}
               </div>
               <h4 style={{
                 fontSize: '20px',
@@ -1188,25 +1162,19 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.primaryText,
                 marginBottom: '12px'
               }}>
-                {historicalDataFilter !== 'all'
-                  ? 'No matching schemes on this page'
-                  : searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
                   ? 'No schemes match your filters'
                   : 'No schemes bookmarked yet'
                 }
               </h4>
               <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                {historicalDataFilter !== 'all'
-                  ? bookmarks.length > 0
-                    ? 'The schemes on this page don\'t match your filter. Try navigating to other pages or clear the filter to see all schemes.'
-                    : 'No schemes available on this page'
-                  : searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
                   ? 'Try adjusting your search criteria or clear filters'
                   : 'Search and bookmark schemes to start tracking their NAV data'
                 }
               </p>
               <button
-                onClick={historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                onClick={searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
                   ? handleClearFilters
                   : handleNavigateToSearch
                 }
@@ -1221,7 +1189,7 @@ const NavBookmarksPage: React.FC = () => {
                   fontWeight: '500'
                 }}
               >
-                {historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
                   ? 'Clear Filters'
                   : '🔍 Search & Bookmark Schemes'
                 }
@@ -1282,22 +1250,8 @@ const NavBookmarksPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination - Hidden when using client-side filters */}
-              {historicalDataFilter !== 'all' ? (
-                <div style={{
-                  marginTop: '32px',
-                  paddingTop: '24px',
-                  borderTop: `1px solid ${colors.utility.primaryText}10`,
-                  textAlign: 'center',
-                  color: colors.utility.secondaryText,
-                  fontSize: '14px'
-                }}>
-                  <p style={{ margin: 0 }}>
-                    📄 Showing all filtered results on current page.
-                    Clear the filter to use pagination.
-                  </p>
-                </div>
-              ) : pagination && pagination.totalPages > 1 && (
+              {/* Pagination - Now works with all filters (server-side) */}
+              {pagination && pagination.totalPages > 1 && (
                 <div style={{
                   display: 'flex',
                   justifyContent: 'center',
