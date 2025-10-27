@@ -28,6 +28,7 @@ const NavBookmarksPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [amcFilter, setAmcFilter] = useState('');
   const [dailyDownloadFilter, setDailyDownloadFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [historicalDataFilter, setHistoricalDataFilter] = useState<'all' | 'with_data' | 'without_data'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
@@ -95,10 +96,17 @@ const NavBookmarksPage: React.FC = () => {
     }
   });
 
-  // Filter bookmarks based on daily download filter
+  // Filter bookmarks based on daily download and historical data filters
   const filteredBookmarks = bookmarks.filter(bookmark => {
-    if (dailyDownloadFilter === 'enabled') return bookmark.daily_download_enabled;
-    if (dailyDownloadFilter === 'disabled') return !bookmark.daily_download_enabled;
+    // Daily download filter
+    if (dailyDownloadFilter === 'enabled' && !bookmark.daily_download_enabled) return false;
+    if (dailyDownloadFilter === 'disabled' && bookmark.daily_download_enabled) return false;
+
+    // Historical data filter
+    const hasHistoricalData = (bookmark.nav_records_count || 0) > 0;
+    if (historicalDataFilter === 'with_data' && !hasHistoricalData) return false;
+    if (historicalDataFilter === 'without_data' && hasHistoricalData) return false;
+
     return true;
   });
 
@@ -121,8 +129,20 @@ const NavBookmarksPage: React.FC = () => {
     setSearchQuery('');
     setAmcFilter('');
     setDailyDownloadFilter('all');
+    setHistoricalDataFilter('all');
     setCurrentPage(1);
     fetchBookmarks({ page: 1, page_size: pageSize });
+  };
+
+  // Filter card click handlers
+  const handleFilterByHistoricalData = (filter: 'with_data' | 'without_data') => {
+    setHistoricalDataFilter(prev => prev === filter ? 'all' : filter);
+    setCurrentPage(1);
+  };
+
+  const handleFilterByDailyDownload = (filter: 'enabled' | 'disabled') => {
+    setDailyDownloadFilter(prev => prev === filter ? 'all' : filter);
+    setCurrentPage(1);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -574,7 +594,7 @@ const NavBookmarksPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Statistics Cards */}
+        {/* Statistics Cards - Clickable Filters */}
         {statistics && (
           <div style={{
             display: 'grid',
@@ -582,6 +602,7 @@ const NavBookmarksPage: React.FC = () => {
             gap: '16px',
             marginBottom: '24px'
           }}>
+            {/* Total Schemes - Not Clickable */}
             <div style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
@@ -605,42 +626,125 @@ const NavBookmarksPage: React.FC = () => {
               </div>
             </div>
 
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '20px',
-              border: `1px solid ${colors.utility.secondaryText}20`
-            }}>
+            {/* Without Historical Data - Clickable */}
+            <div
+              onClick={() => handleFilterByHistoricalData('without_data')}
+              style={{
+                backgroundColor: historicalDataFilter === 'without_data'
+                  ? colors.semantic.warning + '15'
+                  : colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '20px',
+                border: historicalDataFilter === 'without_data'
+                  ? `2px solid ${colors.semantic.warning}`
+                  : `1px solid ${colors.utility.secondaryText}20`,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                if (historicalDataFilter !== 'without_data') {
+                  e.currentTarget.style.borderColor = colors.semantic.warning + '40';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (historicalDataFilter !== 'without_data') {
+                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                Daily Download Enabled
+                <span>Without Historical Data</span>
+                {historicalDataFilter === 'without_data' && (
+                  <span style={{
+                    fontSize: '10px',
+                    backgroundColor: colors.semantic.warning,
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    FILTERED
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: '32px',
                 fontWeight: '700',
-                color: colors.semantic.success
+                color: colors.semantic.warning
               }}>
-                {statistics.schemes_with_daily_download}
+                {statistics.total_schemes_tracked - statistics.schemes_with_historical_data}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginTop: '8px'
+              }}>
+                Click to filter
               </div>
             </div>
 
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '20px',
-              border: `1px solid ${colors.utility.secondaryText}20`
-            }}>
+            {/* With Historical Data - Clickable */}
+            <div
+              onClick={() => handleFilterByHistoricalData('with_data')}
+              style={{
+                backgroundColor: historicalDataFilter === 'with_data'
+                  ? colors.brand.secondary + '15'
+                  : colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '20px',
+                border: historicalDataFilter === 'with_data'
+                  ? `2px solid ${colors.brand.secondary}`
+                  : `1px solid ${colors.utility.secondaryText}20`,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                if (historicalDataFilter !== 'with_data') {
+                  e.currentTarget.style.borderColor = colors.brand.secondary + '40';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (historicalDataFilter !== 'with_data') {
+                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                Historical Data Available
+                <span>With Historical Data</span>
+                {historicalDataFilter === 'with_data' && (
+                  <span style={{
+                    fontSize: '10px',
+                    backgroundColor: colors.brand.secondary,
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    FILTERED
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: '32px',
@@ -649,28 +753,80 @@ const NavBookmarksPage: React.FC = () => {
               }}>
                 {statistics.schemes_with_historical_data}
               </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginTop: '8px'
+              }}>
+                Click to filter
+              </div>
             </div>
 
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '20px',
-              border: `1px solid ${colors.utility.secondaryText}20`
-            }}>
+            {/* Without Daily Download - Clickable */}
+            <div
+              onClick={() => handleFilterByDailyDownload('disabled')}
+              style={{
+                backgroundColor: dailyDownloadFilter === 'disabled'
+                  ? colors.semantic.error + '15'
+                  : colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '20px',
+                border: dailyDownloadFilter === 'disabled'
+                  ? `2px solid ${colors.semantic.error}`
+                  : `1px solid ${colors.utility.secondaryText}20`,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                if (dailyDownloadFilter !== 'disabled') {
+                  e.currentTarget.style.borderColor = colors.semantic.error + '40';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (dailyDownloadFilter !== 'disabled') {
+                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                Downloads Today
+                <span>Without Daily Download</span>
+                {dailyDownloadFilter === 'disabled' && (
+                  <span style={{
+                    fontSize: '10px',
+                    backgroundColor: colors.semantic.error,
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    FILTERED
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: '32px',
                 fontWeight: '700',
-                color: colors.utility.primaryText
+                color: colors.semantic.error
               }}>
-                {statistics.download_jobs_today}
+                {statistics.total_schemes_tracked - statistics.schemes_with_daily_download}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginTop: '8px'
+              }}>
+                Click to filter
               </div>
             </div>
           </div>
@@ -962,7 +1118,16 @@ const NavBookmarksPage: React.FC = () => {
                 margin: 0
               }}>
                 {pagination?.total || 0} schemes found • Showing 25 per page
-                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all') && ' (filtered)'}
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+                  <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
+                    {' '}(filtered
+                    {historicalDataFilter === 'without_data' && ' • No Historical Data'}
+                    {historicalDataFilter === 'with_data' && ' • With Historical Data'}
+                    {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
+                    {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
+                    )
+                  </span>
+                )}
               </p>
             </div>
 
