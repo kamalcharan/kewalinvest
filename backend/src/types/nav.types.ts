@@ -53,6 +53,7 @@ export interface SchemeBookmarkSearchParams {
   search?: string;
   daily_download_only?: boolean;
   amc_name?: string;
+  has_historical_data?: 'true' | 'false' | 'all';  // Filter by NAV data availability
 }
 
 export interface SchemeBookmarkListResponse {
