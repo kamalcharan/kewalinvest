@@ -107,25 +107,37 @@ router.post('/upload', upload.single('file'), authenticate, async (req: any, res
 
         if (duplicateCheck.rows.length > 0) {
           const duplicate = duplicateCheck.rows[0];
-          res.status(409).json({
-            success: false,
-            error: 'DUPLICATE_FILE_BLOCKED',
-            isDuplicate: true,
-            isBlocked: true, // Hard restriction - cannot proceed
-            duplicateInfo: {
-              fileId: duplicate.id,
-              originalFilename: duplicate.original_filename,
-              fileSize: duplicate.file_size,
-              uploadedAt: duplicate.created_at,
-              sessionName: duplicate.session_name,
-              sessionStatus: duplicate.session_status,
-              totalRecords: duplicate.total_records,
-              successfulRecords: duplicate.successful_records,
-              duplicateRecords: duplicate.duplicate_records
-            },
-            message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates. Duplicate file uploads are not allowed.`
-          });
-          return;
+
+          // CRITICAL FIX: Allow re-upload if previous import was cancelled or failed
+          const allowedStatuses = ['cancelled', 'failed', null]; // null = no session created yet
+          if (allowedStatuses.includes(duplicate.session_status)) {
+            console.log(`[Upload] Allowing re-upload - previous session status: ${duplicate.session_status || 'no session'}`);
+            // Delete the old file record to allow fresh upload
+            await db.query(`DELETE FROM t_file_uploads WHERE id = $1`, [duplicate.id]);
+            console.log(`[Upload] Deleted old file record ID: ${duplicate.id}`);
+            // Continue with the upload
+          } else {
+            // Block duplicate only if previous import was successful or in progress
+            res.status(409).json({
+              success: false,
+              error: 'DUPLICATE_FILE_BLOCKED',
+              isDuplicate: true,
+              isBlocked: true, // Hard restriction - cannot proceed
+              duplicateInfo: {
+                fileId: duplicate.id,
+                originalFilename: duplicate.original_filename,
+                fileSize: duplicate.file_size,
+                uploadedAt: duplicate.created_at,
+                sessionName: duplicate.session_name,
+                sessionStatus: duplicate.session_status,
+                totalRecords: duplicate.total_records,
+                successfulRecords: duplicate.successful_records,
+                duplicateRecords: duplicate.duplicate_records
+              },
+              message: `This file was already uploaded on ${new Date(duplicate.created_at).toLocaleString()}. The previous import processed ${duplicate.total_records || 0} records with ${duplicate.successful_records || 0} successful and ${duplicate.duplicate_records || 0} duplicates. Duplicate file uploads are not allowed.`
+            });
+            return;
+          }
         }
       } catch (dbError) {
         console.warn('Could not check for duplicate file:', dbError);
