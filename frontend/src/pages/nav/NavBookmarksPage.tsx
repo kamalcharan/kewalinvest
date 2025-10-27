@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useBookmarks, useDownloads, useDownloadProgress, useNavStatistics, useBulkDownload } from '../../hooks/useNavData';
+import { useBookmarks, useDownloadProgress, useNavStatistics, useBulkDownload } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
@@ -64,7 +64,6 @@ const NavBookmarksPage: React.FC = () => {
     daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined
   });
 
-  const { triggerHistoricalDownload } = useDownloads();
   const { startPolling, stopPolling } = useDownloadProgress();
   const { statistics } = useNavStatistics();
 
