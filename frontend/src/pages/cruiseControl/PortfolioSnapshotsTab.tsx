@@ -3,17 +3,19 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/ThemeContext';
 import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
-import PortfolioSnapshotService from '../../services/portfolioSnapshot.service';
+import JobsService from '../../services/jobs.service';
 import { toastService } from '../../services/toast.service';
-import type { SnapshotStatistics, SnapshotExecution } from '../../types/portfolioSnapshot.types';
+import type { JobStatistics, JobExecution, JobType, PortfolioSnapshotExecutionData } from '../../types/jobs.types';
+
+const JOB_TYPE: JobType = 'PORTFOLIO_SNAPSHOT' as JobType;
 
 export const PortfolioSnapshotsTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const { environment } = useAuth() as any;
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [statistics, setStatistics] = useState<SnapshotStatistics | null>(null);
-  const [executions, setExecutions] = useState<SnapshotExecution[]>([]);
+  const [statistics, setStatistics] = useState<JobStatistics | null>(null);
+  const [executions, setExecutions] = useState<JobExecution[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [page, setPage] = useState(1);
@@ -24,8 +26,8 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     setLoading(true);
     try {
       const [statsResponse, execResponse] = await Promise.all([
-        PortfolioSnapshotService.getStatistics(environment),
-        PortfolioSnapshotService.getExecutions(environment, page, 10)
+        JobsService.getStatistics(JOB_TYPE, environment),
+        JobsService.getExecutions(JOB_TYPE, environment, page, 10)
       ]);
 
       if (statsResponse.success && statsResponse.data) {
@@ -55,7 +57,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
   const handleManualTrigger = async () => {
     setTriggering(true);
     try {
-      const response = await PortfolioSnapshotService.triggerManual(environment);
+      const response = await JobsService.triggerManual(JOB_TYPE, environment);
       if (response.success) {
         toastService.success('Snapshot generation started! This may take a few minutes.');
         // Refresh after 2 seconds
@@ -158,7 +160,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     );
   }
 
-  const { config, last_execution, next_scheduled_run, success_rate, average_duration_ms, total_snapshots_generated } = statistics;
+  const { config, last_execution, next_scheduled_run, success_rate, average_duration_ms, total_executions } = statistics;
 
   return (
     <div>
@@ -268,7 +270,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
             </h3>
           </div>
           <div style={{ fontSize: '32px', fontWeight: '700', color: colors.utility.primaryText, marginBottom: '4px' }}>
-            {total_snapshots_generated.toLocaleString()}
+            {total_executions.toLocaleString()}
           </div>
           <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
             Avg duration: {formatDuration(average_duration_ms)}
@@ -355,6 +357,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                 <tbody>
                   {executions.map((exec, idx) => {
                     const statusDisplay = getStatusDisplay(exec.status);
+                    const execData = exec.execution_data as PortfolioSnapshotExecutionData | undefined;
                     return (
                       <tr
                         key={exec.id}
@@ -385,17 +388,17 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                           {exec.trigger_source === 'manual' ? '👤 Manual' : '⏰ Scheduled'}
                         </td>
                         <td style={{ padding: '16px 20px', fontSize: '14px', textAlign: 'center', color: colors.utility.primaryText }}>
-                          {exec.customers_processed}
-                          {exec.customers_failed > 0 && (
+                          {execData?.customers_processed || 0}
+                          {(execData?.customers_failed || 0) > 0 && (
                             <span style={{ color: '#EF4444', marginLeft: '4px' }}>
-                              (-{exec.customers_failed})
+                              (-{execData?.customers_failed})
                             </span>
                           )}
                         </td>
                         <td style={{ padding: '16px 20px', fontSize: '14px', textAlign: 'center', color: colors.utility.primaryText }}>
-                          {exec.snapshots_created + exec.snapshots_updated}
+                          {(execData?.snapshots_created || 0) + (execData?.snapshots_updated || 0)}
                           <span style={{ fontSize: '12px', color: colors.utility.secondaryText, marginLeft: '4px' }}>
-                            ({exec.snapshots_created}C/{exec.snapshots_updated}U)
+                            ({execData?.snapshots_created || 0}C/{execData?.snapshots_updated || 0}U)
                           </span>
                         </td>
                         <td style={{ padding: '16px 20px', fontSize: '14px', textAlign: 'center', color: colors.utility.secondaryText }}>
