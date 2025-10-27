@@ -68,8 +68,17 @@ router.get('/statistics', authenticate, controller.getStatistics);
 // ==================== UTILITY ROUTES ====================
 
 /**
+ * @route   POST /api/cruise-control/snapshots/backfill-smart
+ * @desc    Smart backfill - auto-detects date range from customer transactions
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @body    { customer_ids?: number[] }  // Optional: specific customers, omit for all
+ */
+router.post('/backfill-smart', authenticate, controller.smartBackfill);
+
+/**
  * @route   POST /api/cruise-control/snapshots/backfill
- * @desc    Backfill historical snapshots (for initial setup)
+ * @desc    Manual backfill with date range (for advanced use)
  * @access  Private (Authenticated users)
  * @query   environment - 'live' or 'test'
  * @body    { start_month: 'YYYY-MM-DD', end_month: 'YYYY-MM-DD', customer_ids?: number[] }
