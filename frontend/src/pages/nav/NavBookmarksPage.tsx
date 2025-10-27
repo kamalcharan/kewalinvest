@@ -615,14 +615,10 @@ const NavBookmarksPage: React.FC = () => {
             <div
               onClick={handleShowAllSchemes}
               style={{
-                backgroundColor: (searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
-                  ? colors.brand.primary + '15'
-                  : colors.utility.secondaryBackground,
+                backgroundColor: colors.utility.secondaryBackground,
                 borderRadius: '12px',
                 padding: '20px',
-                border: (searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
-                  ? `2px solid ${colors.brand.primary}`
-                  : `1px solid ${colors.utility.secondaryText}20`,
+                border: `1px solid ${colors.utility.secondaryText}20`,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 position: 'relative'
@@ -632,35 +628,35 @@ const NavBookmarksPage: React.FC = () => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
-                const hasFilters = searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all';
-                e.currentTarget.style.borderColor = hasFilters
-                  ? colors.brand.primary
-                  : colors.utility.secondaryText + '20';
+                e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
+              {/* Show CLEAR FILTERS badge floating on top when filters are active */}
+              {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+                <div style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '12px',
+                  fontSize: '10px',
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontWeight: '600',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  zIndex: 1
+                }}>
+                  CLEAR FILTERS
+                </div>
+              )}
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
+                fontWeight: '500'
               }}>
-                <span>Schemes Tracked</span>
-                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
-                  <span style={{
-                    fontSize: '10px',
-                    backgroundColor: colors.brand.primary,
-                    color: 'white',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: '600'
-                  }}>
-                    CLEAR FILTERS
-                  </span>
-                )}
+                Schemes Tracked
               </div>
               <div style={{
                 fontSize: '32px',
@@ -1286,8 +1282,22 @@ const NavBookmarksPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination */}
-              {pagination && pagination.totalPages > 1 && (
+              {/* Pagination - Hidden when using client-side filters */}
+              {historicalDataFilter !== 'all' ? (
+                <div style={{
+                  marginTop: '32px',
+                  paddingTop: '24px',
+                  borderTop: `1px solid ${colors.utility.primaryText}10`,
+                  textAlign: 'center',
+                  color: colors.utility.secondaryText,
+                  fontSize: '14px'
+                }}>
+                  <p style={{ margin: 0 }}>
+                    📄 Showing all filtered results on current page.
+                    Clear the filter to use pagination.
+                  </p>
+                </div>
+              ) : pagination && pagination.totalPages > 1 && (
                 <div style={{
                   display: 'flex',
                   justifyContent: 'center',
@@ -1302,11 +1312,11 @@ const NavBookmarksPage: React.FC = () => {
                     disabled={!pagination.hasPrev}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: !pagination.hasPrev 
-                        ? colors.utility.secondaryBackground 
+                      backgroundColor: !pagination.hasPrev
+                        ? colors.utility.secondaryBackground
                         : colors.brand.primary,
-                      color: !pagination.hasPrev 
-                        ? colors.utility.secondaryText 
+                      color: !pagination.hasPrev
+                        ? colors.utility.secondaryText
                         : 'white',
                       border: 'none',
                       borderRadius: '6px',
@@ -1331,11 +1341,11 @@ const NavBookmarksPage: React.FC = () => {
                     disabled={!pagination.hasNext}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: !pagination.hasNext 
-                        ? colors.utility.secondaryBackground 
+                      backgroundColor: !pagination.hasNext
+                        ? colors.utility.secondaryBackground
                         : colors.brand.primary,
-                      color: !pagination.hasNext 
-                        ? colors.utility.secondaryText 
+                      color: !pagination.hasNext
+                        ? colors.utility.secondaryText
                         : 'white',
                       border: 'none',
                       borderRadius: '6px',
