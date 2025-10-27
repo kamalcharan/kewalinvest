@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { PortfolioSnapshotController } from '../controllers/portfolioSnapshot.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 const controller = new PortfolioSnapshotController();
@@ -16,7 +16,7 @@ const controller = new PortfolioSnapshotController();
  * @access  Private (Authenticated users)
  * @query   environment - 'live' or 'test'
  */
-router.get('/config', authenticateToken, controller.getConfig);
+router.get('/config', authenticate, controller.getConfig);
 
 /**
  * @route   POST /api/cruise-control/snapshots/config
@@ -25,7 +25,7 @@ router.get('/config', authenticateToken, controller.getConfig);
  * @query   environment - 'live' or 'test'
  * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries? }
  */
-router.post('/config', authenticateToken, controller.createConfig);
+router.post('/config', authenticate, controller.createConfig);
 
 /**
  * @route   PUT /api/cruise-control/snapshots/config
@@ -34,7 +34,7 @@ router.post('/config', authenticateToken, controller.createConfig);
  * @query   environment - 'live' or 'test'
  * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries? }
  */
-router.put('/config', authenticateToken, controller.updateConfig);
+router.put('/config', authenticate, controller.updateConfig);
 
 // ==================== EXECUTION ROUTES ====================
 
@@ -45,7 +45,7 @@ router.put('/config', authenticateToken, controller.updateConfig);
  * @query   environment - 'live' or 'test'
  * @returns 202 Accepted - Processing started in background
  */
-router.post('/execute', authenticateToken, controller.triggerManual);
+router.post('/execute', authenticate, controller.triggerManual);
 
 /**
  * @route   GET /api/cruise-control/snapshots/executions
@@ -55,7 +55,7 @@ router.post('/execute', authenticateToken, controller.triggerManual);
  * @query   page - Page number (default: 1)
  * @query   page_size - Items per page (default: 20)
  */
-router.get('/executions', authenticateToken, controller.getExecutions);
+router.get('/executions', authenticate, controller.getExecutions);
 
 /**
  * @route   GET /api/cruise-control/snapshots/statistics
@@ -63,7 +63,7 @@ router.get('/executions', authenticateToken, controller.getExecutions);
  * @access  Private (Authenticated users)
  * @query   environment - 'live' or 'test'
  */
-router.get('/statistics', authenticateToken, controller.getStatistics);
+router.get('/statistics', authenticate, controller.getStatistics);
 
 // ==================== UTILITY ROUTES ====================
 
@@ -74,7 +74,7 @@ router.get('/statistics', authenticateToken, controller.getStatistics);
  * @query   environment - 'live' or 'test'
  * @body    { start_month: 'YYYY-MM-DD', end_month: 'YYYY-MM-DD', customer_ids?: number[] }
  */
-router.post('/backfill', authenticateToken, controller.backfillSnapshots);
+router.post('/backfill', authenticate, controller.backfillSnapshots);
 
 /**
  * @route   GET /api/cruise-control/snapshots/health
@@ -82,6 +82,6 @@ router.post('/backfill', authenticateToken, controller.backfillSnapshots);
  * @access  Private (Authenticated users)
  * @query   environment - 'live' or 'test'
  */
-router.get('/health', authenticateToken, controller.healthCheck);
+router.get('/health', authenticate, controller.healthCheck);
 
 export default router;
