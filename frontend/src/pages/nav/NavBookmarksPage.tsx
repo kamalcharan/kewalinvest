@@ -29,7 +29,7 @@ const NavBookmarksPage: React.FC = () => {
   const [amcFilter, setAmcFilter] = useState('');
   const [dailyDownloadFilter, setDailyDownloadFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 25;
 
   // Modal state - NAV operations
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
@@ -955,7 +955,7 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 margin: 0
               }}>
-                {pagination?.total || 0} schemes found • Showing 10 per page
+                {pagination?.total || 0} schemes found • Showing 25 per page
                 {(searchQuery || amcFilter || dailyDownloadFilter !== 'all') && ' (filtered)'}
               </p>
             </div>
