@@ -41,25 +41,27 @@ export class PortfolioSnapshotJob implements JobExecutor {
 
       const executionTime = Date.now() - startTime;
 
-      // Check if generation was successful
-      if (!result.success) {
-        console.error(`[PortfolioSnapshotJob] Execution completed with errors for tenant ${context.tenant_id}`);
+      // Determine success based on whether snapshots were actually generated
+      const hasResults = result.snapshots_created > 0 || result.snapshots_updated > 0;
+      const allCustomersFailed = result.customers_failed > 0 && result.customers_processed === 0;
 
-        // If all customers failed, treat as error
-        if (result.customers_failed > 0 && result.customers_processed === 0) {
-          return {
-            success: false,
-            execution_data: this.buildExecutionData(result),
-            execution_duration_ms: executionTime,
-            error: 'All customers failed to generate snapshots',
-            error_details: result.errors
-          };
-        }
+      if (allCustomersFailed || !hasResults) {
+        console.error(`[PortfolioSnapshotJob] Execution failed for tenant ${context.tenant_id}. Customers processed: ${result.customers_processed}, Failed: ${result.customers_failed}, Snapshots: ${result.snapshots_created}C/${result.snapshots_updated}U`);
+
+        return {
+          success: false,
+          execution_data: this.buildExecutionData(result),
+          execution_duration_ms: executionTime,
+          error: allCustomersFailed
+            ? 'All customers failed to generate snapshots'
+            : 'No snapshots were generated',
+          error_details: result.errors
+        };
       }
 
       console.log(`[PortfolioSnapshotJob] Execution completed successfully for tenant ${context.tenant_id}. Snapshots created: ${result.snapshots_created}, updated: ${result.snapshots_updated}`);
 
-      // Success response
+      // Success response - only if snapshots were actually generated
       return {
         success: true,
         execution_data: this.buildExecutionData(result),
