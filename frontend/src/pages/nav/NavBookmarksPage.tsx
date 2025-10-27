@@ -203,19 +203,27 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
     }).then(() => {
-      // NO auto-refresh - user maintains control of selection for next steps
+      // Refresh card data while maintaining selection
       FrontendErrorLogger.info(
-        'Download completed - user can proceed with workflow',
+        'Download completed - refreshing card data',
         'NavBookmarksPage',
         { jobId }
       );
-      toastService.success('Download complete! You can now calculate metrics or refresh the page.');
+      setTimeout(() => {
+        fetchBookmarks({
+          page: currentPage,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          amc_name: amcFilter || undefined,
+        });
+      }, 1000);
+      toastService.success('Download complete! Cards updated. You can now calculate metrics.');
     }).catch((error) => {
       console.error('Progress polling failed:', error);
       toastService.error('Failed to track download progress: ' + error.message);
       setShowProgressModal(false);
     });
-  }, [startPolling]);
+  }, [startPolling, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter]);
 
   const handleCloseHistoricalModal = () => {
     setShowHistoricalModal(false);
@@ -373,7 +381,7 @@ const NavBookmarksPage: React.FC = () => {
       // Start sequential download (BulkDownloadProgress modal will show automatically)
       const result = await bulkDownload.processSchemes(selectedBookmarks);
 
-      // NO auto-refresh - user maintains selection to proceed with metrics calculation
+      // Refresh card data while maintaining selection for metrics workflow
       FrontendErrorLogger.info(
         'Sequential bulk download completed',
         'NavBookmarksPage',
@@ -384,10 +392,20 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
 
+      // Update card data (NAV counts, dates, status) while keeping selection
+      setTimeout(() => {
+        fetchBookmarks({
+          page: currentPage,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          amc_name: amcFilter || undefined,
+        });
+      }, 1000);
+
       // Notify user they can proceed with their workflow
       toastService.success(
         `Download complete: ${result.successful} successful, ${result.failed} failed. ` +
-        `You can now calculate metrics or refresh the page.`
+        `Cards updated! You can now calculate metrics.`
       );
 
     } catch (error: any) {
@@ -398,7 +416,7 @@ const NavBookmarksPage: React.FC = () => {
         error.stack
       );
     }
-  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload]);
+  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter]);
 
   // NEW: Bulk metrics calculation
   const handleBulkCalculateMetrics = useCallback(() => {
