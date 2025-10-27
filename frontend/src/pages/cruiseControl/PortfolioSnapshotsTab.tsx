@@ -108,7 +108,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
 
       if (response.success) {
         const message = response.data?.months_processed
-          ? `Successfully generated snapshots for ${response.data.months_processed} months`
+          ? `Successfully generated snapshots for all customers for ${response.data.months_processed} months`
           : 'Backfill completed successfully';
         toastService.success(message);
         // Reset form and refresh
