@@ -826,6 +826,40 @@ const NavBookmarksPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Without Calculations - Info Only */}
+            <div
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${colors.utility.secondaryText}20`,
+                position: 'relative'
+              }}
+            >
+              <div style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
+                Without Calculations
+              </div>
+              <div style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: colors.semantic.info || colors.brand.primary
+              }}>
+                {statistics.schemes_without_calculations || 0}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginTop: '8px'
+              }}>
+                Schemes with data but no metrics
+              </div>
+            </div>
+
           </div>
         )}
 
