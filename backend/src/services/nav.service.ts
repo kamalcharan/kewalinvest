@@ -1026,7 +1026,19 @@ export class NavService {
         SELECT
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
-          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND historical_download_completed = true), 0) as schemes_with_historical_data,
+          COALESCE((
+            SELECT COUNT(DISTINCT sb.scheme_code)
+            FROM t_scheme_bookmarks sb
+            WHERE sb.tenant_id = $1
+              AND sb.is_live = $2
+              AND sb.is_active = true
+              AND EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_code = sb.scheme_code
+                  AND nd.is_live = $2
+                LIMIT 1
+              )
+          ), 0) as schemes_with_historical_data,
           (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
           (SELECT MIN(nav_date) FROM t_nav_data WHERE is_live = $2) as oldest_nav_date,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE), 0) as download_jobs_today,
