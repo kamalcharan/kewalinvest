@@ -29,6 +29,7 @@ const NavBookmarksPage: React.FC = () => {
   const [amcFilter, setAmcFilter] = useState('');
   const [dailyDownloadFilter, setDailyDownloadFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [historicalDataFilter, setHistoricalDataFilter] = useState<'all' | 'with_data' | 'without_data'>('all');
+  const [calculationsFilter, setCalculationsFilter] = useState<'all' | 'with_calculations' | 'without_calculations'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
@@ -63,7 +64,8 @@ const NavBookmarksPage: React.FC = () => {
     search: searchQuery || undefined,
     amc_name: amcFilter || undefined,
     daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
-    has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
+    has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+    has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
   });
 
   const { startPolling, stopPolling } = useDownloadProgress();
@@ -112,15 +114,17 @@ const NavBookmarksPage: React.FC = () => {
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
       daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
-      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+      has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
     });
-  }, [searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, fetchBookmarks]);
+  }, [searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter, fetchBookmarks]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
     setAmcFilter('');
     setDailyDownloadFilter('all');
     setHistoricalDataFilter('all');
+    setCalculationsFilter('all');
     setCurrentPage(1);
     fetchBookmarks({ page: 1, page_size: pageSize });
   };
@@ -154,7 +158,25 @@ const NavBookmarksPage: React.FC = () => {
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
       daily_download_only: newFilter === 'enabled' ? true : undefined,
-      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+      has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
+    });
+  };
+
+  const handleFilterByCalculations = (filter: 'with_calculations' | 'without_calculations') => {
+    const newFilter = calculationsFilter === filter ? 'all' : filter;
+    setCalculationsFilter(newFilter);
+    setCurrentPage(1);
+
+    // Immediately fetch with new filter
+    fetchBookmarks({
+      page: 1,
+      page_size: pageSize,
+      search: searchQuery || undefined,
+      amc_name: amcFilter || undefined,
+      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+      has_calculations: newFilter === 'all' ? undefined : newFilter === 'with_calculations' ? 'true' : 'false'
     });
   };
 
@@ -163,6 +185,7 @@ const NavBookmarksPage: React.FC = () => {
     setAmcFilter('');
     setDailyDownloadFilter('all');
     setHistoricalDataFilter('all');
+    setCalculationsFilter('all');
     setCurrentPage(1);
     fetchBookmarks({ page: 1, page_size: pageSize });
   };
@@ -175,7 +198,8 @@ const NavBookmarksPage: React.FC = () => {
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
       daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
-      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false'
+      has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+      has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
     });
   };
 
@@ -647,7 +671,7 @@ const NavBookmarksPage: React.FC = () => {
               }}
             >
               {/* Show CLEAR FILTERS badge floating on top when filters are active */}
-              {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+              {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all') && (
                 <div style={{
                   position: 'absolute',
                   top: '-8px',
@@ -684,7 +708,7 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 marginTop: '8px'
               }}>
-                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all')
                   ? 'Click to show all'
                   : 'All schemes'}
               </div>
@@ -826,23 +850,57 @@ const NavBookmarksPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Without Calculations - Info Only */}
+            {/* Without Calculations - Clickable */}
             <div
+              onClick={() => handleFilterByCalculations('without_calculations')}
               style={{
-                backgroundColor: colors.utility.secondaryBackground,
+                backgroundColor: calculationsFilter === 'without_calculations'
+                  ? colors.semantic.info + '15'
+                  : colors.utility.secondaryBackground,
                 borderRadius: '12px',
                 padding: '20px',
-                border: `1px solid ${colors.utility.secondaryText}20`,
+                border: calculationsFilter === 'without_calculations'
+                  ? `2px solid ${colors.semantic.info || colors.brand.primary}`
+                  : `1px solid ${colors.utility.secondaryText}20`,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
                 position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                if (calculationsFilter !== 'without_calculations') {
+                  e.currentTarget.style.borderColor = (colors.semantic.info || colors.brand.primary) + '40';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (calculationsFilter !== 'without_calculations') {
+                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
               }}
             >
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                Without Calculations
+                <span>Without Calculations</span>
+                {calculationsFilter === 'without_calculations' && (
+                  <span style={{
+                    fontSize: '10px',
+                    backgroundColor: colors.semantic.info || colors.brand.primary,
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    FILTERED
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: '32px',
@@ -856,7 +914,7 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 marginTop: '8px'
               }}>
-                Schemes with data but no metrics
+                Click to filter
               </div>
             </div>
 
@@ -1149,13 +1207,15 @@ const NavBookmarksPage: React.FC = () => {
                 margin: 0
               }}>
                 {pagination?.total || 0} schemes found • Showing 25 per page
-                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all') && (
                   <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
                     {' '}(filtered
                     {historicalDataFilter === 'without_data' && ' • No Historical Data'}
                     {historicalDataFilter === 'with_data' && ' • With Historical Data'}
                     {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
                     {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
+                    {calculationsFilter === 'without_calculations' && ' • No Calculations'}
+                    {calculationsFilter === 'with_calculations' && ' • With Calculations'}
                     )
                   </span>
                 )}
@@ -1210,7 +1270,7 @@ const NavBookmarksPage: React.FC = () => {
               color: colors.utility.secondaryText
             }}>
               <div style={{ fontSize: '64px', marginBottom: '20px' }}>
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' ? '🔍' : '📚'}
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all' ? '🔍' : '📚'}
               </div>
               <h4 style={{
                 fontSize: '20px',
@@ -1218,19 +1278,19 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.primaryText,
                 marginBottom: '12px'
               }}>
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all'
                   ? 'No schemes match your filters'
                   : 'No schemes bookmarked yet'
                 }
               </h4>
               <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all'
                   ? 'Try adjusting your search criteria or clear filters'
                   : 'Search and bookmark schemes to start tracking their NAV data'
                 }
               </p>
               <button
-                onClick={searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
+                onClick={searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all'
                   ? handleClearFilters
                   : handleNavigateToSearch
                 }
@@ -1245,7 +1305,7 @@ const NavBookmarksPage: React.FC = () => {
                   fontWeight: '500'
                 }}
               >
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all'
+                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all' || calculationsFilter !== 'all'
                   ? 'Clear Filters'
                   : '🔍 Search & Bookmark Schemes'
                 }
