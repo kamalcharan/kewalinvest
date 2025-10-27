@@ -2,7 +2,7 @@
 // Generic service for all job types
 
 import apiService from './api.service';
-import { buildQueryParams } from './serviceURLs';
+import { API_ENDPOINTS, buildQueryParams } from './serviceURLs';
 import {
   JobType,
   JobSchedulerConfig,
@@ -18,15 +18,13 @@ import {
   GetJobTypesResponse
 } from '../types/jobs.types';
 
-const BASE_URL = '/api/jobs';
-
 export class JobsService {
   /**
    * Get all available job types
    */
   static async getJobTypes(): Promise<GetJobTypesResponse> {
     try {
-      const url = `${BASE_URL}/types`;
+      const url = API_ENDPOINTS.JOBS.TYPES;
       return await apiService.get(url);
     } catch (error: any) {
       console.error('Error getting job types:', error);
@@ -45,7 +43,7 @@ export class JobsService {
     environment: 'live' | 'test'
   ): Promise<GetJobConfigResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/config${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.get(url);
     } catch (error: any) {
       console.error(`Error getting ${jobType} config:`, error);
@@ -65,7 +63,7 @@ export class JobsService {
     config: CreateJobConfigRequest
   ): Promise<UpdateJobConfigResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/config${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.post(url, config);
     } catch (error: any) {
       console.error(`Error creating ${jobType} config:`, error);
@@ -85,7 +83,7 @@ export class JobsService {
     updates: UpdateJobConfigRequest
   ): Promise<UpdateJobConfigResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/config${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.put(url, updates);
     } catch (error: any) {
       console.error(`Error updating ${jobType} config:`, error);
@@ -104,7 +102,7 @@ export class JobsService {
     environment: 'live' | 'test'
   ): Promise<TriggerJobResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/execute${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.EXECUTE(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.post(url, {});
     } catch (error: any) {
       console.error(`Error triggering ${jobType}:`, error);
@@ -125,7 +123,7 @@ export class JobsService {
     pageSize: number = 20
   ): Promise<GetExecutionsResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/executions${buildQueryParams({ page, page_size: pageSize }, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.EXECUTIONS(jobType)}${buildQueryParams({ page, page_size: pageSize }, environment)}`;
       return await apiService.get(url);
     } catch (error: any) {
       console.error(`Error getting ${jobType} executions:`, error);
@@ -144,7 +142,7 @@ export class JobsService {
     environment: 'live' | 'test'
   ): Promise<GetStatisticsResponse> {
     try {
-      const url = `${BASE_URL}/${jobType}/statistics${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.STATISTICS(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.get(url);
     } catch (error: any) {
       console.error(`Error getting ${jobType} statistics:`, error);
@@ -167,7 +165,7 @@ export class JobsService {
     error?: string;
   }> {
     try {
-      const url = `${BASE_URL}/${jobType}/health${buildQueryParams({}, environment)}`;
+      const url = `${API_ENDPOINTS.JOBS.HEALTH(jobType)}${buildQueryParams({}, environment)}`;
       return await apiService.get(url);
     } catch (error: any) {
       console.error(`Error checking ${jobType} health:`, error);
