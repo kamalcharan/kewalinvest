@@ -15,6 +15,15 @@ import {
   GetJobTypesResponse
 } from '../types/jobs.types';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    userId: number;
+    tenant_id: number;
+    tenantId: number;
+  };
+}
+
 export class JobsController {
   private schedulerService: JobSchedulerService;
 
@@ -28,7 +37,7 @@ export class JobsController {
    * GET /api/jobs/:jobType/config
    * Get scheduler configuration for a job type
    */
-  getConfig = async (req: Request, res: Response): Promise<void> => {
+  getConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
@@ -79,7 +88,7 @@ export class JobsController {
    * POST /api/jobs/:jobType/config
    * Create scheduler configuration for a job type
    */
-  createConfig = async (req: Request, res: Response): Promise<void> => {
+  createConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const userId = req.user?.userId;
@@ -144,7 +153,7 @@ export class JobsController {
    * PUT /api/jobs/:jobType/config
    * Update scheduler configuration for a job type
    */
-  updateConfig = async (req: Request, res: Response): Promise<void> => {
+  updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
@@ -199,7 +208,7 @@ export class JobsController {
    * POST /api/jobs/:jobType/execute
    * Manually trigger job execution
    */
-  triggerManual = async (req: Request, res: Response): Promise<void> => {
+  triggerManual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
@@ -250,7 +259,7 @@ export class JobsController {
    * GET /api/jobs/:jobType/executions
    * Get execution history for a job type
    */
-  getExecutions = async (req: Request, res: Response): Promise<void> => {
+  getExecutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
@@ -312,7 +321,7 @@ export class JobsController {
    * GET /api/jobs/:jobType/statistics
    * Get statistics and status for a job type
    */
-  getStatistics = async (req: Request, res: Response): Promise<void> => {
+  getStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
@@ -366,7 +375,7 @@ export class JobsController {
    * GET /api/jobs/types
    * Get all available job types
    */
-  getJobTypes = async (req: Request, res: Response): Promise<void> => {
+  getJobTypes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
 
@@ -400,7 +409,7 @@ export class JobsController {
    * GET /api/jobs/:jobType/health
    * Health check for a specific job type
    */
-  healthCheck = async (req: Request, res: Response): Promise<void> => {
+  healthCheck = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenantId;
       const environment = req.query.environment as string;
