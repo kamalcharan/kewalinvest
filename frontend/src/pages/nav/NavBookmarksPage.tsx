@@ -509,6 +509,12 @@ const NavBookmarksPage: React.FC = () => {
     // Close pre-check modal
     setShowMetricsPreCheckModal(false);
 
+    console.log('🎯 [DEBUG] handleProceedWithCalculation called with:', {
+      schemeIdsCount: schemeIds.length,
+      schemeIds,
+      totalBookmarksAvailable: bookmarks.length
+    });
+
     FrontendErrorLogger.info(
       'Starting bulk metrics calculation',
       'NavBookmarksPage',
@@ -517,6 +523,11 @@ const NavBookmarksPage: React.FC = () => {
 
     // Get bookmarks for selected scheme IDs
     const schemesToProcess = bookmarks.filter(b => schemeIds.includes(b.scheme_id));
+
+    console.log('✅ [DEBUG] Filtered schemesToProcess:', {
+      count: schemesToProcess.length,
+      schemes: schemesToProcess.map(s => ({ id: s.scheme_id, name: s.scheme_name }))
+    });
 
     // Clear selection
     setSelectedBookmarkIds(new Set());
