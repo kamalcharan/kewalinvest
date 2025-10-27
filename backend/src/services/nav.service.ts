@@ -1039,6 +1039,20 @@ export class NavService {
                 LIMIT 1
               )
           ), 0) as schemes_with_historical_data,
+          COALESCE((
+            SELECT COUNT(DISTINCT sb.scheme_id)
+            FROM t_scheme_bookmarks sb
+            WHERE sb.tenant_id = $1
+              AND sb.is_live = $2
+              AND sb.is_active = true
+              AND EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_id = sb.scheme_id
+                  AND nd.is_live = $2
+                  AND nd.metrics_calculated_at IS NULL
+                LIMIT 1
+              )
+          ), 0) as schemes_without_calculations,
           (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
           (SELECT MIN(nav_date) FROM t_nav_data WHERE is_live = $2) as oldest_nav_date,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE), 0) as download_jobs_today,
@@ -1052,6 +1066,7 @@ export class NavService {
         total_schemes_tracked: parseInt(stats.total_schemes_tracked) || 0,
         schemes_with_daily_download: parseInt(stats.schemes_with_daily_download) || 0,
         schemes_with_historical_data: parseInt(stats.schemes_with_historical_data) || 0,
+        schemes_without_calculations: parseInt(stats.schemes_without_calculations) || 0,
         latest_nav_date: stats.latest_nav_date || new Date(),
         oldest_nav_date: stats.oldest_nav_date || new Date(),
         download_jobs_today: parseInt(stats.download_jobs_today) || 0,
@@ -1066,6 +1081,7 @@ export class NavService {
         total_schemes_tracked: 0,
         schemes_with_daily_download: 0,
         schemes_with_historical_data: 0,
+        schemes_without_calculations: 0,
         latest_nav_date: new Date(),
         oldest_nav_date: new Date(),
         download_jobs_today: 0,
