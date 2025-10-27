@@ -497,6 +497,71 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- JOB SCHEDULER & EXECUTION INDEXES
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Job Scheduler & Execution indexes...';
+END $$;
+
+-- Portfolio snapshot config indexes
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_tenant
+ON t_portfolio_snapshot_configs(tenant_id, is_live);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_enabled
+ON t_portfolio_snapshot_configs(is_enabled)
+WHERE is_enabled = true;
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_next_execution
+ON t_portfolio_snapshot_configs(next_execution_at)
+WHERE is_enabled = true AND next_execution_at IS NOT NULL;
+
+-- Portfolio snapshot execution indexes
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_config
+ON t_portfolio_snapshot_executions(scheduler_config_id);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_tenant
+ON t_portfolio_snapshot_executions(tenant_id, is_live, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_status
+ON t_portfolio_snapshot_executions(status, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_month
+ON t_portfolio_snapshot_executions(snapshot_month_end, tenant_id, is_live);
+
+-- Generic job config indexes
+CREATE INDEX IF NOT EXISTS idx_job_configs_tenant
+ON t_job_scheduler_configs(tenant_id, is_live, job_type);
+
+CREATE INDEX IF NOT EXISTS idx_job_configs_enabled
+ON t_job_scheduler_configs(is_enabled)
+WHERE is_enabled = true;
+
+CREATE INDEX IF NOT EXISTS idx_job_configs_next_execution
+ON t_job_scheduler_configs(next_execution_at)
+WHERE is_enabled = true AND next_execution_at IS NOT NULL;
+
+-- Generic job execution indexes
+CREATE INDEX IF NOT EXISTS idx_job_executions_config
+ON t_job_executions(scheduler_config_id);
+
+CREATE INDEX IF NOT EXISTS idx_job_executions_tenant
+ON t_job_executions(tenant_id, is_live, job_type, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_job_executions_status
+ON t_job_executions(job_type, status, execution_time DESC);
+
+-- Job types index
+CREATE INDEX IF NOT EXISTS idx_job_types_active
+ON m_job_types(is_active)
+WHERE is_active = true;
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Created 14 job scheduler & execution indexes';
+END $$;
+
+-- ============================================================================
 -- SECTION 3: TIMESTAMP UPDATE TRIGGERS
 -- Note: Trigger functions are created in Section 1.5 above
 -- ============================================================================
