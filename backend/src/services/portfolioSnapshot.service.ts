@@ -40,8 +40,8 @@ export class PortfolioSnapshotService {
 
       console.log(`[SnapshotService] Starting snapshot generation for tenant ${request.tenant_id}, month-end: ${snapshotDate.toISOString().split('T')[0]}`);
 
-      // Get all active customers for this tenant
-      const customers = await this.getActiveCustomers(request.tenant_id, request.is_live);
+      // Get all active customers for this tenant (or specific customers if requested)
+      const customers = await this.getActiveCustomers(request.tenant_id, request.is_live, request.customer_ids);
 
       console.log(`[SnapshotService] Found ${customers.length} active customers`);
 
@@ -227,20 +227,33 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Get all active customers for a tenant
+   * Get all active customers for a tenant (optionally filtered by customer IDs)
    */
-  private async getActiveCustomers(tenantId: number, isLive: boolean): Promise<Array<{ id: number; name: string }>> {
-    const query = `
+  private async getActiveCustomers(
+    tenantId: number,
+    isLive: boolean,
+    customerIds?: number[]
+  ): Promise<Array<{ id: number; name: string }>> {
+    let query = `
       SELECT c.id, ct.name
       FROM t_customers c
       JOIN t_contacts ct ON c.contact_id = ct.id
       WHERE c.tenant_id = $1
         AND c.is_live = $2
         AND c.is_active = true
-      ORDER BY c.id
     `;
 
-    const result = await this.db.query(query, [tenantId, isLive]);
+    const params: any[] = [tenantId, isLive];
+
+    // Add customer ID filter if provided
+    if (customerIds && customerIds.length > 0) {
+      query += ` AND c.id = ANY($3)`;
+      params.push(customerIds);
+    }
+
+    query += ` ORDER BY c.id`;
+
+    const result = await this.db.query(query, params);
     return result.rows;
   }
 
@@ -264,7 +277,11 @@ export class PortfolioSnapshotService {
     let totalSnapshotsUpdated = 0;
 
     try {
-      console.log(`[SnapshotService] Starting backfill from ${request.start_month.toISOString().split('T')[0]} to ${request.end_month.toISOString().split('T')[0]}`);
+      const customerInfo = request.customer_ids
+        ? `for ${request.customer_ids.length} customer(s)`
+        : 'for all customers';
+
+      console.log(`[SnapshotService] Starting backfill ${customerInfo} from ${request.start_month.toISOString().split('T')[0]} to ${request.end_month.toISOString().split('T')[0]}`);
 
       // Generate list of month-end dates between start and end
       const monthEnds = this.generateMonthEndDates(request.start_month, request.end_month);
@@ -275,7 +292,8 @@ export class PortfolioSnapshotService {
             tenant_id: request.tenant_id,
             is_live: request.is_live,
             snapshot_month_end: monthEnd,
-            trigger_source: 'manual'
+            trigger_source: 'manual',
+            customer_ids: request.customer_ids  // Pass customer filter
           });
 
           totalSnapshotsCreated += result.snapshots_created;

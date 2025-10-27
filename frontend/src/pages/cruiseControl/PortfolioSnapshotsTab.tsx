@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
+import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp, Database } from 'lucide-react';
 import JobsService from '../../services/jobs.service';
+import PortfolioSnapshotService from '../../services/portfolioSnapshot.service';
 import { toastService } from '../../services/toast.service';
 import type { JobStatistics, JobExecution, JobType, PortfolioSnapshotExecutionData } from '../../types/jobs.types';
 
@@ -20,6 +21,11 @@ export const PortfolioSnapshotsTab: React.FC = () => {
   const [triggering, setTriggering] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Backfill state
+  const [backfillStartMonth, setBackfillStartMonth] = useState('');
+  const [backfillEndMonth, setBackfillEndMonth] = useState('');
+  const [backfilling, setBackfilling] = useState(false);
 
   // Fetch data
   const fetchData = async () => {
@@ -69,6 +75,54 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       toastService.error('Failed to trigger snapshot generation');
     } finally {
       setTriggering(false);
+    }
+  };
+
+  // Backfill historical snapshots
+  const handleBackfill = async () => {
+    if (!backfillStartMonth || !backfillEndMonth) {
+      toastService.error('Please select both start and end months');
+      return;
+    }
+
+    const startDate = new Date(backfillStartMonth + '-01');
+    const endDate = new Date(backfillEndMonth + '-01');
+
+    if (startDate > endDate) {
+      toastService.error('Start month must be before or equal to end month');
+      return;
+    }
+
+    if (endDate > new Date()) {
+      toastService.error('Cannot backfill future months');
+      return;
+    }
+
+    setBackfilling(true);
+    try {
+      const response = await PortfolioSnapshotService.backfill(
+        environment,
+        backfillStartMonth,
+        backfillEndMonth
+      );
+
+      if (response.success) {
+        const message = response.data?.months_processed
+          ? `Successfully generated snapshots for all customers for ${response.data.months_processed} months`
+          : 'Backfill completed successfully';
+        toastService.success(message);
+        // Reset form and refresh
+        setBackfillStartMonth('');
+        setBackfillEndMonth('');
+        setTimeout(fetchData, 2000);
+      } else {
+        toastService.error(response.error || 'Backfill failed');
+      }
+    } catch (error: any) {
+      console.error('Backfill error:', error);
+      toastService.error('Failed to backfill snapshots');
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -323,6 +377,114 @@ export const PortfolioSnapshotsTab: React.FC = () => {
           <Play size={16} />
           {triggering ? 'Starting...' : statistics.is_running ? 'Running...' : 'Generate Now'}
         </button>
+      </div>
+
+      {/* Backfill Historical Snapshots */}
+      <div style={{
+        marginBottom: '32px',
+        padding: '24px',
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        border: `1px solid ${colors.brand.secondary}40`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <Database size={20} style={{ color: colors.brand.secondary }} />
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
+            Backfill Historical Snapshots
+          </h3>
+        </div>
+
+        <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: colors.utility.secondaryText, lineHeight: '1.6' }}>
+          Generate historical portfolio snapshots for multiple months. This is useful for viewing performance graphs which require at least 2 months of data.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+              Start Month
+            </label>
+            <input
+              type="month"
+              value={backfillStartMonth}
+              onChange={(e) => setBackfillStartMonth(e.target.value)}
+              disabled={backfilling}
+              max={new Date().toISOString().slice(0, 7)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '6px',
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                fontSize: '14px',
+                cursor: backfilling ? 'not-allowed' : 'pointer'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+              End Month
+            </label>
+            <input
+              type="month"
+              value={backfillEndMonth}
+              onChange={(e) => setBackfillEndMonth(e.target.value)}
+              disabled={backfilling}
+              max={new Date().toISOString().slice(0, 7)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '6px',
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                fontSize: '14px',
+                cursor: backfilling ? 'not-allowed' : 'pointer'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button
+              onClick={handleBackfill}
+              disabled={backfilling || !backfillStartMonth || !backfillEndMonth}
+              style={{
+                width: '100%',
+                padding: '10px 24px',
+                backgroundColor: backfilling || !backfillStartMonth || !backfillEndMonth
+                  ? colors.utility.secondaryText
+                  : colors.brand.secondary,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: backfilling || !backfillStartMonth || !backfillEndMonth ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                opacity: backfilling || !backfillStartMonth || !backfillEndMonth ? 0.6 : 1
+              }}
+            >
+              <Database size={16} />
+              {backfilling ? 'Backfilling...' : 'Start Backfill'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{
+          padding: '12px',
+          backgroundColor: colors.brand.secondary + '10',
+          borderRadius: '6px',
+          border: `1px solid ${colors.brand.secondary}30`
+        }}>
+          <p style={{ margin: 0, fontSize: '13px', color: colors.utility.secondaryText, lineHeight: '1.5' }}>
+            <strong style={{ color: colors.utility.primaryText }}>Note:</strong> Backfilling will generate snapshots for all active customers for each month in the selected range.
+            This operation may take several minutes depending on the number of months and customers.
+          </p>
+        </div>
       </div>
 
       {/* Execution History Table */}
