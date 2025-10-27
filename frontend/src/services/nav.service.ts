@@ -219,6 +219,7 @@ export interface NavStatistics {
   total_schemes_tracked: number;
   schemes_with_daily_download: number;
   schemes_with_historical_data: number;
+  schemes_without_calculations: number;
   latest_nav_date: string;
   oldest_nav_date: string;
   download_jobs_today: number;
