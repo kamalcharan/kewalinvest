@@ -87,6 +87,7 @@ export interface BookmarkSearchParams {
   daily_download_only?: boolean;
   amc_name?: string;
   has_historical_data?: 'true' | 'false';  // Server-side filter for NAV data availability
+  has_calculations?: 'true' | 'false';  // Server-side filter for metrics calculation status
 }
 
 export interface CreateBookmarkRequest {
