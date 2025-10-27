@@ -145,6 +145,15 @@ const NavBookmarksPage: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const handleShowAllSchemes = () => {
+    setSearchQuery('');
+    setAmcFilter('');
+    setDailyDownloadFilter('all');
+    setHistoricalDataFilter('all');
+    setCurrentPage(1);
+    fetchBookmarks({ page: 1, page_size: pageSize });
+  };
+
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
     fetchBookmarks({
@@ -602,20 +611,56 @@ const NavBookmarksPage: React.FC = () => {
             gap: '16px',
             marginBottom: '24px'
           }}>
-            {/* Total Schemes - Not Clickable */}
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '20px',
-              border: `1px solid ${colors.utility.secondaryText}20`
-            }}>
+            {/* Total Schemes - Clickable (Clear All Filters) */}
+            <div
+              onClick={handleShowAllSchemes}
+              style={{
+                backgroundColor: (searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
+                  ? colors.brand.primary + '15'
+                  : colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '20px',
+                border: (searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
+                  ? `2px solid ${colors.brand.primary}`
+                  : `1px solid ${colors.utility.secondaryText}20`,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = colors.brand.primary + '40';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                const hasFilters = searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all';
+                e.currentTarget.style.borderColor = hasFilters
+                  ? colors.brand.primary
+                  : colors.utility.secondaryText + '20';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
               <div style={{
                 fontSize: '14px',
                 color: colors.utility.secondaryText,
                 marginBottom: '8px',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                Schemes Tracked
+                <span>Schemes Tracked</span>
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
+                  <span style={{
+                    fontSize: '10px',
+                    backgroundColor: colors.brand.primary,
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    CLEAR FILTERS
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: '32px',
@@ -623,6 +668,15 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.brand.primary
               }}>
                 {statistics.total_schemes_tracked}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                marginTop: '8px'
+              }}>
+                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all')
+                  ? 'Click to show all'
+                  : 'All schemes'}
               </div>
             </div>
 
@@ -762,73 +816,6 @@ const NavBookmarksPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Without Daily Download - Clickable */}
-            <div
-              onClick={() => handleFilterByDailyDownload('disabled')}
-              style={{
-                backgroundColor: dailyDownloadFilter === 'disabled'
-                  ? colors.semantic.error + '15'
-                  : colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '20px',
-                border: dailyDownloadFilter === 'disabled'
-                  ? `2px solid ${colors.semantic.error}`
-                  : `1px solid ${colors.utility.secondaryText}20`,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                position: 'relative'
-              }}
-              onMouseEnter={(e) => {
-                if (dailyDownloadFilter !== 'disabled') {
-                  e.currentTarget.style.borderColor = colors.semantic.error + '40';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (dailyDownloadFilter !== 'disabled') {
-                  e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }
-              }}
-            >
-              <div style={{
-                fontSize: '14px',
-                color: colors.utility.secondaryText,
-                marginBottom: '8px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <span>Without Daily Download</span>
-                {dailyDownloadFilter === 'disabled' && (
-                  <span style={{
-                    fontSize: '10px',
-                    backgroundColor: colors.semantic.error,
-                    color: 'white',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: '600'
-                  }}>
-                    FILTERED
-                  </span>
-                )}
-              </div>
-              <div style={{
-                fontSize: '32px',
-                fontWeight: '700',
-                color: colors.semantic.error
-              }}>
-                {statistics.total_schemes_tracked - statistics.schemes_with_daily_download}
-              </div>
-              <div style={{
-                fontSize: '11px',
-                color: colors.utility.secondaryText,
-                marginTop: '8px'
-              }}>
-                Click to filter
-              </div>
-            </div>
           </div>
         )}
 
@@ -1117,16 +1104,34 @@ const NavBookmarksPage: React.FC = () => {
                 color: colors.utility.secondaryText,
                 margin: 0
               }}>
-                {pagination?.total || 0} schemes found • Showing 25 per page
-                {(searchQuery || amcFilter || dailyDownloadFilter !== 'all' || historicalDataFilter !== 'all') && (
-                  <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
-                    {' '}(filtered
-                    {historicalDataFilter === 'without_data' && ' • No Historical Data'}
-                    {historicalDataFilter === 'with_data' && ' • With Historical Data'}
-                    {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
-                    {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
-                    )
-                  </span>
+                {/* Show filtered count when client-side filters active */}
+                {historicalDataFilter !== 'all' ? (
+                  <>
+                    {filteredBookmarks.length} of {bookmarks.length} schemes on this page
+                    <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
+                      {' '}(filtered
+                      {historicalDataFilter === 'without_data' && ' • No Historical Data'}
+                      {historicalDataFilter === 'with_data' && ' • With Historical Data'}
+                      )
+                    </span>
+                    {filteredBookmarks.length === 0 && bookmarks.length > 0 && (
+                      <span style={{ color: colors.semantic.warning, display: 'block', marginTop: '4px' }}>
+                        Try another page or clear filters
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {pagination?.total || 0} schemes found • Showing 25 per page
+                    {(searchQuery || amcFilter || dailyDownloadFilter !== 'all') && (
+                      <span style={{ color: colors.brand.primary, fontWeight: '600' }}>
+                        {' '}(filtered
+                        {dailyDownloadFilter === 'disabled' && ' • No Daily Download'}
+                        {dailyDownloadFilter === 'enabled' && ' • Daily Download Enabled'}
+                        )
+                      </span>
+                    )}
+                  </>
                 )}
               </p>
             </div>
@@ -1178,27 +1183,35 @@ const NavBookmarksPage: React.FC = () => {
               padding: '60px 20px',
               color: colors.utility.secondaryText
             }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px' }}>📚</div>
+              <div style={{ fontSize: '64px', marginBottom: '20px' }}>
+                {historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all' ? '🔍' : '📚'}
+              </div>
               <h4 style={{
                 fontSize: '20px',
                 fontWeight: '600',
                 color: colors.utility.primaryText,
                 marginBottom: '12px'
               }}>
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all' 
-                  ? 'No schemes match your filters' 
+                {historicalDataFilter !== 'all'
+                  ? 'No matching schemes on this page'
+                  : searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                  ? 'No schemes match your filters'
                   : 'No schemes bookmarked yet'
                 }
               </h4>
               <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                {historicalDataFilter !== 'all'
+                  ? bookmarks.length > 0
+                    ? 'The schemes on this page don\'t match your filter. Try navigating to other pages or clear the filter to see all schemes.'
+                    : 'No schemes available on this page'
+                  : searchQuery || amcFilter || dailyDownloadFilter !== 'all'
                   ? 'Try adjusting your search criteria or clear filters'
                   : 'Search and bookmark schemes to start tracking their NAV data'
                 }
               </p>
               <button
-                onClick={searchQuery || amcFilter || dailyDownloadFilter !== 'all' 
-                  ? handleClearFilters 
+                onClick={historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                  ? handleClearFilters
                   : handleNavigateToSearch
                 }
                 style={{
@@ -1212,7 +1225,7 @@ const NavBookmarksPage: React.FC = () => {
                   fontWeight: '500'
                 }}
               >
-                {searchQuery || amcFilter || dailyDownloadFilter !== 'all'
+                {historicalDataFilter !== 'all' || searchQuery || amcFilter || dailyDownloadFilter !== 'all'
                   ? 'Clear Filters'
                   : '🔍 Search & Bookmark Schemes'
                 }
