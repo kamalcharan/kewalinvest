@@ -112,15 +112,15 @@ export class PortfolioSnapshotService {
         SELECT
           t.scheme_code,
           t.scheme_name,
-          SUM(CASE WHEN t.transaction_type_id IN (
+          SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
           ) THEN t.units ELSE 0 END) as total_units_purchased,
-          SUM(CASE WHEN t.transaction_type_id IN (
+          SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'redemption'
           ) THEN t.units ELSE 0 END) as total_units_redeemed,
-          SUM(CASE WHEN t.transaction_type_id IN (
+          SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
-          ) THEN t.amount ELSE 0 END) as total_invested
+          ) THEN t.total_amount ELSE 0 END) as total_invested
         FROM t_transaction_table t
         WHERE t.customer_id = $1
           AND t.tenant_id = $2
