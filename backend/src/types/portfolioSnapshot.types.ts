@@ -82,6 +82,7 @@ export interface SnapshotGenerationRequest {
   snapshot_month_end?: Date;  // Defaults to end of previous month
   trigger_source: 'scheduled' | 'manual';
   scheduler_config_id?: number;
+  customer_ids?: number[];  // Optional: specific customers only
 }
 
 export interface SnapshotGenerationResult {
