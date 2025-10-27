@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp, Database } from 'lucide-react';
+import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
 import JobsService from '../../services/jobs.service';
 import PortfolioSnapshotService from '../../services/portfolioSnapshot.service';
 import { toastService } from '../../services/toast.service';
@@ -21,9 +21,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
   const [triggering, setTriggering] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
-  // Backfill state
-  const [backfilling, setBackfilling] = useState(false);
 
   // Fetch data
   const fetchData = async () => {
@@ -57,43 +54,23 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     return () => clearInterval(interval);
   }, [environment, page]);
 
-  // Manual trigger
+  // Generate snapshots - full history from first transaction
   const handleManualTrigger = async () => {
     setTriggering(true);
     try {
-      const response = await JobsService.triggerManual(JOB_TYPE, environment);
+      const response = await PortfolioSnapshotService.smartBackfill(environment);
       if (response.success) {
-        toastService.success('Snapshot generation started! This may take a few minutes.');
+        const message = response.message || 'Snapshot generation completed successfully';
+        toastService.success(message);
         // Refresh after 2 seconds
         setTimeout(fetchData, 2000);
       } else {
-        toastService.error(response.error || 'Failed to trigger snapshot generation');
+        toastService.error(response.error || 'Failed to generate snapshots');
       }
     } catch (error: any) {
-      toastService.error('Failed to trigger snapshot generation');
+      toastService.error('Failed to generate snapshots');
     } finally {
       setTriggering(false);
-    }
-  };
-
-  // Smart backfill - auto-detects date range
-  const handleSmartBackfill = async () => {
-    setBackfilling(true);
-    try {
-      const response = await PortfolioSnapshotService.smartBackfill(environment);
-
-      if (response.success) {
-        const message = response.message || 'Backfill completed successfully';
-        toastService.success(message);
-        setTimeout(fetchData, 2000);
-      } else {
-        toastService.error(response.error || 'Backfill failed');
-      }
-    } catch (error: any) {
-      console.error('Backfill error:', error);
-      toastService.error('Failed to backfill snapshots');
-    } finally {
-      setBackfilling(false);
     }
   };
 
@@ -319,10 +296,10 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       }}>
         <div>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-            Manual Snapshot Generation
+            Generate Portfolio Snapshots
           </h3>
           <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
-            Generate portfolio snapshots immediately for all customers. This will create snapshots for the end of the previous month.
+            Generates complete snapshot history for all customers from their first transaction to last month. Existing snapshots will be updated with latest values.
           </p>
         </div>
         <button
@@ -347,53 +324,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
         >
           <Play size={16} />
           {triggering ? 'Starting...' : statistics.is_running ? 'Running...' : 'Generate Now'}
-        </button>
-      </div>
-
-      {/* Backfill Historical Snapshots */}
-      <div style={{
-        marginBottom: '32px',
-        padding: '20px',
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '12px',
-        border: `1px solid ${colors.brand.secondary}40`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <Database size={20} style={{ color: colors.brand.secondary }} />
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Backfill Historical Snapshots
-            </h3>
-          </div>
-          <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
-            Automatically generates missing snapshots for all customers from their first transaction until last month. System will skip months that already have snapshots.
-          </p>
-        </div>
-        <button
-          onClick={handleSmartBackfill}
-          disabled={backfilling}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: backfilling ? colors.utility.secondaryText : colors.brand.secondary,
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: backfilling ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            opacity: backfilling ? 0.6 : 1,
-            flexShrink: 0,
-            marginLeft: '20px'
-          }}
-        >
-          <Database size={16} />
-          {backfilling ? 'Backfilling...' : 'Generate Snapshots'}
         </button>
       </div>
 
