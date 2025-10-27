@@ -152,7 +152,8 @@ export class NavController {
         page_size: req.query.page_size ? Number(req.query.page_size) : 20,
         search: req.query.search as string,
         daily_download_only: req.query.daily_download_only === 'true',
-        amc_name: req.query.amc_name as string
+        amc_name: req.query.amc_name as string,
+        has_historical_data: req.query.has_historical_data as 'true' | 'false' | 'all' | undefined
       };
 
       const result = await this.navService.getUserBookmarks(
