@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useBookmarks, useDownloads, useDownloadProgress, useNavStatistics, useBulkDownload } from '../../hooks/useNavData';
+import { useBookmarks, useDownloadProgress, useNavStatistics, useBulkDownload } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
@@ -64,7 +64,6 @@ const NavBookmarksPage: React.FC = () => {
     daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined
   });
 
-  const { triggerHistoricalDownload } = useDownloads();
   const { startPolling, stopPolling } = useDownloadProgress();
   const { statistics } = useNavStatistics();
 
@@ -177,7 +176,7 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // Historical download handler
+  // Historical download handler (NO auto-refresh to maintain user workflow)
   const handleHistoricalDownloadStarted = useCallback((jobId: number) => {
     console.log('Historical download started with job ID:', jobId);
 
@@ -204,26 +203,19 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
     }).then(() => {
-      // Refresh bookmarks after download completes to update card status in real-time
+      // NO auto-refresh - user maintains control of selection for next steps
       FrontendErrorLogger.info(
-        'Download completed, refreshing bookmarks',
+        'Download completed - user can proceed with workflow',
         'NavBookmarksPage',
         { jobId }
       );
-      setTimeout(() => {
-        fetchBookmarks({
-          page: currentPage,
-          page_size: pageSize,
-          search: searchQuery || undefined,
-          amc_name: amcFilter || undefined,
-        });
-      }, 1000);
+      toastService.success('Download complete! You can now calculate metrics or refresh the page.');
     }).catch((error) => {
       console.error('Progress polling failed:', error);
       toastService.error('Failed to track download progress: ' + error.message);
       setShowProgressModal(false);
     });
-  }, [startPolling, fetchBookmarks, currentPage, searchQuery, amcFilter]);
+  }, [startPolling]);
 
   const handleCloseHistoricalModal = () => {
     setShowHistoricalModal(false);
@@ -359,7 +351,7 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // NEW: Sequential bulk historical download (matches NAV History UX)
+  // NEW: Sequential bulk historical download (maintains selection for workflow)
   const handleBulkHistoricalDownload = useCallback(async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
 
@@ -374,24 +366,14 @@ const NavBookmarksPage: React.FC = () => {
       { totalSchemes: selectedBookmarks.length }
     );
 
-    // Clear selection
-    setSelectedBookmarkIds(new Set());
-    setShowBulkActions(false);
+    // KEEP selection - user needs it for next step (calculate metrics)
+    // Selection will be cleared only after they complete their workflow
 
     try {
       // Start sequential download (BulkDownloadProgress modal will show automatically)
       const result = await bulkDownload.processSchemes(selectedBookmarks);
 
-      // Refresh bookmarks after completion
-      setTimeout(() => {
-        fetchBookmarks({
-          page: currentPage,
-          page_size: pageSize,
-          search: searchQuery || undefined,
-          amc_name: amcFilter || undefined,
-        });
-      }, 1000);
-
+      // NO auto-refresh - user maintains selection to proceed with metrics calculation
       FrontendErrorLogger.info(
         'Sequential bulk download completed',
         'NavBookmarksPage',
@@ -402,6 +384,12 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
 
+      // Notify user they can proceed with their workflow
+      toastService.success(
+        `Download complete: ${result.successful} successful, ${result.failed} failed. ` +
+        `You can now calculate metrics or refresh the page.`
+      );
+
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Sequential bulk download failed',
@@ -410,7 +398,7 @@ const NavBookmarksPage: React.FC = () => {
         error.stack
       );
     }
-  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, searchQuery, amcFilter]);
+  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload]);
 
   // NEW: Bulk metrics calculation
   const handleBulkCalculateMetrics = useCallback(() => {
