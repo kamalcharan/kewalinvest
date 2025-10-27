@@ -179,6 +179,19 @@ export const API_ENDPOINTS = {
     HEALTH: (jobType: string) => `${API_BASE}/jobs/${jobType}/health`,
   },
 
+  // Cruise Control - Portfolio Snapshots endpoints
+  CRUISE_CONTROL: {
+    SNAPSHOTS: {
+      CONFIG: `${API_BASE}/cruise-control/snapshots/config`,
+      EXECUTE: `${API_BASE}/cruise-control/snapshots/execute`,
+      EXECUTIONS: `${API_BASE}/cruise-control/snapshots/executions`,
+      STATISTICS: `${API_BASE}/cruise-control/snapshots/statistics`,
+      HEALTH: `${API_BASE}/cruise-control/snapshots/health`,
+      BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
+      BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
+    },
+  },
+
   // Data Import endpoints
   IMPORT: {
     UPLOAD: `${API_BASE}/import/upload`,
@@ -323,6 +336,8 @@ export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
 export type JTBDEndpoints = typeof API_ENDPOINTS.JTBD;
 export type GoalEndpoints = typeof API_ENDPOINTS.GOALS;
 export type UserPreferencesEndpoints = typeof API_ENDPOINTS.USER_PREFERENCES;
+export type JobsEndpoints = typeof API_ENDPOINTS.JOBS;
+export type CruiseControlEndpoints = typeof API_ENDPOINTS.CRUISE_CONTROL;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
@@ -549,6 +564,33 @@ export const USER_PREFERENCES_URLS = {
   
   deleteChartPreference: (indexId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.USER_PREFERENCES.DELETE_CHART_PREFERENCE(indexId)}${buildQueryParams({}, environment)}`,
+} as const;
+
+// Cruise Control - Portfolio Snapshots URL helpers
+export const CRUISE_CONTROL_URLS = {
+  getSnapshotConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.CONFIG}${buildQueryParams({}, environment)}`,
+
+  updateSnapshotConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.CONFIG}${buildQueryParams({}, environment)}`,
+
+  executeSnapshot: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.EXECUTE}${buildQueryParams({}, environment)}`,
+
+  getSnapshotExecutions: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.EXECUTIONS}${buildQueryParams(params || {}, environment)}`,
+
+  getSnapshotStatistics: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.STATISTICS}${buildQueryParams({}, environment)}`,
+
+  getSnapshotHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.HEALTH}${buildQueryParams({}, environment)}`,
+
+  smartBackfill: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.BACKFILL_SMART}${buildQueryParams({}, environment)}`,
+
+  backfill: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.BACKFILL}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
 // Contact-specific URL helpers
