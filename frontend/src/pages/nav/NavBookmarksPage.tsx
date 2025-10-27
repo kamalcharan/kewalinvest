@@ -359,7 +359,7 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  // NEW: Sequential bulk historical download
+  // NEW: Sequential bulk historical download (matches NAV History UX)
   const handleBulkHistoricalDownload = useCallback(async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
 
@@ -367,13 +367,6 @@ const NavBookmarksPage: React.FC = () => {
       toastService.warning('Please select schemes to download');
       return;
     }
-
-    const confirmed = window.confirm(
-      `Start sequential download for ${selectedBookmarks.length} selected schemes?\n\n` +
-      `This will download historical NAV data one scheme at a time. You can cancel anytime.`
-    );
-
-    if (!confirmed) return;
 
     FrontendErrorLogger.info(
       'Starting sequential bulk historical download',
@@ -386,7 +379,7 @@ const NavBookmarksPage: React.FC = () => {
     setShowBulkActions(false);
 
     try {
-      // Start sequential download
+      // Start sequential download (BulkDownloadProgress modal will show automatically)
       const result = await bulkDownload.processSchemes(selectedBookmarks);
 
       // Refresh bookmarks after completion
