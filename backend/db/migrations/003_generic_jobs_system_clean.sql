@@ -128,6 +128,52 @@ BEGIN
     END IF;
 END $$;
 
+-- ============================================================================
+-- STEP 6: Insert default configurations for testing
+-- ============================================================================
+
+-- Create default PORTFOLIO_SNAPSHOT configuration for each tenant (both live and test)
+-- This ensures tenants can immediately test the feature
+INSERT INTO t_job_scheduler_configs (
+    tenant_id,
+    job_type,
+    user_id,
+    is_live,
+    schedule_type,
+    cron_expression,
+    is_enabled,
+    max_retries,
+    job_config,
+    next_execution_at,
+    created_at,
+    updated_at
+)
+SELECT
+    t.id as tenant_id,
+    'PORTFOLIO_SNAPSHOT' as job_type,
+    u.id as user_id,
+    env.is_live,
+    'weekly' as schedule_type,
+    '0 21 * * 5' as cron_expression,  -- Every Friday at 9:00 PM
+    true as is_enabled,
+    3 as max_retries,
+    NULL as job_config,
+    -- Calculate next Friday 9 PM
+    (CURRENT_DATE + ((12 - EXTRACT(DOW FROM CURRENT_DATE))::INTEGER % 7) * INTERVAL '1 day' + INTERVAL '21 hours') as next_execution_at,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+FROM t_tenants t
+CROSS JOIN (VALUES (true), (false)) AS env(is_live)
+CROSS JOIN LATERAL (
+    SELECT id FROM t_users
+    WHERE tenant_id = t.id
+    AND is_active = true
+    ORDER BY id
+    LIMIT 1
+) u
+WHERE t.is_active = true
+ON CONFLICT (tenant_id, job_type, is_live) DO NOTHING;
+
 COMMIT;
 
 -- ============================================================================
@@ -141,8 +187,10 @@ COMMIT;
 -- ✅ Created indexes for performance
 -- ✅ Created update trigger for timestamp management
 -- ✅ Granted permissions to application user
+-- ✅ Created default weekly configurations for all active tenants (both live and test)
 
 -- Next steps:
 -- 1. Restart your backend server
 -- 2. The jobs scheduler will initialize automatically
--- 3. Access Cruise Control > Portfolio Snapshots tab to configure the job
+-- 3. Access Cruise Control > Portfolio Snapshots tab - default configuration is ready!
+-- 4. You can manually trigger or wait for the weekly schedule (Friday 9 PM)
