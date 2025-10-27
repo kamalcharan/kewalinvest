@@ -154,7 +154,10 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       }}>
         <p>No scheduler configuration found.</p>
         <p style={{ fontSize: '14px', marginTop: '8px' }}>
-          Please contact your administrator to set up the portfolio snapshot scheduler.
+          The portfolio snapshot scheduler will be automatically configured on first run.
+        </p>
+        <p style={{ fontSize: '14px', marginTop: '4px' }}>
+          If you continue to see this message, please check the database migration has been run.
         </p>
       </div>
     );
