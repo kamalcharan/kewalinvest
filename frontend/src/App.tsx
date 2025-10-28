@@ -56,6 +56,7 @@ import ImportDashboard from './pages/data-import/ImportDashboard';
 
 // System Admin pages
 import SystemLogsPage from './pages/admin/SystemLogsPage';
+import SchemeAliasManagementPage from './pages/admin/SchemeAliasManagementPage';
 
 const queryClient = new QueryClient();
 
@@ -110,6 +111,7 @@ function App() {
 
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
+                <Route path="admin/scheme-aliases" element={<SchemeAliasManagementPage />} />
 
                 {/* Transaction Routes */}
                 <Route path="transactions" element={<TransactionListPage />} />
