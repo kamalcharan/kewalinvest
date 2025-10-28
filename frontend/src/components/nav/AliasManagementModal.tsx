@@ -3,11 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { SchemeAliasService } from '../../services/schemeAlias.service';
+import { SchemeAliasService, type SchemeAlias } from '../../services/schemeAlias.service';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark } from '../../types/nav.types';
-import type { SchemeAlias } from '../../types/schemeAlias.types';
 
 interface AliasManagementModalProps {
   isOpen: boolean;
@@ -47,11 +46,11 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
       });
 
       if (response.success && response.data) {
-        setAliases(response.data.aliases);
+        setAliases(response.data);
         FrontendErrorLogger.info(
           'Loaded aliases',
           'AliasManagementModal',
-          { count: response.data.aliases.length, schemeCode: bookmark.scheme_code }
+          { count: response.data.length, schemeCode: bookmark.scheme_code }
         );
       } else {
         throw new Error(response.error || 'Failed to load aliases');
