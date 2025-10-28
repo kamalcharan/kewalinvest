@@ -410,13 +410,11 @@ const NavHistoryPage: React.FC = () => {
           'Alias backfill completed',
           'NavHistoryPage',
           {
-            created: response.data.created,
-            skipped: response.data.skipped,
-            total: response.data.total
+            created: response.data.created
           }
         );
         toastService.success(
-          `Successfully backfilled ${response.data.created} aliases (${response.data.skipped} skipped)`
+          `Successfully backfilled ${response.data.created} aliases`
         );
       } else {
         throw new Error(response.error || 'Failed to backfill aliases');
