@@ -322,11 +322,14 @@ export class PortfolioSnapshotController {
       }
 
       const isLive = environment === 'live';
+
+      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}`);
+      console.log(`[SnapshotController] Environment parameter received: "${environment}" (type: ${typeof environment})`);
+      console.log(`[SnapshotController] Converted to is_live: ${isLive}`);
+      console.log(`[SnapshotController] Request query:`, req.query);
+      console.log(`[SnapshotController] Request headers:`, { 'x-environment': req.headers['x-environment'] });
+
       const { customer_ids } = req.body;
-
-      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
-
-      // Create execution record
       const executionId = await this.schedulerService.createExecution(tenantId, userId, isLive, 'manual');
 
       // Execute backfill in background and track it
