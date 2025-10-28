@@ -285,6 +285,8 @@ export class PortfolioSnapshotService {
     isLive: boolean,
     customerIds?: number[]
   ): Promise<Array<{ id: number; name: string }>> {
+    console.log(`[SnapshotService] getActiveCustomers - tenantId: ${tenantId}, is_live: ${isLive}, filter: ${customerIds ? customerIds.length + ' specific customers' : 'all customers'}`);
+
     let query = `
       SELECT c.id, ct.name
       FROM t_customers c
@@ -305,6 +307,27 @@ export class PortfolioSnapshotService {
     query += ` ORDER BY c.id`;
 
     const result = await this.db.query(query, params);
+    console.log(`[SnapshotService] getActiveCustomers - Found ${result.rows.length} customers`);
+
+    // If no customers found, log diagnostic info
+    if (result.rows.length === 0) {
+      console.warn(`[SnapshotService] WARNING: No customers found for tenant ${tenantId}, is_live=${isLive}. Check if customers exist in correct environment.`);
+
+      // Query to show what customers DO exist
+      const diagnosticQuery = `
+        SELECT
+          COUNT(*) as total_customers,
+          COUNT(*) FILTER (WHERE is_live = true) as live_count,
+          COUNT(*) FILTER (WHERE is_live = false) as test_count,
+          COUNT(*) FILTER (WHERE is_active = true) as active_count,
+          COUNT(*) FILTER (WHERE is_active = false) as inactive_count
+        FROM t_customers
+        WHERE tenant_id = $1
+      `;
+      const diagnosticResult = await this.db.query(diagnosticQuery, [tenantId]);
+      console.warn(`[SnapshotService] DIAGNOSTIC: Tenant ${tenantId} has:`, diagnosticResult.rows[0]);
+    }
+
     return result.rows;
   }
 
