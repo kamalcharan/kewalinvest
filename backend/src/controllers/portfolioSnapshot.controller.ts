@@ -127,7 +127,7 @@ export class PortfolioSnapshotController {
    * PUT /api/cruise-control/snapshots/config
    * Update scheduler configuration for current tenant
    */
-  updateConfig = async (req: Request, res: Response): Promise<void> => {
+  updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -172,7 +172,7 @@ export class PortfolioSnapshotController {
    * POST /api/cruise-control/snapshots/execute
    * Manually trigger snapshot generation
    */
-  triggerManual = async (req: Request, res: Response): Promise<void> => {
+  triggerManual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -210,7 +210,7 @@ export class PortfolioSnapshotController {
    * GET /api/cruise-control/snapshots/executions
    * Get execution history for current tenant
    */
-  getExecutions = async (req: Request, res: Response): Promise<void> => {
+  getExecutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -262,7 +262,7 @@ export class PortfolioSnapshotController {
    * GET /api/cruise-control/snapshots/statistics
    * Get statistics and status for current tenant
    */
-  getStatistics = async (req: Request, res: Response): Promise<void> => {
+  getStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -307,7 +307,7 @@ export class PortfolioSnapshotController {
    * POST /api/cruise-control/snapshots/backfill-smart
    * Smart backfill - automatically detects missing months per customer
    */
-  smartBackfill = async (req: Request, res: Response): Promise<void> => {
+  smartBackfill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -350,7 +350,7 @@ export class PortfolioSnapshotController {
    * POST /api/cruise-control/snapshots/backfill
    * Backfill historical snapshots with manual date range (Admin only)
    */
-  backfillSnapshots = async (req: Request, res: Response): Promise<void> => {
+  backfillSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
@@ -403,7 +403,7 @@ export class PortfolioSnapshotController {
    * GET /api/cruise-control/snapshots/health
    * Health check endpoint
    */
-  healthCheck = async (req: Request, res: Response): Promise<void> => {
+  healthCheck = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
       const environment = req.query.environment as string;
