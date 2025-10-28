@@ -394,10 +394,36 @@ export const PortfolioSnapshotsTab: React.FC = () => {
         border: `1px solid ${colors.utility.primaryText}10`,
         overflow: 'hidden'
       }}>
-        <div style={{ padding: '20px', borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText }}>
-            Execution History
-          </h3>
+        <div style={{ padding: '20px', borderBottom: `1px solid ${colors.utility.primaryText}10`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText }}>
+              Execution History
+            </h3>
+            <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+              Showing {executions.length} {executions.length === 1 ? 'execution' : 'executions'} in <span style={{ fontWeight: '600', color: colors.brand.primary }}>{environment.toUpperCase()}</span> environment
+            </div>
+          </div>
+          <button
+            onClick={() => fetchData()}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: colors.brand.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <Activity size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
         </div>
 
         {executions.length === 0 ? (
