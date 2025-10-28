@@ -701,4 +701,53 @@ export class PortfolioSnapshotSchedulerService {
       created_at: row.created_at
     };
   }
+
+  /**
+   * Public method to create execution record for manual operations (like backfill)
+   */
+  async createExecution(tenantId: number, isLive: boolean, triggerSource: 'scheduled' | 'manual'): Promise<number> {
+    // Get or create config for this tenant
+    let config = await this.getConfig(tenantId, isLive);
+
+    if (!config) {
+      // Create default config if it doesn't exist
+      config = await this.createConfig(tenantId, 0, isLive, {
+        schedule_type: 'weekly',
+        cron_expression: '0 21 * * 5',
+        is_enabled: false,
+        max_retries: 3
+      });
+    }
+
+    const query = `
+      INSERT INTO t_portfolio_snapshot_executions (
+        scheduler_config_id,
+        tenant_id,
+        is_live,
+        execution_time,
+        status,
+        trigger_source,
+        retry_attempt,
+        started_at
+      ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'running', $4, 0, CURRENT_TIMESTAMP)
+      RETURNING id
+    `;
+
+    const result = await this.db.query(query, [config.id, tenantId, isLive, triggerSource, 0]);
+    return result.rows[0].id;
+  }
+
+  /**
+   * Public method to complete execution with results
+   */
+  async completeExecutionWithResults(executionId: number, result: any): Promise<void> {
+    await this.completeExecution(executionId, result);
+  }
+
+  /**
+   * Public method to fail execution with error
+   */
+  async failExecutionWithError(executionId: number, errorMessage: string): Promise<void> {
+    await this.failExecution(executionId, errorMessage);
+  }
 }
