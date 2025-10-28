@@ -172,6 +172,7 @@ export class NavService {
         sb.historical_download_completed,
         sb.created_at,
         sb.updated_at,
+        sd.scheme_nav_name,
         sd.launch_date,
         sd.last_nav_download_date,
         sd.last_nav_download_status,
