@@ -139,9 +139,12 @@ export interface BackfillRequest {
 
 export interface BackfillResult {
   success: boolean;
+  snapshot_month_end?: Date;  // Last month processed (for execution tracking)
+  customers_processed: number;  // Number of customers successfully processed
+  customers_failed: number;  // Number of customers that had errors
   months_processed: number;
-  total_snapshots_created: number;
-  total_snapshots_updated: number;
+  snapshots_created: number;  // Renamed from total_snapshots_created
+  snapshots_updated: number;  // Renamed from total_snapshots_updated
   execution_duration_ms: number;
   errors: BackfillMonthError[];
 }
@@ -149,6 +152,7 @@ export interface BackfillResult {
 export interface BackfillMonthError {
   month: Date;
   customer_id?: number;
+  customer_name?: string;  // Added for better error reporting
   error_message: string;
 }
 

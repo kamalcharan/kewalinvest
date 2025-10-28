@@ -494,9 +494,12 @@ export class PortfolioSnapshotService {
 
       return {
         success: errors.length === 0,
+        snapshot_month_end: monthEnds.length > 0 ? monthEnds[monthEnds.length - 1] : undefined,
+        customers_processed: 0, // Not tracked in manual backfill
+        customers_failed: 0,
         months_processed: monthsProcessed,
-        total_snapshots_created: totalSnapshotsCreated,
-        total_snapshots_updated: totalSnapshotsUpdated,
+        snapshots_created: totalSnapshotsCreated,
+        snapshots_updated: totalSnapshotsUpdated,
         execution_duration_ms: duration,
         errors
       };
