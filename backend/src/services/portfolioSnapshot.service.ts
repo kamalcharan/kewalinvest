@@ -326,7 +326,11 @@ export class PortfolioSnapshotService {
     const errors: BackfillMonthError[] = [];
     let totalSnapshotsCreated = 0;
     let totalSnapshotsUpdated = 0;
+    let customersProcessed = 0;
+    let customersFailed = 0;
     const monthsProcessedSet = new Set<string>();
+    const customersWithErrors = new Set<number>();
+    let lastMonthProcessed: Date | null = null;
 
     try {
       // Get customers to process
@@ -340,12 +344,16 @@ export class PortfolioSnapshotService {
 
       // Process each customer
       for (const customer of customers) {
+        let customerHadError = false;
+        let customerSuccessful = false;
+
         try {
           // Get missing months for this customer
           const missingMonths = await this.getMissingMonths(customer.id, request.tenant_id, request.is_live);
 
           if (missingMonths.length === 0) {
             console.log(`[SnapshotService] Customer ${customer.id} (${customer.name}) - No missing snapshots`);
+            customersProcessed++;
             continue;
           }
 
@@ -372,37 +380,53 @@ export class PortfolioSnapshotService {
 
               // Track unique months processed
               monthsProcessedSet.add(monthEnd.toISOString().slice(0, 7));
+              lastMonthProcessed = monthEnd;
+              customerSuccessful = true;
 
             } catch (error: any) {
+              customerHadError = true;
+              customersWithErrors.add(customer.id);
               errors.push({
                 month: monthEnd,
                 customer_id: customer.id,
+                customer_name: customer.name,
                 error_message: error.message
               });
               console.error(`[SnapshotService] Failed to generate snapshot for customer ${customer.id}, month ${monthEnd.toISOString().slice(0, 7)}:`, error.message);
             }
           }
 
+          if (customerSuccessful) {
+            customersProcessed++;
+          }
+
         } catch (error: any) {
+          customerHadError = true;
+          customersWithErrors.add(customer.id);
           errors.push({
             month: new Date(),
             customer_id: customer.id,
+            customer_name: customer.name,
             error_message: `Failed to process customer: ${error.message}`
           });
           console.error(`[SnapshotService] Failed to process customer ${customer.id}:`, error.message);
         }
       }
 
+      customersFailed = customersWithErrors.size;
       const duration = Date.now() - startTime;
       const monthsProcessed = monthsProcessedSet.size;
 
-      console.log(`[SnapshotService] Smart backfill complete. Customers: ${customers.length}, Unique months: ${monthsProcessed}, Created: ${totalSnapshotsCreated}, Updated: ${totalSnapshotsUpdated}, Duration: ${duration}ms`);
+      console.log(`[SnapshotService] Smart backfill complete. Customers: ${customersProcessed}/${customers.length}, Failed: ${customersFailed}, Unique months: ${monthsProcessed}, Created: ${totalSnapshotsCreated}, Updated: ${totalSnapshotsUpdated}, Duration: ${duration}ms`);
 
       return {
         success: errors.length === 0,
+        snapshot_month_end: lastMonthProcessed || this.getEndOfPreviousMonth(),
+        customers_processed: customersProcessed,
+        customers_failed: customersFailed,
         months_processed: monthsProcessed,
-        total_snapshots_created: totalSnapshotsCreated,
-        total_snapshots_updated: totalSnapshotsUpdated,
+        snapshots_created: totalSnapshotsCreated,
+        snapshots_updated: totalSnapshotsUpdated,
         execution_duration_ms: duration,
         errors
       };
