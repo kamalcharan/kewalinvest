@@ -255,14 +255,32 @@ export class TransactionService {
         client
       );
 
-      // Insert transaction
+      // CRITICAL FIX: Look up scheme_id from scheme_details before inserting transaction
+      let schemeId = null;
+      if (data.scheme_name) {
+        const schemeLookupQuery = `
+          SELECT id FROM t_scheme_details
+          WHERE TRIM(UPPER(scheme_name)) = TRIM(UPPER($1))
+            AND is_live = $2
+            AND is_active = true
+          LIMIT 1
+        `;
+        const schemeResult = await client.query(schemeLookupQuery, [data.scheme_name, isLive]);
+        if (schemeResult.rows.length > 0) {
+          schemeId = schemeResult.rows[0].id;
+        } else {
+          console.warn(`[TransactionService] No matching scheme found for: "${data.scheme_name}" (is_live: ${isLive})`);
+        }
+      }
+
+      // Insert transaction WITH scheme_id
       const insertQuery = `
         INSERT INTO t_transaction_table (
-          tenant_id, is_live, customer_id, scheme_code, scheme_name, folio_no,
+          tenant_id, is_live, customer_id, scheme_id, scheme_code, scheme_name, folio_no,
           txn_type_id, txn_date, total_amount, units, nav, stamp_duty,
           staging_record_id, import_session_id,
           is_potential_duplicate, portfolio_flag, duplicate_reason
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *
       `;
 
@@ -270,6 +288,7 @@ export class TransactionService {
         tenantId,
         isLive,
         data.customer_id,
+        schemeId,  // ADDED: scheme_id from lookup
         TransactionUtil.sanitizeSchemeCode(data.scheme_code),
         data.scheme_name,
         data.folio_no ? TransactionUtil.sanitizeFolioNumber(data.folio_no) : null,
