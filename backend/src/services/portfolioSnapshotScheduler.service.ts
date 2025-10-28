@@ -698,7 +698,16 @@ export class PortfolioSnapshotSchedulerService {
       execution_duration_ms: row.execution_duration_ms,
       started_at: row.started_at,
       completed_at: row.completed_at,
-      created_at: row.created_at
+      created_at: row.created_at,
+      // Wrap snapshot-specific data in execution_data for frontend compatibility
+      execution_data: {
+        snapshot_month_end: row.snapshot_month_end,
+        customers_processed: row.customers_processed || 0,
+        customers_failed: row.customers_failed || 0,
+        snapshots_created: row.snapshots_created || 0,
+        snapshots_updated: row.snapshots_updated || 0,
+        errors: row.error_details ? (Array.isArray(row.error_details) ? row.error_details : []) : []
+      }
     };
   }
 
