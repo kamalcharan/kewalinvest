@@ -140,12 +140,16 @@ export class NavController {
   // ==================== BOOKMARK MANAGEMENT ====================
 
   /**
-   * Get user's bookmarked schemes (tenant-scoped)
+   * Get user's bookmarked schemes (tenant-scoped, or all schemes for admin)
    */
   getBookmarks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;
       const isLive = environment === 'live';
+
+      // Check if admin user wants to see all schemes (not tenant-filtered)
+      const isAdmin = user?.tenant?.is_admin === true;
+      const showAll = isAdmin && req.query.show_all === 'true';
 
       const params: SchemeBookmarkSearchParams = {
         page: req.query.page ? Number(req.query.page) : 1,
@@ -160,7 +164,8 @@ export class NavController {
         user!.tenant_id,
         isLive,
         user!.user_id,
-        params
+        params,
+        showAll // Pass flag to skip tenant filtering for admin
       );
 
       res.json({

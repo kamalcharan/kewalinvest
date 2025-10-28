@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookmarks, useBulkDownload, useDownloadProgress } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
+import { useAliasBackfill } from '../../hooks/useAliasBackfill';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import { BulkDownloadProgress } from '../../components/nav/BulkDownloadProgress';
 import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
@@ -15,6 +16,7 @@ import { MetricsCalculationModal } from '../../components/nav/MetricsCalculation
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import { AliasManagementModal } from '../../components/nav/AliasManagementModal';
+import { AliasBackfillProgress } from '../../components/nav/AliasBackfillProgress';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
@@ -45,10 +47,17 @@ const NavHistoryPage: React.FC = () => {
     fetchBookmarks,
     refetch,
     pagination
-  } = useBookmarks({ page: 1, page_size: 100 });
+  } = useBookmarks({
+    page: 1,
+    page_size: 100,
+    show_all: isAdmin ? 'true' : undefined // Admin sees all schemes, not tenant-filtered
+  });
 
   const bulkDownload = useBulkDownload();
   const { startPolling, stopPolling } = useDownloadProgress();
+
+  // Hooks - Alias Backfill
+  const aliasBackfill = useAliasBackfill();
 
   // Hooks - Metrics Calculation
   const bulkMetrics = useBulkMetricsCalculation({
@@ -97,9 +106,6 @@ const NavHistoryPage: React.FC = () => {
   // Modal state - Alias Management
   const [showAliasModal, setShowAliasModal] = useState(false);
   const [aliasBookmark, setAliasBookmark] = useState<SchemeBookmark | null>(null);
-
-  // Alias backfill state
-  const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Prevent multiple fetches on mount
   useEffect(() => {
@@ -389,36 +395,54 @@ const NavHistoryPage: React.FC = () => {
 
   // ==================== ALIAS HANDLERS ====================
 
-  // Handle backfill all aliases (admin only)
+  // Handle backfill all aliases (admin only) - sequential processing for ALL schemes
   const handleBackfillAll = useCallback(async () => {
     if (!isAdmin) return;
 
-    setIsBackfilling(true);
-
     FrontendErrorLogger.info(
-      'Starting alias backfill',
+      'Fetching ALL schemes for alias backfill',
       'NavHistoryPage',
       {}
     );
 
     try {
-      toastService.info('Starting alias backfill...');
-      const response = await SchemeAliasService.backfillAliases();
+      // Fetch ALL schemes (not just current page) with large page size
+      const allSchemesResponse = await navService.getBookmarks({
+        page: 1,
+        page_size: 10000, // Large number to get all schemes
+        show_all: 'true' // Admin flag to get all schemes
+      });
 
-      if (response.success && response.data) {
-        FrontendErrorLogger.info(
-          'Alias backfill completed',
-          'NavHistoryPage',
-          {
-            created: response.data.created
-          }
-        );
-        toastService.success(
-          `Successfully backfilled ${response.data.created} aliases`
-        );
-      } else {
-        throw new Error(response.error || 'Failed to backfill aliases');
+      if (!allSchemesResponse.success || !allSchemesResponse.data) {
+        throw new Error('Failed to fetch all schemes');
       }
+
+      const allBookmarks = allSchemesResponse.data.bookmarks;
+
+      if (allBookmarks.length === 0) {
+        toastService.info('No schemes found to backfill');
+        return;
+      }
+
+      FrontendErrorLogger.info(
+        'Starting sequential alias backfill for ALL schemes',
+        'NavHistoryPage',
+        { totalSchemes: allBookmarks.length }
+      );
+
+      toastService.info(`Starting backfill for ${allBookmarks.length} schemes...`);
+
+      // Convert bookmarks to the format needed by the backfill hook
+      const schemesForBackfill = allBookmarks.map(b => ({
+        scheme_id: b.scheme_id,
+        scheme_code: b.scheme_code,
+        scheme_name: b.scheme_name,
+        scheme_nav_name: b.scheme_nav_name || null
+      }));
+
+      // Process sequentially with progress tracking
+      await aliasBackfill.processSchemes(schemesForBackfill);
+
     } catch (error: any) {
       FrontendErrorLogger.error(
         'Alias backfill failed',
@@ -427,10 +451,8 @@ const NavHistoryPage: React.FC = () => {
         error.stack
       );
       toastService.error('Failed to backfill aliases: ' + error.message);
-    } finally {
-      setIsBackfilling(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, aliasBackfill]);
 
   // Handle manage aliases click
   const handleManageAliases = useCallback((bookmark: SchemeBookmark) => {
@@ -887,26 +909,26 @@ const NavHistoryPage: React.FC = () => {
             {isAdmin && (
               <button
                 onClick={handleBackfillAll}
-                disabled={isBackfilling}
+                disabled={aliasBackfill.isProcessing}
                 style={{
                   padding: '12px 20px',
-                  backgroundColor: isBackfilling
+                  backgroundColor: aliasBackfill.isProcessing
                     ? colors.utility.secondaryText
                     : colors.semantic.info,
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: isBackfilling ? 'not-allowed' : 'pointer',
+                  cursor: aliasBackfill.isProcessing ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   transition: 'transform 0.2s ease',
-                  opacity: isBackfilling ? 0.6 : 1
+                  opacity: aliasBackfill.isProcessing ? 0.6 : 1
                 }}
                 onMouseEnter={(e) => {
-                  if (!isBackfilling) {
+                  if (!aliasBackfill.isProcessing) {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                   }
                 }}
@@ -1422,6 +1444,15 @@ const NavHistoryPage: React.FC = () => {
         isOpen={showAliasModal}
         bookmark={aliasBookmark}
         onClose={handleCloseAliasModal}
+      />
+
+      {/* Alias Backfill Progress Modal */}
+      <AliasBackfillProgress
+        isOpen={aliasBackfill.isProcessing}
+        current={aliasBackfill.progress.current}
+        total={aliasBackfill.progress.total}
+        currentScheme={aliasBackfill.progress.currentScheme}
+        onCancel={aliasBackfill.cancel}
       />
 
       {/* Delete Confirmation Dialog */}
