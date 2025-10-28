@@ -192,50 +192,89 @@ export class PortfolioSnapshotService {
 
     const { tenant_id, is_live } = customerResult.rows[0];
 
-    // UPSERT query - insert or update if snapshot already exists
-    const query = `
-      INSERT INTO t_monthly_portfolio_snapshots (
-        tenant_id,
-        is_live,
-        customer_id,
-        snapshot_month_end,
-        total_invested,
-        current_value,
-        total_returns,
-        return_percentage,
-        total_units,
-        total_schemes,
-        created_at,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT (tenant_id, is_live, customer_id, snapshot_month_end)
-      DO UPDATE SET
-        total_invested = EXCLUDED.total_invested,
-        current_value = EXCLUDED.current_value,
-        total_returns = EXCLUDED.total_returns,
-        return_percentage = EXCLUDED.return_percentage,
-        total_units = EXCLUDED.total_units,
-        total_schemes = EXCLUDED.total_schemes,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING (xmax = 0) AS inserted
+    // Check if snapshot already exists
+    const checkQuery = `
+      SELECT id FROM t_monthly_portfolio_snapshots
+      WHERE tenant_id = $1
+        AND is_live = $2
+        AND customer_id = $3
+        AND snapshot_month_end = $4
     `;
 
-    const result = await this.db.query(query, [
+    const existingSnapshot = await this.db.query(checkQuery, [
       tenant_id,
       is_live,
       snapshot.customer_id,
-      snapshot.snapshot_month_end,
-      snapshot.total_invested,
-      snapshot.current_value,
-      snapshot.total_returns,
-      snapshot.return_percentage,
-      snapshot.total_units,
-      snapshot.total_schemes
+      snapshot.snapshot_month_end
     ]);
 
-    // Return true if updated (xmax != 0), false if inserted (xmax = 0)
-    return !result.rows[0].inserted;
+    if (existingSnapshot.rows.length > 0) {
+      // UPDATE existing snapshot
+      const updateQuery = `
+        UPDATE t_monthly_portfolio_snapshots
+        SET
+          total_invested = $1,
+          current_value = $2,
+          total_returns = $3,
+          return_percentage = $4,
+          total_units = $5,
+          total_schemes = $6,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = $7
+          AND is_live = $8
+          AND customer_id = $9
+          AND snapshot_month_end = $10
+      `;
+
+      await this.db.query(updateQuery, [
+        snapshot.total_invested,
+        snapshot.current_value,
+        snapshot.total_returns,
+        snapshot.return_percentage,
+        snapshot.total_units,
+        snapshot.total_schemes,
+        tenant_id,
+        is_live,
+        snapshot.customer_id,
+        snapshot.snapshot_month_end
+      ]);
+
+      return true; // Updated
+    } else {
+      // INSERT new snapshot
+      const insertQuery = `
+        INSERT INTO t_monthly_portfolio_snapshots (
+          tenant_id,
+          is_live,
+          customer_id,
+          snapshot_month_end,
+          total_invested,
+          current_value,
+          total_returns,
+          return_percentage,
+          total_units,
+          total_schemes,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `;
+
+      await this.db.query(insertQuery, [
+        tenant_id,
+        is_live,
+        snapshot.customer_id,
+        snapshot.snapshot_month_end,
+        snapshot.total_invested,
+        snapshot.current_value,
+        snapshot.total_returns,
+        snapshot.return_percentage,
+        snapshot.total_units,
+        snapshot.total_schemes
+      ]);
+
+      return false; // Inserted
+    }
   }
 
   /**

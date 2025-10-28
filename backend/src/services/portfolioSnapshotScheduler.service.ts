@@ -415,22 +415,37 @@ export class PortfolioSnapshotSchedulerService {
   }
 
   private async completeExecution(executionId: number, result: any): Promise<void> {
+    // Determine final status based on results
+    // - 'success' if no customers failed
+    // - 'failed' if all customers failed or no customers were processed
+    // - 'success' with error_details if some customers failed (partial success)
+    let finalStatus = 'success';
+
+    if (result.customers_processed === 0) {
+      finalStatus = 'failed'; // No customers processed at all
+    } else if (result.customers_failed > 0 && result.customers_failed === result.customers_processed) {
+      finalStatus = 'failed'; // All customers failed
+    } else if (result.customers_failed > 0) {
+      finalStatus = 'success'; // Partial success - some failed but not all
+    }
+
     const query = `
       UPDATE t_portfolio_snapshot_executions
       SET
-        status = 'success',
-        snapshot_month_end = $1,
-        customers_processed = $2,
-        customers_failed = $3,
-        snapshots_created = $4,
-        snapshots_updated = $5,
-        execution_duration_ms = $6,
+        status = $1,
+        snapshot_month_end = $2,
+        customers_processed = $3,
+        customers_failed = $4,
+        snapshots_created = $5,
+        snapshots_updated = $6,
+        execution_duration_ms = $7,
         completed_at = CURRENT_TIMESTAMP,
-        error_details = $7
-      WHERE id = $8
+        error_details = $8
+      WHERE id = $9
     `;
 
     await this.db.query(query, [
+      finalStatus,
       result.snapshot_month_end,
       result.customers_processed,
       result.customers_failed,
