@@ -217,7 +217,7 @@ export class PortfolioSnapshotSchedulerService {
       throw new Error(`No configuration found for tenant ${tenantId}`);
     }
 
-    const executionId = await this.createExecution(config.id!, tenantId, isLive, triggerSource, attempt);
+    const executionId = await this.createExecutionRecord(config.id!, tenantId, isLive, triggerSource, attempt);
 
     try {
       // Mark as running
@@ -379,7 +379,7 @@ export class PortfolioSnapshotSchedulerService {
 
   // ==================== EXECUTION TRACKING ====================
 
-  private async createExecution(
+  private async createExecutionRecord(
     configId: number,
     tenantId: number,
     isLive: boolean,
