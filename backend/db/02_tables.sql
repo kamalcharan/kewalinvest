@@ -460,6 +460,26 @@ CREATE TABLE t_scheme_bookmarks (
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
 COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference). Falls back to scheme_name if NULL';
 
+-- TABLE: t_scheme_aliases
+CREATE TABLE t_scheme_aliases (
+    id SERIAL PRIMARY KEY,
+    scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id) ON DELETE CASCADE,
+    scheme_code VARCHAR(100),
+    alias_name VARCHAR(500) NOT NULL,
+    alias_name_normalized VARCHAR(500) NOT NULL,
+    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('auto', 'manual', 'import')),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_by INTEGER REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+);
+
+COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Aliases are shared across all tenants.';
+COMMENT ON COLUMN t_scheme_aliases.alias_name IS 'The actual alias variation (e.g., "ICICI Pru MNC Fund Reg (G)")';
+COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces';
+COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV)';
+
 -- TABLE: t_nav_data (CORRECTED - NO tenant_id column)
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
