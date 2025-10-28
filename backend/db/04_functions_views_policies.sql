@@ -824,6 +824,38 @@ $$;
 
 COMMENT ON FUNCTION process_scheme_import_with_timing IS 'Process scheme import with controlled timing';
 
+-- ----------------------------------------------------------------------------
+-- FUNCTION: lookup_scheme_by_alias
+-- Description: Fast lookup to find scheme by alias name during transaction import
+-- Returns: scheme_id, scheme_code, scheme_name, matched_alias
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION lookup_scheme_by_alias(
+    p_alias_name VARCHAR
+)
+RETURNS TABLE(
+    scheme_id INTEGER,
+    scheme_code VARCHAR,
+    scheme_name VARCHAR,
+    matched_alias VARCHAR
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        sd.id::INTEGER,
+        sd.scheme_code::VARCHAR,
+        sd.scheme_name::VARCHAR,
+        sa.alias_name::VARCHAR
+    FROM t_scheme_aliases sa
+    JOIN t_scheme_details sd ON sa.scheme_id = sd.id
+    WHERE sa.is_active = true
+      AND sd.is_active = true
+      AND sa.alias_name_normalized = REGEXP_REPLACE(TRIM(UPPER(p_alias_name)), '\s+', ' ', 'g')
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION lookup_scheme_by_alias IS 'Fast lookup to find scheme by alias name during transaction import';
+
 -- ============================================================================
 -- SECTION 4: TRANSACTION IMPORT FUNCTIONS
 -- ============================================================================
@@ -1679,6 +1711,7 @@ GRANT EXECUTE ON FUNCTION process_single_customer_record TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_customer_import_with_timing TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_single_scheme_record TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_scheme_import_with_timing TO kewal_admin;
+GRANT EXECUTE ON FUNCTION lookup_scheme_by_alias TO kewal_admin;
 GRANT EXECUTE ON FUNCTION process_transaction_import_with_timing TO kewal_admin;
 
 -- Grant execute on cleanup functions
