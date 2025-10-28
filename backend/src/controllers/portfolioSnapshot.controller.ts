@@ -325,16 +325,31 @@ export class PortfolioSnapshotController {
 
       console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
 
-      const result = await this.snapshotService.smartBackfill({
+      // Create execution record
+      const executionId = await this.schedulerService.createExecution(tenantId, isLive, 'manual');
+
+      // Execute backfill in background and track it
+      this.snapshotService.smartBackfill({
         tenant_id: tenantId,
         is_live: isLive,
         customer_ids: customer_ids
+      }).then(async (result) => {
+        // Update execution with results
+        await this.schedulerService.completeExecutionWithResults(executionId, result);
+        console.log(`[SnapshotController] Smart backfill completed for execution ${executionId}`);
+      }).catch(async (error) => {
+        // Mark execution as failed
+        await this.schedulerService.failExecutionWithError(executionId, error.message);
+        console.error(`[SnapshotController] Smart backfill failed for execution ${executionId}:`, error);
       });
 
-      res.status(200).json({
+      res.status(202).json({
         success: true,
-        data: result,
-        message: `Smart backfill completed. Created ${result.total_snapshots_created} snapshots across ${result.months_processed} months.`
+        data: {
+          execution_id: executionId,
+          status: 'running',
+          message: 'Smart backfill started. This may take a few minutes.'
+        }
       });
 
     } catch (error: any) {
