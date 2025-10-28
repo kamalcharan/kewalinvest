@@ -135,6 +135,66 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     }
   };
 
+  // Get execution result summary
+  const getExecutionResult = (execData: PortfolioSnapshotExecutionData | undefined, status: string) => {
+    if (status === 'running') {
+      return { message: 'Processing...', color: '#3B82F6', icon: '⏳' };
+    }
+
+    if (!execData) {
+      return { message: 'No data', color: colors.utility.secondaryText, icon: '—' };
+    }
+
+    const customersProcessed = execData.customers_processed || 0;
+    const customersFailed = execData.customers_failed || 0;
+    const snapshotsCreated = execData.snapshots_created || 0;
+    const snapshotsUpdated = execData.snapshots_updated || 0;
+    const totalSnapshots = snapshotsCreated + snapshotsUpdated;
+
+    // No customers found
+    if (customersProcessed === 0) {
+      return {
+        message: 'No customers found',
+        color: '#F59E0B',
+        icon: '⚠️'
+      };
+    }
+
+    // No snapshots generated
+    if (totalSnapshots === 0) {
+      return {
+        message: 'No snapshots generated',
+        color: '#F59E0B',
+        icon: '⚠️'
+      };
+    }
+
+    // All customers failed
+    if (customersFailed > 0 && customersFailed === customersProcessed) {
+      return {
+        message: 'All customers failed',
+        color: '#EF4444',
+        icon: '❌'
+      };
+    }
+
+    // Partial success
+    if (customersFailed > 0) {
+      return {
+        message: `${customersProcessed - customersFailed}/${customersProcessed} successful`,
+        color: '#F59E0B',
+        icon: '⚠️'
+      };
+    }
+
+    // Full success
+    return {
+      message: `${totalSnapshots} snapshots generated`,
+      color: '#10B981',
+      icon: '✓'
+    };
+  };
+
   if (loading && !statistics) {
     return (
       <div style={{
@@ -352,6 +412,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                   <tr style={{ backgroundColor: colors.utility.primaryBackground }}>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Date/Time</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Status</th>
+                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Result</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Trigger</th>
                     <th style={{ padding: '12px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Customers</th>
                     <th style={{ padding: '12px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Snapshots</th>
@@ -388,6 +449,24 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                             {statusDisplay.icon}
                             {statusDisplay.label}
                           </span>
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          {(() => {
+                            const result = getExecutionResult(execData, exec.status);
+                            return (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                color: result.color
+                              }}>
+                                <span>{result.icon}</span>
+                                <span>{result.message}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td style={{ padding: '16px 20px', fontSize: '14px', color: colors.utility.secondaryText }}>
                           {exec.trigger_source === 'manual' ? '👤 Manual' : '⏰ Scheduled'}
