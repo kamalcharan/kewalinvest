@@ -705,13 +705,14 @@ export class PortfolioSnapshotSchedulerService {
   /**
    * Public method to create execution record for manual operations (like backfill)
    */
-  async createExecution(tenantId: number, isLive: boolean, triggerSource: 'scheduled' | 'manual'): Promise<number> {
+  async createExecution(tenantId: number, userId: number, isLive: boolean, triggerSource: 'scheduled' | 'manual'): Promise<number> {
     // Get or create config for this tenant
     let config = await this.getConfig(tenantId, isLive);
 
     if (!config) {
       // Create default config if it doesn't exist
       config = await this.createConfig(tenantId, isLive, {
+        user_id: userId,
         schedule_type: 'weekly',
         cron_expression: '0 21 * * 5',
         is_enabled: false,
