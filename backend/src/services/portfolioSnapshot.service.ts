@@ -107,12 +107,13 @@ export class PortfolioSnapshotService {
     const { customer_id, tenant_id, is_live, as_of_date } = input;
 
     // Query to calculate portfolio metrics as of the snapshot date
-    // FIXED: Use scheme_id instead of scheme_code (scheme_code is NULL in transactions)
+    // CRITICAL FIX: Both scheme_id and scheme_code are NULL in t_transaction_table!
+    // Solution: JOIN to t_scheme_details on scheme_name (case-insensitive), then to t_nav_data on scheme_id
     const query = `
       WITH transactions_up_to_date AS (
         SELECT
-          t.scheme_id,
           t.scheme_name,
+          sd.id as scheme_id,
           SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
           ) THEN t.units ELSE 0 END) as total_units_purchased,
@@ -123,12 +124,14 @@ export class PortfolioSnapshotService {
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
           ) THEN t.total_amount ELSE 0 END) as total_invested
         FROM t_transaction_table t
+        LEFT JOIN t_scheme_details sd ON TRIM(UPPER(t.scheme_name)) = TRIM(UPPER(sd.scheme_name))
+          AND sd.is_live = $3
         WHERE t.customer_id = $1
           AND t.tenant_id = $2
           AND t.is_live = $3
           AND t.txn_date <= $4
-          AND t.scheme_id IS NOT NULL
-        GROUP BY t.scheme_id, t.scheme_name
+        GROUP BY t.scheme_name, sd.id
+        HAVING sd.id IS NOT NULL  -- Only include schemes that matched
       ),
       portfolio_with_nav AS (
         SELECT
