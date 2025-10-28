@@ -18,9 +18,11 @@ interface EnhancedBookmarkCardProps {
   onCalculateMetrics?: (bookmark: SchemeBookmark) => void;
   onDashboardClick?: (bookmark: SchemeBookmark) => void;
   onDelete?: (bookmark: SchemeBookmark) => void;
+  onManageAliases?: (bookmark: SchemeBookmark) => void;
   showActions?: boolean;
   showDeleteButton?: boolean;
   isCalculating?: boolean;
+  isAdmin?: boolean;
 }
 
 export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
@@ -31,9 +33,11 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   onCalculateMetrics,
   onDashboardClick,
   onDelete,
+  onManageAliases,
   showActions = true,
   showDeleteButton = false,
   isCalculating = false,
+  isAdmin = false,
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -405,6 +409,33 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
               ) : (
                 '📊 Calculate'
               )}
+            </button>
+          )}
+
+          {/* MANAGE ALIASES BUTTON (Admin Only) */}
+          {isAdmin && onManageAliases && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onManageAliases(bookmark);
+              }}
+              title="Manage scheme name aliases for transaction imports"
+              style={{
+                backgroundColor: 'transparent',
+                color: colors.accent.accent2,
+                border: `1px solid ${colors.accent.accent2}40`,
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🏷️ Manage Aliases
             </button>
           )}
 
