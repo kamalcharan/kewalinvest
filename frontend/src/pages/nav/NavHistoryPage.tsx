@@ -45,7 +45,11 @@ const NavHistoryPage: React.FC = () => {
     fetchBookmarks,
     refetch,
     pagination
-  } = useBookmarks({ page: 1, page_size: 100 });
+  } = useBookmarks({
+    page: 1,
+    page_size: 100,
+    show_all: isAdmin ? 'true' : undefined // Admin sees all schemes, not tenant-filtered
+  });
 
   const bulkDownload = useBulkDownload();
   const { startPolling, stopPolling } = useDownloadProgress();
