@@ -33,7 +33,7 @@ export class PortfolioSnapshotController {
   getConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -43,7 +43,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
       const config = await this.schedulerService.getConfig(tenantId, isLive);
 
       if (!config) {
@@ -76,7 +75,7 @@ export class PortfolioSnapshotController {
     try {
       const tenantId = req.user?.tenant_id;
       const userId = req.user?.user_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId || !userId) {
         res.status(401).json({
@@ -86,7 +85,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       // Check if config already exists
       const existing = await this.schedulerService.getConfig(tenantId, isLive);
@@ -130,7 +128,7 @@ export class PortfolioSnapshotController {
   updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -140,7 +138,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       const request: UpdateSnapshotConfigRequest = {
         schedule_type: req.body.schedule_type,
@@ -175,7 +172,7 @@ export class PortfolioSnapshotController {
   triggerManual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -185,7 +182,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       console.log(`[SnapshotController] Manual trigger requested by tenant ${tenantId} (${environment})`);
 
@@ -213,7 +209,7 @@ export class PortfolioSnapshotController {
   getExecutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.page_size as string) || 20;
 
@@ -225,7 +221,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       const { executions, total } = await this.schedulerService.getExecutions(
         tenantId,
@@ -265,7 +260,7 @@ export class PortfolioSnapshotController {
   getStatistics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -275,7 +270,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       const statistics = await this.schedulerService.getStatistics(tenantId, isLive);
 
@@ -311,7 +305,7 @@ export class PortfolioSnapshotController {
     try {
       const tenantId = req.user?.tenant_id;
       const userId = req.user?.user_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId || !userId) {
         res.status(401).json({
@@ -321,15 +315,10 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
-
-      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}`);
-      console.log(`[SnapshotController] Environment parameter received: "${environment}" (type: ${typeof environment})`);
-      console.log(`[SnapshotController] Converted to is_live: ${isLive}`);
-      console.log(`[SnapshotController] Request query:`, req.query);
-      console.log(`[SnapshotController] Request headers:`, { 'x-environment': req.headers['x-environment'] });
-
       const { customer_ids } = req.body;
+
+      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
+      console.log(`[SnapshotController] Environment from header: ${req.headers['x-environment']}, is_live: ${isLive}`);
       const executionId = await this.schedulerService.createExecution(tenantId, userId, isLive, 'manual');
 
       // Execute backfill in background and track it
@@ -395,7 +384,7 @@ export class PortfolioSnapshotController {
   backfillSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -405,7 +394,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
       const { start_month, end_month, customer_ids } = req.body;
 
       if (!start_month || !end_month) {
@@ -448,7 +436,7 @@ export class PortfolioSnapshotController {
   healthCheck = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
-      const environment = req.query.environment as string;
+      const isLive = req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(401).json({
@@ -458,7 +446,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const isLive = environment === 'live';
 
       const config = await this.schedulerService.getConfig(tenantId, isLive);
       const stats = await this.schedulerService.getStatistics(tenantId, isLive);

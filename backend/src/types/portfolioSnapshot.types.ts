@@ -61,6 +61,7 @@ export interface SnapshotExecution {
   started_at?: Date;
   completed_at?: Date;
   created_at: Date;
+  execution_data?: any; // Frontend-compatible wrapper for snapshot data
 }
 
 export interface SnapshotExecutionSummary {
