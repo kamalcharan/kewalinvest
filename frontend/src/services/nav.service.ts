@@ -88,6 +88,7 @@ export interface BookmarkSearchParams {
   daily_download_only?: boolean;
   amc_name?: string;
   has_historical_data?: 'true' | 'false';  // Server-side filter for NAV data availability
+  has_calculations?: string; // Filter for schemes with/without calculations
   show_all?: string; // Admin flag to show all schemes across tenants
 }
 
@@ -221,6 +222,7 @@ export interface NavStatistics {
   total_schemes_tracked: number;
   schemes_with_daily_download: number;
   schemes_with_historical_data: number;
+  schemes_without_calculations: number;
   latest_nav_date: string;
   oldest_nav_date: string;
   download_jobs_today: number;
