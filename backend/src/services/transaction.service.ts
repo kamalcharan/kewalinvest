@@ -13,12 +13,15 @@ import {
   TransactionSummary
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
+import { SchemeAliasService } from './schemeAlias.service';
 
 export class TransactionService {
   private db: Pool;
+  private schemeAliasService: SchemeAliasService;
 
   constructor() {
     this.db = pool;
+    this.schemeAliasService = new SchemeAliasService();
   }
 
   /**
@@ -255,25 +258,7 @@ export class TransactionService {
         client
       );
 
-      // CRITICAL FIX: Look up scheme_id from scheme_details before inserting transaction
-      let schemeId = null;
-      if (data.scheme_name) {
-        const schemeLookupQuery = `
-          SELECT id FROM t_scheme_details
-          WHERE TRIM(UPPER(scheme_name)) = TRIM(UPPER($1))
-            AND is_live = $2
-            AND is_active = true
-          LIMIT 1
-        `;
-        const schemeResult = await client.query(schemeLookupQuery, [data.scheme_name, isLive]);
-        if (schemeResult.rows.length > 0) {
-          schemeId = schemeResult.rows[0].id;
-        } else {
-          console.warn(`[TransactionService] No matching scheme found for: "${data.scheme_name}" (is_live: ${isLive})`);
-        }
-      }
-
-      // Insert transaction WITH scheme_id
+      // Insert transaction
       const insertQuery = `
         INSERT INTO t_transaction_table (
           tenant_id, is_live, customer_id, scheme_id, scheme_code, scheme_name, folio_no,
@@ -288,7 +273,6 @@ export class TransactionService {
         tenantId,
         isLive,
         data.customer_id,
-        schemeId,  // ADDED: scheme_id from lookup
         TransactionUtil.sanitizeSchemeCode(data.scheme_code),
         data.scheme_name,
         data.folio_no ? TransactionUtil.sanitizeFolioNumber(data.folio_no) : null,

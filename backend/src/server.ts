@@ -14,6 +14,7 @@ import contactRoutes from './routes/contact.routes';
 import customerRoutes from './routes/customer.routes';
 import importRoutes from './routes/import.routes';
 import schemeRoutes from './routes/scheme.routes';
+import schemeAliasRoutes from './routes/schemeAlias.routes';
 import navRoutes from './routes/nav.routes';
 import transactionRoutes from './routes/transaction.routes';
 import portfolioRoutes from './routes/portfolio.routes';
@@ -162,6 +163,7 @@ app.get('/api', (_req: Request, res: Response) => {
       contacts: '/api/contacts',
       customers: '/api/customers',
       schemes: '/api/schemes',
+      scheme_aliases: '/api/scheme-aliases',
       transactions: '/api/transactions',
       portfolio: '/api/portfolio',
       import: '/api/import',
@@ -185,6 +187,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/schemes', schemeRoutes);
+app.use('/api/scheme-aliases', schemeAliasRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
