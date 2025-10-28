@@ -310,9 +310,10 @@ export class PortfolioSnapshotController {
   smartBackfill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
       const environment = req.query.environment as string;
 
-      if (!tenantId) {
+      if (!tenantId || !userId) {
         res.status(401).json({
           success: false,
           error: 'Authentication required'
@@ -326,7 +327,7 @@ export class PortfolioSnapshotController {
       console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
 
       // Create execution record
-      const executionId = await this.schedulerService.createExecution(tenantId, isLive, 'manual');
+      const executionId = await this.schedulerService.createExecution(tenantId, userId, isLive, 'manual');
 
       // Execute backfill in background and track it
       this.snapshotService.smartBackfill({
