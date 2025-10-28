@@ -734,7 +734,7 @@ export class PortfolioSnapshotSchedulerService {
       RETURNING id
     `;
 
-    const result = await this.db.query(query, [config.id, tenantId, isLive, triggerSource, 0]);
+    const result = await this.db.query(query, [config.id, tenantId, isLive, triggerSource]);
     return result.rows[0].id;
   }
 
