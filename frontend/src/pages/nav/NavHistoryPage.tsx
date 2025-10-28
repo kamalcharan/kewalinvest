@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useBookmarks, useBulkDownload, useDownloadProgress } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
@@ -13,10 +14,12 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
+import { AliasManagementModal } from '../../components/nav/AliasManagementModal';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import { navService } from '../../services/nav.service';
+import { SchemeAliasService } from '../../services/schemeAlias.service';
 import type { SchemeBookmark } from '../../types/nav.types';
 import type { DownloadProgress } from '../../services/nav.service';
 
@@ -25,7 +28,9 @@ type FilterType = 'all' | 'success' | 'failed';
 const NavHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const isAdmin = user?.tenant?.is_admin === true;
 
   // Refs
   const hasInitializedRef = useRef(false);
@@ -88,6 +93,13 @@ const NavHistoryPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingSchemeId, setDeletingSchemeId] = useState<number | null>(null);
   const [deleteProgress, setDeleteProgress] = useState<string>('');
+
+  // Modal state - Alias Management
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [aliasBookmark, setAliasBookmark] = useState<SchemeBookmark | null>(null);
+
+  // Alias backfill state
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Prevent multiple fetches on mount
   useEffect(() => {
@@ -360,7 +372,7 @@ const NavHistoryPage: React.FC = () => {
   // Handle calculation complete
   const handleCalculationComplete = useCallback((schemeId: number) => {
     setCalculatingSchemeId(null);
-    
+
     FrontendErrorLogger.info(
       'Metrics calculation completed',
       'NavHistoryPage',
@@ -374,6 +386,76 @@ const NavHistoryPage: React.FC = () => {
       }
     }, 500);
   }, [refetch]);
+
+  // ==================== ALIAS HANDLERS ====================
+
+  // Handle backfill all aliases (admin only)
+  const handleBackfillAll = useCallback(async () => {
+    if (!isAdmin) return;
+
+    setIsBackfilling(true);
+
+    FrontendErrorLogger.info(
+      'Starting alias backfill',
+      'NavHistoryPage',
+      {}
+    );
+
+    try {
+      toastService.info('Starting alias backfill...');
+      const response = await SchemeAliasService.backfillAliases();
+
+      if (response.success && response.data) {
+        FrontendErrorLogger.info(
+          'Alias backfill completed',
+          'NavHistoryPage',
+          {
+            created: response.data.created,
+            skipped: response.data.skipped,
+            total: response.data.total
+          }
+        );
+        toastService.success(
+          `Successfully backfilled ${response.data.created} aliases (${response.data.skipped} skipped)`
+        );
+      } else {
+        throw new Error(response.error || 'Failed to backfill aliases');
+      }
+    } catch (error: any) {
+      FrontendErrorLogger.error(
+        'Alias backfill failed',
+        'NavHistoryPage',
+        { error: error.message },
+        error.stack
+      );
+      toastService.error('Failed to backfill aliases: ' + error.message);
+    } finally {
+      setIsBackfilling(false);
+    }
+  }, [isAdmin]);
+
+  // Handle manage aliases click
+  const handleManageAliases = useCallback((bookmark: SchemeBookmark) => {
+    setAliasBookmark(bookmark);
+    setShowAliasModal(true);
+
+    FrontendErrorLogger.info(
+      'Opening Alias Management Modal',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name,
+        schemeCode: bookmark.scheme_code
+      }
+    );
+  }, []);
+
+  // Handle close alias modal
+  const handleCloseAliasModal = useCallback(() => {
+    setShowAliasModal(false);
+    setAliasBookmark(null);
+  }, []);
 
   // ==================== DELETE HANDLERS ====================
 
@@ -802,6 +884,39 @@ const NavHistoryPage: React.FC = () => {
             >
               📊 Calculate Metrics ({schemesWithData})
             </button>
+
+            {/* Admin Only: Backfill Aliases Button */}
+            {isAdmin && (
+              <button
+                onClick={handleBackfillAll}
+                disabled={isBackfilling}
+                style={{
+                  padding: '12px 20px',
+                  backgroundColor: isBackfilling
+                    ? colors.utility.secondaryText
+                    : colors.semantic.info,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: isBackfilling ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s ease',
+                  opacity: isBackfilling ? 0.6 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!isBackfilling) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                🔄 Backfill All Aliases
+              </button>
+            )}
           </div>
         </div>
 
@@ -1172,9 +1287,11 @@ const NavHistoryPage: React.FC = () => {
                   onHistoricalDownload={handleHistoricalDownload}
                   onCalculateMetrics={handleCalculateMetrics}
                   onDelete={handleDelete}
+                  onManageAliases={handleManageAliases}
                   showActions={true}
                   showDeleteButton={true}
                   isCalculating={calculatingSchemeId === bookmark.scheme_id}
+                  isAdmin={isAdmin}
                 />
               ))}
             </div>
@@ -1300,6 +1417,13 @@ const NavHistoryPage: React.FC = () => {
           handleCloseMetricsPreCheckModal();
           toastService.info('Download NAV data first, then calculate metrics');
         }}
+      />
+
+      {/* Alias Management Modal */}
+      <AliasManagementModal
+        isOpen={showAliasModal}
+        bookmark={aliasBookmark}
+        onClose={handleCloseAliasModal}
       />
 
       {/* Delete Confirmation Dialog */}
