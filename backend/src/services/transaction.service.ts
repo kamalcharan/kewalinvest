@@ -13,12 +13,15 @@ import {
   TransactionSummary
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
+import { SchemeAliasService } from './schemeAlias.service';
 
 export class TransactionService {
   private db: Pool;
+  private schemeAliasService: SchemeAliasService;
 
   constructor() {
     this.db = pool;
+    this.schemeAliasService = new SchemeAliasService();
   }
 
   /**
@@ -255,14 +258,42 @@ export class TransactionService {
         client
       );
 
-      // Insert transaction
+      // CRITICAL: Lookup scheme_id using alias system
+      let schemeId: number | null = null;
+
+      // Priority 1: Try exact scheme_code match
+      if (data.scheme_code) {
+        const schemeCodeQuery = `
+          SELECT id FROM t_scheme_details
+          WHERE scheme_code = $1 AND is_active = true
+          LIMIT 1
+        `;
+        const codeResult = await client.query(schemeCodeQuery, [data.scheme_code]);
+        if (codeResult.rows.length > 0) {
+          schemeId = codeResult.rows[0].id;
+          console.log(`[TransactionService] ✓ Matched scheme by code: ${data.scheme_code} → scheme_id ${schemeId}`);
+        }
+      }
+
+      // Priority 2: If not found by code, try alias lookup on scheme_name
+      if (!schemeId && data.scheme_name) {
+        const aliasResult = await this.schemeAliasService.lookupSchemeByAlias(data.scheme_name);
+        if (aliasResult.success && aliasResult.data) {
+          schemeId = aliasResult.data.scheme_id;
+          console.log(`[TransactionService] ✓ Matched scheme by alias: "${data.scheme_name}" → scheme_id ${schemeId} (${aliasResult.data.scheme_code})`);
+        } else {
+          console.warn(`[TransactionService] ✗ No scheme found for code "${data.scheme_code}" or name "${data.scheme_name}" - scheme_id will be NULL`);
+        }
+      }
+
+      // Insert transaction WITH scheme_id
       const insertQuery = `
         INSERT INTO t_transaction_table (
-          tenant_id, is_live, customer_id, scheme_code, scheme_name, folio_no,
+          tenant_id, is_live, customer_id, scheme_id, scheme_code, scheme_name, folio_no,
           txn_type_id, txn_date, total_amount, units, nav, stamp_duty,
           staging_record_id, import_session_id,
           is_potential_duplicate, portfolio_flag, duplicate_reason
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *
       `;
 
@@ -270,6 +301,7 @@ export class TransactionService {
         tenantId,
         isLive,
         data.customer_id,
+        schemeId,  // NEW: scheme_id from lookup
         TransactionUtil.sanitizeSchemeCode(data.scheme_code),
         data.scheme_name,
         data.folio_no ? TransactionUtil.sanitizeFolioNumber(data.folio_no) : null,
