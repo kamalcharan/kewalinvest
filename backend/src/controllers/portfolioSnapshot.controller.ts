@@ -183,7 +183,7 @@ export class PortfolioSnapshotController {
       }
 
 
-      console.log(`[SnapshotController] Manual trigger requested by tenant ${tenantId} (${environment})`);
+      console.log(`[SnapshotController] Manual trigger requested by tenant ${tenantId} (${isLive ? 'live' : 'test'})`);
 
       const result = await this.schedulerService.triggerManual(tenantId, isLive);
 
