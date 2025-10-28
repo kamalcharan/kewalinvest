@@ -532,7 +532,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                   border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.text
+                  color: colors.utility.primaryText
                 }}
                 placeholder="e.g., 119551"
               />
@@ -552,7 +552,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                   border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.text
+                  color: colors.utility.primaryText
                 }}
                 placeholder="e.g., Axis Tax Saver"
               />
@@ -613,7 +613,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                   border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.text
+                  color: colors.utility.primaryText
                 }}
                 placeholder="e.g., 119551"
               />
@@ -707,7 +707,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                   border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.text
+                  color: colors.utility.primaryText
                 }}
               />
             </div>
