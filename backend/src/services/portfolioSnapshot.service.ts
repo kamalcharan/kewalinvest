@@ -107,10 +107,13 @@ export class PortfolioSnapshotService {
     const { customer_id, tenant_id, is_live, as_of_date } = input;
 
     // Query to calculate portfolio metrics as of the snapshot date
+    // HYBRID APPROACH: Use scheme_id when available, fallback to scheme_name lookup for legacy data
+    // New imports will have scheme_id populated, old transactions will use name-based JOIN
     const query = `
       WITH transactions_up_to_date AS (
         SELECT
-          t.scheme_code,
+          -- Use transaction's scheme_id if available, otherwise look up from scheme_details
+          COALESCE(t.scheme_id, sd.id) as scheme_id,
           t.scheme_name,
           SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
@@ -122,11 +125,16 @@ export class PortfolioSnapshotService {
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
           ) THEN t.total_amount ELSE 0 END) as total_invested
         FROM t_transaction_table t
+        -- Only JOIN to scheme_details if scheme_id is NULL (legacy data)
+        LEFT JOIN t_scheme_details sd ON t.scheme_id IS NULL
+          AND TRIM(UPPER(t.scheme_name)) = TRIM(UPPER(sd.scheme_name))
+          AND sd.is_live = $3
         WHERE t.customer_id = $1
           AND t.tenant_id = $2
           AND t.is_live = $3
           AND t.txn_date <= $4
-        GROUP BY t.scheme_code, t.scheme_name
+        GROUP BY COALESCE(t.scheme_id, sd.id), t.scheme_name
+        HAVING COALESCE(t.scheme_id, sd.id) IS NOT NULL
       ),
       portfolio_with_nav AS (
         SELECT
@@ -135,7 +143,7 @@ export class PortfolioSnapshotService {
           COALESCE(
             (SELECT n.nav_value
              FROM t_nav_data n
-             WHERE n.scheme_code = t.scheme_code
+             WHERE n.scheme_id = t.scheme_id
                AND n.is_live = $3
                AND n.nav_date <= $4
              ORDER BY n.nav_date DESC
@@ -143,7 +151,7 @@ export class PortfolioSnapshotService {
             ), 0
           ) as latest_nav
         FROM transactions_up_to_date t
-        WHERE (t.total_units_purchased - t.total_units_redeemed) > 0.001  -- Only schemes with positive units
+        WHERE (t.total_units_purchased - t.total_units_redeemed) > 0.001
       )
       SELECT
         COUNT(*) as total_schemes,
