@@ -402,7 +402,7 @@ export class PortfolioSnapshotController {
       res.status(200).json({
         success: true,
         data: result,
-        message: `Backfill completed. Processed ${result.months_processed} months, created ${result.total_snapshots_created} snapshots.`
+        message: `Backfill completed. Processed ${result.months_processed} months, created ${result.snapshots_created} snapshots.`
       });
 
     } catch (error: any) {
