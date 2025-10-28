@@ -711,7 +711,7 @@ export class PortfolioSnapshotSchedulerService {
 
     if (!config) {
       // Create default config if it doesn't exist
-      config = await this.createConfig(tenantId, 0, isLive, {
+      config = await this.createConfig(tenantId, isLive, {
         schedule_type: 'weekly',
         cron_expression: '0 21 * * 5',
         is_enabled: false,
