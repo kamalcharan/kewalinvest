@@ -477,7 +477,7 @@ const SchemeAliasManagementPage: React.FC = () => {
             disabled={page === 1}
             style={{
               padding: '8px 16px',
-              backgroundColor: page === 1 ? ${colors.utility.primaryText}20 : colors.brand.primary,
+              backgroundColor: page === 1 ? `${colors.utility.primaryText}20` : colors.brand.primary,
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -488,7 +488,7 @@ const SchemeAliasManagementPage: React.FC = () => {
           </button>
           <span style={{
             padding: '8px 16px',
-            color: colors.text
+            color: colors.utility.primaryText
           }}>
             Page {page} of {totalPages}
           </span>
@@ -497,7 +497,7 @@ const SchemeAliasManagementPage: React.FC = () => {
             disabled={page === totalPages}
             style={{
               padding: '8px 16px',
-              backgroundColor: page === totalPages ? ${colors.utility.primaryText}20 : colors.brand.primary,
+              backgroundColor: page === totalPages ? `${colors.utility.primaryText}20` : colors.brand.primary,
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -563,7 +563,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 onClick={() => setShowAddModal(false)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: ${colors.utility.primaryText}20,
+                  backgroundColor: `${colors.utility.primaryText}20`,
                   color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
@@ -646,7 +646,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 onClick={() => setShowBulkModal(false)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: ${colors.utility.primaryText}20,
+                  backgroundColor: `${colors.utility.primaryText}20`,
                   color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
@@ -720,7 +720,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 }}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: ${colors.utility.primaryText}20,
+                  backgroundColor: `${colors.utility.primaryText}20`,
                   color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
