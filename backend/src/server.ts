@@ -25,6 +25,7 @@ import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
 import jobsRoutes from './routes/jobs.routes';
+import portfolioSnapshotRoutes from './routes/portfolioSnapshot.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -173,7 +174,8 @@ app.get('/api', (_req: Request, res: Response) => {
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
       meetings: '/api/meetings',
-      jobs: '/api/jobs'
+      jobs: '/api/jobs',
+      cruise_control_snapshots: '/api/cruise-control/snapshots'
     }
   });
 });
@@ -195,6 +197,7 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/jobs', jobsRoutes);
+app.use('/api/cruise-control/snapshots', portfolioSnapshotRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -401,7 +404,18 @@ app.use((_req: Request, res: Response) => {
       'GET /api/logs',
       'GET /api/logs/stats',
       'DELETE /api/logs/cleanup',
-      'POST /api/logs/frontend-error'
+      'POST /api/logs/frontend-error',
+
+      // Cruise Control - Portfolio Snapshots endpoints
+      'GET /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/config',
+      'PUT /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/execute',
+      'GET /api/cruise-control/snapshots/executions',
+      'GET /api/cruise-control/snapshots/statistics',
+      'POST /api/cruise-control/snapshots/backfill-smart',
+      'POST /api/cruise-control/snapshots/backfill',
+      'GET /api/cruise-control/snapshots/health'
     ]
   });
 });
