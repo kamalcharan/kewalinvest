@@ -316,7 +316,7 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${${colors.utility.primaryText}20`,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               backgroundColor: colors.utility.secondaryBackground,
               color: colors.utility.primaryText,
@@ -331,7 +331,7 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${${colors.utility.primaryText}20`,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               backgroundColor: colors.utility.secondaryBackground,
               color: colors.utility.primaryText
@@ -350,7 +350,7 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${${colors.utility.primaryText}20`,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               backgroundColor: colors.utility.secondaryBackground,
               color: colors.utility.primaryText
@@ -529,7 +529,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${${colors.utility.primaryText}20`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
@@ -549,7 +549,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${${colors.utility.primaryText}20`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
@@ -610,7 +610,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${${colors.utility.primaryText}20`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
@@ -630,7 +630,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${${colors.utility.primaryText}20`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.utility.primaryText,
@@ -704,7 +704,7 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${${colors.utility.primaryText}20`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   borderRadius: '6px',
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
