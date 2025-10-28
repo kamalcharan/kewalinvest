@@ -63,6 +63,7 @@ export interface SchemeBookmark {
   scheme_id: number;
   scheme_code: string;
   scheme_name: string;
+  scheme_nav_name?: string;
   amc_name: string;
   alias_name?: string;
   daily_download_enabled: boolean;
@@ -87,6 +88,7 @@ export interface BookmarkSearchParams {
   daily_download_only?: boolean;
   amc_name?: string;
   has_historical_data?: 'true' | 'false';  // Server-side filter for NAV data availability
+  show_all?: string; // Admin flag to show all schemes across tenants
 }
 
 export interface CreateBookmarkRequest {
