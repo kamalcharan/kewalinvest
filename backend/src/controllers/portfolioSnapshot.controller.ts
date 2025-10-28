@@ -335,13 +335,36 @@ export class PortfolioSnapshotController {
         is_live: isLive,
         customer_ids: customer_ids
       }).then(async (result) => {
-        // Update execution with results
-        await this.schedulerService.completeExecutionWithResults(executionId, result);
-        console.log(`[SnapshotController] Smart backfill completed for execution ${executionId}`);
+        try {
+          console.log(`[SnapshotController] Smart backfill completed for execution ${executionId}. Result:`, {
+            customers_processed: result.customers_processed,
+            customers_failed: result.customers_failed,
+            snapshots_created: result.snapshots_created,
+            snapshots_updated: result.snapshots_updated,
+            duration_ms: result.execution_duration_ms
+          });
+
+          // Update execution with results
+          await this.schedulerService.completeExecutionWithResults(executionId, result);
+          console.log(`[SnapshotController] Execution ${executionId} updated with results successfully`);
+        } catch (updateError: any) {
+          console.error(`[SnapshotController] CRITICAL: Failed to update execution ${executionId} with results:`, updateError);
+          // Try to mark as failed
+          try {
+            await this.schedulerService.failExecutionWithError(executionId, `Failed to update results: ${updateError.message}`);
+          } catch (failError) {
+            console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
+          }
+        }
       }).catch(async (error) => {
-        // Mark execution as failed
-        await this.schedulerService.failExecutionWithError(executionId, error.message);
-        console.error(`[SnapshotController] Smart backfill failed for execution ${executionId}:`, error);
+        try {
+          console.error(`[SnapshotController] Smart backfill failed for execution ${executionId}:`, error);
+          // Mark execution as failed
+          await this.schedulerService.failExecutionWithError(executionId, error.message);
+          console.log(`[SnapshotController] Execution ${executionId} marked as failed`);
+        } catch (failError: any) {
+          console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
+        }
       });
 
       res.status(202).json({

@@ -140,28 +140,28 @@ export class PortfolioService {
 
       // ========================================
       // 7. GET PERFORMANCE HISTORY (FROM SNAPSHOTS)
+      // IMPORTANT: Fetch ALL snapshots for full timeline, not just last 365 days
       // ========================================
       let performance: PortfolioPerformanceMetric[] = [];
       try {
         const performanceQuery = `
-          SELECT 
+          SELECT
             snapshot_month_end as date,
             total_invested as invested,
             current_value,
             total_returns as returns,
             return_percentage
           FROM t_monthly_portfolio_snapshots
-          WHERE customer_id = $1 
-            AND tenant_id = $2 
+          WHERE customer_id = $1
+            AND tenant_id = $2
             AND is_live = $3
-            AND snapshot_month_end >= CURRENT_DATE - INTERVAL '365 days'
           ORDER BY snapshot_month_end ASC
         `;
 
         const performanceResult = await this.db.query(performanceQuery, [customerId, tenantId, isLive]);
 
         performance = performanceResult.rows.map(row => ({
-          date: row.date instanceof Date 
+          date: row.date instanceof Date
             ? row.date.toISOString().split('T')[0]
             : row.date,
           invested: parseFloat(row.invested) || 0,
@@ -170,7 +170,7 @@ export class PortfolioService {
           return_percentage: parseFloat(row.return_percentage) || 0
         }));
 
-        console.log(`Fetched ${performance.length} performance snapshots for customer ${customerId}`);
+        console.log(`Fetched ${performance.length} performance snapshots for customer ${customerId} (full timeline)`);
       } catch (error: any) {
         console.warn(`Failed to fetch performance history: ${error.message}`);
         performance = [];
