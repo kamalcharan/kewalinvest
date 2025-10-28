@@ -209,13 +209,13 @@ const SchemeAliasManagementPage: React.FC = () => {
   const totalPages = Math.ceil(totalAliases / pageSize);
 
   return (
-    <div style={{ padding: '24px', backgroundColor: colors.background, minHeight: '100vh' }}>
+    <div style={{ padding: '24px', backgroundColor: colors.utility.primaryBackground, minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: colors.text, marginBottom: '8px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: colors.utility.primaryText, marginBottom: '8px' }}>
           Scheme Alias Management
         </h1>
-        <p style={{ color: colors.textSecondary }}>
+        <p style={{ color: colors.utility.secondaryText }}>
           Manage scheme name variations for flexible transaction imports
         </p>
       </div>
@@ -265,8 +265,8 @@ const SchemeAliasManagementPage: React.FC = () => {
             onClick={() => setShowAddModal(true)}
             style={{
               padding: '8px 16px',
-              backgroundColor: colors.primary,
-              color: colors.buttonText,
+              backgroundColor: colors.brand.primary,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -279,8 +279,8 @@ const SchemeAliasManagementPage: React.FC = () => {
             onClick={() => setShowBulkModal(true)}
             style={{
               padding: '8px 16px',
-              backgroundColor: colors.secondary,
-              color: colors.buttonText,
+              backgroundColor: colors.brand.secondary,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -293,8 +293,8 @@ const SchemeAliasManagementPage: React.FC = () => {
             onClick={handleBackfill}
             style={{
               padding: '8px 16px',
-              backgroundColor: colors.info,
-              color: colors.buttonText,
+              backgroundColor: colors.semantic.info,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -316,10 +316,10 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${colors.border}`,
+              border: `1px solid ${${colors.utility.primaryText}20`,
               borderRadius: '6px',
-              backgroundColor: colors.cardBg,
-              color: colors.text,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
               minWidth: '250px'
             }}
           />
@@ -331,10 +331,10 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${colors.border}`,
+              border: `1px solid ${${colors.utility.primaryText}20`,
               borderRadius: '6px',
-              backgroundColor: colors.cardBg,
-              color: colors.text
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText
             }}
           >
             <option value="all">All Sources</option>
@@ -350,10 +350,10 @@ const SchemeAliasManagementPage: React.FC = () => {
             }}
             style={{
               padding: '8px 12px',
-              border: `1px solid ${colors.border}`,
+              border: `1px solid ${${colors.utility.primaryText}20`,
               borderRadius: '6px',
-              backgroundColor: colors.cardBg,
-              color: colors.text
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText
             }}
           >
             <option value="all">All Status</option>
@@ -365,39 +365,39 @@ const SchemeAliasManagementPage: React.FC = () => {
 
       {/* Aliases Table */}
       <div style={{
-        backgroundColor: colors.cardBg,
+        backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '8px',
         overflow: 'hidden',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
         {isLoading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: colors.textSecondary }}>
+          <div style={{ padding: '48px', textAlign: 'center', color: colors.utility.secondaryText }}>
             Loading aliases...
           </div>
         ) : aliases.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: colors.textSecondary }}>
+          <div style={{ padding: '48px', textAlign: 'center', color: colors.utility.secondaryText }}>
             No aliases found
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ backgroundColor: colors.border }}>
+            <thead style={{ backgroundColor: colors.utility.secondaryBackground }}>
               <tr>
-                <th style={{ padding: '12px', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Alias Name</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Scheme Code</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Scheme Name</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Source</th>
-                <th style={{ padding: '12px', textAlign: 'center', color: colors.text, fontWeight: '600' }}>Status</th>
-                <th style={{ padding: '12px', textAlign: 'center', color: colors.text, fontWeight: '600' }}>Actions</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: colors.utility.primaryText, fontWeight: '600' }}>Alias Name</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: colors.utility.primaryText, fontWeight: '600' }}>Scheme Code</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: colors.utility.primaryText, fontWeight: '600' }}>Scheme Name</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: colors.utility.primaryText, fontWeight: '600' }}>Source</th>
+                <th style={{ padding: '12px', textAlign: 'center', color: colors.utility.primaryText, fontWeight: '600' }}>Status</th>
+                <th style={{ padding: '12px', textAlign: 'center', color: colors.utility.primaryText, fontWeight: '600' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {aliases.map((alias) => (
-                <tr key={alias.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
-                  <td style={{ padding: '12px', color: colors.text }}>{alias.alias_name}</td>
-                  <td style={{ padding: '12px', color: colors.textSecondary, fontFamily: 'monospace' }}>
+                <tr key={alias.id} style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
+                  <td style={{ padding: '12px', color: colors.utility.primaryText }}>{alias.alias_name}</td>
+                  <td style={{ padding: '12px', color: colors.utility.secondaryText, fontFamily: 'monospace' }}>
                     {alias.scheme_code}
                   </td>
-                  <td style={{ padding: '12px', color: colors.textSecondary, fontSize: '14px' }}>
+                  <td style={{ padding: '12px', color: colors.utility.secondaryText, fontSize: '14px' }}>
                     {alias.scheme_name}
                   </td>
                   <td style={{ padding: '12px' }}>
@@ -405,8 +405,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                       padding: '4px 8px',
                       borderRadius: '4px',
                       fontSize: '12px',
-                      backgroundColor: alias.source === 'auto' ? colors.info + '20' : colors.primary + '20',
-                      color: alias.source === 'auto' ? colors.info : colors.primary
+                      backgroundColor: alias.source === 'auto' ? colors.semantic.info + '20' : colors.brand.primary + '20',
+                      color: alias.source === 'auto' ? colors.semantic.info : colors.brand.primary
                     }}>
                       {alias.source}
                     </span>
@@ -416,8 +416,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                       padding: '4px 8px',
                       borderRadius: '4px',
                       fontSize: '12px',
-                      backgroundColor: alias.is_active ? colors.success + '20' : colors.danger + '20',
-                      color: alias.is_active ? colors.success : colors.danger
+                      backgroundColor: alias.is_active ? colors.semantic.success + '20' : colors.semantic.error + '20',
+                      color: alias.is_active ? colors.semantic.success : colors.semantic.error
                     }}>
                       {alias.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -432,8 +432,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                       style={{
                         padding: '4px 8px',
                         marginRight: '4px',
-                        backgroundColor: colors.secondary,
-                        color: colors.buttonText,
+                        backgroundColor: colors.brand.secondary,
+                        color: 'white',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -446,8 +446,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                       onClick={() => handleDeleteAlias(alias.id)}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: colors.danger,
-                        color: colors.buttonText,
+                        backgroundColor: colors.semantic.error,
+                        color: 'white',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -477,8 +477,8 @@ const SchemeAliasManagementPage: React.FC = () => {
             disabled={page === 1}
             style={{
               padding: '8px 16px',
-              backgroundColor: page === 1 ? colors.border : colors.primary,
-              color: colors.buttonText,
+              backgroundColor: page === 1 ? ${colors.utility.primaryText}20 : colors.brand.primary,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               cursor: page === 1 ? 'not-allowed' : 'pointer'
@@ -497,8 +497,8 @@ const SchemeAliasManagementPage: React.FC = () => {
             disabled={page === totalPages}
             style={{
               padding: '8px 16px',
-              backgroundColor: page === totalPages ? colors.border : colors.primary,
-              color: colors.buttonText,
+              backgroundColor: page === totalPages ? ${colors.utility.primaryText}20 : colors.brand.primary,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               cursor: page === totalPages ? 'not-allowed' : 'pointer'
@@ -518,7 +518,7 @@ const SchemeAliasManagementPage: React.FC = () => {
         >
           <form onSubmit={handleAddAlias}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Scheme Code *
               </label>
               <input
@@ -529,16 +529,16 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${${colors.utility.primaryText}20`,
                   borderRadius: '6px',
-                  backgroundColor: colors.cardBg,
+                  backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
                 }}
                 placeholder="e.g., 119551"
               />
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Alias Name *
               </label>
               <input
@@ -549,9 +549,9 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${${colors.utility.primaryText}20`,
                   borderRadius: '6px',
-                  backgroundColor: colors.cardBg,
+                  backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
                 }}
                 placeholder="e.g., Axis Tax Saver"
@@ -563,8 +563,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 onClick={() => setShowAddModal(false)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.border,
-                  color: colors.text,
+                  backgroundColor: ${colors.utility.primaryText}20,
+                  color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -576,8 +576,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 type="submit"
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.primary,
-                  color: colors.buttonText,
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -599,7 +599,7 @@ const SchemeAliasManagementPage: React.FC = () => {
         >
           <form onSubmit={handleBulkAdd}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Scheme Code *
               </label>
               <input
@@ -610,16 +610,16 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${${colors.utility.primaryText}20`,
                   borderRadius: '6px',
-                  backgroundColor: colors.cardBg,
+                  backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
                 }}
                 placeholder="e.g., 119551"
               />
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Aliases (one per line) *
               </label>
               <textarea
@@ -630,10 +630,10 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${${colors.utility.primaryText}20`,
                   borderRadius: '6px',
-                  backgroundColor: colors.cardBg,
-                  color: colors.text,
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
                   fontFamily: 'monospace',
                   fontSize: '14px'
                 }}
@@ -646,8 +646,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 onClick={() => setShowBulkModal(false)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.border,
-                  color: colors.text,
+                  backgroundColor: ${colors.utility.primaryText}20,
+                  color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -659,8 +659,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 type="submit"
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.primary,
-                  color: colors.buttonText,
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -685,15 +685,15 @@ const SchemeAliasManagementPage: React.FC = () => {
         >
           <form onSubmit={handleUpdateAlias}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Scheme: {selectedAlias.scheme_name}
               </label>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.textSecondary, fontSize: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.secondaryText, fontSize: '12px' }}>
                 Code: {selectedAlias.scheme_code}
               </label>
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: colors.text }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: colors.utility.primaryText }}>
                 Alias Name *
               </label>
               <input
@@ -704,9 +704,9 @@ const SchemeAliasManagementPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${${colors.utility.primaryText}20`,
                   borderRadius: '6px',
-                  backgroundColor: colors.cardBg,
+                  backgroundColor: colors.utility.secondaryBackground,
                   color: colors.text
                 }}
               />
@@ -720,8 +720,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 }}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.border,
-                  color: colors.text,
+                  backgroundColor: ${colors.utility.primaryText}20,
+                  color: colors.utility.primaryText,
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -733,8 +733,8 @@ const SchemeAliasManagementPage: React.FC = () => {
                 type="submit"
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: colors.primary,
-                  color: colors.buttonText,
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -753,15 +753,15 @@ const SchemeAliasManagementPage: React.FC = () => {
 // Helper Components
 const StatCard: React.FC<{ label: string; value: string | number; colors: any }> = ({ label, value, colors }) => (
   <div style={{
-    backgroundColor: colors.cardBg,
+    backgroundColor: colors.utility.secondaryBackground,
     padding: '16px',
     borderRadius: '8px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
   }}>
-    <div style={{ color: colors.textSecondary, fontSize: '14px', marginBottom: '8px' }}>
+    <div style={{ color: colors.utility.secondaryText, fontSize: '14px', marginBottom: '8px' }}>
       {label}
     </div>
-    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>
+    <div style={{ color: colors.utility.primaryText, fontSize: '24px', fontWeight: 'bold' }}>
       {value}
     </div>
   </div>
@@ -786,7 +786,7 @@ const Modal: React.FC<{ title: string; onClose: () => void; colors: any; childre
     zIndex: 1000
   }}>
     <div style={{
-      backgroundColor: colors.cardBg,
+      backgroundColor: colors.utility.secondaryBackground,
       borderRadius: '8px',
       padding: '24px',
       maxWidth: '500px',
@@ -800,7 +800,7 @@ const Modal: React.FC<{ title: string; onClose: () => void; colors: any; childre
         alignItems: 'center',
         marginBottom: '24px'
       }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0 }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.utility.primaryText, margin: 0 }}>
           {title}
         </h2>
         <button
@@ -810,7 +810,7 @@ const Modal: React.FC<{ title: string; onClose: () => void; colors: any; childre
             border: 'none',
             fontSize: '24px',
             cursor: 'pointer',
-            color: colors.textSecondary
+            color: colors.utility.secondaryText
           }}
         >
           ×
