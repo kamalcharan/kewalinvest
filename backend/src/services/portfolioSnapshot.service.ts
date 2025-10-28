@@ -107,10 +107,11 @@ export class PortfolioSnapshotService {
     const { customer_id, tenant_id, is_live, as_of_date } = input;
 
     // Query to calculate portfolio metrics as of the snapshot date
+    // FIXED: Use scheme_id instead of scheme_code (scheme_code is NULL in transactions)
     const query = `
       WITH transactions_up_to_date AS (
         SELECT
-          t.scheme_code,
+          t.scheme_id,
           t.scheme_name,
           SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
@@ -126,7 +127,8 @@ export class PortfolioSnapshotService {
           AND t.tenant_id = $2
           AND t.is_live = $3
           AND t.txn_date <= $4
-        GROUP BY t.scheme_code, t.scheme_name
+          AND t.scheme_id IS NOT NULL
+        GROUP BY t.scheme_id, t.scheme_name
       ),
       portfolio_with_nav AS (
         SELECT
@@ -135,7 +137,7 @@ export class PortfolioSnapshotService {
           COALESCE(
             (SELECT n.nav_value
              FROM t_nav_data n
-             WHERE n.scheme_code = t.scheme_code
+             WHERE n.scheme_id = t.scheme_id
                AND n.is_live = $3
                AND n.nav_date <= $4
              ORDER BY n.nav_date DESC
