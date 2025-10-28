@@ -46,27 +46,36 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
-   * Get user's bookmarked schemes with NAV statistics (tenant-scoped)
+   * Get user's bookmarked schemes with NAV statistics (tenant-scoped or all for admin)
    */
   async getUserBookmarks(
     tenantId: number,
     isLive: boolean,
     userId: number,
-    params: SchemeBookmarkSearchParams = {}
+    params: SchemeBookmarkSearchParams = {},
+    showAll: boolean = false
   ): Promise<SchemeBookmarkListResponse> {
     try {
       const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data, has_calculations } = params;
       const offset = (page - 1) * page_size;
+
+    // Build WHERE clause - skip tenant filter if showAll is true (admin mode)
     let baseQuery = `
       FROM t_scheme_bookmarks sb
       JOIN t_scheme_details sd ON sb.scheme_id = sd.id
-      WHERE sb.tenant_id = $1 
-        AND sb.is_live = $2 
+      WHERE sb.is_live = $1
         AND sb.is_active = true
     `;
 
-    const queryParams: any[] = [tenantId, isLive];
-    let paramIndex = 3;
+    const queryParams: any[] = [isLive];
+    let paramIndex = 2;
+
+    // Add tenant filter only if NOT in admin mode
+    if (!showAll) {
+      baseQuery += ` AND sb.tenant_id = $${paramIndex}`;
+      queryParams.push(tenantId);
+      paramIndex++;
+    }
 
     if (search) {
       baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
@@ -147,7 +156,7 @@ export class NavService {
     }
 
     const dataQuery = `
-      SELECT 
+      SELECT
         sb.id,
         sb.tenant_id,
         sb.user_id,
@@ -171,15 +180,15 @@ export class NavService {
         sd.earliest_nav_date,
         sd.latest_nav_date,
         sd.total_nav_records as nav_records_count,
-        (SELECT nav_value 
-         FROM t_nav_data nd 
-         WHERE nd.scheme_id = sb.scheme_id 
-           AND nd.is_live = $2
-         ORDER BY nav_date DESC 
+        (SELECT nav_value
+         FROM t_nav_data nd
+         WHERE nd.scheme_id = sb.scheme_id
+           AND nd.is_live = $1
+         ORDER BY nav_date DESC
          LIMIT 1
         ) as latest_nav_value
       ${baseQuery}
-      ORDER BY sb.created_at DESC 
+      ORDER BY sb.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
