@@ -189,15 +189,15 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
         style={{
           marginTop: '16px',
           padding: '12px',
-          backgroundColor: `${colors.info}15`,
-          border: `1px solid ${colors.info}40`,
+          backgroundColor: `${colors.semantic.info}15`,
+          border: `1px solid ${colors.semantic.info}40`,
           borderRadius: '6px',
           fontSize: '12px',
-          color: colors.textSecondary,
+          color: colors.utility.secondaryText,
           lineHeight: '1.5'
         }}
       >
-        <strong style={{ color: colors.info }}>Note:</strong> When using name-based
+        <strong style={{ color: colors.semantic.info }}>Note:</strong> When using name-based
         lookup, exact match is required after removing salutations (Mr, Mrs, Dr, etc).
         If multiple customers have the same name, PAN is used as a tiebreaker. Records
         without PAN will fail if multiple matches are found.

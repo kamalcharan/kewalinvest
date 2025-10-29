@@ -193,7 +193,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
             display: 'block',
             fontSize: '13px',
             fontWeight: 500,
-            color: colors.text,
+            color: colors.utility.primaryText,
             marginBottom: '6px'
           }}
         >
@@ -207,18 +207,18 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
             width: '100%',
             padding: '10px',
             fontSize: '14px',
-            color: colors.text,
-            backgroundColor: colors.inputBackground,
-            border: `1px solid ${colors.border}`,
+            color: colors.utility.primaryText,
+            backgroundColor: colors.utility.secondaryBackground,
+            border: `1px solid ${colors.utility.secondaryText}20`,
             borderRadius: '6px',
             outline: 'none',
             transition: 'border-color 0.2s ease'
           }}
           onFocus={(e) => {
-            e.currentTarget.style.borderColor = colors.primary;
+            e.currentTarget.style.borderColor = colors.brand.primary;
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
+            e.currentTarget.style.borderColor = `${colors.utility.secondaryText}20`;
           }}
         />
       </div>
@@ -244,7 +244,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
     >
       <div
         style={{
-          backgroundColor: colors.cardBackground,
+          backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
           maxWidth: '800px',
           width: '100%',
@@ -259,7 +259,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
         <div
           style={{
             padding: '24px',
-            borderBottom: `1px solid ${colors.border}`,
+            borderBottom: `1px solid ${colors.utility.secondaryText}20`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
@@ -271,7 +271,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                 margin: 0,
                 fontSize: '20px',
                 fontWeight: 600,
-                color: colors.text
+                color: colors.utility.primaryText
               }}
             >
               Edit Record #{record.row_number}
@@ -280,7 +280,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               style={{
                 margin: '6px 0 0 0',
                 fontSize: '13px',
-                color: colors.textSecondary
+                color: colors.utility.secondaryText
               }}
             >
               Status: {record.status} | Session: {record.import_session_id}
@@ -293,7 +293,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               border: 'none',
               fontSize: '24px',
               cursor: 'pointer',
-              color: colors.textSecondary,
+              color: colors.utility.secondaryText,
               padding: '0',
               width: '32px',
               height: '32px',
@@ -303,12 +303,12 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               borderRadius: '6px'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = colors.danger + '20';
-              e.currentTarget.style.color = colors.danger;
+              e.currentTarget.style.backgroundColor = colors.semantic.error + '20';
+              e.currentTarget.style.color = colors.semantic.error;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = colors.textSecondary;
+              e.currentTarget.style.color = colors.utility.secondaryText;
             }}
           >
             ×
@@ -320,13 +320,13 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
           <div
             style={{
               padding: '16px 24px',
-              backgroundColor: `${colors.danger}10`,
-              borderBottom: `1px solid ${colors.border}`
+              backgroundColor: `${colors.semantic.error}10`,
+              borderBottom: `1px solid ${colors.utility.secondaryText}20`
             }}
           >
             {record.error_messages?.length > 0 && (
               <div style={{ marginBottom: record.ambiguous_matches ? '12px' : 0 }}>
-                <strong style={{ fontSize: '13px', color: colors.danger }}>
+                <strong style={{ fontSize: '13px', color: colors.semantic.error }}>
                   Errors:
                 </strong>
                 <ul
@@ -334,7 +334,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                     margin: '6px 0 0 0',
                     paddingLeft: '20px',
                     fontSize: '13px',
-                    color: colors.text
+                    color: colors.utility.primaryText
                   }}
                 >
                   {record.error_messages.map((msg, idx) => (
@@ -346,7 +346,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
 
             {record.ambiguous_matches && record.ambiguous_matches.length > 0 && (
               <div>
-                <strong style={{ fontSize: '13px', color: colors.warning }}>
+                <strong style={{ fontSize: '13px', color: colors.semantic.warning }}>
                   Ambiguous Matches Found:
                 </strong>
                 <div
@@ -362,10 +362,10 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                       key={match.id}
                       style={{
                         padding: '8px',
-                        backgroundColor: colors.cardBackground,
+                        backgroundColor: colors.utility.secondaryBackground,
                         borderRadius: '4px',
                         fontSize: '12px',
-                        color: colors.text
+                        color: colors.utility.primaryText
                       }}
                     >
                       {match.name} {match.pan && `(PAN: ${match.pan})`} - ID: {match.id}
@@ -393,9 +393,9 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                 style={{
                   padding: '8px 16px',
                   fontSize: '13px',
-                  color: colors.primary,
+                  color: colors.brand.primary,
                   backgroundColor: 'transparent',
-                  border: `1px solid ${colors.primary}`,
+                  border: `1px solid ${colors.brand.primary}`,
                   borderRadius: '6px',
                   cursor: 'pointer'
                 }}
@@ -408,7 +408,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                   style={{
                     marginTop: '12px',
                     padding: '12px',
-                    backgroundColor: colors.background,
+                    backgroundColor: colors.utility.primaryBackground,
                     borderRadius: '6px',
                     fontSize: '12px'
                   }}
@@ -420,13 +420,13 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
                         padding: '8px 0',
                         borderBottom:
                           idx < record.edit_history!.length - 1
-                            ? `1px solid ${colors.border}`
+                            ? `1px solid ${colors.utility.secondaryText}20`
                             : 'none',
-                        color: colors.textSecondary
+                        color: colors.utility.secondaryText
                       }}
                     >
                       <div>
-                        <strong style={{ color: colors.text }}>{edit.field}:</strong>{' '}
+                        <strong style={{ color: colors.utility.primaryText }}>{edit.field}:</strong>{' '}
                         {String(edit.old_value)} → {String(edit.new_value)}
                       </div>
                       <div style={{ fontSize: '11px', marginTop: '4px' }}>
@@ -445,7 +445,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               style={{
                 fontSize: '14px',
                 fontWeight: 600,
-                color: colors.text,
+                color: colors.utility.primaryText,
                 marginBottom: '16px'
               }}
             >
@@ -459,7 +459,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
         <div
           style={{
             padding: '20px 24px',
-            borderTop: `1px solid ${colors.border}`,
+            borderTop: `1px solid ${colors.utility.secondaryText}20`,
             display: 'flex',
             justifyContent: 'flex-end',
             gap: '12px'
@@ -472,9 +472,9 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               padding: '10px 20px',
               fontSize: '14px',
               fontWeight: 500,
-              color: colors.text,
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.border}`,
+              color: colors.utility.primaryText,
+              backgroundColor: colors.utility.primaryBackground,
+              border: `1px solid ${colors.utility.secondaryText}20`,
               borderRadius: '6px',
               cursor: isSaving || isReprocessing ? 'not-allowed' : 'pointer',
               opacity: isSaving || isReprocessing ? 0.6 : 1
@@ -491,7 +491,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               fontSize: '14px',
               fontWeight: 500,
               color: '#fff',
-              backgroundColor: colors.primary,
+              backgroundColor: colors.brand.primary,
               border: 'none',
               borderRadius: '6px',
               cursor: isSaving || isReprocessing ? 'not-allowed' : 'pointer',
@@ -509,7 +509,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
               fontSize: '14px',
               fontWeight: 500,
               color: '#fff',
-              backgroundColor: colors.success,
+              backgroundColor: colors.semantic.success,
               border: 'none',
               borderRadius: '6px',
               cursor: isSaving || isReprocessing ? 'not-allowed' : 'pointer',

@@ -1415,7 +1415,7 @@ export class ImportController {
    * POST /api/import/restart/:sessionId
    * Restart a timed-out or failed import session
    */
-  restartSession = async (req: any, res: express.Response): Promise<void> => {
+  restartSession = async (req: any, res: Response): Promise<void> => {
     try {
       const user = req.user;
       const { sessionId } = req.params;
@@ -1480,7 +1480,7 @@ export class ImportController {
    * PUT /api/import/staging/:stagingId/edit
    * Edit a staging record's mapped data
    */
-  editStagingRecord = async (req: any, res: express.Response): Promise<void> => {
+  editStagingRecord = async (req: any, res: Response): Promise<void> => {
     try {
       const user = req.user;
       const { stagingId } = req.params;
@@ -1533,7 +1533,7 @@ export class ImportController {
    * POST /api/import/staging/:stagingId/reprocess
    * Reprocess a single staging record
    */
-  reprocessSingleRecord = async (req: any, res: express.Response): Promise<void> => {
+  reprocessSingleRecord = async (req: any, res: Response): Promise<void> => {
     try {
       const user = req.user;
       const { stagingId } = req.params;
@@ -1585,7 +1585,7 @@ export class ImportController {
    * POST /api/import/session/:sessionId/bulk-reprocess
    * Bulk reprocess multiple staging records
    */
-  bulkReprocessRecords = async (req: any, res: express.Response): Promise<void> => {
+  bulkReprocessRecords = async (req: any, res: Response): Promise<void> => {
     try {
       const user = req.user;
       const { sessionId } = req.params;
