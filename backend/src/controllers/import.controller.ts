@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 import { ImportService } from '../services/import.service';
 import { N8NIntegrationService } from '../services/n8nIntegration.service';
-import { FileParserService } from '../services/fileParser.service';
+import { FileParserService } from '../services/fileparser.service';
 import { FileImportType } from '../types/import.types';
 import path from 'path';
 import fs from 'fs/promises';
