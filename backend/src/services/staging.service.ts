@@ -161,7 +161,7 @@ export class StagingService {
           JSON.stringify(row),
           JSON.stringify(mappedData),
           validation.warnings.length > 0 ? validation.warnings : null,
-          'pending_process' // Status: ready for Phase 2 processing
+          'pending' // Status: ready for Phase 2 processing
         );
 
         paramIndex += 9;

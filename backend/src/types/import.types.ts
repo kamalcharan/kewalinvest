@@ -1,6 +1,6 @@
 // backend/src/types/import.types.ts
 
-export type FileImportType = 'CustomerData' | 'TransactionData' | 'SchemeData';;
+export type FileImportType = 'CustomerData' | 'TransactionData' | 'BookmarkData'| 'SchemeData';;
 
 export type ImportStatus = 'pending' | 'staged' | 'pending_processing' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
 

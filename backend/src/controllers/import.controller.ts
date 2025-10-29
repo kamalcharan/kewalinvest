@@ -372,8 +372,8 @@ export class ImportController {
         return;
       }
 
-      // Create import session
-      const session = await this.importService.createImportSession({
+      // Create import session with validation
+      const sessionResult = await this.importService.createImportSessionWithValidation({
         sessionName,
         fileUploadId: parseInt(fileId),
         tenantId: user.tenant_id,
@@ -382,6 +382,17 @@ export class ImportController {
         createdBy: user.user_id
       });
 
+      // Check if session creation was blocked due to missing prerequisites
+      if (!sessionResult.allowed) {
+        console.warn(`Session creation blocked for tenant ${user.tenant_id}: ${sessionResult.reason}`);
+        res.status(400).json({
+          success: false,
+          error: sessionResult.reason || 'Import prerequisites not met'
+        });
+        return;
+      }
+
+      const session = sessionResult.session!;
       console.log('Session created:', session.id, 'for import type:', importType);
 
       // Populate staging table
