@@ -82,10 +82,8 @@ CREATE INDEX IF NOT EXISTS idx_contacts_normalized_name
 ON t_contacts(normalized_name)
 WHERE is_active = true;
 
--- Create composite index for name + PAN lookups (for tiebreaker)
-CREATE INDEX IF NOT EXISTS idx_contacts_normalized_name_pan
-ON t_contacts(normalized_name, pan, tenant_id, is_live)
-WHERE is_active = true;
+-- Note: PAN is in t_customers table, not t_contacts, so we don't create a composite index here
+-- The customer lookup will join t_contacts (for name) with t_customers (for PAN)
 
 -- ============================================================================
 -- PART 2: Update Import Sessions Schema for Restart Capability
@@ -327,7 +325,6 @@ DROP COLUMN IF EXISTS last_restart_at,
 DROP COLUMN IF EXISTS restart_count;
 
 -- Remove contact indexes
-DROP INDEX IF EXISTS idx_contacts_normalized_name_pan;
 DROP INDEX IF EXISTS idx_contacts_normalized_name;
 
 -- Remove normalized_name column
