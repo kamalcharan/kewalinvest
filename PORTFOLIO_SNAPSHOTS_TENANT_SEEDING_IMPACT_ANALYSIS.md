@@ -1,0 +1,766 @@
+# Portfolio Snapshots - Tenant Seeding Impact Analysis
+
+**Date:** 2025-10-29
+**Focus Area:** Cruise Control → Portfolio Snapshots Tab
+**Objective:** Ensure Portfolio Snapshots work immediately after tenant signup
+**Status:** ANALYSIS PHASE - NO CODE CHANGES YET
+
+---
+
+## Executive Summary
+
+**Current State:** Portfolio Snapshot configuration seeding is **ALREADY IMPLEMENTED** in `tenantSeed.service.ts` but there are **CRITICAL GAPS** preventing the feature from working end-to-end.
+
+**Key Finding:** The tenant seeding creates the scheduler configuration, but the **jobs system infrastructure is incomplete**, causing the Cruise Control → Portfolio Snapshots tab to fail.
+
+**Risk Level:** 🟡 **MEDIUM** - Feature partially implemented but not functional
+
+---
+
+## 1. Current Implementation Status
+
+### ✅ What's Already Working
+
+#### A. Tenant Seeding (IMPLEMENTED)
+**File:** `backend/src/services/tenantSeed.service.ts`
+**Lines:** 128-171
+
+**What happens on signup:**
+1. Function `seedJobSchedulerConfigs()` is called
+2. Queries `m_job_types` table for all active job types
+3. For each job type (including `PORTFOLIO_SNAPSHOT`):
+   - Creates entry in `t_job_scheduler_configs`
+   - Sets default cron expression: `'0 21 * * 5'` (Friday 9 PM)
+   - Enables scheduler by default: `is_enabled = true`
+   - Sets max retries: `3`
+   - Creates for BOTH environments: `is_live=true` AND `is_live=false`
+
+**Code Evidence:**
+```typescript
+// Lines 146-167
+await client.query(
+  `INSERT INTO t_job_scheduler_configs (
+    tenant_id, job_type, user_id, is_live,
+    schedule_type, cron_expression, is_enabled, max_retries,
+    job_config
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  ON CONFLICT (tenant_id, job_type, is_live)
+  DO UPDATE SET
+    cron_expression = EXCLUDED.cron_expression,
+    max_retries = EXCLUDED.max_retries,
+    updated_at = CURRENT_TIMESTAMP`,
+  [
+    tenantId,
+    jobType.code,           // 'PORTFOLIO_SNAPSHOT'
+    userId,
+    isLive,
+    'weekly',
+    jobType.default_cron_expression || '0 21 * * 5',
+    true,                   // Enabled by default
+    jobType.default_max_retries || 3,
+    '{}'                    // Empty job config
+  ]
+);
+```
+
+#### B. Global Job Type Registry (IMPLEMENTED)
+**File:** `backend/src/services/tenantSeed.service.ts`
+**Lines:** 92-122
+
+**What happens:**
+- Function `seedGlobalJobTypes()` ensures `PORTFOLIO_SNAPSHOT` exists in `m_job_types`
+- This runs BEFORE tenant-specific seeding
+- Uses `ON CONFLICT DO NOTHING` - idempotent
+
+**Code Evidence:**
+```typescript
+const jobTypes = [
+  {
+    code: 'PORTFOLIO_SNAPSHOT',
+    name: 'Portfolio Snapshot Generation',
+    description: 'Generate monthly portfolio snapshots for all customers...',
+    default_cron_expression: '0 21 * * 5',
+    default_max_retries: 3
+  }
+];
+```
+
+#### C. Database Tables (EXIST)
+
+**Table 1: `m_job_types`** - Global job registry ✅
+- Stores all available job types
+- PORTFOLIO_SNAPSHOT is pre-seeded
+
+**Table 2: `t_job_scheduler_configs`** - Tenant-specific configs ✅
+- Stores scheduler configuration per tenant
+- Automatically created on signup
+
+**Table 3: `t_job_executions`** - Execution history ✅
+- Tracks all job runs
+- Records success/failure/retry status
+
+**Table 4: `t_monthly_portfolio_snapshots`** - Actual snapshots ✅
+- Stores calculated portfolio snapshots
+- Populated when job runs
+
+#### D. Frontend UI (EXISTS)
+**Location:** `frontend/src/pages/cruiseControl/PortfolioSnapshotsTab.tsx`
+
+**Features:**
+- Statistics cards (total, success, failed, etc.)
+- Execution history table
+- Manual trigger button ("Generate Snapshots")
+- Auto-refresh every 30 seconds
+
+---
+
+## 2. Critical Gaps (Why It's NOT Working)
+
+### ❌ Gap 1: Backend Routes NOT Registered
+
+**Problem:** Jobs routes exist but are NOT mounted in `server.ts`
+
+**Evidence:**
+```bash
+# Routes file exists
+/backend/src/routes/jobs.routes.ts  ✅
+
+# But NOT imported in server.ts
+grep "jobsRoutes" /backend/src/server.ts  ❌ NOT FOUND
+grep "jobs.routes" /backend/src/server.ts  ❌ NOT FOUND
+```
+
+**Impact:**
+- Frontend calls `/api/jobs/PORTFOLIO_SNAPSHOT/statistics` → **404 Not Found**
+- Frontend calls `/api/jobs/PORTFOLIO_SNAPSHOT/executions` → **404 Not Found**
+- Manual trigger button fails → **404 Not Found**
+
+**Required Fix:**
+```typescript
+// server.ts - MISSING
+import jobsRoutes from './routes/jobs.routes';
+app.use('/api/jobs', jobsRoutes);
+```
+
+---
+
+### ❌ Gap 2: Job Scheduler NOT Initialized on Startup
+
+**Problem:** `JobSchedulerService` is created but never initialized
+
+**Evidence:**
+```bash
+# Scheduler service exists
+/backend/src/services/jobScheduler.service.ts  ✅
+
+# Has initializeScheduler() method
+Line 56: async initializeScheduler(): Promise<void>
+
+# But NOT called in server.ts
+grep "initializeScheduler\|JobScheduler" /backend/src/server.ts  ❌ NOT FOUND
+```
+
+**What should happen:**
+1. Server starts
+2. JobSchedulerService initialized
+3. Loads all active configs from `t_job_scheduler_configs`
+4. Starts cron timers for enabled jobs
+5. Portfolio Snapshots run every Friday 9 PM
+
+**What actually happens:**
+1. Server starts
+2. No scheduler initialized ❌
+3. Configs exist in database but never loaded ❌
+4. No timers running ❌
+5. Jobs never execute ❌
+
+**Required Fix:**
+```typescript
+// server.ts - MISSING
+import { JobSchedulerService } from './services/jobScheduler.service';
+import { PortfolioSnapshotJob } from './services/jobs/portfolioSnapshot.job';
+
+const jobScheduler = new JobSchedulerService();
+
+// Register job executors
+jobScheduler.registerJob(new PortfolioSnapshotJob());
+
+// Initialize scheduler on startup
+await jobScheduler.initializeScheduler();
+```
+
+---
+
+### ❌ Gap 3: Controller NOT Implemented
+
+**Problem:** Jobs controller skeleton exists but methods are incomplete
+
+**Evidence:**
+```bash
+# Controller exists
+/backend/src/controllers/jobs.controller.ts  ✅ (presumed)
+
+# But service layer incomplete
+/backend/src/services/jobs.service.ts  ❌ NOT FOUND
+```
+
+**What's Missing:**
+- Generic jobs service to fetch statistics
+- Generic jobs service to fetch executions
+- Generic jobs service to trigger manual runs
+- Integration with JobSchedulerService
+
+---
+
+### ❌ Gap 4: Dual System Conflict
+
+**Problem:** Two systems exist simultaneously - OLD and NEW
+
+**OLD System (Portfolio-Specific):**
+- `t_portfolio_snapshot_configs` table ✅
+- `t_portfolio_snapshot_executions` table ✅
+- `portfolioSnapshotScheduler.service.ts` ✅
+- `portfolioSnapshot.controller.ts` ✅
+- `portfolioSnapshot.routes.ts` ✅
+
+**NEW System (Generic Jobs):**
+- `t_job_scheduler_configs` table ✅
+- `t_job_executions` table ✅
+- `jobScheduler.service.ts` ✅ (incomplete)
+- `jobs.controller.ts` ✅ (incomplete)
+- `jobs.routes.ts` ✅ (not registered)
+
+**Frontend Expectation:**
+- Calls NEW generic jobs API: `/api/jobs/PORTFOLIO_SNAPSHOT/*`
+- But backend has OLD routes: `/api/portfolio-snapshots/*`
+
+**Status:** **TRANSITION IN PROGRESS** (40% complete per `JOBS_REFACTORING_PROGRESS.md`)
+
+---
+
+## 3. Frontend Requirements Analysis
+
+### API Calls Made by PortfolioSnapshotsTab
+
+**Source:** `frontend/src/pages/cruiseControl/PortfolioSnapshotsTab.tsx`
+
+#### Call 1: Get Statistics
+```typescript
+// Line 30
+JobsService.getStatistics(JOB_TYPE, environment)
+
+// Expected endpoint:
+GET /api/jobs/PORTFOLIO_SNAPSHOT/statistics?is_live=true
+
+// Expected response:
+{
+  "total_configs": 1,
+  "enabled_configs": 1,
+  "total_executions": 15,
+  "successful_executions": 12,
+  "failed_executions": 3,
+  "last_execution": "2025-10-28T21:00:00Z",
+  "next_scheduled": "2025-11-01T21:00:00Z"
+}
+```
+
+**Status:** ❌ Endpoint NOT WORKING (404)
+
+#### Call 2: Get Executions
+```typescript
+// Line 31
+JobsService.getExecutions(JOB_TYPE, environment, page, 10)
+
+// Expected endpoint:
+GET /api/jobs/PORTFOLIO_SNAPSHOT/executions?is_live=true&page=1&page_size=10
+
+// Expected response:
+{
+  "executions": [
+    {
+      "id": 123,
+      "execution_time": "2025-10-25T21:00:00Z",
+      "status": "success",
+      "trigger_source": "scheduled",
+      "execution_data": {
+        "snapshot_month_end": "2025-10-31",
+        "customers_processed": 45,
+        "customers_failed": 0,
+        "snapshots_created": 45,
+        "snapshots_updated": 0
+      },
+      "execution_duration_ms": 15000
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 10,
+    "total_pages": 2,
+    "total_count": 15
+  }
+}
+```
+
+**Status:** ❌ Endpoint NOT WORKING (404)
+
+#### Call 3: Manual Trigger (Smart Backfill)
+```typescript
+// Line 61
+PortfolioSnapshotService.smartBackfill(environment)
+
+// Expected endpoint:
+POST /api/portfolio-snapshots/smart-backfill?is_live=true
+
+// Expected response:
+{
+  "success": true,
+  "message": "Generated 3 snapshots (Sep 2025, Oct 2025, Nov 2025)",
+  "months_generated": 3,
+  "execution_id": 124
+}
+```
+
+**Status:** ⚠️ Uses OLD API (separate from generic jobs)
+
+---
+
+## 4. Data Flow Analysis
+
+### Current Signup Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ USER SIGNS UP                                                    │
+│ POST /api/auth/register                                          │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Create Tenant (t_tenants)                                    │
+│    tenant_id = 5                                                 │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Create User (t_users)                                        │
+│    user_id = 12                                                  │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Call seedTenantData(tenantId=5, userId=12)                   │
+│    ✅ IMPLEMENTED                                                │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Seed Global Job Types                                        │
+│    - Ensures PORTFOLIO_SNAPSHOT exists in m_job_types           │
+│    ✅ WORKING                                                    │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Seed Job Scheduler Configs (BOTH LIVE & TEST)                │
+│    INSERT INTO t_job_scheduler_configs                           │
+│    - tenant_id: 5                                                │
+│    - job_type: 'PORTFOLIO_SNAPSHOT'                             │
+│    - is_live: true                                               │
+│    - cron_expression: '0 21 * * 5'                              │
+│    - is_enabled: true                                            │
+│    ✅ WORKING - Config created in database                       │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. Server Running? Scheduler Initialized?                       │
+│    ❌ NO - JobScheduler NOT initialized in server.ts             │
+│    ❌ NO - Config exists but no timer started                    │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 7. User visits Cruise Control → Portfolio Snapshots             │
+│    Frontend calls: /api/jobs/PORTFOLIO_SNAPSHOT/statistics      │
+│    ❌ FAILS - Route not registered (404 Not Found)               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Impact Assessment
+
+### A. Signup Flow Impact
+
+**Question:** Does tenant seeding need changes?
+**Answer:** ❌ **NO** - Seeding is already complete and correct
+
+**What's seeded automatically:**
+- ✅ `m_job_types` → PORTFOLIO_SNAPSHOT job type (global)
+- ✅ `t_job_scheduler_configs` → Scheduler config (tenant-specific, both envs)
+- ✅ Bookmark reasons (8 types, both envs)
+
+**Verification Query:**
+```sql
+-- Check if config exists for a tenant
+SELECT
+  id,
+  tenant_id,
+  job_type,
+  is_live,
+  is_enabled,
+  cron_expression,
+  created_at
+FROM t_job_scheduler_configs
+WHERE tenant_id = ? AND job_type = 'PORTFOLIO_SNAPSHOT';
+
+-- Expected result: 2 rows (1 live, 1 test)
+```
+
+### B. Backend Infrastructure Impact
+
+**What needs to be fixed:**
+
+1. **Server Initialization** - HIGH PRIORITY ⚠️
+   - Import `JobSchedulerService`
+   - Import `PortfolioSnapshotJob`
+   - Register job executor
+   - Initialize scheduler on startup
+   - **Impact:** Backend can now load configs and run scheduled jobs
+
+2. **Route Registration** - HIGH PRIORITY ⚠️
+   - Import `jobsRoutes`
+   - Mount at `/api/jobs`
+   - **Impact:** Frontend API calls stop failing with 404
+
+3. **Complete Jobs Service** - HIGH PRIORITY ⚠️
+   - Implement `getStatistics()` method
+   - Implement `getExecutions()` method
+   - Implement `triggerManual()` method
+   - **Impact:** Endpoints return data to frontend
+
+4. **Jobs Controller** - MEDIUM PRIORITY
+   - Complete controller methods
+   - Add error handling
+   - Add validation
+   - **Impact:** Proper request/response handling
+
+### C. Frontend Impact
+
+**Changes needed:** ❌ **NONE** (assuming backend is fixed)
+
+**Rationale:**
+- Frontend already expects generic jobs API
+- Frontend already has PortfolioSnapshotsTab component
+- Frontend already calls correct endpoints
+- Once backend routes are registered, everything should work
+
+**User Experience:**
+1. User signs up → Config automatically created ✅
+2. User navigates to Cruise Control → Tab loads ✅
+3. Statistics cards show zeros (no executions yet) ✅
+4. User clicks "Generate Snapshots" → Job triggers ✅
+5. Execution history updates → User sees results ✅
+
+### D. Database Impact
+
+**Schema changes needed:** ❌ **NONE**
+
+**Tables ready:**
+- ✅ `m_job_types`
+- ✅ `t_job_scheduler_configs`
+- ✅ `t_job_executions`
+- ✅ `t_monthly_portfolio_snapshots`
+
+**Migration status:**
+- ✅ Migration 003 creates generic jobs tables
+- ⚠️ Two versions exist: `003_generic_jobs_system.sql` and `003_generic_jobs_system_clean.sql`
+- 🔍 Need to verify which is deployed
+
+---
+
+## 6. Dependencies & Blockers
+
+### Critical Dependencies
+
+**Blocker 1: Jobs System Refactoring (40% Complete)**
+**Tracking:** `JOBS_REFACTORING_PROGRESS.md`
+
+**What's done:**
+- ✅ Database tables (m_job_types, t_job_scheduler_configs, t_job_executions)
+- ✅ Generic types (jobs.types.ts)
+- ✅ Tenant seeding (seedJobSchedulerConfigs)
+
+**What's pending (60%):**
+- ❌ Backend services: Complete JobSchedulerService
+- ❌ Backend services: Implement generic jobs.service.ts
+- ❌ Backend controller: Complete jobs.controller.ts
+- ❌ Server integration: Register routes and initialize scheduler
+- ❌ Frontend: Generic job components (optional, PortfolioSnapshotsTab already uses new API)
+
+**Blocker 2: Migration Conflict**
+**Issue:** Two versions of migration 003 exist
+- `003_generic_jobs_system.sql` (9.5K)
+- `003_generic_jobs_system_clean.sql` (8.2K)
+
+**Impact:** Unclear which tables are actually deployed
+
+**Resolution needed:** Determine correct migration, verify schema
+
+---
+
+## 7. Testing Requirements
+
+### A. Database Verification
+
+**After signup, verify:**
+```sql
+-- 1. Job type exists globally
+SELECT * FROM m_job_types WHERE code = 'PORTFOLIO_SNAPSHOT';
+-- Expected: 1 row
+
+-- 2. Scheduler config created for tenant (both envs)
+SELECT tenant_id, job_type, is_live, is_enabled, cron_expression
+FROM t_job_scheduler_configs
+WHERE tenant_id = <NEW_TENANT_ID> AND job_type = 'PORTFOLIO_SNAPSHOT';
+-- Expected: 2 rows (is_live=true, is_live=false)
+
+-- 3. Verify config is enabled
+SELECT is_enabled FROM t_job_scheduler_configs
+WHERE tenant_id = <NEW_TENANT_ID>
+  AND job_type = 'PORTFOLIO_SNAPSHOT'
+  AND is_live = true;
+-- Expected: true
+```
+
+### B. Backend API Testing
+
+**Test endpoints once implemented:**
+```bash
+# 1. Get statistics
+curl -X GET "http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/statistics?is_live=true" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: 1"
+
+# Expected: Statistics object with counts
+
+# 2. Get executions
+curl -X GET "http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/executions?is_live=true&page=1&page_size=10" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: 1"
+
+# Expected: Executions array with pagination
+
+# 3. Manual trigger
+curl -X POST "http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/execute?is_live=true" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"trigger_source": "manual"}'
+
+# Expected: Job queued response with execution_id
+```
+
+### C. Frontend UI Testing
+
+**Test flow:**
+1. Login as tenant admin
+2. Navigate to Cruise Control
+3. Click "Portfolio Snapshots" tab
+4. Verify statistics cards display (may show zeros initially)
+5. Click "Generate Snapshots" button
+6. Verify execution appears in history table
+7. Wait for job completion
+8. Verify statistics update
+9. Check `t_monthly_portfolio_snapshots` for actual snapshot data
+
+---
+
+## 8. Risk Assessment
+
+### High Risk Items
+
+**Risk 1: Dual System Confusion** 🔴
+**Description:** Old and new systems coexist
+**Impact:** Unclear which code path is active
+**Mitigation:** Complete migration to generic jobs, deprecate old system
+
+**Risk 2: Scheduler Not Running** 🔴
+**Description:** Configs exist but scheduler never initialized
+**Impact:** Automated snapshots never generated
+**Mitigation:** Initialize JobSchedulerService in server.ts
+
+**Risk 3: Missing Routes** 🔴
+**Description:** Routes file exists but not registered
+**Impact:** All frontend calls fail with 404
+**Mitigation:** Register jobs.routes in server.ts
+
+### Medium Risk Items
+
+**Risk 4: Migration Uncertainty** 🟡
+**Description:** Two migration files for 003
+**Impact:** Unclear what schema is deployed
+**Mitigation:** Audit database, determine correct migration
+
+**Risk 5: No Test Coverage** 🟡
+**Description:** Zero test files in codebase
+**Impact:** No validation of job execution logic
+**Mitigation:** Add unit/integration tests for critical paths
+
+---
+
+## 9. Recommended Implementation Sequence
+
+### Phase 1: Complete Backend Infrastructure (2-3 days)
+
+**Priority:** CRITICAL ⚠️
+
+**Tasks:**
+1. ✅ Resolve migration 003 conflict
+   - Verify which tables are deployed
+   - Delete duplicate migration file
+
+2. ✅ Complete `jobs.service.ts`
+   - Implement getStatistics()
+   - Implement getExecutions()
+   - Implement triggerManual()
+   - Add error handling
+
+3. ✅ Complete `jobs.controller.ts`
+   - Wire service methods
+   - Add request validation
+   - Add response formatting
+
+4. ✅ Register routes in `server.ts`
+   - Import jobsRoutes
+   - Mount at /api/jobs
+   - Test route registration
+
+5. ✅ Initialize scheduler in `server.ts`
+   - Import JobSchedulerService
+   - Import PortfolioSnapshotJob
+   - Register job executor
+   - Call initializeScheduler()
+   - Test scheduler starts
+
+**Exit Criteria:**
+- ✅ All jobs routes respond (not 404)
+- ✅ Statistics endpoint returns data
+- ✅ Executions endpoint returns data
+- ✅ Manual trigger creates execution
+- ✅ Scheduler starts on server startup
+- ✅ Logs show "Scheduler initialized successfully"
+
+### Phase 2: Verification & Testing (1 day)
+
+**Priority:** HIGH
+
+**Tasks:**
+1. Create test tenant via signup
+2. Verify configs created in database
+3. Test all API endpoints
+4. Verify scheduler loads config
+5. Manually trigger snapshot generation
+6. Verify snapshots saved to database
+7. Test frontend UI end-to-end
+
+### Phase 3: Cleanup & Documentation (0.5 days)
+
+**Priority:** MEDIUM
+
+**Tasks:**
+1. Remove duplicate service files
+2. Update documentation
+3. Mark old system as deprecated
+4. Plan migration from old to new system
+
+---
+
+## 10. Open Questions
+
+### Technical Questions
+
+**Q1:** Which migration 003 is deployed?
+**Answer:** Need to query database and compare with files
+
+**Q2:** Should old portfolio snapshot routes coexist?
+**Answer:** Temporarily yes, until full migration complete
+
+**Q3:** What happens to existing old configs?
+**Answer:** Migration script copies old configs to new table (line 87-118 in 003 migration)
+
+**Q4:** Who triggers the first snapshot generation?
+**Answer:** Either manual trigger by user OR first scheduled run (Friday 9 PM)
+
+**Q5:** Do we need to pre-populate snapshots on signup?
+**Answer:** NO - snapshots generated on-demand or scheduled
+
+### Product Questions
+
+**Q1:** Should Portfolio Snapshots be enabled by default for new tenants?
+**Current:** Yes (is_enabled = true)
+**Recommendation:** Yes, keep as-is
+
+**Q2:** What's the default schedule for new tenants?
+**Current:** Weekly, Friday 9 PM
+**Recommendation:** Reasonable default, can be customized later
+
+**Q3:** Should admin be able to disable snapshot generation?
+**Current:** Yes, via is_enabled flag
+**Recommendation:** Keep this capability
+
+---
+
+## 11. Conclusion
+
+### Summary
+
+**Tenant Seeding:** ✅ **ALREADY COMPLETE** - No changes needed
+**Backend Infrastructure:** ❌ **INCOMPLETE** - 60% work remaining
+**Frontend:** ✅ **READY** - Expects new API, will work once backend is fixed
+
+### Critical Path
+
+```
+┌──────────────────────────────────────────┐
+│ 1. Complete backend jobs infrastructure  │ ← BLOCKING
+│    - Implement services                   │
+│    - Complete controllers                 │
+│    - Register routes                      │
+│    - Initialize scheduler                 │
+└──────────────────┬───────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────┐
+│ 2. Test end-to-end                        │
+│    - Verify signup creates config         │
+│    - Test API endpoints                   │
+│    - Test manual trigger                  │
+│    - Test scheduled execution             │
+└──────────────────┬───────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────┐
+│ 3. Deploy & Monitor                       │
+│    - Deploy backend changes               │
+│    - Monitor first scheduled run          │
+│    - Verify snapshots created             │
+└──────────────────────────────────────────┘
+```
+
+### Next Action
+
+**DO NOT CODE YET** ✋
+
+**Instead:**
+1. Review this analysis
+2. Confirm understanding
+3. Ask clarifying questions
+4. Agree on implementation sequence
+5. THEN proceed with Phase 1 implementation
+
+---
+
+**Document Status:** ANALYSIS COMPLETE - AWAITING APPROVAL
+**Last Updated:** 2025-10-29
+**Prepared By:** Claude Code Analysis Agent
