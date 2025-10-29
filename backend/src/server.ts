@@ -24,6 +24,7 @@ import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
+import schemeAliasRoutes from './routes/schemeAlias.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -132,6 +133,7 @@ app.get('/health', (_req: Request, res: Response) => {
       default_comparison_index: true, // NEW: Default index for performance charts
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
+      scheme_aliases: true, // NEW: Scheme alias management for flexible imports
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -166,6 +168,7 @@ app.get('/api', (_req: Request, res: Response) => {
       market: '/api/market',
       market_analysis: '/api/market-analysis',
       scheme_analysis: '/api/scheme-analysis',
+      scheme_aliases: '/api/scheme-aliases',
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
@@ -186,6 +189,7 @@ app.use('/api/nav', navRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/scheme-analysis', schemeAnalysisRoutes);
+app.use('/api/scheme-aliases', schemeAliasRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
