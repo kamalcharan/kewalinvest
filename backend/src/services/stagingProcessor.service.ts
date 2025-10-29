@@ -33,7 +33,7 @@ interface StagingRecord {
   id: number;
   row_number: number;
   mapped_data: any;
-  status: string;
+  processing_status: string;
 }
 
 export class StagingProcessorService {
@@ -554,11 +554,11 @@ export class StagingProcessorService {
     batchSize: number
   ): Promise<StagingRecord[]> {
     const query = `
-      SELECT id, row_number, mapped_data, status
+      SELECT id, row_number, mapped_data, processing_status
       FROM t_import_staging_data
-      WHERE import_session_id = $1
+      WHERE session_id = $1
         AND id > $2
-        AND status = 'pending_process'
+        AND processing_status = 'pending_process'
       ORDER BY id ASC
       LIMIT $3
     `;
@@ -586,7 +586,7 @@ export class StagingProcessorService {
     const query = `
       UPDATE t_import_staging_data
       SET
-        status = $1,
+        processing_status = $1,
         error_messages = $2,
         warnings = $3,
         match_type = $4,

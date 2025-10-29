@@ -1468,7 +1468,7 @@ async processSchemeImport(
           edit_history = $2,
           edited_at = NOW(),
           edited_by = $3,
-          status = 'pending_process',
+          processing_status = 'pending_process',
           error_messages = NULL,
           warnings = NULL,
           match_type = NULL,

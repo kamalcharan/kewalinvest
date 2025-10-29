@@ -171,26 +171,31 @@ COMMENT ON COLUMN t_import_staging_data.reprocess_count IS
 COMMENT ON COLUMN t_import_staging_data.last_reprocess_at IS
 'Timestamp of last reprocess attempt';
 
--- Update status column to support new states
--- Current: 'pending', 'success', 'failed', 'duplicate', 'orphan'
+-- Update processing_status column to support new states
+-- Current: 'pending', 'processing', 'success', 'failed', 'skipped', 'duplicate', 'orphan'
 -- Add: 'pending_process' (staged, waiting for Phase 2)
 ALTER TABLE t_import_staging_data
-DROP CONSTRAINT IF EXISTS t_import_staging_data_status_check;
+DROP CONSTRAINT IF EXISTS t_import_staging_data_processing_status_check;
 
+-- Drop the inline constraint from table creation if it exists
 ALTER TABLE t_import_staging_data
-ADD CONSTRAINT t_import_staging_data_status_check
-CHECK (status IN ('pending', 'pending_process', 'success', 'failed', 'duplicate', 'orphan', 'skipped'));
+DROP CONSTRAINT IF EXISTS t_import_staging_data_processing_status_check1;
+
+-- Add new constraint with all existing statuses plus new one
+ALTER TABLE t_import_staging_data
+ADD CONSTRAINT t_import_staging_data_processing_status_check
+CHECK (processing_status IN ('pending', 'pending_process', 'processing', 'success', 'failed', 'duplicate', 'orphan', 'skipped'));
 
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_staging_requires_review
-ON t_import_staging_data(import_session_id, requires_review)
+ON t_import_staging_data(session_id, requires_review)
 WHERE requires_review = true;
 
-CREATE INDEX IF NOT EXISTS idx_staging_status_session
-ON t_import_staging_data(import_session_id, status);
+CREATE INDEX IF NOT EXISTS idx_staging_processing_status_session
+ON t_import_staging_data(session_id, processing_status);
 
 CREATE INDEX IF NOT EXISTS idx_staging_edited
-ON t_import_staging_data(import_session_id, edited_at)
+ON t_import_staging_data(session_id, edited_at)
 WHERE edited_at IS NOT NULL;
 
 -- ============================================================================
