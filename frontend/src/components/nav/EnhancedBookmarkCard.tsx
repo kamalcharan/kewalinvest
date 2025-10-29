@@ -23,6 +23,7 @@ interface EnhancedBookmarkCardProps {
   showActions?: boolean;
   showDeleteButton?: boolean;
   isCalculating?: boolean;
+  isAdmin?: boolean;
 }
 
 export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
@@ -37,6 +38,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   showActions = true,
   showDeleteButton = false,
   isCalculating = false,
+  isAdmin = false,
 }) => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
