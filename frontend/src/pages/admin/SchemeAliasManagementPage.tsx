@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SchemeAliasService, SchemeAliasWithScheme, SchemeAliasFilters } from '../../services/schemeAlias.service';
 import { toastService } from '../../services/toast.service';
+import BackfillProgressModal from '../../components/admin/BackfillProgressModal';
 
 const SchemeAliasManagementPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
@@ -23,6 +24,7 @@ const SchemeAliasManagementPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showBackfillProgress, setShowBackfillProgress] = useState(false);
   const [selectedAlias, setSelectedAlias] = useState<SchemeAliasWithScheme | null>(null);
 
   // Form state
@@ -187,23 +189,28 @@ const SchemeAliasManagementPage: React.FC = () => {
 
   // Handle backfill
   const handleBackfill = async () => {
-    if (!window.confirm('This will auto-create aliases for schemes without them. Continue?')) return;
+    if (!window.confirm('This will auto-create aliases for all schemes. Continue?')) return;
 
     try {
-      toastService.info('Starting backfill... This may take a moment.');
       const response = await SchemeAliasService.backfillAliases();
 
-      if (response.success && response.data) {
-        toastService.success(`Backfilled ${response.data.created} aliases`);
-        fetchAliases();
-        fetchStatistics();
+      if (response.success) {
+        // Show progress modal
+        setShowBackfillProgress(true);
+        toastService.success('Backfill started! Processing in background...');
       } else {
-        toastService.error(response.error || 'Failed to backfill aliases');
+        toastService.error(response.error || 'Failed to start backfill');
       }
     } catch (error: any) {
-      console.error('Error backfilling aliases:', error);
-      toastService.error('Failed to backfill aliases');
+      console.error('Error starting backfill:', error);
+      toastService.error('Failed to start backfill');
     }
+  };
+
+  const handleBackfillComplete = () => {
+    // Refresh data when backfill completes
+    fetchAliases();
+    fetchStatistics();
   };
 
   const totalPages = Math.ceil(totalAliases / pageSize);
@@ -746,6 +753,13 @@ const SchemeAliasManagementPage: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      {/* Backfill Progress Modal */}
+      <BackfillProgressModal
+        isOpen={showBackfillProgress}
+        onClose={() => setShowBackfillProgress(false)}
+        onComplete={handleBackfillComplete}
+      />
     </div>
   );
 };
