@@ -4,7 +4,6 @@ import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/database';
 import { FileParserService } from './fileparser.service';
 import { EncryptionUtil } from '../utils/encryption.util';
-import { CustomerLookupService } from './customerLookup.service';
 
 export interface StagingParams {
   sessionId: number;
@@ -49,13 +48,11 @@ export interface StagingRecord {
 export class StagingService {
   private db: Pool;
   private fileParser: FileParserService;
-  private customerLookup: CustomerLookupService;
   private readonly BATCH_SIZE = 500;
 
   constructor() {
     this.db = pool;
     this.fileParser = new FileParserService();
-    this.customerLookup = new CustomerLookupService();
   }
 
   /**
@@ -147,26 +144,14 @@ export class StagingService {
       
       try {
         const mappedData = this.applyFieldMappings(row, params.mappings);
-        
-        // Add customer_id lookup for transaction imports
-        if (params.importType === 'TransactionData' && mappedData.iwell_code) {
-          const customerId = await this.customerLookup.findCustomerByIwellCode(
-            mappedData.iwell_code,
-            params.tenantId,
-            params.isLive
-          );
-          if (customerId) {
-            mappedData.customer_id = customerId;
-            console.log(`[StagingService] Customer ${customerId} found for IWELL: ${mappedData.iwell_code.substring(0, 3)}***`);
-          } else {
-            console.warn(`[StagingService] No customer found for IWELL: ${mappedData.iwell_code.substring(0, 3)}***`);
-          }
-        }
-        
+
+        // Phase 1: Just stage the data, no lookups
+        // Customer/Scheme lookups will be done in Phase 2 by StagingProcessorService
+
         const validation = this.validateMappedData(mappedData, params.mappings);
-        
-        placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7})`);
-        
+
+        placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8})`);
+
         values.push(
           params.tenantId,
           params.isLive,
@@ -175,10 +160,11 @@ export class StagingService {
           rowNumber,
           JSON.stringify(row),
           JSON.stringify(mappedData),
-          validation.warnings.length > 0 ? validation.warnings : null
+          validation.warnings.length > 0 ? validation.warnings : null,
+          'pending_process' // Status: ready for Phase 2 processing
         );
-        
-        paramIndex += 8;
+
+        paramIndex += 9;
 
       } catch (error: any) {
         errors.push({
@@ -191,11 +177,11 @@ export class StagingService {
     if (placeholders.length > 0) {
       const query = `
         INSERT INTO t_import_staging_data (
-          tenant_id, is_live, session_id, import_type, 
-          row_number, raw_data, mapped_data, warnings
+          tenant_id, is_live, session_id, import_type,
+          row_number, raw_data, mapped_data, warnings, status
         ) VALUES ${placeholders.join(', ')}
       `;
-      
+
       await client.query(query, values);
     }
   }

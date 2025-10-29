@@ -1406,4 +1406,241 @@ export class ImportController {
       });
     }
   };
+
+  // ========================================================================
+  // NEW ENDPOINTS: Session Restart and Record Reprocessing
+  // ========================================================================
+
+  /**
+   * POST /api/import/restart/:sessionId
+   * Restart a timed-out or failed import session
+   */
+  restartSession = async (req: any, res: express.Response): Promise<void> => {
+    try {
+      const user = req.user;
+      const { sessionId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!sessionId) {
+        res.status(400).json({
+          success: false,
+          error: 'Session ID is required'
+        });
+        return;
+      }
+
+      // Verify session ownership
+      const session = await this.importService.getImportSession(
+        user.tenant_id,
+        isLive,
+        parseInt(sessionId)
+      );
+
+      if (!session) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      console.log(`[ImportController] Restarting session ${sessionId} for tenant ${user.tenant_id}`);
+
+      const result = await this.importService.restartSession(
+        parseInt(sessionId),
+        user.tenant_id,
+        isLive
+      );
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            message: result.message,
+            sessionId: parseInt(sessionId)
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.message
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Error restarting session:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to restart session'
+      });
+    }
+  };
+
+  /**
+   * PUT /api/import/staging/:stagingId/edit
+   * Edit a staging record's mapped data
+   */
+  editStagingRecord = async (req: any, res: express.Response): Promise<void> => {
+    try {
+      const user = req.user;
+      const { stagingId } = req.params;
+      const { editedData } = req.body;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!stagingId || !editedData) {
+        res.status(400).json({
+          success: false,
+          error: 'Staging ID and edited data are required'
+        });
+        return;
+      }
+
+      console.log(`[ImportController] Editing staging record ${stagingId} for tenant ${user.tenant_id}`);
+
+      const result = await this.importService.editStagingRecord(
+        parseInt(stagingId),
+        editedData,
+        user.user_id,
+        user.tenant_id,
+        isLive
+      );
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            message: result.message,
+            stagingId: parseInt(stagingId)
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.message
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Error editing staging record:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to edit staging record'
+      });
+    }
+  };
+
+  /**
+   * POST /api/import/staging/:stagingId/reprocess
+   * Reprocess a single staging record
+   */
+  reprocessSingleRecord = async (req: any, res: express.Response): Promise<void> => {
+    try {
+      const user = req.user;
+      const { stagingId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!stagingId) {
+        res.status(400).json({
+          success: false,
+          error: 'Staging ID is required'
+        });
+        return;
+      }
+
+      console.log(`[ImportController] Reprocessing staging record ${stagingId} for tenant ${user.tenant_id}`);
+
+      const result = await this.importService.reprocessSingleRecord(
+        parseInt(stagingId),
+        user.tenant_id,
+        isLive
+      );
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            message: result.message,
+            stagingId: parseInt(stagingId),
+            status: result.status
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.message,
+          status: result.status
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Error reprocessing staging record:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to reprocess staging record'
+      });
+    }
+  };
+
+  /**
+   * POST /api/import/session/:sessionId/bulk-reprocess
+   * Bulk reprocess multiple staging records
+   */
+  bulkReprocessRecords = async (req: any, res: express.Response): Promise<void> => {
+    try {
+      const user = req.user;
+      const { sessionId } = req.params;
+      const { recordIds } = req.body;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!sessionId || !recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Session ID and record IDs array are required'
+        });
+        return;
+      }
+
+      // Verify session ownership
+      const session = await this.importService.getImportSession(
+        user.tenant_id,
+        isLive,
+        parseInt(sessionId)
+      );
+
+      if (!session) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      console.log(`[ImportController] Bulk reprocessing ${recordIds.length} records for session ${sessionId}`);
+
+      const result = await this.importService.bulkReprocessRecords(
+        parseInt(sessionId),
+        recordIds.map((id: any) => parseInt(id)),
+        user.tenant_id,
+        isLive
+      );
+
+      res.json({
+        success: true,
+        data: {
+          message: result.message,
+          sessionId: parseInt(sessionId),
+          processed: result.processed,
+          successful: result.successful,
+          failed: result.failed
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error bulk reprocessing records:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to bulk reprocess records'
+      });
+    }
+  };
 }
