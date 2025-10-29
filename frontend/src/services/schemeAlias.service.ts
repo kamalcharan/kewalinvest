@@ -237,7 +237,7 @@ export class SchemeAliasService {
     request: BulkCreateAliasesRequest
   ): Promise<BulkCreateAliasesResponse> {
     try {
-      const url = API_ENDPOINTS.SCHEME_ALIASES.BULK;
+      const url = API_ENDPOINTS.SCHEME_ALIASES.BULK_CREATE;
       return await apiService.post<BulkCreateAliasesResponse>(url, request);
     } catch (error: any) {
       console.error('Error bulk creating aliases:', error);
