@@ -131,7 +131,7 @@ export class CustomerLookupService {
         SELECT
           c.id,
           ct.name,
-          ct.pan
+          c.pan
         FROM t_customers c
         INNER JOIN t_contacts ct ON ct.id = c.contact_id
         WHERE c.tenant_id = $1

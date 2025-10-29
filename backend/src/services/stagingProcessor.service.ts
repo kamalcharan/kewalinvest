@@ -299,23 +299,31 @@ export class StagingProcessorService {
 
       // Step 2: Scheme Lookup (if scheme_name provided)
       let schemeId: number | null = null;
+      let schemeCode: string | undefined;
+      let schemeName: string | undefined;
+
       if (data.scheme_name) {
         const schemeResult = await this.schemeAlias.lookupSchemeByAlias(data.scheme_name);
 
         if (schemeResult.success && schemeResult.data) {
           schemeId = schemeResult.data.scheme_id;
+          schemeCode = schemeResult.data.scheme_code;
+          schemeName = schemeResult.data.scheme_name;
         } else {
           warnings.push(`Scheme not found for name: ${data.scheme_name}`);
         }
       }
 
+      // Handle txn_type_id: convert from string to integer if needed, or accept as-is
+      const txnTypeId = data.txn_type_id ? parseInt(data.txn_type_id, 10) : null;
+
       // Step 3: Check for duplicates (same customer, scheme, date, amount)
       const duplicateCheck = await this.checkTransactionDuplicate({
         customer_id: customerResult.customerId,
         scheme_id: schemeId,
-        transaction_date: data.transaction_date,
-        transaction_amount: data.transaction_amount,
-        transaction_type: data.transaction_type,
+        txn_date: data.txn_date || data.transaction_date,
+        total_amount: data.total_amount || data.transaction_amount,
+        txn_type_id: txnTypeId,
         tenant_id: params.tenantId,
         is_live: params.isLive
       });
@@ -335,13 +343,20 @@ export class StagingProcessorService {
         const transactionId = await this.insertTransaction({
           customer_id: customerResult.customerId,
           scheme_id: schemeId,
-          transaction_date: data.transaction_date,
-          transaction_type: data.transaction_type,
-          transaction_amount: data.transaction_amount,
+          scheme_code: schemeCode || data.scheme_code,
+          scheme_name: schemeName || data.scheme_name,
+          txn_date: data.txn_date || data.transaction_date,
+          txn_type_id: txnTypeId,
+          total_amount: data.total_amount || data.transaction_amount,
           units: data.units,
           nav: data.nav,
-          folio_number: data.folio_number,
-          remarks: data.remarks,
+          folio_no: data.folio_no || data.folio_number,
+          txn_description: data.txn_description || data.remarks,
+          stamp_duty: data.stamp_duty,
+          stt: data.stt,
+          tds: data.tds,
+          staging_record_id: record.id,
+          import_session_id: params.sessionId,
           tenant_id: params.tenantId,
           is_live: params.isLive
         });
@@ -404,34 +419,37 @@ export class StagingProcessorService {
   private async checkTransactionDuplicate(data: {
     customer_id: number;
     scheme_id: number | null;
-    transaction_date: string;
-    transaction_amount: number;
-    transaction_type: string;
+    txn_date: string;
+    total_amount: number;
+    txn_type_id: number | null;
     tenant_id: number;
     is_live: boolean;
   }): Promise<{ isDuplicate: boolean; existingId?: number }> {
     try {
       const query = `
         SELECT id
-        FROM t_transactions
+        FROM t_transaction_table
         WHERE customer_id = $1
           AND tenant_id = $2
           AND is_live = $3
-          AND transaction_date = $4
-          AND transaction_amount = $5
-          AND transaction_type = $6
-          ${data.scheme_id ? 'AND scheme_id = $7' : 'AND scheme_id IS NULL'}
+          AND txn_date = $4
+          AND total_amount = $5
+          ${data.txn_type_id !== null ? 'AND txn_type_id = $6' : 'AND txn_type_id IS NULL'}
+          ${data.scheme_id ? `AND scheme_id = $${data.txn_type_id !== null ? '7' : '6'}` : 'AND scheme_id IS NULL'}
         LIMIT 1
       `;
 
-      const params = [
+      const params: any[] = [
         data.customer_id,
         data.tenant_id,
         data.is_live,
-        data.transaction_date,
-        data.transaction_amount,
-        data.transaction_type
+        data.txn_date,
+        data.total_amount
       ];
+
+      if (data.txn_type_id !== null) {
+        params.push(data.txn_type_id);
+      }
 
       if (data.scheme_id) {
         params.push(data.scheme_id);
@@ -451,37 +469,53 @@ export class StagingProcessorService {
   }
 
   /**
-   * Insert transaction into t_transactions table
+   * Insert transaction into t_transaction_table
    */
   private async insertTransaction(data: {
     customer_id: number;
     scheme_id: number | null;
-    transaction_date: string;
-    transaction_type: string;
-    transaction_amount: number;
+    scheme_code?: string;
+    scheme_name?: string;
+    txn_date: string;
+    txn_type_id: number | null;
+    total_amount: number;
     units?: number;
     nav?: number;
-    folio_number?: string;
-    remarks?: string;
+    folio_no?: string;
+    txn_description?: string;
+    stamp_duty?: number;
+    stt?: number;
+    tds?: number;
+    staging_record_id: number;
+    import_session_id: number;
     tenant_id: number;
     is_live: boolean;
   }): Promise<number> {
     const query = `
-      INSERT INTO t_transactions (
+      INSERT INTO t_transaction_table (
         tenant_id,
         is_live,
         is_active,
         customer_id,
         scheme_id,
-        transaction_date,
-        transaction_type,
-        transaction_amount,
+        scheme_code,
+        scheme_name,
+        folio_no,
+        txn_type_id,
+        txn_date,
+        total_amount,
         units,
         nav,
-        folio_number,
-        remarks,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+        stamp_duty,
+        stt,
+        tds,
+        txn_description,
+        txn_source,
+        staging_record_id,
+        import_session_id,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW())
       RETURNING id
     `;
 
@@ -491,13 +525,21 @@ export class StagingProcessorService {
       true, // is_active
       data.customer_id,
       data.scheme_id,
-      data.transaction_date,
-      data.transaction_type,
-      data.transaction_amount,
+      data.scheme_code || null,
+      data.scheme_name || null,
+      data.folio_no || null,
+      data.txn_type_id,
+      data.txn_date,
+      data.total_amount,
       data.units || null,
       data.nav || null,
-      data.folio_number || null,
-      data.remarks || null
+      data.stamp_duty || null,
+      data.stt || null,
+      data.tds || null,
+      data.txn_description || null,
+      'import', // txn_source
+      data.staging_record_id,
+      data.import_session_id
     ]);
 
     return result.rows[0].id;
