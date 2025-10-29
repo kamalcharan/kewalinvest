@@ -15,6 +15,7 @@ interface AuthRequest extends Request {
     username: string;
     email: string;
     tenant_id: number;
+    is_admin?: boolean;
   };
 }
 
@@ -203,11 +204,24 @@ export class SchemeAliasController {
    * DELETE /api/scheme-aliases/:id
    * Delete (deactivate) alias
    */
+  /**
+   * DELETE /api/scheme-aliases/:id
+   * Delete (deactivate) alias - ADMIN ONLY
+   */
   deleteAlias = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const user = req.user;
       if (!user) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      // Check if user is admin
+      if (!user.is_admin) {
+        res.status(403).json({
+          success: false,
+          error: 'Admin access required. Please contact your administrator to delete aliases.'
+        });
         return;
       }
 
