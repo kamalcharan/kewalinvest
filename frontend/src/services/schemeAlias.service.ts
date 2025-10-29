@@ -117,6 +117,31 @@ export interface BackfillResponse {
   data?: {
     created: number;
   };
+  message?: string;
+  error?: string;
+}
+
+export interface BackfillProgress {
+  userId: number;
+  current: number;
+  total: number;
+  created: number;
+  skipped: number;
+  status: 'running' | 'completed' | 'cancelled' | 'error';
+  startTime: string;
+  endTime?: string;
+  error?: string;
+}
+
+export interface BackfillProgressResponse {
+  success: boolean;
+  data?: BackfillProgress | null;
+  error?: string;
+}
+
+export interface CancelBackfillResponse {
+  success: boolean;
+  message?: string;
   error?: string;
 }
 
@@ -247,7 +272,8 @@ export class SchemeAliasService {
   }
 
   /**
-   * Backfill missing aliases for all schemes
+   * Backfill missing aliases for all schemes (async operation)
+   * Returns immediately, processes in background
    */
   static async backfillAliases(): Promise<BackfillResponse> {
     try {
@@ -255,6 +281,32 @@ export class SchemeAliasService {
       return await apiService.post<BackfillResponse>(url, {});
     } catch (error: any) {
       console.error('Error backfilling aliases:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get backfill progress for current user
+   */
+  static async getBackfillProgress(): Promise<BackfillProgressResponse> {
+    try {
+      const url = API_ENDPOINTS.SCHEME_ALIASES.BACKFILL_PROGRESS;
+      return await apiService.get<BackfillProgressResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching backfill progress:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel running backfill for current user
+   */
+  static async cancelBackfill(): Promise<CancelBackfillResponse> {
+    try {
+      const url = API_ENDPOINTS.SCHEME_ALIASES.BACKFILL_CANCEL;
+      return await apiService.post<CancelBackfillResponse>(url, {});
+    } catch (error: any) {
+      console.error('Error cancelling backfill:', error);
       throw error;
     }
   }

@@ -14,7 +14,6 @@ import contactRoutes from './routes/contact.routes';
 import customerRoutes from './routes/customer.routes';
 import importRoutes from './routes/import.routes';
 import schemeRoutes from './routes/scheme.routes';
-import schemeAliasRoutes from './routes/schemeAlias.routes';
 import navRoutes from './routes/nav.routes';
 import transactionRoutes from './routes/transaction.routes';
 import portfolioRoutes from './routes/portfolio.routes';
@@ -25,8 +24,7 @@ import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
-import jobsRoutes from './routes/jobs.routes';
-import portfolioSnapshotRoutes from './routes/portfolioSnapshot.routes';
+import schemeAliasRoutes from './routes/schemeAlias.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -47,7 +45,6 @@ const PORT = process.env.PORT || 8080;
 
 // CHANGED: Declare without import
 let navScheduler: any;
-let jobScheduler: any;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -136,7 +133,7 @@ app.get('/health', (_req: Request, res: Response) => {
       default_comparison_index: true, // NEW: Default index for performance charts
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
-      jobs_scheduler: !!jobScheduler, // NEW: Generic jobs scheduler system
+      scheme_aliases: true, // NEW: Scheme alias management for flexible imports
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -163,7 +160,6 @@ app.get('/api', (_req: Request, res: Response) => {
       contacts: '/api/contacts',
       customers: '/api/customers',
       schemes: '/api/schemes',
-      scheme_aliases: '/api/scheme-aliases',
       transactions: '/api/transactions',
       portfolio: '/api/portfolio',
       import: '/api/import',
@@ -172,12 +168,11 @@ app.get('/api', (_req: Request, res: Response) => {
       market: '/api/market',
       market_analysis: '/api/market-analysis',
       scheme_analysis: '/api/scheme-analysis',
+      scheme_aliases: '/api/scheme-aliases',
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
-      meetings: '/api/meetings',
-      jobs: '/api/jobs',
-      cruise_control_snapshots: '/api/cruise-control/snapshots'
+      meetings: '/api/meetings'
     }
   });
 });
@@ -187,7 +182,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/schemes', schemeRoutes);
-app.use('/api/scheme-aliases', schemeAliasRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
@@ -195,12 +189,11 @@ app.use('/api/nav', navRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/scheme-analysis', schemeAnalysisRoutes);
+app.use('/api/scheme-aliases', schemeAliasRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
-app.use('/api/jobs', jobsRoutes);
-app.use('/api/cruise-control/snapshots', portfolioSnapshotRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -407,18 +400,7 @@ app.use((_req: Request, res: Response) => {
       'GET /api/logs',
       'GET /api/logs/stats',
       'DELETE /api/logs/cleanup',
-      'POST /api/logs/frontend-error',
-
-      // Cruise Control - Portfolio Snapshots endpoints
-      'GET /api/cruise-control/snapshots/config',
-      'POST /api/cruise-control/snapshots/config',
-      'PUT /api/cruise-control/snapshots/config',
-      'POST /api/cruise-control/snapshots/execute',
-      'GET /api/cruise-control/snapshots/executions',
-      'GET /api/cruise-control/snapshots/statistics',
-      'POST /api/cruise-control/snapshots/backfill-smart',
-      'POST /api/cruise-control/snapshots/backfill',
-      'GET /api/cruise-control/snapshots/health'
+      'POST /api/logs/frontend-error'
     ]
   });
 });
@@ -481,36 +463,28 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction): void => {
 
 // CHANGED: Updated graceful shutdown handlers
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down schedulers gracefully...');
+  console.log('SIGTERM received, shutting down NAV scheduler gracefully...');
   try {
     if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
       console.log('NAV Scheduler shut down successfully');
     }
-    if (jobScheduler && jobScheduler.stopAllTimers) {
-      jobScheduler.stopAllTimers();
-      console.log('Jobs Scheduler shut down successfully');
-    }
   } catch (error) {
-    console.error('Error shutting down schedulers:', error);
+    console.error('Error shutting down NAV scheduler:', error);
   } finally {
     process.exit(0);
   }
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down schedulers gracefully...');
+  console.log('SIGINT received, shutting down NAV scheduler gracefully...');
   try {
     if (navScheduler && navScheduler.shutdownSchedulers) {
       await navScheduler.shutdownSchedulers();
       console.log('NAV Scheduler shut down successfully');
     }
-    if (jobScheduler && jobScheduler.stopAllTimers) {
-      jobScheduler.stopAllTimers();
-      console.log('Jobs Scheduler shut down successfully');
-    }
   } catch (error) {
-    console.error('Error shutting down schedulers:', error);
+    console.error('Error shutting down NAV scheduler:', error);
   } finally {
     process.exit(0);
   }
@@ -768,30 +742,7 @@ app.listen(PORT, async () => {
       console.log('📅 NAV Scheduler will be available but no active schedules will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
-
-    // Initialize Generic Jobs Scheduler Service
-    try {
-      console.log('⚙️  Initializing Generic Jobs Scheduler Service...');
-
-      const { schedulerService } = await import('./routes/jobs.routes');
-      const { PortfolioSnapshotJob } = await import('./services/jobs/portfolioSnapshot.job');
-
-      jobScheduler = schedulerService;
-
-      // Register job executors
-      jobScheduler.registerJob(new PortfolioSnapshotJob());
-      console.log('✅ Registered job: PORTFOLIO_SNAPSHOT');
-
-      // Initialize scheduler (load configs and start timers)
-      await jobScheduler.initializeScheduler();
-
-      console.log('✅ Generic Jobs Scheduler Service initialized successfully');
-    } catch (schedulerError: any) {
-      console.error('⚠️  Jobs Scheduler initialization failed:', schedulerError.message);
-      console.log('⚙️  Jobs Scheduler will be available but no active schedules will run');
-      // Don't fail server startup if scheduler fails - just log the error
-    }
-
+    
     // Check N8N configuration
     if (process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_URL) {
       console.log('✅ N8N integration configured');
@@ -865,7 +816,6 @@ app.listen(PORT, async () => {
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
-║  Jobs Scheduler: ${jobScheduler ? '✅' : '⚠️ '} ${jobScheduler ? 'Active' : 'Failed'}       ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║
 ╚════════════════════════════════════════╝

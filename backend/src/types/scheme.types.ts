@@ -120,7 +120,7 @@ export interface BulkCreateAliasesResponse {
 /**
  * Lookup response (for transaction import)
  */
-export interface SchemeLooku pResponse {
+export interface SchemeLookupResponse {
   success: boolean;
   data?: SchemeLookupResult;
   error?: string;
