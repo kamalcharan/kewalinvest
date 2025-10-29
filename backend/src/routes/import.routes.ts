@@ -14,6 +14,10 @@ const IMPORT_TYPE_CONFIG: Record<FileImportType, {
   folderName: string;
   uploadPath: string;
 }> = {
+  BookmarkData: {
+    folderName: 'bookmarks',
+    uploadPath: 'UserFiles/bookmarks'
+  },
   CustomerData: {
     folderName: 'customers',
     uploadPath: 'UserFiles/customers'

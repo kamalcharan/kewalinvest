@@ -1,5 +1,5 @@
 // backend/src/server.ts
-// UPDATED: Added time-series analytics route
+// UPDATED: Added bookmark routes and time-series analytics route
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -25,6 +25,7 @@ import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
+import bookmarkRoutes from './routes/bookmark.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -112,6 +113,9 @@ app.get('/health', (_req: Request, res: Response) => {
       nav_bookmark_gaps: true,
       nav_scheduler: !!navScheduler,
       nav_timeseries_analytics: true, // NEW: Time series analytics
+      bookmarks: true, // NEW: Bookmark import and management
+      bookmark_import: true, // NEW: Bookmark CSV/Excel import
+      bookmark_templates: true, // NEW: Downloadable bookmark templates
       market_data: true,
       market_indices: true,
       market_downloads: true,
@@ -168,6 +172,7 @@ app.get('/api', (_req: Request, res: Response) => {
       import: '/api/import',
       logs: '/api/logs',
       nav: '/api/nav',
+      bookmarks: '/api/bookmarks',
       market: '/api/market',
       market_analysis: '/api/market-analysis',
       scheme_analysis: '/api/scheme-analysis',
@@ -189,6 +194,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/scheme-analysis', schemeAnalysisRoutes);
@@ -344,6 +350,14 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/scheduler/status',
       'POST /api/nav/scheduler/trigger',
       'GET /api/nav/scheduler/all-active',
+      
+      // Bookmark endpoints
+      'POST /api/bookmarks/import',
+      'GET /api/bookmarks/stats',
+      'GET /api/bookmarks/list',
+      'GET /api/bookmarks/check',
+      'DELETE /api/bookmarks/:id',
+      'GET /api/bookmarks/template',
       
       // Market Data endpoints
       'GET /api/market/indices',
@@ -597,6 +611,14 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/bookmark-gaps/cust/:id║
 ║  • GET  /api/nav/bookmark-gaps/summary ║
 ║                                        ║
+║  🔖 Bookmark Import & Management:      ║
+║  • POST /api/bookmarks/import          ║
+║  • GET  /api/bookmarks/stats           ║
+║  • GET  /api/bookmarks/list            ║
+║  • GET  /api/bookmarks/check           ║
+║  • DELETE /api/bookmarks/:id           ║
+║  • GET  /api/bookmarks/template        ║
+║                                        ║
 ║  📅 NAV Scheduler:                     ║
 ║  • GET  /api/nav/scheduler/config      ║
 ║  • POST /api/nav/scheduler/config      ║
@@ -720,6 +742,9 @@ app.listen(PORT, async () => {
     console.log('✅ NAV time-series analytics ready'); // NEW
     console.log('✅ Enhanced bookmark endpoints ready');
     console.log('✅ Bookmark gap detection ready');
+    console.log('✅ Bookmark import and management ready'); // NEW
+    console.log('✅ Bookmark CSV/Excel import ready'); // NEW
+    console.log('✅ Bookmark template downloads ready'); // NEW
     console.log('✅ Market data endpoints ready');
     console.log('✅ Market indices management ready');
     console.log('✅ Market data downloads ready');
@@ -779,6 +804,9 @@ app.listen(PORT, async () => {
     // Define all required directories
     const directories = [
       'UserFiles',
+      'UserFiles/bookmarks',           
+      'UserFiles/bookmarks/pending',   
+      'UserFiles/bookmarks/processed', 
       'UserFiles/customers',
       'UserFiles/customers/pending',
       'UserFiles/customers/processed',
@@ -787,7 +815,9 @@ app.listen(PORT, async () => {
       'UserFiles/transactions/processed',
       'UserFiles/schemes',
       'UserFiles/schemes/pending',
-      'UserFiles/schemes/processed'
+      'UserFiles/schemes/processed',
+      'uploads',
+      'uploads/bookmarks'
     ];
     
     // Create directories if they don't exist
@@ -813,6 +843,7 @@ app.listen(PORT, async () => {
 ║  NAV Time Series: ✅ Ready             ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
 ║  Bookmark Gap Detection: ✅ Ready      ║
+║  Bookmark Import: ✅ Ready             ║
 ║  Customer Bookmarks: ✅ Ready          ║
 ║  Customer Activation: ✅ Ready         ║
 ║  Customer Family Accounts: ✅ Ready    ║

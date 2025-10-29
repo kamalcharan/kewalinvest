@@ -161,6 +161,16 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       ];
     }
     
+    // ADD THIS NEW CASE ↓
+  if (type === 'BookmarkData') {
+    return [
+      { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier from AMFI', group: 'Basic Info' },
+      { field: 'isin', label: 'ISIN', type: 'text', required: true, description: 'International Securities Identification Number', group: 'Basic Info' },
+      { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full name of the scheme as per your software', group: 'Basic Info' }
+    ];
+  }
+
+
     // TransactionData fields (25+ fields)
     // TransactionData fields (25+ fields)
 if (type === 'TransactionData') {
@@ -246,6 +256,13 @@ if (type === 'TransactionData') {
       { patterns: ['country', 'nation'], field: 'country' },
       { patterns: ['pin', 'pincode', 'postal_code', 'zip', 'zipcode'], field: 'pincode' },
       { patterns: ['prefix', 'title', 'salutation'], field: 'prefix' },
+
+
+      // ADD THESE BOOKMARK PATTERNS AT THE TOP ↓
+  { patterns: ['scheme_code', 'scheme code', 'code', 'schemecode'], field: 'scheme_code' },
+  { patterns: ['isin', 'isin number', 'isin_number'], field: 'isin' },
+  { patterns: ['scheme_name', 'scheme name', 'schemename', 'scheme'], field: 'scheme_name' },
+  
       
       // Scheme patterns
       { patterns: ['amc', 'amc_name', 'fund_house'], field: 'amc_name' },
@@ -477,6 +494,7 @@ if (type === 'TransactionData') {
   const getImportTypeLabel = (type: FileImportType): string => {
     switch (type) {
       case 'CustomerData': return 'Customer Data';
+      case 'BookmarkData': return 'Bookmark Data';
       case 'SchemeData': return 'Scheme Data';
       case 'TransactionData': return 'Transaction Data';
       default: return 'Data';

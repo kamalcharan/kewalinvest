@@ -59,6 +59,19 @@ export const API_ENDPOINTS = {
     // Family endpoints
     FAMILY_MEMBERS: (familyCode: string) => `${API_BASE}/customers/family/${familyCode}`,
   },
+
+  // Bookmark management endpoints
+BOOKMARKS: {
+  IMPORT: `${API_BASE}/bookmarks/import`,
+  STATS: (tenantId: number, isLive: boolean) => 
+    `${API_BASE}/bookmarks/stats?tenant_id=${tenantId}&is_live=${isLive}`,
+  LIST: `${API_BASE}/bookmarks/list`,
+  CHECK: (tenantId: number, isLive: boolean) => 
+    `${API_BASE}/bookmarks/check?tenant_id=${tenantId}&is_live=${isLive}`,
+  DELETE: (bookmarkId: number, tenantId: number, isLive: boolean) => 
+    `${API_BASE}/bookmarks/${bookmarkId}?tenant_id=${tenantId}&is_live=${isLive}`,
+  TEMPLATE: `${API_BASE}/bookmarks/template`,
+},
   
   // Scheme management endpoints
   SCHEMES: {
@@ -350,6 +363,7 @@ export const API_ENDPOINTS = {
 export type AuthEndpoints = typeof API_ENDPOINTS.AUTH;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CustomerEndpoints = typeof API_ENDPOINTS.CUSTOMERS;
+export type BookmarkEndpoints = typeof API_ENDPOINTS.BOOKMARKS;
 export type SchemeEndpoints = typeof API_ENDPOINTS.SCHEMES;
 export type TransactionEndpoints = typeof API_ENDPOINTS.TRANSACTIONS;
 export type PortfolioEndpoints = typeof API_ENDPOINTS.PORTFOLIO;
@@ -653,6 +667,27 @@ export const CUSTOMER_URLS = {
     `${API_ENDPOINTS.CUSTOMERS.FAMILY_MEMBERS(familyCode)}${buildQueryParams({}, environment)}`,
 } as const;
 
+// Bookmark-specific URL helpers
+export const BOOKMARK_URLS = {
+  import: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.BOOKMARKS.IMPORT}${buildQueryParams({}, environment)}`,
+  
+  getStats: (tenantId: number, isLive: boolean) =>
+    API_ENDPOINTS.BOOKMARKS.STATS(tenantId, isLive),
+  
+  getList: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.BOOKMARKS.LIST}${buildQueryParams(params || {}, environment)}`,
+  
+  check: (tenantId: number, isLive: boolean) =>
+    API_ENDPOINTS.BOOKMARKS.CHECK(tenantId, isLive),
+  
+  delete: (bookmarkId: number, tenantId: number, isLive: boolean) =>
+    API_ENDPOINTS.BOOKMARKS.DELETE(bookmarkId, tenantId, isLive),
+  
+  getTemplate: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.BOOKMARKS.TEMPLATE}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Import-specific URL helpers
 export const IMPORT_URLS = {
   uploadFile: (environment?: 'live' | 'test') =>
@@ -683,6 +718,16 @@ export const IMPORT_URLS = {
     `${API_ENDPOINTS.IMPORT.FILE_INFO(fileId)}${buildQueryParams({}, environment)}`,
   deleteFile: (fileId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.IMPORT.DELETE_FILE(fileId)}${buildQueryParams({}, environment)}`,
+  
+  // Restart and reprocess URL helpers
+  restartSession: (sessionId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.IMPORT.RESTART_SESSION(sessionId)}${buildQueryParams({}, environment)}`,
+  editStagingRecord: (stagingId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.IMPORT.EDIT_STAGING_RECORD(stagingId)}${buildQueryParams({}, environment)}`,
+  reprocessSingleRecord: (stagingId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.IMPORT.REPROCESS_SINGLE_RECORD(stagingId)}${buildQueryParams({}, environment)}`,
+  bulkReprocessRecords: (sessionId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.IMPORT.BULK_REPROCESS_RECORDS(sessionId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // NAV-specific URL helpers
@@ -839,6 +884,7 @@ if (process.env.NODE_ENV === 'development') {
     Auth: Object.keys(API_ENDPOINTS.AUTH).length,
     Contacts: Object.keys(API_ENDPOINTS.CONTACTS).length,
     Customers: Object.keys(API_ENDPOINTS.CUSTOMERS).length,
+    Bookmarks: Object.keys(API_ENDPOINTS.BOOKMARKS).length,
     Schemes: Object.keys(API_ENDPOINTS.SCHEMES).length,
     Transactions: Object.keys(API_ENDPOINTS.TRANSACTIONS).length,
     Portfolio: Object.keys(API_ENDPOINTS.PORTFOLIO).length,
@@ -884,6 +930,15 @@ if (process.env.NODE_ENV === 'development') {
     GET_CHART_PREFERENCE: 'GET /api/user-preferences/chart/:indexId',
     SAVE_CHART_PREFERENCE: 'POST /api/user-preferences/chart/:indexId',
     DELETE_CHART_PREFERENCE: 'DELETE /api/user-preferences/chart/:indexId',
+  });
+  
+  console.log('🔖 Bookmark Endpoints:', {
+    IMPORT: API_ENDPOINTS.BOOKMARKS.IMPORT,
+    STATS: API_ENDPOINTS.BOOKMARKS.STATS,
+    LIST: API_ENDPOINTS.BOOKMARKS.LIST,
+    CHECK: API_ENDPOINTS.BOOKMARKS.CHECK,
+    DELETE: 'DELETE /api/bookmarks/:id',
+    TEMPLATE: API_ENDPOINTS.BOOKMARKS.TEMPLATE,
   });
   
   console.log('🔍 NAV Bookmark Gap Detection:', {

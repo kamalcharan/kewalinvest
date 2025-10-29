@@ -3,8 +3,7 @@
   import { IMPORT_STATUS, RECORD_STATUS } from '../constants/fileImportTypes';
 
   // Export the FileImportType from constants
-  export type FileImportType = 'CustomerData' | 'TransactionData' | 'SchemeData';
-
+export type FileImportType = 'BookmarkData' | 'CustomerData' | 'TransactionData' | 'SchemeData';
   // File upload related types
   export interface FileUploadInfo {
     id: number;
