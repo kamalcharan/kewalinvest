@@ -103,6 +103,9 @@ app.get('/health', (_req: Request, res: Response) => {
       portfolio: true,
       import: true,
       staging: true,
+      import_customer_name_lookup: true, // NEW: Customer lookup by name with PAN tiebreaker
+      import_two_phase_processing: true, // NEW: Staged processing with restart capability
+      import_record_editing: true, // NEW: Edit and reprocess failed/orphan records
       logs: true,
       nav: true,
       nav_enhanced_bookmarks: true,
@@ -300,6 +303,12 @@ app.use((_req: Request, res: Response) => {
       'GET /api/import/staging/:sessionId/status',
       'GET /api/import/staging/:sessionId/records',
       'POST /api/import/staging/:sessionId/retry',
+
+      // Session restart and record reprocessing endpoints
+      'POST /api/import/restart/:sessionId',
+      'PUT /api/import/staging/:stagingId/edit',
+      'POST /api/import/staging/:stagingId/reprocess',
+      'POST /api/import/session/:sessionId/bulk-reprocess',
       
       // NAV endpoints
       'GET /api/nav/schemes/search',
@@ -681,6 +690,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/import/staging/:id/records║
 ║  • POST /api/import/staging/:id/retry  ║
 ║                                        ║
+║  Import Restart & Reprocess:           ║
+║  • POST /api/import/restart/:sessionId ║
+║  • PUT  /api/import/staging/:id/edit   ║
+║  • POST /api/import/staging/:id/reprocess
+║  • POST /api/import/session/:id/bulk...║
+║                                        ║
 ║  System Logs:                          ║
 ║  • GET  /api/logs                      ║
 ║  • GET  /api/logs/stats                ║
@@ -725,6 +740,10 @@ app.listen(PORT, async () => {
     console.log('✅ Chart preferences management ready');
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
+    console.log('✅ Customer name-based lookup ready');
+    console.log('✅ Two-phase import processing ready');
+    console.log('✅ Import session restart capability ready');
+    console.log('✅ Record editing and reprocessing ready');
     console.log('✅ System logs endpoints ready');
     
     // CHANGED: Dynamic import and initialization of NAV Scheduler Service
