@@ -14,6 +14,7 @@ import FieldMappingComponent from '../../components/ETL/FieldMapping';
 import ProcessingStatus from '../../components/ETL/ProcessingStatus';
 import ImportResults from '../../components/ETL/ImportResults';
 import ProcessingModal from '../../components/ETL/ProcessingModal';
+import { CustomerLookupMethod } from '../../components/ETL/CustomerLookupSelector';
 
 // Define FieldMapping interface locally to avoid conflicts
 interface FieldMappingData {
@@ -182,7 +183,7 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
   };
 
   // Handle mapping confirmed with processing modal
-  const handleMappingConfirmed = async (mappings: FieldMappingData[]) => {
+  const handleMappingConfirmed = async (mappings: FieldMappingData[], customerLookupMethod?: CustomerLookupMethod) => {
     try {
       // Show processing modal immediately
       setShowProcessingModal(true);
@@ -192,6 +193,7 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
       console.log('Starting mapping confirmation...');
       console.log('File ID:', importState.uploadedFile?.id);
       console.log('Mappings:', mappings);
+      console.log('Customer Lookup Method:', customerLookupMethod);
 
       // Create import session with the field mappings
       const token = localStorage.getItem('access_token');
@@ -206,7 +208,8 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
         body: JSON.stringify({
           fileId: importState.uploadedFile?.id,
           mappings: mappings,
-          sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`
+          sessionName: `${importState.selectedImportType}_Import_${new Date().toISOString().split('T')[0]}`,
+          customerLookupMethod: customerLookupMethod
         })
       });
 

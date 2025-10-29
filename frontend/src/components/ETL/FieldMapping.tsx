@@ -12,7 +12,7 @@ interface FieldMappingProps {
   importType: FileImportType;
   sourceHeaders: string[];
   fileName: string;
-  onMappingConfirmed: (mappings: FieldMappingData[]) => void;
+  onMappingConfirmed: (mappings: FieldMappingData[], customerLookupMethod?: CustomerLookupMethod) => void;
   onError: (error: string) => void;
   disabled?: boolean;
 }
@@ -50,6 +50,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
   const [availableTargetFields, setAvailableTargetFields] = useState<TargetField[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [customerLookupMethod, setCustomerLookupMethod] = useState<CustomerLookupMethod>('iwell_code');
 
   // Define target fields based on import type
   useEffect(() => {
@@ -449,15 +450,19 @@ if (type === 'TransactionData') {
   // Handle confirm mappings
   const handleConfirmMappings = () => {
     const errors = validateMappings();
-    
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       onError(`Mapping validation failed: ${errors.join(', ')}`);
       return;
     }
-    
+
     const activeMappings = mappings.filter(m => m.isActive && m.targetField);
-    onMappingConfirmed(activeMappings);
+    // Pass customerLookupMethod for TransactionData imports
+    onMappingConfirmed(
+      activeMappings,
+      importType === 'TransactionData' ? customerLookupMethod : undefined
+    );
   };
 
   // Group target fields
@@ -653,6 +658,15 @@ if (type === 'TransactionData') {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Customer Lookup Method Selector - Only for Transaction Imports */}
+      {importType === 'TransactionData' && (
+        <CustomerLookupSelector
+          value={customerLookupMethod}
+          onChange={setCustomerLookupMethod}
+          disabled={disabled}
+        />
       )}
 
       {/* Mapping Interface */}
