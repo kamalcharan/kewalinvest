@@ -46,40 +46,64 @@ export class NavService {
   // ==================== BOOKMARK OPERATIONS ====================
 
   /**
-   * Get user's bookmarked schemes with NAV statistics (tenant-scoped)
+   * Get user's bookmarked schemes with NAV statistics (tenant-scoped or all for admin)
    */
   async getUserBookmarks(
     tenantId: number,
     isLive: boolean,
     userId: number,
-    params: SchemeBookmarkSearchParams = {}
+    params: SchemeBookmarkSearchParams = {},
+    showAll: boolean = false
   ): Promise<SchemeBookmarkListResponse> {
     try {
-      const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data } = params;
+      const { page = 1, page_size = 20, search, daily_download_only, amc_name, has_historical_data, has_calculations } = params;
       const offset = (page - 1) * page_size;
-    let baseQuery = `
-      FROM t_scheme_bookmarks sb
-      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
-      WHERE sb.tenant_id = $1 
-        AND sb.is_live = $2 
-        AND sb.is_active = true
-    `;
 
-    const queryParams: any[] = [tenantId, isLive];
-    let paramIndex = 3;
+    let baseQuery: string;
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+
+    if (showAll) {
+      // ADMIN MODE: Query from t_scheme_details (all schemes), LEFT JOIN bookmarks
+      baseQuery = `
+        FROM t_scheme_details sd
+        LEFT JOIN t_scheme_bookmarks sb ON sd.id = sb.scheme_id
+          AND sb.is_live = $${paramIndex}
+          AND sb.is_active = true
+        WHERE sd.is_active = true
+      `;
+      queryParams.push(isLive);
+      paramIndex++;
+    } else {
+      // REGULAR MODE: Query from t_scheme_bookmarks (only bookmarked schemes)
+      baseQuery = `
+        FROM t_scheme_bookmarks sb
+        JOIN t_scheme_details sd ON sb.scheme_id = sd.id
+        WHERE sb.is_live = $${paramIndex}
+          AND sb.is_active = true
+          AND sb.tenant_id = $${paramIndex + 1}
+      `;
+      queryParams.push(isLive, tenantId);
+      paramIndex += 2;
+    }
 
     if (search) {
-      baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
+      if (showAll) {
+        baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.amc_name ILIKE $${paramIndex})`;
+      } else {
+        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
+      }
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
-    if (daily_download_only) {
+    if (daily_download_only && !showAll) {
       baseQuery += ` AND sb.daily_download_enabled = true`;
     }
 
     if (amc_name) {
-      baseQuery += ` AND sb.amc_name = $${paramIndex}`;
+      const amcColumn = showAll ? 'sd.amc_name' : 'sb.amc_name';
+      baseQuery += ` AND ${amcColumn} = $${paramIndex}`;
       queryParams.push(amc_name);
       paramIndex++;
     }
@@ -88,12 +112,38 @@ export class NavService {
     if (has_historical_data === 'true') {
       baseQuery += ` AND sd.total_nav_records > 0`;
       SimpleLogger.info('NavService', 'Filtering for schemes WITH historical data', 'getUserBookmarks', {
-        has_historical_data, tenantId, page
+        has_historical_data, tenantId, page, showAll
       });
     } else if (has_historical_data === 'false') {
       baseQuery += ` AND (sd.total_nav_records IS NULL OR sd.total_nav_records = 0)`;
       SimpleLogger.info('NavService', 'Filtering for schemes WITHOUT historical data', 'getUserBookmarks', {
-        has_historical_data, tenantId, page
+        has_historical_data, tenantId, page, showAll
+      });
+    }
+    // 'all' or undefined = no filter, show all
+
+    // Filter by calculations availability (check if ANY NAV records have calculated metrics)
+    if (has_calculations === 'true') {
+      baseQuery += ` AND EXISTS (
+        SELECT 1 FROM t_nav_data nd
+        WHERE nd.scheme_id = sb.scheme_id
+          AND nd.is_live = $2
+          AND nd.metrics_calculated_at IS NOT NULL
+        LIMIT 1
+      )`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITH calculations', 'getUserBookmarks', {
+        has_calculations, tenantId, page
+      });
+    } else if (has_calculations === 'false') {
+      baseQuery += ` AND sd.total_nav_records > 0 AND NOT EXISTS (
+        SELECT 1 FROM t_nav_data nd
+        WHERE nd.scheme_id = sb.scheme_id
+          AND nd.is_live = $2
+          AND nd.metrics_calculated_at IS NOT NULL
+        LIMIT 1
+      )`;
+      SimpleLogger.info('NavService', 'Filtering for schemes WITHOUT calculations', 'getUserBookmarks', {
+        has_calculations, tenantId, page
       });
     }
     // 'all' or undefined = no filter, show all
@@ -102,10 +152,11 @@ export class NavService {
     SimpleLogger.info('NavService', 'Executing count query', 'getUserBookmarks', {
       countQuery: countQuery.substring(0, 200),
       params: queryParams,
-      has_historical_data
+      has_historical_data,
+      showAll
     });
     const countResult = await this.db.query(countQuery, queryParams);
-    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ? 
+    const total = countResult.rows.length > 0 && countResult.rows[0]?.total ?
       parseInt(countResult.rows[0].total) : 0;
 
     if (total === 0) {
@@ -120,42 +171,87 @@ export class NavService {
       };
     }
 
-    const dataQuery = `
-      SELECT 
-        sb.id,
-        sb.tenant_id,
-        sb.user_id,
-        sb.scheme_id,
-        sb.scheme_code,
-        sb.scheme_name,
-        sb.amc_name,
-        sb.alias_name,
-        sb.is_live,
-        sb.is_active,
-        sb.daily_download_enabled,
-        sb.download_time,
-        sb.historical_download_completed,
-        sb.created_at,
-        sb.updated_at,
-        sd.launch_date,
-        sd.last_nav_download_date,
-        sd.last_nav_download_status,
-        sd.last_nav_download_error,
-        sd.historical_data_available,
-        sd.earliest_nav_date,
-        sd.latest_nav_date,
-        sd.total_nav_records as nav_records_count,
-        (SELECT nav_value 
-         FROM t_nav_data nd 
-         WHERE nd.scheme_id = sb.scheme_id 
-           AND nd.is_live = $2
-         ORDER BY nav_date DESC 
-         LIMIT 1
-        ) as latest_nav_value
-      ${baseQuery}
-      ORDER BY sb.created_at DESC 
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
+    let dataQuery: string;
+
+    if (showAll) {
+      // ADMIN MODE: Use scheme_details as primary source
+      dataQuery = `
+        SELECT
+          sb.id,
+          sb.tenant_id,
+          sb.user_id,
+          sd.id as scheme_id,
+          sd.scheme_code,
+          sd.scheme_name,
+          sd.amc_name,
+          sb.alias_name,
+          COALESCE(sb.is_live, $1) as is_live,
+          true as is_active,
+          COALESCE(sb.daily_download_enabled, false) as daily_download_enabled,
+          COALESCE(sb.download_time, '00:00') as download_time,
+          COALESCE(sb.historical_download_completed, false) as historical_download_completed,
+          COALESCE(sb.created_at, CURRENT_TIMESTAMP) as created_at,
+          COALESCE(sb.updated_at, CURRENT_TIMESTAMP) as updated_at,
+          sd.scheme_nav_name,
+          sd.launch_date,
+          sd.last_nav_download_date,
+          sd.last_nav_download_status,
+          sd.last_nav_download_error,
+          sd.historical_data_available,
+          sd.earliest_nav_date,
+          sd.latest_nav_date,
+          sd.total_nav_records as nav_records_count,
+          (SELECT nav_value
+           FROM t_nav_data nd
+           WHERE nd.scheme_id = sd.id
+             AND nd.is_live = $1
+           ORDER BY nav_date DESC
+           LIMIT 1
+          ) as latest_nav_value
+        ${baseQuery}
+        ORDER BY sd.scheme_code ASC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+    } else {
+      // REGULAR MODE: Use bookmarks as primary source
+      dataQuery = `
+        SELECT
+          sb.id,
+          sb.tenant_id,
+          sb.user_id,
+          sb.scheme_id,
+          sb.scheme_code,
+          sb.scheme_name,
+          sb.amc_name,
+          sb.alias_name,
+          sb.is_live,
+          sb.is_active,
+          sb.daily_download_enabled,
+          sb.download_time,
+          sb.historical_download_completed,
+          sb.created_at,
+          sb.updated_at,
+          sd.scheme_nav_name,
+          sd.launch_date,
+          sd.last_nav_download_date,
+          sd.last_nav_download_status,
+          sd.last_nav_download_error,
+          sd.historical_data_available,
+          sd.earliest_nav_date,
+          sd.latest_nav_date,
+          sd.total_nav_records as nav_records_count,
+          (SELECT nav_value
+           FROM t_nav_data nd
+           WHERE nd.scheme_id = sb.scheme_id
+             AND nd.is_live = $1
+           ORDER BY nav_date DESC
+           LIMIT 1
+          ) as latest_nav_value
+        ${baseQuery}
+        ORDER BY sb.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+    }
 
     queryParams.push(page_size, offset);
     const result = await this.db.query(dataQuery, queryParams);
@@ -1026,7 +1122,39 @@ export class NavService {
         SELECT
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND daily_download_enabled = true), 0) as schemes_with_daily_download,
-          COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true AND historical_download_completed = true), 0) as schemes_with_historical_data,
+          COALESCE((
+            SELECT COUNT(DISTINCT sb.scheme_id)
+            FROM t_scheme_bookmarks sb
+            WHERE sb.tenant_id = $1
+              AND sb.is_live = $2
+              AND sb.is_active = true
+              AND EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_id = sb.scheme_id
+                  AND nd.is_live = $2
+                LIMIT 1
+              )
+          ), 0) as schemes_with_historical_data,
+          COALESCE((
+            SELECT COUNT(DISTINCT sb.scheme_id)
+            FROM t_scheme_bookmarks sb
+            WHERE sb.tenant_id = $1
+              AND sb.is_live = $2
+              AND sb.is_active = true
+              AND EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_id = sb.scheme_id
+                  AND nd.is_live = $2
+                LIMIT 1
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM t_nav_data nd
+                WHERE nd.scheme_id = sb.scheme_id
+                  AND nd.is_live = $2
+                  AND nd.metrics_calculated_at IS NOT NULL
+                LIMIT 1
+              )
+          ), 0) as schemes_without_calculations,
           (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
           (SELECT MIN(nav_date) FROM t_nav_data WHERE is_live = $2) as oldest_nav_date,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE), 0) as download_jobs_today,
@@ -1040,6 +1168,7 @@ export class NavService {
         total_schemes_tracked: parseInt(stats.total_schemes_tracked) || 0,
         schemes_with_daily_download: parseInt(stats.schemes_with_daily_download) || 0,
         schemes_with_historical_data: parseInt(stats.schemes_with_historical_data) || 0,
+        schemes_without_calculations: parseInt(stats.schemes_without_calculations) || 0,
         latest_nav_date: stats.latest_nav_date || new Date(),
         oldest_nav_date: stats.oldest_nav_date || new Date(),
         download_jobs_today: parseInt(stats.download_jobs_today) || 0,
@@ -1054,6 +1183,7 @@ export class NavService {
         total_schemes_tracked: 0,
         schemes_with_daily_download: 0,
         schemes_with_historical_data: 0,
+        schemes_without_calculations: 0,
         latest_nav_date: new Date(),
         oldest_nav_date: new Date(),
         download_jobs_today: 0,

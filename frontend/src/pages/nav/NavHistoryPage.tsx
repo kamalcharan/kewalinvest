@@ -13,6 +13,7 @@ import { NavProgressModal } from '../../components/nav/NavProgressModal';
 import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
+import { AliasManagementModal } from '../../components/nav/AliasManagementModal';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
@@ -88,6 +89,10 @@ const NavHistoryPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingSchemeId, setDeletingSchemeId] = useState<number | null>(null);
   const [deleteProgress, setDeleteProgress] = useState<string>('');
+
+  // Modal state - Alias Management
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [aliasBookmark, setAliasBookmark] = useState<SchemeBookmark | null>(null);
 
   // Prevent multiple fetches on mount
   useEffect(() => {
@@ -582,6 +587,27 @@ const NavHistoryPage: React.FC = () => {
 
   const handleCloseMetricsPreCheckModal = useCallback(() => {
     setShowMetricsPreCheckModal(false);
+  }, []);
+
+  // Handle Manage Aliases
+  const handleManageAliases = useCallback((bookmark: SchemeBookmark) => {
+    setAliasBookmark(bookmark);
+    setShowAliasModal(true);
+
+    FrontendErrorLogger.info(
+      'Opening Alias Management Modal',
+      'NavHistoryPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  const handleCloseAliasModal = useCallback(() => {
+    setShowAliasModal(false);
+    setAliasBookmark(null);
   }, []);
 
   // Loading state
@@ -1171,6 +1197,7 @@ const NavHistoryPage: React.FC = () => {
                   onDashboardClick={handleDashboardClick}
                   onHistoricalDownload={handleHistoricalDownload}
                   onCalculateMetrics={handleCalculateMetrics}
+                  onManageAliases={handleManageAliases}
                   onDelete={handleDelete}
                   showActions={true}
                   showDeleteButton={true}
@@ -1396,6 +1423,13 @@ const NavHistoryPage: React.FC = () => {
         errors={bulkMetrics.progress.errors}
         onCancel={bulkMetrics.cancel}
         onClose={() => bulkMetrics.reset()}
+      />
+
+      {/* Alias Management Modal */}
+      <AliasManagementModal
+        isOpen={showAliasModal}
+        bookmark={aliasBookmark}
+        onClose={handleCloseAliasModal}
       />
 
       {/* CSS Animations */}

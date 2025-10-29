@@ -2,7 +2,7 @@
 
 import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/database';
-import { FileParserService } from './fileParser.service';
+import { FileParserService } from './fileparser.service';
 import { EncryptionUtil } from '../utils/encryption.util';
 import { CustomerLookupService } from './customerLookup.service';
 

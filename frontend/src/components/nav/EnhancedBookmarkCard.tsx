@@ -17,10 +17,12 @@ interface EnhancedBookmarkCardProps {
   onDownloadLatest?: (bookmark: SchemeBookmark) => void;
   onCalculateMetrics?: (bookmark: SchemeBookmark) => void;
   onDashboardClick?: (bookmark: SchemeBookmark) => void;
+  onManageAliases?: (bookmark: SchemeBookmark) => void;
   onDelete?: (bookmark: SchemeBookmark) => void;
   showActions?: boolean;
   showDeleteButton?: boolean;
   isCalculating?: boolean;
+  isAdmin?: boolean;
 }
 
 export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
@@ -30,10 +32,12 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   onDownloadLatest,
   onCalculateMetrics,
   onDashboardClick,
+  onManageAliases,
   onDelete,
   showActions = true,
   showDeleteButton = false,
   isCalculating = false,
+  isAdmin = false,
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -405,6 +409,33 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
               ) : (
                 '📊 Calculate'
               )}
+            </button>
+          )}
+
+          {/* MANAGE ALIASES BUTTON */}
+          {onManageAliases && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onManageAliases(bookmark);
+              }}
+              title={`Manage aliases for ${bookmark.scheme_name}`}
+              style={{
+                backgroundColor: 'transparent',
+                color: colors.brand.secondary,
+                border: `1px solid ${colors.brand.secondary}40`,
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🏷️ Manage Aliases
             </button>
           )}
 
