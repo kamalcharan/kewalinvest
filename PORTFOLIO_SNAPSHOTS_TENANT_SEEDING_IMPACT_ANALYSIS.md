@@ -1,23 +1,494 @@
 # Portfolio Snapshots - Tenant Seeding Impact Analysis
 
-**Date:** 2025-10-29
+**Date:** 2025-10-29 (Updated)
 **Focus Area:** Cruise Control → Portfolio Snapshots Tab
 **Objective:** Ensure Portfolio Snapshots work immediately after tenant signup
-**Status:** ANALYSIS PHASE - NO CODE CHANGES YET
+**Status:** FOCUSED IMPLEMENTATION PLAN
 
 ---
 
 ## Executive Summary
 
-**Current State:** Portfolio Snapshot configuration seeding is **ALREADY IMPLEMENTED** in `tenantSeed.service.ts` but there are **CRITICAL GAPS** preventing the feature from working end-to-end.
+**Current State:** Portfolio Snapshot configuration seeding is **ALREADY IMPLEMENTED** in `tenantSeed.service.ts` but there are **2 CRITICAL BLOCKERS** preventing the feature from working.
 
-**Key Finding:** The tenant seeding creates the scheduler configuration, but the **jobs system infrastructure is incomplete**, causing the Cruise Control → Portfolio Snapshots tab to fail.
+**Key Finding:** The tenant seeding creates the scheduler configuration correctly, but **server.ts is missing critical initialization code**, causing the entire Cruise Control → Portfolio Snapshots tab to fail.
 
-**Risk Level:** 🟡 **MEDIUM** - Feature partially implemented but not functional
+**Solution:** Fix 2 files in this exact order:
+1. **server.ts** - Register routes + Initialize scheduler
+2. **tenantSeed.service.ts** - Verify data seeding is complete
+
+**Risk Level:** 🟡 **MEDIUM** - Feature blocked by 2 missing initializations
 
 ---
 
-## 1. Current Implementation Status
+## Implementation Strategy
+
+### Phase 1: Foundation (CRITICAL - Must be done first)
+
+**These 2 items MUST be in place before Cruise Control Portfolio Snapshots can work:**
+
+#### 1. Update server.ts (BLOCKER #1)
+**File:** `backend/src/server.ts`
+**Lines to modify:** Import section + Route registration + Startup initialization
+**Impact:** Without this, ALL Portfolio Snapshots API calls return 404
+
+**Required Changes:**
+- Import jobs routes
+- Register `/api/jobs` endpoint
+- Import and initialize JobSchedulerService
+- Register PortfolioSnapshotJob executor
+
+**Estimated Time:** 15 minutes
+**Priority:** 🔴 **CRITICAL - DO THIS FIRST**
+
+#### 2. Verify tenantSeed.service.ts (BLOCKER #2)
+**File:** `backend/src/services/tenantSeed.service.ts`
+**Lines to check:** 128-171 (seedJobSchedulerConfigs function)
+**Impact:** Without this, new tenants won't have Portfolio Snapshot configs
+
+**Required Changes:**
+- Verify seedJobSchedulerConfigs() is called on signup
+- Verify PORTFOLIO_SNAPSHOT job type is seeded
+- Ensure both LIVE and TEST environments are seeded
+
+**Estimated Time:** 10 minutes (verification only, likely already working)
+**Priority:** 🟡 **HIGH - VERIFY AFTER SERVER.TS**
+
+**Total Phase 1 Time:** 25 minutes
+
+---
+
+## Why These 2 Files Are Critical
+
+### Without server.ts Updates:
+
+```
+User visits Cruise Control → Portfolio Snapshots
+    ↓
+Frontend calls: GET /api/jobs/PORTFOLIO_SNAPSHOT/statistics
+    ↓
+❌ 404 Not Found (routes not registered)
+    ↓
+Frontend shows error: "Failed to load data"
+    ↓
+🚫 FEATURE COMPLETELY BROKEN
+```
+
+### Without tenantSeed Updates:
+
+```
+New tenant signs up
+    ↓
+Tenant data seeded... but is job config created?
+    ↓
+If NO → No scheduler config in database
+    ↓
+Even if server.ts is fixed, no jobs will run
+    ↓
+🚫 FEATURE BROKEN FOR NEW TENANTS
+```
+
+### With Both Fixed:
+
+```
+New tenant signs up
+    ↓
+✅ tenantSeed creates job config in t_job_scheduler_configs
+    ↓
+Server starts
+    ↓
+✅ server.ts initializes JobSchedulerService
+    ↓
+✅ Scheduler loads configs from database
+    ↓
+✅ Jobs run on schedule (Friday 9 PM)
+    ↓
+User visits Cruise Control → Portfolio Snapshots
+    ↓
+✅ Frontend calls /api/jobs/PORTFOLIO_SNAPSHOT/statistics
+    ↓
+✅ Backend returns data
+    ↓
+✅ FEATURE WORKS END-TO-END
+```
+
+---
+
+## Detailed Implementation Guide
+
+### STEP 1: Update server.ts (CRITICAL)
+
+**File:** `backend/src/server.ts`
+
+#### What Needs to Be Added:
+
+**A. Import Statements (Add to import section at top):**
+```typescript
+// Add these imports
+import jobsRoutes from './routes/jobs.routes';
+import { JobSchedulerService } from './services/jobScheduler.service';
+import { PortfolioSnapshotJob } from './services/jobs/portfolioSnapshot.job';
+```
+
+**B. Route Registration (Add with other route registrations ~line 196):**
+```typescript
+// Add this line after other app.use() routes
+app.use('/api/jobs', jobsRoutes);
+```
+
+**C. Update Health Check (Add to features object ~line 137):**
+```typescript
+features: {
+  // ... existing features ...
+  cruise_control_portfolio_snapshots: true,  // ADD THIS LINE
+  portfolio_snapshot_scheduler: true,        // ADD THIS LINE
+}
+```
+
+**D. Initialize Job Scheduler (Add in server startup section):**
+
+**Find the section where server starts** (around line 700-750 after route registration).
+
+**Add this code BEFORE `app.listen()`:**
+```typescript
+// ============ INITIALIZE JOB SCHEDULER ============
+let jobScheduler: JobSchedulerService | null = null;
+
+async function initializeJobScheduler() {
+  try {
+    SimpleLogger.info('Server', 'Initializing Job Scheduler...', 'startup', {});
+
+    jobScheduler = new JobSchedulerService();
+
+    // Register job executors
+    const portfolioSnapshotJob = new PortfolioSnapshotJob();
+    jobScheduler.registerJob(portfolioSnapshotJob);
+
+    // Initialize scheduler (loads configs from database and starts cron timers)
+    await jobScheduler.initializeScheduler();
+
+    SimpleLogger.info('Server', 'Job Scheduler initialized successfully', 'startup', {
+      registered_jobs: ['PORTFOLIO_SNAPSHOT']
+    });
+  } catch (error) {
+    SimpleLogger.error('Server', 'Failed to initialize Job Scheduler', 'startup', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    // Don't crash server if scheduler fails
+    console.error('Job Scheduler initialization failed:', error);
+  }
+}
+```
+
+**E. Call Initialization (Add to server startup):**
+```typescript
+// Start server
+const startServer = async () => {
+  try {
+    // Test database connection
+    await testConnection();
+
+    // NEW: Initialize job scheduler
+    await initializeJobScheduler();
+
+    // Start listening
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
+```
+
+#### Expected Result After Changes:
+
+✅ `/api/jobs` endpoint registered and accessible
+✅ JobSchedulerService initialized on server startup
+✅ PortfolioSnapshotJob registered as executor
+✅ Scheduler loads configs from database
+✅ Jobs will run on schedule
+✅ API calls to `/api/jobs/PORTFOLIO_SNAPSHOT/*` will work
+
+#### Verification Steps:
+
+1. **Start server:**
+   ```bash
+   npm run dev
+   ```
+
+2. **Check logs for:**
+   ```
+   ✅ "Initializing Job Scheduler..."
+   ✅ "Job Scheduler initialized successfully"
+   ✅ "registered_jobs: ['PORTFOLIO_SNAPSHOT']"
+   ```
+
+3. **Test endpoint:**
+   ```bash
+   curl http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/statistics
+   ```
+   Should return data, NOT 404
+
+---
+
+### STEP 2: Verify tenantSeed.service.ts
+
+**File:** `backend/src/services/tenantSeed.service.ts`
+
+#### What to Verify:
+
+**A. Check seedJobSchedulerConfigs() exists and is called:**
+
+**Lines to check:** 128-171
+
+**Verify this function exists:**
+```typescript
+async function seedJobSchedulerConfigs(
+  tenantId: number,
+  userId: number,
+  client: PoolClient
+): Promise<void> {
+  // Get all job types from m_job_types
+  const jobTypesResult = await client.query(`
+    SELECT code, name, default_cron_expression, default_max_retries
+    FROM m_job_types
+    WHERE is_active = true
+  `);
+
+  // For each job type, create configs for LIVE and TEST
+  for (const jobType of jobTypesResult.rows) {
+    for (const isLive of [true, false]) {
+      await client.query(
+        `INSERT INTO t_job_scheduler_configs (
+          tenant_id, job_type, user_id, is_live,
+          schedule_type, cron_expression, is_enabled, max_retries,
+          job_config
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (tenant_id, job_type, is_live)
+        DO UPDATE SET
+          cron_expression = EXCLUDED.cron_expression,
+          max_retries = EXCLUDED.max_retries,
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          tenantId,
+          jobType.code,           // 'PORTFOLIO_SNAPSHOT'
+          userId,
+          isLive,
+          'weekly',
+          jobType.default_cron_expression || '0 21 * * 5',
+          true,                   // Enabled by default
+          jobType.default_max_retries || 3,
+          '{}'
+        ]
+      );
+    }
+  }
+}
+```
+
+**B. Verify it's called in seedTenantData():**
+
+**Look for this in the main seedTenantData() function:**
+```typescript
+export async function seedTenantData(tenantId: number, userId: number): Promise<void> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // ... other seeding functions ...
+
+    // VERIFY THIS LINE EXISTS:
+    await seedJobSchedulerConfigs(tenantId, userId, client);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+```
+
+**C. Verify global job types seeding:**
+
+**Check seedGlobalJobTypes() includes PORTFOLIO_SNAPSHOT:**
+```typescript
+const jobTypes = [
+  {
+    code: 'PORTFOLIO_SNAPSHOT',
+    name: 'Portfolio Snapshot Generation',
+    description: 'Generate monthly portfolio snapshots for all customers to enable performance tracking',
+    default_cron_expression: '0 21 * * 5',
+    default_max_retries: 3
+  }
+  // ... other job types
+];
+```
+
+#### If seedJobSchedulerConfigs() is Missing:
+
+**Add this function to tenantSeed.service.ts:**
+```typescript
+async function seedJobSchedulerConfigs(
+  tenantId: number,
+  userId: number,
+  client: PoolClient
+): Promise<void> {
+  console.log(`Seeding job scheduler configs for tenant ${tenantId}...`);
+
+  // Get all active job types
+  const jobTypesResult = await client.query(`
+    SELECT code, name, default_cron_expression, default_max_retries
+    FROM m_job_types
+    WHERE is_active = true
+  `);
+
+  console.log(`Found ${jobTypesResult.rows.length} job types to seed`);
+
+  // Create configs for each job type (both LIVE and TEST)
+  for (const jobType of jobTypesResult.rows) {
+    for (const isLive of [true, false]) {
+      await client.query(
+        `INSERT INTO t_job_scheduler_configs (
+          tenant_id, job_type, user_id, is_live,
+          schedule_type, cron_expression, is_enabled, max_retries,
+          job_config
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (tenant_id, job_type, is_live)
+        DO UPDATE SET
+          cron_expression = EXCLUDED.cron_expression,
+          max_retries = EXCLUDED.max_retries,
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          tenantId,
+          jobType.code,
+          userId,
+          isLive,
+          'weekly',
+          jobType.default_cron_expression || '0 21 * * 5',
+          true,  // Enabled by default
+          jobType.default_max_retries || 3,
+          '{}'
+        ]
+      );
+
+      console.log(`  ✓ Created config for ${jobType.code} (${isLive ? 'LIVE' : 'TEST'})`);
+    }
+  }
+
+  console.log(`Job scheduler configs seeded successfully for tenant ${tenantId}`);
+}
+```
+
+**Then call it in seedTenantData():**
+```typescript
+await seedJobSchedulerConfigs(tenantId, userId, client);
+```
+
+#### Verification Steps:
+
+1. **Create a test tenant** (or check existing tenant):
+   ```sql
+   -- Check if configs exist for a tenant
+   SELECT
+     tenant_id,
+     job_type,
+     is_live,
+     is_enabled,
+     cron_expression,
+     created_at
+   FROM t_job_scheduler_configs
+   WHERE tenant_id = 1;  -- Replace with your tenant ID
+   ```
+
+2. **Expected result:**
+   ```
+   tenant_id | job_type           | is_live | is_enabled | cron_expression
+   ----------|-------------------|---------|------------|----------------
+   1         | PORTFOLIO_SNAPSHOT | true    | true       | 0 21 * * 5
+   1         | PORTFOLIO_SNAPSHOT | false   | true       | 0 21 * * 5
+   ```
+
+3. **If no rows returned:**
+   - Run `seedGlobalJobTypes()` first
+   - Then run `seedJobSchedulerConfigs(tenantId, userId)`
+   - Or create new tenant to test auto-seeding
+
+---
+
+## Expected Outcome After Both Steps
+
+### Signup Flow (New Tenant):
+
+```
+1. User signs up
+   ↓
+2. Tenant created (tenant_id = 5)
+   ↓
+3. User created (user_id = 12)
+   ↓
+4. seedTenantData(5, 12) called
+   ↓
+5. seedJobSchedulerConfigs(5, 12) called
+   ↓
+6. Query m_job_types for active job types
+   ↓
+7. Found: PORTFOLIO_SNAPSHOT
+   ↓
+8. INSERT INTO t_job_scheduler_configs (2 rows: LIVE + TEST)
+   ↓
+✅ Tenant now has Portfolio Snapshot scheduler configs
+```
+
+### Server Startup:
+
+```
+1. Server starts
+   ↓
+2. Routes registered (including /api/jobs)
+   ↓
+3. initializeJobScheduler() called
+   ↓
+4. JobSchedulerService created
+   ↓
+5. PortfolioSnapshotJob registered
+   ↓
+6. jobScheduler.initializeScheduler() called
+   ↓
+7. Loads all configs from t_job_scheduler_configs
+   ↓
+8. Creates cron timers for enabled jobs
+   ↓
+✅ Jobs will now run on schedule
+```
+
+### User Access:
+
+```
+1. User navigates to Cruise Control → Portfolio Snapshots
+   ↓
+2. Frontend calls: GET /api/jobs/PORTFOLIO_SNAPSHOT/statistics
+   ↓
+3. server.ts routes to jobsRoutes
+   ↓
+4. jobs.controller.ts handles request
+   ↓
+5. jobs.service.ts queries t_job_scheduler_configs + t_job_executions
+   ↓
+6. Returns statistics data
+   ↓
+✅ Frontend displays stats cards
+```
+
+---
+
+## 1. Current Implementation Status (REFERENCE)
 
 ### ✅ What's Already Working
 
@@ -761,6 +1232,75 @@ curl -X POST "http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/execute?is_live=
 
 ---
 
-**Document Status:** ANALYSIS COMPLETE - AWAITING APPROVAL
-**Last Updated:** 2025-10-29
+## Quick Start Checklist
+
+Use this checklist to implement the 2 critical fixes:
+
+### ☐ STEP 1: Update server.ts
+
+- [ ] Add imports: `jobsRoutes`, `JobSchedulerService`, `PortfolioSnapshotJob`
+- [ ] Register route: `app.use('/api/jobs', jobsRoutes)`
+- [ ] Update health check: Add portfolio snapshot features
+- [ ] Create `initializeJobScheduler()` function
+- [ ] Call `await initializeJobScheduler()` before `app.listen()`
+- [ ] Test: Start server and check logs for "Job Scheduler initialized successfully"
+- [ ] Test: `curl http://localhost:8080/api/jobs/PORTFOLIO_SNAPSHOT/statistics`
+
+**Time Estimate:** 15 minutes
+
+### ☐ STEP 2: Verify tenantSeed.service.ts
+
+- [ ] Check `seedJobSchedulerConfigs()` function exists (lines 128-171)
+- [ ] Verify it's called in `seedTenantData()`
+- [ ] Check `seedGlobalJobTypes()` includes PORTFOLIO_SNAPSHOT
+- [ ] Test: Query `t_job_scheduler_configs` for existing tenant
+- [ ] Test: Create new tenant and verify configs are created
+
+**Time Estimate:** 10 minutes
+
+### ☐ VERIFICATION
+
+- [ ] Server starts without errors
+- [ ] Logs show "Job Scheduler initialized successfully"
+- [ ] `/api/jobs` endpoints return data (not 404)
+- [ ] Database has configs for PORTFOLIO_SNAPSHOT
+- [ ] Frontend Cruise Control → Portfolio Snapshots tab loads
+
+**Total Time:** ~25 minutes
+
+---
+
+## Summary
+
+**Problem:** Cruise Control → Portfolio Snapshots tab doesn't work
+
+**Root Cause:** 2 missing initialization steps in backend
+
+**Solution:**
+1. **server.ts** - Register routes + Initialize scheduler (15 min)
+2. **tenantSeed.service.ts** - Verify data seeding works (10 min)
+
+**Impact:** LOW effort, HIGH impact (unblocks entire feature)
+
+**Dependencies:**
+- Must have: `jobs.routes.ts`, `jobScheduler.service.ts`, `portfolioSnapshot.job.ts`
+- Must have: Database tables (`t_job_scheduler_configs`, `t_job_executions`, `m_job_types`)
+
+**After These 2 Steps:**
+✅ Portfolio Snapshots tab will load
+✅ API calls will work
+✅ Jobs will run on schedule
+✅ New tenants will have configs automatically
+
+**What's Still Pending (can do later):**
+- Complete jobs.service.ts implementation (if needed)
+- Add more job types
+- Enhance UI features
+- Add tests
+
+---
+
+**Document Status:** UPDATED - FOCUSED ON 2 CRITICAL FIXES
+**Last Updated:** 2025-10-29 (Revised with implementation guide)
 **Prepared By:** Claude Code Analysis Agent
+**Next Step:** Implement server.ts changes first, then verify tenant seeding
