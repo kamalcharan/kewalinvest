@@ -18,6 +18,7 @@ interface EnhancedBookmarkCardProps {
   onDownloadLatest?: (bookmark: SchemeBookmark) => void;
   onCalculateMetrics?: (bookmark: SchemeBookmark) => void;
   onDashboardClick?: (bookmark: SchemeBookmark) => void;
+  onManageAliases?: (bookmark: SchemeBookmark) => void;
   onDelete?: (bookmark: SchemeBookmark) => void;
   showActions?: boolean;
   showDeleteButton?: boolean;
@@ -31,6 +32,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   onDownloadLatest,
   onCalculateMetrics,
   onDashboardClick,
+  onManageAliases,
   onDelete,
   showActions = true,
   showDeleteButton = false,
@@ -414,7 +416,11 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/admin/scheme-aliases?search=${bookmark.scheme_code}`);
+              if (onManageAliases) {
+                onManageAliases(bookmark);
+              } else {
+                navigate(`/admin/scheme-aliases?search=${bookmark.scheme_code}`);
+              }
             }}
             title={`Manage aliases for ${bookmark.scheme_name}`}
             style={{
