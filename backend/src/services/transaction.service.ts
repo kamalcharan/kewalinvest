@@ -13,12 +13,15 @@ import {
   TransactionSummary
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
+import { SchemeAliasService } from './schemeAlias.service';
 
 export class TransactionService {
   private db: Pool;
+  private schemeAliasService: SchemeAliasService;
 
   constructor() {
     this.db = pool;
+    this.schemeAliasService = new SchemeAliasService();
   }
 
   /**
@@ -258,11 +261,11 @@ export class TransactionService {
       // Insert transaction
       const insertQuery = `
         INSERT INTO t_transaction_table (
-          tenant_id, is_live, customer_id, scheme_code, scheme_name, folio_no,
+          tenant_id, is_live, customer_id, scheme_id, scheme_code, scheme_name, folio_no,
           txn_type_id, txn_date, total_amount, units, nav, stamp_duty,
           staging_record_id, import_session_id,
           is_potential_duplicate, portfolio_flag, duplicate_reason
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *
       `;
 

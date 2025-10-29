@@ -23,56 +23,57 @@ export const IndividualFamilySwitch: React.FC<IndividualFamilySwitchProps> = ({
   };
 
   return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '4px',
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '8px',
-        border: `1px solid ${colors.utility.primaryText}15`,
-        opacity: disabled ? 0.6 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer'
-      }}
-    >
-      <button
-        onClick={handleToggle}
-        disabled={disabled}
-        style={{
-          padding: '6px 14px',
-          backgroundColor: mode === 'individual' ? colors.brand.primary : 'transparent',
-          color: mode === 'individual' ? 'white' : colors.utility.secondaryText,
-          border: 'none',
-          borderRadius: '6px',
-          fontSize: '13px',
-          fontWeight: '600',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease',
-          whiteSpace: 'nowrap'
-        }}
-      >
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      backgroundColor: colors.utility.primaryBackground,
+      opacity: disabled ? 0.6 : 1
+    }}>
+      <span style={{
+        fontSize: '0.875rem',
+        color: mode === 'individual' ? colors.brand.primary : colors.utility.secondaryText,
+        fontWeight: mode === 'individual' ? '600' : '400',
+        transition: 'all 0.3s'
+      }}>
         Individual
-      </button>
-
+      </span>
       <button
         onClick={handleToggle}
         disabled={disabled}
         style={{
-          padding: '6px 14px',
-          backgroundColor: mode === 'family' ? colors.brand.primary : 'transparent',
-          color: mode === 'family' ? 'white' : colors.utility.secondaryText,
+          width: '44px',
+          height: '24px',
+          borderRadius: '12px',
+          backgroundColor: mode === 'individual' ? colors.brand.primary : colors.brand.secondary,
           border: 'none',
-          borderRadius: '6px',
-          fontSize: '13px',
-          fontWeight: '600',
           cursor: disabled ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease',
-          whiteSpace: 'nowrap'
+          position: 'relative',
+          transition: 'background-color 0.3s'
         }}
       >
-        Family
+        <span style={{
+          position: 'absolute',
+          top: '2px',
+          left: mode === 'individual' ? '2px' : '22px',
+          width: '20px',
+          height: '20px',
+          backgroundColor: 'white',
+          borderRadius: '50%',
+          transition: 'left 0.3s',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        }} />
       </button>
+      <span style={{
+        fontSize: '0.875rem',
+        color: mode === 'family' ? colors.brand.secondary : colors.utility.secondaryText,
+        fontWeight: mode === 'family' ? '600' : '400',
+        transition: 'all 0.3s'
+      }}>
+        Family
+      </span>
     </div>
   );
 };

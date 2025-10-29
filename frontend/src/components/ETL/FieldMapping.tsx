@@ -52,27 +52,40 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
 
   // Define target fields based on import type
   useEffect(() => {
+    console.log('🔧 [FieldMapping] useEffect triggered:', { importType, sourceHeadersCount: sourceHeaders.length });
+
     const targetFields = getTargetFieldsForImportType(importType);
+    console.log('📋 [FieldMapping] Target fields loaded:', { importType, targetFieldsCount: targetFields.length });
+
     setAvailableTargetFields(targetFields);
-    
+
     // Initialize mappings with auto-suggestions only if no existing mappings
     if (mappings.length === 0) {
+      console.log('🆕 [FieldMapping] Initializing new mappings for headers:', sourceHeaders);
+
       const usedTargetFields = new Set<string>();
       const initialMappings = sourceHeaders.map(header => {
         const suggestedTarget = suggestTargetField(header, targetFields, usedTargetFields);
         if (suggestedTarget) {
           usedTargetFields.add(suggestedTarget.field);
         }
-        return {
+
+        const mapping = {
           sourceField: header,
           targetField: suggestedTarget?.field || '',
           isRequired: suggestedTarget?.required || false,
           transformation: suggestTransformation(header, suggestedTarget || undefined),
           isActive: true
         };
+
+        console.log(`  📍 Mapped "${header}" → "${mapping.targetField}" (required: ${mapping.isRequired})`);
+        return mapping;
       });
-      
+
+      console.log('✅ [FieldMapping] All mappings initialized:', { totalMappings: initialMappings.length });
       setMappings(initialMappings);
+    } else {
+      console.log('⏭️  [FieldMapping] Skipping initialization - mappings already exist:', mappings.length);
     }
   }, [importType, sourceHeaders]);
 
@@ -273,10 +286,9 @@ if (type === 'TransactionData') {
       { patterns: ['sb code', 'sb_code', 'subbroker'], field: 'sb_code' },
       { patterns: ['applicant'], field: 'applicant' },
 
-      // Customer family fields (must come before generic 'family head' pattern for proper matching)
-      { patterns: ['family head name', 'family_head_name'], field: 'family_head_name' },
-      { patterns: ['family head code', 'family_head_code', 'family head iwell code', 'family_head_iwell_code'], field: 'family_head_iwell_code' },
-      { patterns: ['family head', 'family_head'], field: 'family_head' }
+      // Customer family fields - 'family head' alone maps to family_head_name
+      { patterns: ['family head name', 'family_head_name', 'family head', 'family_head'], field: 'family_head_name' },
+      { patterns: ['family head code', 'family_head_code', 'family head iwell code', 'family_head_iwell_code'], field: 'family_head_iwell_code' }
     ];
     
     for (const match of fuzzyMatches) {
@@ -653,16 +665,26 @@ if (type === 'TransactionData') {
 
         {/* Mapping Rows */}
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          {mappings.map((mapping, index) => (
-            <MappingRow
-              key={`${mapping.sourceField}-${index}`}
-              mapping={mapping}
-              availableTargetFields={groupedTargetFields}
-              onUpdate={(updates) => updateMapping(index, updates)}
-              onToggle={() => toggleMapping(index)}
-              disabled={disabled}
-            />
-          ))}
+          {(() => {
+            console.log('🎨 [FieldMapping] Rendering mappings:', { mappingsCount: mappings.length, mappings });
+            return null;
+          })()}
+          {mappings.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
+              ⚠️ No mappings found. Check console for details.
+            </div>
+          ) : (
+            mappings.map((mapping, index) => (
+              <MappingRow
+                key={`${mapping.sourceField}-${index}`}
+                mapping={mapping}
+                availableTargetFields={groupedTargetFields}
+                onUpdate={(updates) => updateMapping(index, updates)}
+                onToggle={() => toggleMapping(index)}
+                disabled={disabled}
+              />
+            ))
+          )}
         </div>
       </div>
 

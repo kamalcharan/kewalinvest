@@ -9,7 +9,7 @@ import {
   FileImportType,
   ValidationResult
 } from '../types/import.types';
-import { FileParserService } from './fileParser.service';
+import { FileParserService } from './fileparser.service';
 import { StagingService, StagingResult, StagingRecord } from './staging.service';
 import { SchemeService } from './scheme.service';  
 

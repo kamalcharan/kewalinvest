@@ -67,6 +67,38 @@ $$;
 
 ALTER FUNCTION public.update_market_updated_at() OWNER TO kewal_admin;
 
+-- Function: update_scheme_alias_timestamp()
+CREATE OR REPLACE FUNCTION public.update_scheme_alias_timestamp() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.update_scheme_alias_timestamp() OWNER TO kewal_admin;
+COMMENT ON FUNCTION public.update_scheme_alias_timestamp() IS 'Automatically update updated_at timestamp for scheme aliases';
+
+-- Function: normalize_alias_name()
+CREATE OR REPLACE FUNCTION public.normalize_alias_name() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Normalize: uppercase, trim, collapse multiple spaces into single space
+    NEW.alias_name_normalized = REGEXP_REPLACE(
+        TRIM(UPPER(NEW.alias_name)),
+        '\s+',
+        ' ',
+        'g'
+    );
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.normalize_alias_name() OWNER TO kewal_admin;
+COMMENT ON FUNCTION public.normalize_alias_name() IS 'Auto-normalize alias names for case-insensitive matching';
+
 DO $$
 BEGIN
     RAISE NOTICE '✓ Trigger functions created successfully';
@@ -272,6 +304,11 @@ CREATE INDEX idx_scheme_details_scheme_type ON t_scheme_details USING btree (sch
 CREATE INDEX idx_scheme_details_scheme_category ON t_scheme_details USING btree (scheme_category_id);
 CREATE INDEX idx_scheme_details_isin ON t_scheme_details USING btree (isin_div_payout, isin_growth, isin_div_reinvestment);
 CREATE INDEX idx_scheme_details_nav_available ON t_scheme_details USING btree (scheme_code) WHERE (is_active = true);
+
+-- t_scheme_aliases indexes
+CREATE INDEX idx_scheme_aliases_lookup ON t_scheme_aliases USING btree (alias_name_normalized) WHERE (is_active = true);
+CREATE INDEX idx_scheme_aliases_scheme ON t_scheme_aliases USING btree (scheme_id, is_active);
+CREATE INDEX idx_scheme_aliases_active ON t_scheme_aliases USING btree (is_active, created_at DESC);
 
 -- Conditional indexes for t_scheme_bookmarks (may not have scheme_code column)
 DO $$
@@ -497,6 +534,71 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- JOB SCHEDULER & EXECUTION INDEXES
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Job Scheduler & Execution indexes...';
+END $$;
+
+-- Portfolio snapshot config indexes
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_tenant
+ON t_portfolio_snapshot_configs(tenant_id, is_live);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_enabled
+ON t_portfolio_snapshot_configs(is_enabled)
+WHERE is_enabled = true;
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_configs_next_execution
+ON t_portfolio_snapshot_configs(next_execution_at)
+WHERE is_enabled = true AND next_execution_at IS NOT NULL;
+
+-- Portfolio snapshot execution indexes
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_config
+ON t_portfolio_snapshot_executions(scheduler_config_id);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_tenant
+ON t_portfolio_snapshot_executions(tenant_id, is_live, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_status
+ON t_portfolio_snapshot_executions(status, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_executions_month
+ON t_portfolio_snapshot_executions(snapshot_month_end, tenant_id, is_live);
+
+-- Generic job config indexes
+CREATE INDEX IF NOT EXISTS idx_job_configs_tenant
+ON t_job_scheduler_configs(tenant_id, is_live, job_type);
+
+CREATE INDEX IF NOT EXISTS idx_job_configs_enabled
+ON t_job_scheduler_configs(is_enabled)
+WHERE is_enabled = true;
+
+CREATE INDEX IF NOT EXISTS idx_job_configs_next_execution
+ON t_job_scheduler_configs(next_execution_at)
+WHERE is_enabled = true AND next_execution_at IS NOT NULL;
+
+-- Generic job execution indexes
+CREATE INDEX IF NOT EXISTS idx_job_executions_config
+ON t_job_executions(scheduler_config_id);
+
+CREATE INDEX IF NOT EXISTS idx_job_executions_tenant
+ON t_job_executions(tenant_id, is_live, job_type, execution_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_job_executions_status
+ON t_job_executions(job_type, status, execution_time DESC);
+
+-- Job types index
+CREATE INDEX IF NOT EXISTS idx_job_types_active
+ON m_job_types(is_active)
+WHERE is_active = true;
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Created 14 job scheduler & execution indexes';
+END $$;
+
+-- ============================================================================
 -- SECTION 3: TIMESTAMP UPDATE TRIGGERS
 -- Note: Trigger functions are created in Section 1.5 above
 -- ============================================================================
@@ -557,6 +659,12 @@ CREATE TRIGGER update_scheme_details_updated_at BEFORE UPDATE ON t_scheme_detail
 
 CREATE TRIGGER update_scheme_bookmarks_updated_at BEFORE UPDATE ON t_scheme_bookmarks
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_update_scheme_alias_timestamp BEFORE UPDATE ON t_scheme_aliases
+    FOR EACH ROW EXECUTE FUNCTION update_scheme_alias_timestamp();
+
+CREATE TRIGGER trg_normalize_alias_name BEFORE INSERT OR UPDATE ON t_scheme_aliases
+    FOR EACH ROW EXECUTE FUNCTION normalize_alias_name();
 
 CREATE TRIGGER update_nav_data_updated_at BEFORE UPDATE ON t_nav_data
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
