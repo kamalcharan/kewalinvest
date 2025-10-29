@@ -72,19 +72,6 @@ export const API_ENDPOINTS = {
     VALIDATE_ISIN: `${API_BASE}/schemes/validate-isin`,
   },
 
-  // Scheme Alias management endpoints
-  SCHEME_ALIASES: {
-    LIST: `${API_BASE}/scheme-aliases`,
-    CREATE: `${API_BASE}/scheme-aliases`,
-    GET: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
-    UPDATE: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
-    DELETE: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
-    BULK: `${API_BASE}/scheme-aliases/bulk`,
-    LOOKUP: `${API_BASE}/scheme-aliases/lookup`,
-    STATISTICS: `${API_BASE}/scheme-aliases/statistics`,
-    BACKFILL: `${API_BASE}/scheme-aliases/backfill`,
-  },
-
   // Transaction management endpoints
   TRANSACTIONS: {
     LIST: `${API_BASE}/transactions`,
