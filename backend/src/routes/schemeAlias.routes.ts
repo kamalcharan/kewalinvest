@@ -38,10 +38,29 @@ router.post('/bulk', schemeAliasController.bulkCreateAliases);
 
 /**
  * POST /api/scheme-aliases/backfill
- * Backfill missing aliases for all schemes
+ * Start backfill process (returns immediately, processes in background)
  * Auto-creates aliases from scheme_name and scheme_nav_name
  */
 router.post('/backfill', schemeAliasController.backfillAliases);
+
+/**
+ * GET /api/scheme-aliases/backfill/progress
+ * Get backfill progress for current user
+ * Returns: {
+ *   current: number,
+ *   total: number,
+ *   created: number,
+ *   skipped: number,
+ *   status: 'running' | 'completed' | 'cancelled' | 'error'
+ * }
+ */
+router.get('/backfill/progress', schemeAliasController.getBackfillProgress);
+
+/**
+ * POST /api/scheme-aliases/backfill/cancel
+ * Cancel running backfill for current user
+ */
+router.post('/backfill/cancel', schemeAliasController.cancelBackfill);
 
 /**
  * GET /api/scheme-aliases
