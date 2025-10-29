@@ -32,16 +32,39 @@ interface ImportSession {
 
 interface ImportRecord {
   id: number;
+  import_session_id: number;
   row_number: number;
   raw_data: any;
   mapped_data: any;
   processing_status: string;
+  status: string; // Alias for processing_status for compatibility
   error_messages: string[];
   warnings: string[];
   created_record_id?: number;
   created_record_type?: string;
   processed_at: string;
   transaction_portfolio_flag?: boolean; // Actual portfolio_flag from t_transaction_table
+  // Match tracking fields (from backend)
+  match_type?: string;
+  match_confidence?: string;
+  ambiguous_matches?: Array<{
+    id: number;
+    name: string;
+    pan: string | null;
+  }>;
+  requires_review?: boolean;
+  // Edit history fields (from backend)
+  edit_history?: Array<{
+    edited_at: string;
+    edited_by: number;
+    field: string;
+    old_value: any;
+    new_value: any;
+  }>;
+  edited_at?: string;
+  edited_by?: number;
+  reprocess_count?: number;
+  last_reprocess_at?: string;
 }
 
 interface ResultsData {
