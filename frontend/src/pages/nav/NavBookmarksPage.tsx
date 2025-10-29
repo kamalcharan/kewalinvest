@@ -14,6 +14,7 @@ import { MetricsCalculationModal } from '../../components/nav/MetricsCalculation
 import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreCheckModal';
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import { BulkDownloadProgress } from '../../components/nav/BulkDownloadProgress';
+import { AliasManagementModal } from '../../components/nav/AliasManagementModal';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
@@ -44,6 +45,10 @@ const NavBookmarksPage: React.FC = () => {
   const [showMetricsCalculationModal, setShowMetricsCalculationModal] = useState(false);
   const [showMetricsPreCheckModal, setShowMetricsPreCheckModal] = useState(false);
   const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
+
+  // Modal state - Alias Management
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [aliasBookmark, setAliasBookmark] = useState<SchemeBookmark | null>(null);
 
   // Bulk selection state
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<number>>(new Set());
@@ -364,6 +369,27 @@ const NavBookmarksPage: React.FC = () => {
 
   const handleCloseMetricsPreCheckModal = useCallback(() => {
     setShowMetricsPreCheckModal(false);
+  }, []);
+
+  // Handle Manage Aliases
+  const handleManageAliases = useCallback((bookmark: SchemeBookmark) => {
+    setAliasBookmark(bookmark);
+    setShowAliasModal(true);
+
+    FrontendErrorLogger.info(
+      'Opening Alias Management Modal',
+      'NavBookmarksPage',
+      {
+        bookmarkId: bookmark.id,
+        schemeId: bookmark.scheme_id,
+        schemeName: bookmark.scheme_name
+      }
+    );
+  }, []);
+
+  const handleCloseAliasModal = useCallback(() => {
+    setShowAliasModal(false);
+    setAliasBookmark(null);
   }, []);
 
   // ==================== BULK SELECTION HANDLERS ====================
@@ -1350,6 +1376,7 @@ const NavBookmarksPage: React.FC = () => {
                         onDashboardClick={handleDashboardClick}
                         onHistoricalDownload={handleHistoricalDownload}
                         onCalculateMetrics={handleCalculateMetrics}
+                        onManageAliases={handleManageAliases}
                         showActions={true}
                         isCalculating={calculatingSchemeId === bookmark.scheme_id}
                       />
@@ -1512,6 +1539,13 @@ const NavBookmarksPage: React.FC = () => {
         total={bulkDownload.progress.total}
         currentScheme={bulkDownload.progress.currentScheme}
         onCancel={bulkDownload.cancel}
+      />
+
+      {/* Alias Management Modal */}
+      <AliasManagementModal
+        isOpen={showAliasModal}
+        bookmark={aliasBookmark}
+        onClose={handleCloseAliasModal}
       />
 
       {/* CSS Animation */}
