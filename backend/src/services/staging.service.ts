@@ -178,7 +178,7 @@ export class StagingService {
       const query = `
         INSERT INTO t_import_staging_data (
           tenant_id, is_live, session_id, import_type,
-          row_number, raw_data, mapped_data, warnings, status
+          row_number, raw_data, mapped_data, warnings, processing_status
         ) VALUES ${placeholders.join(', ')}
       `;
 
