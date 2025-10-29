@@ -135,6 +135,13 @@ export function useBulkMetricsCalculation(options?: BulkMetricsCalculationOption
       // Extract scheme IDs
       const schemeIds = bookmarks.map(b => b.scheme_id);
 
+      console.log('🔍 [DEBUG] Processing batch calculation:', {
+        bookmarksCount: bookmarks.length,
+        schemeIds,
+        batchSize,
+        delayMs
+      });
+
       // Build request
       const request: BulkMetricsRequest = {
         scheme_ids: schemeIds,
@@ -144,8 +151,12 @@ export function useBulkMetricsCalculation(options?: BulkMetricsCalculationOption
         priority: 'bookmarked',
       };
 
+      console.log('📤 [DEBUG] Sending bulk metrics request:', request);
+
       // Call API
       const result = await schemeAnalysisService.batchCalculateMetrics(request);
+
+      console.log('📥 [DEBUG] Received bulk metrics result:', result);
 
       // Check if cancelled during API call
       if (isCancelledRef.current) {
