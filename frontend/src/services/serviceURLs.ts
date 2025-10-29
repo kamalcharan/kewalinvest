@@ -264,7 +264,22 @@ export const API_ENDPOINTS = {
     GET_METRICS: (schemeId: number) => `${API_BASE}/scheme-analysis/metrics/${schemeId}`,
     BATCH_CALCULATE: `${API_BASE}/scheme-analysis/batch-calculate`,
   },
-  
+
+  // Scheme Alias endpoints (for flexible transaction imports)
+  SCHEME_ALIASES: {
+    LIST: `${API_BASE}/scheme-aliases`,
+    CREATE: `${API_BASE}/scheme-aliases`,
+    GET: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
+    DELETE: (id: number) => `${API_BASE}/scheme-aliases/${id}`,
+    BULK_CREATE: `${API_BASE}/scheme-aliases/bulk`,
+    LOOKUP: `${API_BASE}/scheme-aliases/lookup`,
+    STATISTICS: `${API_BASE}/scheme-aliases/statistics`,
+    BACKFILL: `${API_BASE}/scheme-aliases/backfill`,
+    BACKFILL_PROGRESS: `${API_BASE}/scheme-aliases/backfill/progress`,
+    BACKFILL_CANCEL: `${API_BASE}/scheme-aliases/backfill/cancel`,
+  },
+
   // File management endpoints (for future sprints)
   FILES: {
     UPLOAD: `${API_BASE}/files/upload`,
