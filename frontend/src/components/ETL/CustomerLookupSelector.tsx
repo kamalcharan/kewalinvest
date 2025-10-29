@@ -49,8 +49,8 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
     <div
       style={{
         padding: '20px',
-        backgroundColor: colors.background,
-        border: `1px solid ${colors.border}`,
+        backgroundColor: colors.utility.primaryBackground,
+        border: `1px solid ${colors.utility.secondaryText}20`,
         borderRadius: '8px',
         marginBottom: '20px'
       }}
@@ -70,7 +70,7 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
               margin: 0,
               fontSize: '16px',
               fontWeight: 600,
-              color: colors.text
+              color: colors.utility.primaryText
             }}
           >
             Customer Lookup Method
@@ -79,7 +79,7 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
             style={{
               margin: '4px 0 0 0',
               fontSize: '13px',
-              color: colors.textSecondary
+              color: colors.utility.secondaryText
             }}
           >
             Choose how to match transaction records to customers
@@ -105,10 +105,10 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
               style={{
                 padding: '16px',
                 backgroundColor: isSelected
-                  ? `${colors.primary}15`
-                  : colors.cardBackground,
+                  ? `${colors.brand.primary}15`
+                  : colors.utility.secondaryBackground,
                 border: `2px solid ${
-                  isSelected ? colors.primary : colors.border
+                  isSelected ? colors.brand.primary : `${colors.utility.secondaryText}20`
                 }`,
                 borderRadius: '8px',
                 cursor: disabled ? 'not-allowed' : 'pointer',
@@ -119,14 +119,14 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
               }}
               onMouseEnter={(e) => {
                 if (!disabled && !isSelected) {
-                  e.currentTarget.style.borderColor = colors.primary;
+                  e.currentTarget.style.borderColor = colors.brand.primary;
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = `0 4px 12px ${colors.primary}20`;
+                  e.currentTarget.style.boxShadow = `0 4px 12px ${colors.brand.primary}20`;
                 }
               }}
               onMouseLeave={(e) => {
                 if (!disabled && !isSelected) {
-                  e.currentTarget.style.borderColor = colors.border;
+                  e.currentTarget.style.borderColor = `${colors.utility.secondaryText}20`;
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = 'none';
                 }
@@ -141,7 +141,7 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
                     width: '20px',
                     height: '20px',
                     borderRadius: '50%',
-                    backgroundColor: colors.primary,
+                    backgroundColor: colors.brand.primary,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -162,7 +162,7 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
                     style={{
                       fontSize: '14px',
                       fontWeight: 600,
-                      color: isSelected ? colors.primary : colors.text,
+                      color: isSelected ? colors.brand.primary : colors.utility.primaryText,
                       marginBottom: '6px'
                     }}
                   >
@@ -171,7 +171,7 @@ const CustomerLookupSelector: React.FC<CustomerLookupSelectorProps> = ({
                   <div
                     style={{
                       fontSize: '12px',
-                      color: colors.textSecondary,
+                      color: colors.utility.secondaryText,
                       lineHeight: '1.4'
                     }}
                   >
