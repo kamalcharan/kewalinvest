@@ -1024,8 +1024,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                       <span style={{ fontSize: '16px' }}>👁️</span>
                     </button>
 
-                    {/* Edit Icon - Only for failed/orphan/duplicate */}
-                    {['failed', 'orphan', 'duplicate'].includes(record.processing_status) && (
+                    {/* Edit Icon - For failed/orphan/duplicate/pending records (any non-success) */}
+                    {record.processing_status !== 'success' && (
                       <button
                         onClick={() => handleEditRecord(record)}
                         style={{
