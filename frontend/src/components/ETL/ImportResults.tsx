@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import RecordEditModal from './RecordEditModal';
 
 interface ImportResultsProps {
   sessionId: number;
@@ -79,6 +80,11 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [portfolioFlagToggles, setPortfolioFlagToggles] = useState<Record<number, boolean>>({});
   const [isTogglingFlag, setIsTogglingFlag] = useState<number | null>(null);
+
+  // View and Edit modals
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<ImportRecord | null>(null);
 
   // Fetch results on component mount and when filters change
   useEffect(() => {
@@ -257,6 +263,16 @@ const ImportResults: React.FC<ImportResultsProps> = ({
     } finally {
       setIsTogglingFlag(null);
     }
+  };
+
+  const handleViewRecord = (record: ImportRecord) => {
+    setSelectedRecord(record);
+    setIsViewModalOpen(true);
+  };
+
+  const handleEditRecord = (record: ImportRecord) => {
+    setSelectedRecord(record);
+    setIsEditModalOpen(true);
   };
 
   const formatProcessingTime = (milliseconds: number): string => {
@@ -740,9 +756,9 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         {/* Table Header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isTransactionImport 
-            ? '60px 80px 1fr 200px 120px 140px'
-            : '60px 80px 1fr 200px 120px',
+          gridTemplateColumns: isTransactionImport
+            ? '60px 80px 1fr 200px 120px 140px 100px'
+            : '60px 80px 1fr 200px 120px 100px',
           gap: '16px',
           padding: '16px 20px',
           backgroundColor: colors.utility.secondaryBackground,
@@ -757,6 +773,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           <div>ISSUES</div>
           <div>PROCESSED</div>
           {isTransactionImport && <div style={{ textAlign: 'center' as const }}>PORTFOLIO</div>}
+          <div style={{ textAlign: 'center' as const }}>ACTIONS</div>
         </div>
 
         {/* Table Body */}
@@ -785,15 +802,15 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                   key={record.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: isTransactionImport 
-                      ? '60px 80px 1fr 200px 120px 140px'
-                      : '60px 80px 1fr 200px 120px',
+                    gridTemplateColumns: isTransactionImport
+                      ? '60px 80px 1fr 200px 120px 140px 100px'
+                      : '60px 80px 1fr 200px 120px 100px',
                     gap: '16px',
                     padding: '16px 20px',
                     borderBottom: index < resultsData.records.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none',
                     fontSize: '13px',
-                    backgroundColor: isDuplicate && !currentPortfolioFlag 
-                      ? colors.semantic.warning + '08' 
+                    backgroundColor: isDuplicate && !currentPortfolioFlag
+                      ? colors.semantic.warning + '08'
                       : 'transparent'
                   }}
                 >
@@ -949,6 +966,70 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                       )}
                     </div>
                   )}
+
+                  {/* Actions */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}>
+                    {/* View Icon */}
+                    <button
+                      onClick={() => handleViewRecord(record)}
+                      style={{
+                        padding: '6px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${colors.utility.secondaryText}30`,
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = `${colors.brand.primary}10`;
+                        e.currentTarget.style.borderColor = colors.brand.primary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = `${colors.utility.secondaryText}30`;
+                      }}
+                      title="View Details"
+                    >
+                      <span style={{ fontSize: '16px' }}>👁️</span>
+                    </button>
+
+                    {/* Edit Icon - Only for failed/orphan/duplicate */}
+                    {['failed', 'orphan', 'duplicate'].includes(record.processing_status) && (
+                      <button
+                        onClick={() => handleEditRecord(record)}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${colors.utility.secondaryText}30`,
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = `${colors.semantic.warning}10`;
+                          e.currentTarget.style.borderColor = colors.semantic.warning;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = `${colors.utility.secondaryText}30`;
+                        }}
+                        title="Edit & Reprocess"
+                      >
+                        <span style={{ fontSize: '16px' }}>✏️</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -1014,6 +1095,232 @@ const ImportResults: React.FC<ImportResultsProps> = ({
           </div>
         ) : null}
       </div>
+
+      {/* View Record Modal */}
+      {isViewModalOpen && selectedRecord && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => {
+            setIsViewModalOpen(false);
+            setSelectedRecord(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              maxWidth: '700px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '24px',
+                borderBottom: `1px solid ${colors.utility.secondaryText}20`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 600,
+                  color: colors.utility.primaryText
+                }}
+              >
+                Record Details - Row #{selectedRecord.row_number}
+              </h2>
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  setSelectedRecord(null);
+                }}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: colors.utility.secondaryText,
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+              {/* Status */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: colors.utility.secondaryText,
+                  marginBottom: '8px'
+                }}>
+                  STATUS
+                </div>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: `${getStatusColor(selectedRecord.processing_status)}15`,
+                  color: getStatusColor(selectedRecord.processing_status),
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}>
+                  {getStatusIcon(selectedRecord.processing_status)}
+                  {selectedRecord.processing_status}
+                </div>
+              </div>
+
+              {/* Raw Data */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: colors.utility.secondaryText,
+                  marginBottom: '8px'
+                }}>
+                  RAW DATA
+                </div>
+                <pre style={{
+                  padding: '12px',
+                  backgroundColor: colors.utility.primaryBackground,
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  color: colors.utility.primaryText,
+                  overflow: 'auto',
+                  maxHeight: '200px',
+                  margin: 0
+                }}>
+                  {JSON.stringify(selectedRecord.raw_data, null, 2)}
+                </pre>
+              </div>
+
+              {/* Mapped Data */}
+              {selectedRecord.mapped_data && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: colors.utility.secondaryText,
+                    marginBottom: '8px'
+                  }}>
+                    MAPPED DATA
+                  </div>
+                  <pre style={{
+                    padding: '12px',
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                    color: colors.utility.primaryText,
+                    overflow: 'auto',
+                    maxHeight: '200px',
+                    margin: 0
+                  }}>
+                    {JSON.stringify(selectedRecord.mapped_data, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Errors */}
+              {selectedRecord.error_messages && selectedRecord.error_messages.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: colors.semantic.error,
+                    marginBottom: '8px'
+                  }}>
+                    ERRORS
+                  </div>
+                  <ul style={{
+                    margin: 0,
+                    paddingLeft: '20px',
+                    color: colors.semantic.error,
+                    fontSize: '13px'
+                  }}>
+                    {selectedRecord.error_messages.map((error, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {selectedRecord.warnings && selectedRecord.warnings.length > 0 && (
+                <div>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: colors.semantic.warning,
+                    marginBottom: '8px'
+                  }}>
+                    WARNINGS
+                  </div>
+                  <ul style={{
+                    margin: 0,
+                    paddingLeft: '20px',
+                    color: colors.semantic.warning,
+                    fontSize: '13px'
+                  }}>
+                    {selectedRecord.warnings.map((warning, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Record Modal */}
+      {isEditModalOpen && selectedRecord && (
+        <RecordEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedRecord(null);
+          }}
+          record={selectedRecord}
+          onSaveSuccess={() => {
+            setIsEditModalOpen(false);
+            setSelectedRecord(null);
+            fetchResults();
+          }}
+          onError={onError}
+        />
+      )}
     </div>
   );
 };
