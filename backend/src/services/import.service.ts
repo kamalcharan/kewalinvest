@@ -1311,13 +1311,392 @@ async processSchemeImport(
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('Error processing scheme import:', error);
-    SimpleLogger.error('ImportService', 'Scheme import processing failed', 'processSchemeImport', { 
-      sessionId, tenantId, isLive, error: error.message 
+    SimpleLogger.error('ImportService', 'Scheme import processing failed', 'processSchemeImport', {
+      sessionId, tenantId, isLive, error: error.message
     }, undefined, tenantId, error.stack);
     return { success: false, message: error.message };
   } finally {
     client.release();
   }
 }
+
+  // ========================================================================
+  // NEW METHODS: Session Restart and Record Reprocessing
+  // ========================================================================
+
+  /**
+   * Restart a timed-out or failed import session
+   * Uses checkpoint data to continue from where it left off
+   */
+  async restartSession(
+    sessionId: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Verify session exists and can be restarted
+      const sessionQuery = `
+        SELECT
+          id,
+          status,
+          can_restart,
+          import_type,
+          customer_lookup_method,
+          last_processed_staging_id,
+          restart_count
+        FROM t_import_sessions
+        WHERE id = $1
+          AND tenant_id = $2
+          AND is_live = $3
+      `;
+
+      const sessionResult = await this.db.query(sessionQuery, [sessionId, tenantId, isLive]);
+
+      if (sessionResult.rows.length === 0) {
+        return { success: false, message: 'Import session not found' };
+      }
+
+      const session = sessionResult.rows[0];
+
+      // Check if session can be restarted
+      if (!session.can_restart) {
+        return {
+          success: false,
+          message: `Session cannot be restarted (current status: ${session.status})`
+        };
+      }
+
+      // Valid statuses for restart: 'pending_processing', 'processing', 'failed'
+      const restartableStatuses = ['pending_processing', 'processing', 'failed'];
+      if (!restartableStatuses.includes(session.status)) {
+        return {
+          success: false,
+          message: `Session status '${session.status}' cannot be restarted. Valid statuses: ${restartableStatuses.join(', ')}`
+        };
+      }
+
+      console.log(`[ImportService] Restarting session ${sessionId}, status: ${session.status}, last_processed_id: ${session.last_processed_staging_id || 'none'}`);
+
+      // Import StagingProcessorService dynamically to avoid circular deps
+      const { StagingProcessorService } = await import('./stagingProcessor.service');
+      const processor = new StagingProcessorService();
+
+      // Restart processing from checkpoint
+      const result = await processor.restartSession(sessionId);
+
+      return {
+        success: result.success,
+        message: result.timedOut
+          ? `Session processing timed out again. Processed ${result.successCount}/${result.processedCount} records. Can be restarted.`
+          : `Session restarted successfully. Processed ${result.successCount}/${result.processedCount} records.`
+      };
+
+    } catch (error: any) {
+      console.error(`[ImportService] Error restarting session ${sessionId}:`, error);
+      SimpleLogger.error('ImportService', 'Session restart failed', 'restartSession', {
+        sessionId, tenantId, isLive, error: error.message
+      }, undefined, tenantId, error.stack);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Edit a staging record's mapped data
+   * Records the edit in edit_history and prepares for reprocessing
+   */
+  async editStagingRecord(
+    stagingId: number,
+    editedData: Record<string, any>,
+    editedBy: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ success: boolean; message: string }> {
+    const client = await this.db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Get current record
+      const currentQuery = `
+        SELECT
+          id,
+          import_session_id,
+          tenant_id,
+          is_live,
+          mapped_data,
+          edit_history
+        FROM t_import_staging_data
+        WHERE id = $1
+          AND tenant_id = $2
+          AND is_live = $3
+      `;
+
+      const currentResult = await client.query(currentQuery, [stagingId, tenantId, isLive]);
+
+      if (currentResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { success: false, message: 'Staging record not found' };
+      }
+
+      const currentRecord = currentResult.rows[0];
+      const oldData = currentRecord.mapped_data;
+      const editHistory = currentRecord.edit_history || [];
+
+      // Build edit history entries for changed fields
+      const editEntries: any[] = [];
+      for (const [field, newValue] of Object.entries(editedData)) {
+        const oldValue = oldData[field];
+        if (oldValue !== newValue) {
+          editEntries.push({
+            edited_at: new Date().toISOString(),
+            edited_by: editedBy,
+            field,
+            old_value: oldValue,
+            new_value: newValue
+          });
+        }
+      }
+
+      // Merge edited data with existing data
+      const updatedData = { ...oldData, ...editedData };
+
+      // Update record
+      const updateQuery = `
+        UPDATE t_import_staging_data
+        SET
+          mapped_data = $1,
+          edit_history = $2,
+          edited_at = NOW(),
+          edited_by = $3,
+          status = 'pending_process',
+          error_messages = NULL,
+          warnings = NULL,
+          match_type = NULL,
+          match_confidence = NULL,
+          ambiguous_matches = NULL
+        WHERE id = $4
+      `;
+
+      await client.query(updateQuery, [
+        JSON.stringify(updatedData),
+        JSON.stringify([...editHistory, ...editEntries]),
+        editedBy,
+        stagingId
+      ]);
+
+      await client.query('COMMIT');
+
+      console.log(`[ImportService] Staging record ${stagingId} edited successfully, ${editEntries.length} fields changed`);
+
+      return {
+        success: true,
+        message: `Record updated successfully. ${editEntries.length} field(s) changed.`
+      };
+
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error(`[ImportService] Error editing staging record ${stagingId}:`, error);
+      SimpleLogger.error('ImportService', 'Record edit failed', 'editStagingRecord', {
+        stagingId, tenantId, isLive, error: error.message
+      }, undefined, tenantId, error.stack);
+      return { success: false, message: error.message };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Reprocess a single staging record
+   * Used after editing a failed/orphan/duplicate record
+   */
+  async reprocessSingleRecord(
+    stagingId: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ success: boolean; message: string; status?: string }> {
+    try {
+      // Get record details
+      const recordQuery = `
+        SELECT
+          s.id,
+          s.import_session_id,
+          s.row_number,
+          s.mapped_data,
+          s.status,
+          sess.import_type,
+          sess.customer_lookup_method
+        FROM t_import_staging_data s
+        INNER JOIN t_import_sessions sess ON sess.id = s.import_session_id
+        WHERE s.id = $1
+          AND s.tenant_id = $2
+          AND s.is_live = $3
+      `;
+
+      const recordResult = await this.db.query(recordQuery, [stagingId, tenantId, isLive]);
+
+      if (recordResult.rows.length === 0) {
+        return { success: false, message: 'Staging record not found' };
+      }
+
+      const record = recordResult.rows[0];
+
+      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.import_session_id}`);
+
+      // Import StagingProcessorService
+      const { StagingProcessorService } = await import('./stagingProcessor.service');
+      const processor = new StagingProcessorService();
+
+      // Process the single record
+      const result = await (processor as any).processRecord(
+        {
+          id: record.id,
+          row_number: record.row_number,
+          mapped_data: record.mapped_data,
+          status: record.status
+        },
+        {
+          sessionId: record.import_session_id,
+          tenantId,
+          isLive,
+          importType: record.import_type,
+          customerLookupMethod: record.customer_lookup_method || 'iwell_code'
+        }
+      );
+
+      // Update staging record with result
+      await this.db.query(`
+        UPDATE t_import_staging_data
+        SET
+          status = $1,
+          error_messages = $2,
+          warnings = $3,
+          match_type = $4,
+          match_confidence = $5,
+          ambiguous_matches = $6,
+          created_customer_id = $7,
+          reprocess_count = reprocess_count + 1,
+          last_reprocess_at = NOW(),
+          processed_at = NOW()
+        WHERE id = $8
+      `, [
+        result.status,
+        result.error_messages || null,
+        result.warnings || null,
+        result.match_type || null,
+        result.match_confidence || null,
+        result.ambiguous_matches ? JSON.stringify(result.ambiguous_matches) : null,
+        result.created_customer_id || null,
+        stagingId
+      ]);
+
+      // Update session counters
+      await this.updateSessionCounters(record.import_session_id);
+
+      console.log(`[ImportService] Record ${stagingId} reprocessed with status: ${result.status}`);
+
+      return {
+        success: result.status === 'success',
+        status: result.status,
+        message: result.status === 'success'
+          ? 'Record processed successfully'
+          : result.error_messages?.[0] || 'Processing failed'
+      };
+
+    } catch (error: any) {
+      console.error(`[ImportService] Error reprocessing record ${stagingId}:`, error);
+      SimpleLogger.error('ImportService', 'Record reprocess failed', 'reprocessSingleRecord', {
+        stagingId, tenantId, isLive, error: error.message
+      }, undefined, tenantId, error.stack);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Bulk reprocess multiple staging records
+   * Used for reprocessing all failed/orphan records in a session
+   */
+  async bulkReprocessRecords(
+    sessionId: number,
+    recordIds: number[],
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{
+    success: boolean;
+    message: string;
+    processed: number;
+    successful: number;
+    failed: number;
+  }> {
+    let processed = 0;
+    let successful = 0;
+    let failed = 0;
+
+    try {
+      console.log(`[ImportService] Bulk reprocessing ${recordIds.length} records for session ${sessionId}`);
+
+      for (const recordId of recordIds) {
+        const result = await this.reprocessSingleRecord(recordId, tenantId, isLive);
+        processed++;
+
+        if (result.success) {
+          successful++;
+        } else {
+          failed++;
+        }
+      }
+
+      return {
+        success: true,
+        message: `Bulk reprocess complete: ${successful} successful, ${failed} failed`,
+        processed,
+        successful,
+        failed
+      };
+
+    } catch (error: any) {
+      console.error(`[ImportService] Error in bulk reprocess:`, error);
+      SimpleLogger.error('ImportService', 'Bulk reprocess failed', 'bulkReprocessRecords', {
+        sessionId, recordCount: recordIds.length, tenantId, isLive, error: error.message
+      }, undefined, tenantId, error.stack);
+      return {
+        success: false,
+        message: error.message,
+        processed,
+        successful,
+        failed
+      };
+    }
+  }
+
+  /**
+   * Update session counters after reprocessing records
+   * Recalculates totals from staging table
+   */
+  private async updateSessionCounters(sessionId: number): Promise<void> {
+    const query = `
+      UPDATE t_import_sessions
+      SET
+        successful_records = (
+          SELECT COUNT(*) FROM t_import_staging_data
+          WHERE import_session_id = $1 AND status = 'success'
+        ),
+        failed_records = (
+          SELECT COUNT(*) FROM t_import_staging_data
+          WHERE import_session_id = $1 AND status = 'failed'
+        ),
+        duplicate_records = (
+          SELECT COUNT(*) FROM t_import_staging_data
+          WHERE import_session_id = $1 AND status = 'duplicate'
+        ),
+        processed_records = (
+          SELECT COUNT(*) FROM t_import_staging_data
+          WHERE import_session_id = $1 AND status IN ('success', 'failed', 'duplicate', 'orphan')
+        ),
+        updated_at = NOW()
+      WHERE id = $1
+    `;
+
+    await this.db.query(query, [sessionId]);
+  }
 
 }

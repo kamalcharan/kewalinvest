@@ -257,4 +257,10 @@ router.post('/check-filename-duplicate', authenticate, importController.checkFil
 router.get('/check-session-duplicates/:sessionId', authenticate, importController.checkSessionDuplicates);
 router.post('/save-duplicate-decision/:sessionId', authenticate, importController.saveDuplicateDecision);
 
+// Session restart and record reprocessing endpoints
+router.post('/restart/:sessionId', authenticate, importController.restartSession);
+router.put('/staging/:stagingId/edit', authenticate, importController.editStagingRecord);
+router.post('/staging/:stagingId/reprocess', authenticate, importController.reprocessSingleRecord);
+router.post('/session/:sessionId/bulk-reprocess', authenticate, importController.bulkReprocessRecords);
+
 export default router;

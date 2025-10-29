@@ -2,9 +2,9 @@
 
 export type FileImportType = 'CustomerData' | 'TransactionData' | 'SchemeData';;
 
-export type ImportStatus = 'pending' | 'staged' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
+export type ImportStatus = 'pending' | 'staged' | 'pending_processing' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
 
-export type RecordStatus = 'success' | 'failed' | 'duplicate' | 'skipped';
+export type RecordStatus = 'pending' | 'pending_process' | 'success' | 'failed' | 'duplicate' | 'orphan' | 'skipped';
 
 // Database entity interfaces
 export interface FileUpload {
@@ -66,6 +66,14 @@ export interface ImportSession {
   duplicate_classification?: string;
   duplicate_user_decision_at?: Date;
   filename_duplicate_check?: any;
+
+  // Restart and checkpoint fields (added in migration 006)
+  restart_count?: number;
+  last_restart_at?: Date;
+  can_restart?: boolean;
+  last_processed_staging_id?: number;
+  processing_checkpoint?: any;
+  customer_lookup_method?: 'iwell_code' | 'customer_name' | 'both';
 }
 export interface ImportFieldMapping {
   id: number;
@@ -96,6 +104,19 @@ export interface ImportRecordResult {
   created_contact_id?: number;
   created_customer_id?: number;
   processed_at: Date;
+
+  // Match tracking fields (added in migration 006)
+  match_type?: string;
+  match_confidence?: string;
+  ambiguous_matches?: any;
+  requires_review?: boolean;
+
+  // Edit history fields (added in migration 006)
+  edit_history?: any[];
+  edited_at?: Date;
+  edited_by?: number;
+  reprocess_count?: number;
+  last_reprocess_at?: Date;
 }
 
 // Configuration interfaces
