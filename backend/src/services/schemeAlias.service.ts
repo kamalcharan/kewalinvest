@@ -505,84 +505,167 @@ export class SchemeAliasService {
   }
 
   /**
-   * Backfill: Auto-create aliases for schemes that don't have any
-   * Useful for newly added schemes
+   * Backfill: Auto-create aliases for schemes in BATCHES with progress tracking
+   * IMPROVED: Batch processing, progress tracking, cancellable, better duplicate handling
+   *
+   * @param userId - User ID performing the backfill
+   * @param batchSize - Number of schemes to process per batch (default: 100)
+   * @param onProgress - Optional callback for progress updates
+   * @param checkCancel - Optional function to check if operation should be cancelled
    */
-  async backfillMissingAliases(userId: number): Promise<{ created: number }> {
+  async backfillMissingAliases(
+    userId: number,
+    batchSize: number = 100,
+    onProgress?: (progress: { current: number; total: number; created: number; skipped: number }) => void,
+    checkCancel?: () => boolean
+  ): Promise<{ created: number; processed: number; cancelled: boolean }> {
+    let totalCreated = 0;
+    let totalProcessed = 0;
+    let cancelled = false;
+
+    try {
+      // Step 1: Get all active schemes that need aliases
+      console.log('[SchemeAliasService] Fetching schemes for backfill...');
+
+      const schemesQuery = `
+        SELECT id, scheme_code, scheme_name, scheme_nav_name
+        FROM t_scheme_details
+        WHERE is_active = true
+          AND scheme_name IS NOT NULL
+        ORDER BY id
+      `;
+
+      const schemesResult = await this.db.query(schemesQuery);
+      const allSchemes = schemesResult.rows;
+      const totalSchemes = allSchemes.length;
+
+      console.log(`[SchemeAliasService] Found ${totalSchemes} active schemes to process`);
+
+      // Step 2: Process in batches
+      for (let i = 0; i < totalSchemes; i += batchSize) {
+        // Check if cancelled
+        if (checkCancel && checkCancel()) {
+          console.log('[SchemeAliasService] Backfill cancelled by user');
+          cancelled = true;
+          break;
+        }
+
+        const batch = allSchemes.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(totalSchemes / batchSize);
+
+        console.log(`[SchemeAliasService] Processing batch ${batchNumber}/${totalBatches} (${batch.length} schemes)`);
+
+        // Process batch
+        const batchResult = await this.processBatch(batch, userId);
+
+        totalCreated += batchResult.created;
+        totalProcessed += batch.length;
+
+        // Report progress
+        if (onProgress) {
+          onProgress({
+            current: totalProcessed,
+            total: totalSchemes,
+            created: totalCreated,
+            skipped: totalProcessed - totalCreated
+          });
+        }
+
+        console.log(`[SchemeAliasService] Batch ${batchNumber}: created ${batchResult.created} aliases`);
+      }
+
+      console.log(`[SchemeAliasService] ✓ Backfill ${cancelled ? 'CANCELLED' : 'COMPLETE'}: processed ${totalProcessed}/${totalSchemes} schemes, created ${totalCreated} aliases`);
+
+      return {
+        created: totalCreated,
+        processed: totalProcessed,
+        cancelled
+      };
+    } catch (error: any) {
+      console.error('[SchemeAliasService] Error in backfillMissingAliases:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process a single batch of schemes for backfill
+   * FIXED: Uses new constraint (scheme_id, alias_name_normalized)
+   * IMPROVED: Smart duplicate handling - skips if scheme_name === scheme_nav_name
+   */
+  private async processBatch(
+    schemes: Array<{ id: number; scheme_code: string; scheme_name: string; scheme_nav_name: string | null }>,
+    userId: number
+  ): Promise<{ created: number }> {
     const client = await this.db.connect();
+    let created = 0;
 
     try {
       await client.query('BEGIN');
 
-      // Insert scheme_name as alias for schemes without aliases
-      const insertNameQuery = `
-        INSERT INTO t_scheme_aliases (
-          scheme_id, scheme_code, alias_name, source, is_active, created_by
-        )
-        SELECT
-          sd.id,
-          sd.scheme_code,
-          sd.scheme_name,
-          'auto',
-          true,
-          $1
-        FROM t_scheme_details sd
-        WHERE sd.is_active = true
-          AND sd.scheme_name IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM t_scheme_aliases sa
-            WHERE sa.scheme_id = sd.id
-              AND sa.alias_name_normalized = REGEXP_REPLACE(TRIM(UPPER(sd.scheme_name)), '\\s+', ' ', 'g')
-          )
-        ON CONFLICT (alias_name_normalized) DO NOTHING
-        RETURNING id
-      `;
+      for (const scheme of schemes) {
+        // Add scheme_name as alias
+        try {
+          const insertNameQuery = `
+            INSERT INTO t_scheme_aliases (
+              scheme_id, scheme_code, alias_name, source, is_active, created_by
+            )
+            VALUES ($1, $2, $3, 'auto', true, $4)
+            ON CONFLICT (scheme_id, alias_name_normalized) DO NOTHING
+            RETURNING id
+          `;
 
-      const nameResult = await client.query(insertNameQuery, [userId]);
-      const createdFromName = nameResult.rows.length;
+          const nameResult = await client.query(insertNameQuery, [
+            scheme.id,
+            scheme.scheme_code,
+            scheme.scheme_name,
+            userId
+          ]);
 
-      // Insert scheme_nav_name as alias (if different)
-      const insertNavNameQuery = `
-        INSERT INTO t_scheme_aliases (
-          scheme_id, scheme_code, alias_name, source, is_active, created_by
-        )
-        SELECT
-          sd.id,
-          sd.scheme_code,
-          sd.scheme_nav_name,
-          'auto',
-          true,
-          $1
-        FROM t_scheme_details sd
-        WHERE sd.is_active = true
-          AND sd.scheme_nav_name IS NOT NULL
-          AND TRIM(sd.scheme_nav_name) != ''
-          AND REGEXP_REPLACE(TRIM(UPPER(sd.scheme_nav_name)), '\\s+', ' ', 'g') !=
-              REGEXP_REPLACE(TRIM(UPPER(sd.scheme_name)), '\\s+', ' ', 'g')
-          AND NOT EXISTS (
-            SELECT 1 FROM t_scheme_aliases sa
-            WHERE sa.scheme_id = sd.id
-              AND sa.alias_name_normalized = REGEXP_REPLACE(TRIM(UPPER(sd.scheme_nav_name)), '\\s+', ' ', 'g')
-          )
-        ON CONFLICT (alias_name_normalized) DO NOTHING
-        RETURNING id
-      `;
+          if (nameResult.rows.length > 0) {
+            created++;
+          }
+        } catch (err: any) {
+          console.warn(`[SchemeAliasService] Failed to insert scheme_name alias for scheme ${scheme.id}:`, err.message);
+        }
 
-      const navNameResult = await client.query(insertNavNameQuery, [userId]);
-      const createdFromNavName = navNameResult.rows.length;
+        // Add scheme_nav_name as alias (only if different from scheme_name)
+        if (
+          scheme.scheme_nav_name &&
+          scheme.scheme_nav_name.trim() !== '' &&
+          scheme.scheme_nav_name.trim().toUpperCase() !== scheme.scheme_name.trim().toUpperCase()
+        ) {
+          try {
+            const insertNavNameQuery = `
+              INSERT INTO t_scheme_aliases (
+                scheme_id, scheme_code, alias_name, source, is_active, created_by
+              )
+              VALUES ($1, $2, $3, 'auto', true, $4)
+              ON CONFLICT (scheme_id, alias_name_normalized) DO NOTHING
+              RETURNING id
+            `;
+
+            const navNameResult = await client.query(insertNavNameQuery, [
+              scheme.id,
+              scheme.scheme_code,
+              scheme.scheme_nav_name,
+              userId
+            ]);
+
+            if (navNameResult.rows.length > 0) {
+              created++;
+            }
+          } catch (err: any) {
+            console.warn(`[SchemeAliasService] Failed to insert scheme_nav_name alias for scheme ${scheme.id}:`, err.message);
+          }
+        }
+      }
 
       await client.query('COMMIT');
-
-      const totalCreated = createdFromName + createdFromNavName;
-
-      console.log(`[SchemeAliasService] ✓ Backfilled ${totalCreated} aliases (${createdFromName} from scheme_name, ${createdFromNavName} from scheme_nav_name)`);
-
-      return {
-        created: totalCreated
-      };
+      return { created };
     } catch (error: any) {
       await client.query('ROLLBACK');
-      console.error('[SchemeAliasService] Error in backfillMissingAliases:', error);
+      console.error('[SchemeAliasService] Error in processBatch:', error);
       throw error;
     } finally {
       client.release();
