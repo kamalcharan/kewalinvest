@@ -2,6 +2,7 @@
 // UPDATED: Unified view with metrics calculation support
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookmarks } from '../../hooks/useNavData';
 import { useMetricsStatus } from '../../hooks/useSchemeMetrics';
@@ -35,6 +36,7 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
   showDeleteButton = false,
   isCalculating = false,
 }) => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -407,6 +409,31 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
               )}
             </button>
           )}
+
+          {/* MANAGE ALIASES BUTTON */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/admin/scheme-aliases?search=${bookmark.scheme_code}`);
+            }}
+            title={`Manage aliases for ${bookmark.scheme_name}`}
+            style={{
+              backgroundColor: 'transparent',
+              color: colors.brand.secondary,
+              border: `1px solid ${colors.brand.secondary}40`,
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🏷️ Manage Aliases
+          </button>
 
           {/* DELETE ALL BUTTON */}
           {onDelete && showDeleteButton && (
