@@ -25,6 +25,7 @@ import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
+import jobsRoutes from './routes/jobs.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -45,6 +46,7 @@ const PORT = process.env.PORT || 8080;
 
 // CHANGED: Declare without import
 let navScheduler: any;
+let jobScheduler: any;
 
 // Initialize controllers
 const logsController = new LogsController();
@@ -134,6 +136,9 @@ app.get('/health', (_req: Request, res: Response) => {
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
       scheme_aliases: true, // NEW: Scheme alias management for flexible imports
+      cruise_control_portfolio_snapshots: true, // NEW: Cruise Control Portfolio Snapshots tab
+      portfolio_snapshot_scheduler: true, // NEW: Portfolio snapshot job scheduler
+      generic_jobs_system: true, // NEW: Generic jobs system for all scheduled jobs
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -194,6 +199,7 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/jobs', jobsRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -730,16 +736,42 @@ app.listen(PORT, async () => {
     // CHANGED: Dynamic import and initialization of NAV Scheduler Service
     try {
       console.log('📅 Initializing NAV Scheduler Service...');
-      
+
       // Use dynamic import to avoid TypeScript compilation issues
       const { NavSchedulerService } = await import('./services/navScheduler.service');
       navScheduler = new NavSchedulerService();
       await navScheduler.initializeSchedulers();
-      
+
       console.log('✅ NAV Scheduler Service initialized successfully');
     } catch (schedulerError: any) {
       console.error('⚠️  NAV Scheduler initialization failed:', schedulerError.message);
       console.log('📅 NAV Scheduler will be available but no active schedules will run');
+      // Don't fail server startup if scheduler fails - just log the error
+    }
+
+    // NEW: Initialize Job Scheduler Service for Portfolio Snapshots and other generic jobs
+    try {
+      console.log('🔄 Initializing Generic Job Scheduler Service...');
+
+      // Use dynamic import to avoid TypeScript compilation issues
+      const { JobSchedulerService } = await import('./services/jobScheduler.service');
+      const { PortfolioSnapshotJob } = await import('./services/jobs/portfolioSnapshot.job');
+
+      // Create job scheduler instance
+      jobScheduler = new JobSchedulerService();
+
+      // Register job executors
+      const portfolioSnapshotJob = new PortfolioSnapshotJob();
+      jobScheduler.registerJob(portfolioSnapshotJob);
+
+      // Initialize scheduler (loads configs from database and starts cron timers)
+      await jobScheduler.initializeScheduler();
+
+      console.log('✅ Generic Job Scheduler Service initialized successfully');
+      console.log('📊 Registered jobs: PORTFOLIO_SNAPSHOT');
+    } catch (jobSchedulerError: any) {
+      console.error('⚠️  Generic Job Scheduler initialization failed:', jobSchedulerError.message);
+      console.log('🔄 Generic Job Scheduler will be available but no scheduled jobs will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
     
