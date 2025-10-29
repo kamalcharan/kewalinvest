@@ -210,6 +210,11 @@ export const API_ENDPOINTS = {
     DELETE_FILE: (fileId: number) => `${API_BASE}/import/file/${fileId}`,
     CHECK_SESSION_DUPLICATES: (sessionId: number) => `${API_BASE}/import/check-session-duplicates/${sessionId}`,
     SAVE_DUPLICATE_DECISION: (sessionId: number) => `${API_BASE}/import/save-duplicate-decision/${sessionId}`,
+    // NEW: Restart and reprocess endpoints
+    RESTART_SESSION: (sessionId: number) => `${API_BASE}/import/restart/${sessionId}`,
+    EDIT_STAGING_RECORD: (stagingId: number) => `${API_BASE}/import/staging/${stagingId}/edit`,
+    REPROCESS_SINGLE_RECORD: (stagingId: number) => `${API_BASE}/import/staging/${stagingId}/reprocess`,
+    BULK_REPROCESS_RECORDS: (sessionId: number) => `${API_BASE}/import/session/${sessionId}/bulk-reprocess`,
   },
   
   // NAV Tracking endpoints
