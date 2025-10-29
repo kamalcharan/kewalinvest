@@ -6,6 +6,7 @@ import { FileImportType } from '../../types/import.types';
 import { CUSTOMER_DATA_FIELDS, SCHEME_DATA_FIELDS, TRANSFORMATION_RULES } from '../../constants/fileImportTypes';
 import MappingRow from './MappingRow';
 import TemplateManager from './TemplateManager';
+import CustomerLookupSelector, { CustomerLookupMethod } from './CustomerLookupSelector';
 
 interface FieldMappingProps {
   importType: FileImportType;
