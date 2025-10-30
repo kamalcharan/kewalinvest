@@ -770,58 +770,61 @@ export class StagingProcessorService {
     }
   ): Promise<void> {
     const updates: string[] = ['status = $1'];
-    const params: any[] = [status, sessionId];
-    let paramIndex = 3;
+    const params: any[] = [status];
+    let paramIndex = 2;
 
     if (metadata.processing_started_at !== undefined) {
       updates.push(`processing_started_at = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.processing_started_at);
+      params.push(metadata.processing_started_at);
     }
 
     if (metadata.processing_completed_at !== undefined) {
       updates.push(`processing_completed_at = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.processing_completed_at);
+      params.push(metadata.processing_completed_at);
     }
 
     if (metadata.processed_records !== undefined) {
       updates.push(`processed_records = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.processed_records);
+      params.push(metadata.processed_records);
     }
 
     if (metadata.successful_records !== undefined) {
       updates.push(`successful_records = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.successful_records);
+      params.push(metadata.successful_records);
     }
 
     if (metadata.failed_records !== undefined) {
       updates.push(`failed_records = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.failed_records);
+      params.push(metadata.failed_records);
     }
 
     if (metadata.duplicate_records !== undefined) {
       updates.push(`duplicate_records = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.duplicate_records);
+      params.push(metadata.duplicate_records);
     }
 
     if (metadata.error_summary !== undefined) {
       updates.push(`error_summary = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.error_summary);
+      params.push(metadata.error_summary);
     }
 
     if (metadata.last_processed_staging_id !== undefined) {
       updates.push(`last_processed_staging_id = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.last_processed_staging_id);
+      params.push(metadata.last_processed_staging_id);
     }
 
     if (metadata.can_restart !== undefined) {
       updates.push(`can_restart = $${paramIndex++}`);
-      params.splice(-1, 0, metadata.can_restart);
+      params.push(metadata.can_restart);
     }
+
+    // sessionId goes last
+    params.push(sessionId);
 
     const query = `
       UPDATE t_import_sessions
       SET ${updates.join(', ')}, updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $${paramIndex}
     `;
 
     await this.db.query(query, params);
