@@ -310,6 +310,10 @@ CREATE INDEX idx_scheme_aliases_lookup ON t_scheme_aliases USING btree (alias_na
 CREATE INDEX idx_scheme_aliases_scheme ON t_scheme_aliases USING btree (scheme_id, is_active);
 CREATE INDEX idx_scheme_aliases_active ON t_scheme_aliases USING btree (is_active, created_at DESC);
 
+-- Performance indexes for JOINs and text search (Migration 007)
+CREATE INDEX IF NOT EXISTS idx_scheme_aliases_scheme_id_active ON t_scheme_aliases USING btree (scheme_id, is_active) WHERE (is_active = true);
+CREATE INDEX IF NOT EXISTS idx_scheme_aliases_alias_name_text ON t_scheme_aliases USING btree (alias_name) WHERE (is_active = true);
+
 -- Conditional indexes for t_scheme_bookmarks (may not have scheme_code column)
 DO $$
 BEGIN
@@ -317,11 +321,14 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_scheme_bookmarks') THEN
         CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_tenant ON t_scheme_bookmarks USING btree (tenant_id, is_live, is_active);
         CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_user ON t_scheme_bookmarks USING btree (user_id, is_active);
-        
+
+        -- Performance index for text search on bookmarks (Migration 007)
+        CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_search_fields ON t_scheme_bookmarks USING btree (scheme_name, scheme_code, amc_name) WHERE (is_active = true);
+
         -- Check if scheme_code column exists
         IF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 't_scheme_bookmarks' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 't_scheme_bookmarks'
             AND column_name = 'scheme_code'
         ) THEN
             CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_scheme ON t_scheme_bookmarks USING btree (scheme_code);
