@@ -1,5 +1,6 @@
 // backend/src/server.ts
 // UPDATED: Added bookmark routes and time-series analytics route
+// UPDATED: Added Jobs Scheduler and Cruise Control routes
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -26,6 +27,8 @@ import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
 import bookmarkRoutes from './routes/bookmark.routes';
+import jobsRoutes from './routes/jobs.routes';
+import cruiseControlRoutes from './routes/cruiseControl.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -141,6 +144,8 @@ app.get('/health', (_req: Request, res: Response) => {
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
       scheme_aliases: true, // NEW: Scheme alias management for flexible imports
+      jobs_scheduler: true,
+      cruise_control_snapshots: true,
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -180,7 +185,9 @@ app.get('/api', (_req: Request, res: Response) => {
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
-      meetings: '/api/meetings'
+      meetings: '/api/meetings',
+      jobs: '/api/jobs',
+      cruise_control: '/api/cruise-control'
     }
   });
 });
@@ -203,6 +210,8 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/jobs', jobsRoutes);
+app.use('/api/cruise-control', cruiseControlRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -418,6 +427,27 @@ app.use((_req: Request, res: Response) => {
       'GET /api/user-preferences/chart/:indexId',
       'POST /api/user-preferences/chart/:indexId',
       'DELETE /api/user-preferences/chart/:indexId',
+      
+      // Jobs Scheduler endpoints
+      'GET /api/jobs/types',
+      'GET /api/jobs/:jobType/config',
+      'POST /api/jobs/:jobType/config',
+      'PUT /api/jobs/:jobType/config',
+      'POST /api/jobs/:jobType/execute',
+      'GET /api/jobs/:jobType/executions',
+      'GET /api/jobs/:jobType/statistics',
+      'GET /api/jobs/:jobType/health',
+      
+      // Cruise Control - Portfolio Snapshots
+      'GET /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/config',
+      'PUT /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/execute',
+      'GET /api/cruise-control/snapshots/executions',
+      'GET /api/cruise-control/snapshots/statistics',
+      'GET /api/cruise-control/snapshots/health',
+      'POST /api/cruise-control/snapshots/backfill-smart',
+      'POST /api/cruise-control/snapshots/backfill',
       
       // System logs endpoints
       'GET /api/logs',
@@ -693,6 +723,27 @@ app.listen(PORT, async () => {
 ║  • PATCH /api/customers/:id/bookmark   ║
 ║  • DELETE /api/customers/:id/bookmark  ║
 ║                                        ║
+║  ⏰ Jobs Scheduler:                    ║
+║  • GET  /api/jobs/types                ║
+║  • GET  /api/jobs/:jobType/config      ║
+║  • POST /api/jobs/:jobType/config      ║
+║  • PUT  /api/jobs/:jobType/config      ║
+║  • POST /api/jobs/:jobType/execute     ║
+║  • GET  /api/jobs/:jobType/executions  ║
+║  • GET  /api/jobs/:jobType/statistics  ║
+║  • GET  /api/jobs/:jobType/health      ║
+║                                        ║
+║  🚢 Cruise Control Snapshots:         ║
+║  • GET  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • PUT  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
 ║  • GET  /api/import/headers/:fileId    ║
@@ -763,6 +814,8 @@ app.listen(PORT, async () => {
     console.log('✅ Goal history tracking ready');
     console.log('✅ User preferences endpoints ready');
     console.log('✅ Chart preferences management ready');
+    console.log('✅ Jobs Scheduler endpoints ready');
+    console.log('✅ Cruise Control - Portfolio Snapshots ready');
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ Customer name-based lookup ready');
@@ -865,6 +918,8 @@ app.listen(PORT, async () => {
 ║  Goal History: ✅ Ready                ║
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
+║  Jobs Scheduler: ✅ Ready              ║
+║  Cruise Control Snapshots: ✅ Ready    ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

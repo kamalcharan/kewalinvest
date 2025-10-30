@@ -1,7 +1,11 @@
 // frontend/src/pages/cruiseControl/DashboardOverview.tsx
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import JobsService from '../../services/jobs.service';
+import { JobType } from '../../types/jobs.types';
 
 interface StatCardProps {
   title: string;
@@ -9,6 +13,13 @@ interface StatCardProps {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
+}
+
+interface DashboardStats {
+  totalJobs: number;
+  successful: number;
+  failed: number;
+  pending: number;
 }
 
 const StatCard: React.FC<StatCardProps> = ({ title, count, icon, color, bgColor }) => {
@@ -39,7 +50,6 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, icon, color, bgColor 
       e.currentTarget.style.transform = 'translateY(0)';
     }}
     >
-      {/* Icon */}
       <div style={{
         width: '56px',
         height: '56px',
@@ -53,7 +63,6 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, icon, color, bgColor 
         {icon}
       </div>
 
-      {/* Stats */}
       <div style={{ flex: 1 }}>
         <div style={{
           fontSize: '28px',
@@ -78,15 +87,79 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, icon, color, bgColor 
 
 export const DashboardOverview: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
+  const { environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Dummy data
-  const stats = {
-    totalJobs: 1289,
-    successful: 1247,
-    failed: 4,
-    pending: 38
+  const [stats, setStats] = useState<DashboardStats>({
+    totalJobs: 0,
+    successful: 0,
+    failed: 0,
+    pending: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [environment]);
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await JobsService.getStatistics(
+        JobType.PORTFOLIO_SNAPSHOT, 
+        environment
+      );
+      
+      if (response.success && response.data) {
+        // Use the new aggregated counts from backend
+        setStats({
+          totalJobs: response.data.total_executions || 0,
+          successful: response.data.successful_count || 0,
+          failed: response.data.failed_count || 0,
+          pending: response.data.running_count || 0
+        });
+      } else {
+        setError(response.error || 'Failed to load dashboard statistics');
+      }
+    } catch (err: any) {
+      console.error('Error fetching dashboard stats:', err);
+      setError('Failed to load statistics');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        color: colors.utility.secondaryText
+      }}>
+        <Loader2 size={24} className="animate-spin" style={{ marginRight: '8px' }} />
+        Loading dashboard statistics...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: `${colors.semantic.error}10`,
+        border: `1px solid ${colors.semantic.error}40`,
+        borderRadius: '8px',
+        color: colors.semantic.error
+      }}>
+        <strong>Error:</strong> {error}
+      </div>
+    );
+  }
 
   return (
     <div>

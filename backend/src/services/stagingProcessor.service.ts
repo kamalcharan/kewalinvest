@@ -672,50 +672,54 @@ export class StagingProcessorService {
   }
 
   /**
-   * Update checkpoint during processing
-   */
-  private async updateCheckpoint(
-    sessionId: number,
-    lastProcessedId: number,
-    counts: {
-      processedCount: number;
-      successCount: number;
-      failedCount: number;
-      duplicateCount: number;
-      orphanCount: number;
-    }
-  ): Promise<void> {
-    const query = `
-      UPDATE t_import_sessions
-      SET
-        last_processed_staging_id = $1,
-        processed_records = $2,
-        successful_records = $3,
-        failed_records = $4,
-        duplicate_records = $5,
-        processing_checkpoint = jsonb_build_object(
-          'last_processed_id', $1,
-          'processed', $2,
-          'success', $3,
-          'failed', $4,
-          'duplicate', $5,
-          'orphan', $6,
-          'updated_at', NOW()
-        )
-      WHERE id = $7
-    `;
-
-    await this.db.query(query, [
-      lastProcessedId,
-      counts.processedCount,
-      counts.successCount,
-      counts.failedCount,
-      counts.duplicateCount,
-      counts.orphanCount,
-      sessionId
-    ]);
+ * Update checkpoint during processing
+ */
+private async updateCheckpoint(
+  sessionId: number,
+  lastProcessedId: number,
+  counts: {
+    processedCount: number;
+    successCount: number;
+    failedCount: number;
+    duplicateCount: number;
+    orphanCount: number;
   }
+): Promise<void> {
+  const query = `
+    UPDATE t_import_sessions
+    SET
+      last_processed_staging_id = $1,
+      processed_records = $2,
+      successful_records = $3,
+      failed_records = $4,
+      duplicate_records = $5,
+      processing_checkpoint = jsonb_build_object(
+        'last_processed_id', $7::bigint,
+        'processed', $8::integer,
+        'success', $9::integer,
+        'failed', $10::integer,
+        'duplicate', $11::integer,
+        'orphan', $12::integer,
+        'updated_at', NOW()
+      )
+    WHERE id = $6
+  `;
 
+  await this.db.query(query, [
+    lastProcessedId,           // $1 - for last_processed_staging_id column
+    counts.processedCount,     // $2 - for processed_records column
+    counts.successCount,       // $3 - for successful_records column
+    counts.failedCount,        // $4 - for failed_records column
+    counts.duplicateCount,     // $5 - for duplicate_records column
+    sessionId,                 // $6 - for WHERE clause
+    lastProcessedId,           // $7 - for JSONB (same value, different parameter)
+    counts.processedCount,     // $8 - for JSONB
+    counts.successCount,       // $9 - for JSONB
+    counts.failedCount,        // $10 - for JSONB
+    counts.duplicateCount,     // $11 - for JSONB
+    counts.orphanCount         // $12 - for JSONB
+  ]);
+}
   /**
    * Update session status and metadata
    */

@@ -379,7 +379,7 @@ export class JobSchedulerService {
 
   // ==================== EXECUTION TRACKING ====================
 
-  private async createExecution(
+  async createExecution(
     configId: number,
     tenantId: number,
     isLive: boolean,
@@ -399,7 +399,7 @@ export class JobSchedulerService {
     return result.rows[0].id;
   }
 
-  private async updateExecutionStatus(executionId: number, status: string, errorMessage?: string): Promise<void> {
+  async updateExecutionStatus(executionId: number, status: string, errorMessage?: string): Promise<void> {
     const query = `
       UPDATE t_job_executions
       SET status = $1, error_message = $2
@@ -409,7 +409,7 @@ export class JobSchedulerService {
     await this.db.query(query, [status, errorMessage || null, executionId]);
   }
 
-  private async completeExecution(executionId: number, result: JobExecutionResult): Promise<void> {
+  async completeExecution(executionId: number, result: JobExecutionResult): Promise<void> {
     const query = `
       UPDATE t_job_executions
       SET
@@ -427,7 +427,7 @@ export class JobSchedulerService {
     ]);
   }
 
-  private async failExecution(executionId: number, errorMessage: string): Promise<void> {
+  async failExecution(executionId: number, errorMessage: string): Promise<void> {
     const query = `
       UPDATE t_job_executions
       SET status = 'failed', error_message = $1, completed_at = CURRENT_TIMESTAMP
@@ -437,7 +437,7 @@ export class JobSchedulerService {
     await this.db.query(query, [errorMessage, executionId]);
   }
 
-  private async updateConfigStats(configId: number, success: boolean): Promise<void> {
+  async updateConfigStats(configId: number, success: boolean): Promise<void> {
     const query = `
       UPDATE t_job_scheduler_configs
       SET
@@ -496,58 +496,63 @@ export class JobSchedulerService {
     };
   }
 
-  async getStatistics(tenantId: number, isLive: boolean, jobType: JobType): Promise<JobStatistics | null> {
-    const config = await this.getConfig(tenantId, isLive, jobType);
+  // Find the getStatistics method around line 470 and update the return statement:
 
-    if (!config) {
-      return null;
-    }
+async getStatistics(tenantId: number, isLive: boolean, jobType: JobType): Promise<JobStatistics | null> {
+  const config = await this.getConfig(tenantId, isLive, jobType);
 
-    const recentQuery = `
-      SELECT * FROM t_job_executions
-      WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
-      ORDER BY execution_time DESC
-      LIMIT 10
-    `;
-
-    const statsQuery = `
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'success') as success_count,
-        COUNT(*) as total_count,
-        AVG(execution_duration_ms) FILTER (WHERE status = 'success') as avg_duration
-      FROM t_job_executions
-      WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
-    `;
-
-    const runningQuery = `
-      SELECT COUNT(*) as count FROM t_job_executions
-      WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
-      AND status IN ('running', 'retrying')
-    `;
-
-    const [recentResult, statsResult, runningResult] = await Promise.all([
-      this.db.query(recentQuery, [tenantId, isLive, jobType]),
-      this.db.query(statsQuery, [tenantId, isLive, jobType]),
-      this.db.query(runningQuery, [tenantId, isLive, jobType])
-    ]);
-
-    const stats = statsResult.rows[0];
-    const successRate = stats.total_count > 0 ? (stats.success_count / stats.total_count) * 100 : 0;
-
-    // Check if there's an actual running execution (not just a scheduled timer)
-    const isRunning = parseInt(runningResult.rows[0].count) > 0;
-
-    return {
-      config,
-      is_running: isRunning,
-      last_execution: recentResult.rows.length > 0 ? this.mapRowToExecution(recentResult.rows[0]) : undefined,
-      next_scheduled_run: config.next_execution_at || undefined,
-      recent_executions: recentResult.rows.map(row => this.mapRowToExecution(row)),
-      success_rate: successRate,
-      average_duration_ms: parseFloat(stats.avg_duration) || 0,
-      total_executions: parseInt(stats.total_count) || 0
-    };
+  if (!config) {
+    return null;
   }
+
+  const recentQuery = `
+    SELECT * FROM t_job_executions
+    WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
+    ORDER BY execution_time DESC
+    LIMIT 10
+  `;
+
+  const statsQuery = `
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'success') as success_count,
+      COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+      COUNT(*) as total_count,
+      AVG(execution_duration_ms) FILTER (WHERE status = 'success') as avg_duration
+    FROM t_job_executions
+    WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
+  `;
+
+  const runningQuery = `
+    SELECT COUNT(*) as count FROM t_job_executions
+    WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
+    AND status IN ('running', 'retrying')
+  `;
+
+  const [recentResult, statsResult, runningResult] = await Promise.all([
+    this.db.query(recentQuery, [tenantId, isLive, jobType]),
+    this.db.query(statsQuery, [tenantId, isLive, jobType]),
+    this.db.query(runningQuery, [tenantId, isLive, jobType])
+  ]);
+
+  const stats = statsResult.rows[0];
+  const successRate = stats.total_count > 0 ? (stats.success_count / stats.total_count) * 100 : 0;
+  const isRunning = parseInt(runningResult.rows[0].count) > 0;
+
+  return {
+    config,
+    is_running: isRunning,
+    last_execution: recentResult.rows.length > 0 ? this.mapRowToExecution(recentResult.rows[0]) : undefined,
+    next_scheduled_run: config.next_execution_at || undefined,
+    recent_executions: recentResult.rows.map(row => this.mapRowToExecution(row)),
+    success_rate: successRate,
+    average_duration_ms: parseFloat(stats.avg_duration) || 0,
+    total_executions: parseInt(stats.total_count) || 0,
+    // ADD THESE NEW FIELDS:
+    successful_count: parseInt(stats.success_count) || 0,
+    failed_count: parseInt(stats.failed_count) || 0,
+    running_count: parseInt(runningResult.rows[0].count) || 0
+  };
+}
 
   // ==================== UTILITY METHODS ====================
 
@@ -653,3 +658,4 @@ export class JobSchedulerService {
     };
   }
 }
+export const jobSchedulerService = new JobSchedulerService();
