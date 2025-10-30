@@ -27,17 +27,16 @@ CREATE TABLE IF NOT EXISTS t_scheme_aliases (
   -- Auto-normalized version for case-insensitive matching
   alias_name_normalized VARCHAR(500) NOT NULL,
 
-  -- Source of this alias (for tracking)
-  source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('auto', 'manual', 'import')),
+  -- Source of this alias (for tracking) - NO CHECK CONSTRAINT to allow flexibility
+  source VARCHAR(50) DEFAULT 'manual',
 
   -- Metadata
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_by INTEGER REFERENCES t_users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-  -- Global uniqueness: one alias can only map to ONE scheme
-  CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+  -- NO UNIQUE CONSTRAINT: Allows multiple schemes to share the same alias (ambiguous matches)
 );
 
 -- =====================================================
@@ -178,11 +177,11 @@ ON CONFLICT (alias_name_normalized) DO NOTHING;
 -- Comments for Documentation
 -- =====================================================
 
-COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Aliases are shared across all tenants.';
+COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Multiple schemes can share the same alias for ambiguous match detection. Aliases are shared across all tenants.';
 COMMENT ON COLUMN t_scheme_aliases.alias_name IS 'The actual alias variation (e.g., "ICICI Pru MNC Fund Reg (G)")';
-COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces';
-COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV)';
-COMMENT ON FUNCTION lookup_scheme_by_alias IS 'Fast lookup to find scheme by alias name during transaction import';
+COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces. Not unique - same alias can map to multiple schemes.';
+COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV), or any custom value';
+COMMENT ON FUNCTION lookup_scheme_by_alias IS 'Fast lookup to find scheme by alias name during transaction import. Returns first match only.';
 
 -- =====================================================
 -- Grant permissions (if needed)

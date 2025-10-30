@@ -490,18 +490,17 @@ CREATE TABLE t_scheme_aliases (
     scheme_code VARCHAR(100),
     alias_name VARCHAR(500) NOT NULL,
     alias_name_normalized VARCHAR(500) NOT NULL,
-    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('auto', 'manual', 'import')),
+    source VARCHAR(50) DEFAULT 'manual',
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Aliases are shared across all tenants.';
+COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Multiple schemes can share the same alias for ambiguous match detection. Aliases are shared across all tenants.';
 COMMENT ON COLUMN t_scheme_aliases.alias_name IS 'The actual alias variation (e.g., "ICICI Pru MNC Fund Reg (G)")';
-COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces';
-COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV)';
+COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces. Not unique - same alias can map to multiple schemes.';
+COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV), or any custom value';
 
 -- TABLE: t_nav_data (CORRECTED - NO tenant_id column)
 CREATE TABLE t_nav_data (
