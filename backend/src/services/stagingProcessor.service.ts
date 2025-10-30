@@ -384,26 +384,101 @@ export class StagingProcessorService {
     // CUSTOMER DATA PROCESSING
     // ======================================================================
     if (params.importType === 'CustomerData') {
-      // For customer imports, we'd insert into t_contacts and t_customers
-      // This is a placeholder - implement based on your customer import logic
-      return {
-        status: 'success',
-        match_type: 'direct_insert',
-        match_confidence: 'high'
-      };
+      // Call existing database function for customer processing
+      try {
+        const result = await this.db.query(
+          'SELECT * FROM process_single_customer_record($1, $2, $3, $4)',
+          [
+            params.sessionId,
+            record.id,
+            params.tenantId,
+            params.isLive
+          ]
+        );
+
+        const dbResult = result.rows[0];
+
+        if (dbResult.status === 'success') {
+          return {
+            status: 'success',
+            match_type: 'direct_insert',
+            match_confidence: 'high',
+            created_customer_id: dbResult.customer_id
+          };
+        } else if (dbResult.status === 'duplicate') {
+          return {
+            status: 'duplicate',
+            error_messages: dbResult.errors || ['Duplicate customer detected'],
+            match_type: 'duplicate_check',
+            match_confidence: 'high'
+          };
+        } else {
+          return {
+            status: 'failed',
+            error_messages: dbResult.errors || ['Customer processing failed'],
+            match_type: 'processing_error',
+            match_confidence: 'low'
+          };
+        }
+      } catch (error: any) {
+        console.error('[StagingProcessor] Customer import DB function error:', error);
+        return {
+          status: 'failed',
+          error_messages: [`Database function error: ${error.message}`],
+          match_type: 'db_error',
+          match_confidence: 'low'
+        };
+      }
     }
 
     // ======================================================================
     // SCHEME DATA PROCESSING
     // ======================================================================
     if (params.importType === 'SchemeData') {
-      // For scheme imports, we'd insert into t_scheme_details
-      // This is a placeholder - implement based on your scheme import logic
-      return {
-        status: 'success',
-        match_type: 'direct_insert',
-        match_confidence: 'high'
-      };
+      // Call existing database function for scheme processing
+      try {
+        const result = await this.db.query(
+          'SELECT * FROM process_single_scheme_record($1, $2, $3, $4)',
+          [
+            params.sessionId,
+            record.id,
+            params.tenantId,
+            params.isLive
+          ]
+        );
+
+        const dbResult = result.rows[0];
+
+        if (dbResult.status === 'success') {
+          return {
+            status: 'success',
+            match_type: 'direct_insert',
+            match_confidence: 'high'
+          };
+        } else if (dbResult.status === 'duplicate') {
+          return {
+            status: 'duplicate',
+            error_messages: dbResult.errors || ['Duplicate scheme detected'],
+            match_type: 'duplicate_check',
+            match_confidence: 'high'
+          };
+        } else {
+          return {
+            status: 'failed',
+            error_messages: dbResult.errors || ['Scheme processing failed'],
+            match_type: 'processing_error',
+            match_confidence: 'low'
+          };
+        }
+      } catch (error: any) {
+        console.error('[StagingProcessor] Scheme import DB function error:', error);
+        return {
+          status: 'failed',
+          error_messages: [`Database function error: ${error.message}`],
+          match_type: 'db_error',
+          match_confidence: 'low'
+        };
+      }
     }
 
     // Unknown import type
