@@ -243,7 +243,7 @@ export class ImportController {
         return;
       }
 
-      const { fileId, mappings, sessionName } = req.body;
+      const { fileId, mappings, sessionName, customerLookupMethod } = req.body;
       const isLive = req.headers['x-environment'] === 'live';
 
       console.log('Processing request received:', { fileId, sessionName, mappingsCount: mappings?.length });
@@ -404,7 +404,8 @@ export class ImportController {
           fileId: parseInt(fileId),
           filePath,
           importType,
-          mappings
+          mappings,
+          customerLookupMethod: customerLookupMethod || 'iwell_code'
         });
 
         console.log('Staging completed, triggering processing for session:', session.id, 'type:', importType);
