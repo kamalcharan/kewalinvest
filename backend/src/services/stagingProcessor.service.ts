@@ -72,10 +72,11 @@ export class StagingProcessorService {
         processing_started_at: new Date()
       });
 
-      // Start from beginning (checkpoint columns don't exist in DB yet)
-      const startFromId = 0;
+      // Get checkpoint (if restarting)
+      const checkpoint = await this.getCheckpoint(params.sessionId);
+      const startFromId = checkpoint?.last_processed_staging_id || 0;
 
-      console.log(`[StagingProcessor] Starting from staging ID: ${startFromId}`);
+      console.log(`[StagingProcessor] Starting from staging ID: ${startFromId} (checkpoint: ${checkpoint ? 'yes' : 'no'})`);
 
       // Process in batches
       while (true) {
@@ -107,7 +108,14 @@ export class StagingProcessorService {
         orphanCount += batchResult.orphan;
         lastProcessedId = batch[batch.length - 1].id;
 
-        // Checkpoint functionality disabled (columns don't exist in DB yet)
+        // Update checkpoint
+        await this.updateCheckpoint(params.sessionId, lastProcessedId, {
+          processedCount,
+          successCount,
+          failedCount,
+          duplicateCount,
+          orphanCount
+        });
 
         console.log(`[StagingProcessor] Batch complete: ${batchResult.success} success, ${batchResult.failed} failed, ${batchResult.duplicate} duplicate, ${batchResult.orphan} orphan`);
       }
@@ -128,7 +136,9 @@ export class StagingProcessorService {
         successful_records: successCount,
         failed_records: failedCount,
         duplicate_records: duplicateCount,
-        processing_completed_at: timedOut ? null : new Date()
+        processing_completed_at: timedOut ? null : new Date(),
+        last_processed_staging_id: lastProcessedId,
+        can_restart: timedOut
       });
 
       console.log(`[StagingProcessor] Phase 2 complete for session ${params.sessionId}: ${successCount}/${processedCount} successful, status: ${finalStatus}`);
@@ -153,7 +163,9 @@ export class StagingProcessorService {
         processed_records: processedCount,
         successful_records: successCount,
         failed_records: failedCount,
-        duplicate_records: duplicateCount
+        duplicate_records: duplicateCount,
+        last_processed_staging_id: lastProcessedId,
+        can_restart: true
       });
 
       return {
@@ -718,6 +730,8 @@ export class StagingProcessorService {
       failed_records?: number;
       duplicate_records?: number;
       error_summary?: string;
+      last_processed_staging_id?: number;
+      can_restart?: boolean;
     }
   ): Promise<void> {
     const updates: string[] = ['status = $1'];
