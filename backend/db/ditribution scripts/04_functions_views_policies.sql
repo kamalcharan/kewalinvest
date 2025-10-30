@@ -165,6 +165,8 @@ BEGIN
     BEGIN
         -- Check for duplicates
         v_is_duplicate := check_customer_duplicate(
+            v_staging.tenant_id,
+            v_staging.is_live,
             v_mapped_data->>'pan',
             v_mapped_data->>'email',
             v_mapped_data->>'mobile'

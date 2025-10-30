@@ -627,6 +627,33 @@ export const CRUISE_CONTROL_URLS = {
     `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.BACKFILL}${buildQueryParams(params || {}, environment)}`,
 } as const;
 
+// Jobs Scheduler-specific URL helpers
+export const JOBS_URLS = {
+  getJobTypes: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.TYPES}${buildQueryParams({}, environment)}`,
+  
+  getConfig: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`,
+  
+  createConfig: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`,
+  
+  updateConfig: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.CONFIG(jobType)}${buildQueryParams({}, environment)}`,
+  
+  triggerExecution: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.EXECUTE(jobType)}${buildQueryParams({}, environment)}`,
+  
+  getExecutions: (jobType: string, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.EXECUTIONS(jobType)}${buildQueryParams(params || {}, environment)}`,
+  
+  getStatistics: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.STATISTICS(jobType)}${buildQueryParams({}, environment)}`,
+  
+  getHealth: (jobType: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JOBS.HEALTH(jobType)}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Contact-specific URL helpers
 export const CONTACT_URLS = {
   getContactList: (params?: Record<string, any>, environment?: 'live' | 'test') => 

@@ -3,7 +3,8 @@
 
 import { Router } from 'express';
 import { JobsController } from '../controllers/jobs.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authMiddleware } from '../middleware/auth.middleware'; // CHANGE THIS
+import { environmentMiddleware } from '../middleware/environment.middleware'; // ADD THIS
 import { JobSchedulerService } from '../services/jobScheduler.service';
 
 const router = Router();
@@ -12,6 +13,10 @@ const router = Router();
 const schedulerService = new JobSchedulerService();
 const controller = new JobsController(schedulerService);
 
+// Apply middleware globally to all routes
+router.use(authMiddleware); // ADD THIS
+router.use(environmentMiddleware); // ADD THIS
+
 // ==================== JOB TYPES ROUTE ====================
 
 /**
@@ -19,7 +24,7 @@ const controller = new JobsController(schedulerService);
  * @desc    Get all available job types
  * @access  Private (Authenticated users)
  */
-router.get('/types', authenticate, controller.getJobTypes);
+router.get('/types', controller.getJobTypes); // REMOVE authenticate
 
 // ==================== CONFIGURATION ROUTES ====================
 
@@ -27,30 +32,22 @@ router.get('/types', authenticate, controller.getJobTypes);
  * @route   GET /api/jobs/:jobType/config
  * @desc    Get scheduler configuration for a job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/config', authenticate, controller.getConfig);
+router.get('/:jobType/config', controller.getConfig); // REMOVE authenticate
 
 /**
  * @route   POST /api/jobs/:jobType/config
  * @desc    Create scheduler configuration for a job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
- * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries?, job_config? }
  */
-router.post('/:jobType/config', authenticate, controller.createConfig);
+router.post('/:jobType/config', controller.createConfig); // REMOVE authenticate
 
 /**
  * @route   PUT /api/jobs/:jobType/config
  * @desc    Update scheduler configuration for a job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
- * @body    { schedule_type?, cron_expression?, is_enabled?, max_retries?, job_config? }
  */
-router.put('/:jobType/config', authenticate, controller.updateConfig);
+router.put('/:jobType/config', controller.updateConfig); // REMOVE authenticate
 
 // ==================== EXECUTION ROUTES ====================
 
@@ -58,31 +55,22 @@ router.put('/:jobType/config', authenticate, controller.updateConfig);
  * @route   POST /api/jobs/:jobType/execute
  * @desc    Manually trigger job execution
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
- * @returns 202 Accepted - Processing started in background
  */
-router.post('/:jobType/execute', authenticate, controller.triggerManual);
+router.post('/:jobType/execute', controller.triggerManual); // REMOVE authenticate
 
 /**
  * @route   GET /api/jobs/:jobType/executions
  * @desc    Get execution history for a job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
- * @query   page - Page number (default: 1)
- * @query   page_size - Items per page (default: 20)
  */
-router.get('/:jobType/executions', authenticate, controller.getExecutions);
+router.get('/:jobType/executions', controller.getExecutions); // REMOVE authenticate
 
 /**
  * @route   GET /api/jobs/:jobType/statistics
  * @desc    Get statistics and status for a job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/statistics', authenticate, controller.getStatistics);
+router.get('/:jobType/statistics', controller.getStatistics); // REMOVE authenticate
 
 // ==================== UTILITY ROUTES ====================
 
@@ -90,10 +78,8 @@ router.get('/:jobType/statistics', authenticate, controller.getStatistics);
  * @route   GET /api/jobs/:jobType/health
  * @desc    Health check for a specific job type
  * @access  Private (Authenticated users)
- * @param   jobType - Job type code (e.g., PORTFOLIO_SNAPSHOT)
- * @query   environment - 'live' or 'test'
  */
-router.get('/:jobType/health', authenticate, controller.healthCheck);
+router.get('/:jobType/health', controller.healthCheck); // REMOVE authenticate
 
 // Export both router and scheduler service (for server initialization)
 export default router;
