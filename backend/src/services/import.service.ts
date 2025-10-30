@@ -35,6 +35,7 @@ interface CreateImportSessionParams {
   isLive: boolean;
   importType: FileImportType;
   createdBy: number;
+  customerLookupMethod?: string;
 }
 
 interface SaveTemplateParams {
@@ -78,6 +79,16 @@ export class ImportService {
     this.db = pool;
     this.fileParser = new FileParserService();
     this.stagingService = new StagingService();
+  }
+
+  /**
+   * Type guard for customer lookup method
+   */
+  private validateLookupMethod(method: any): 'iwell_code' | 'customer_name' | 'both' {
+    if (method === 'customer_name' || method === 'both') {
+      return method;
+    }
+    return 'iwell_code';
   }
 
   /**
@@ -245,47 +256,50 @@ export class ImportService {
   /**
    * Create import session
    */
-  async createImportSession(params: CreateImportSessionParams): Promise<ImportSession> {
-    try {
-      // t_import_sessions expects frontend format (CustomerData, TransactionData)
-      // so we DON'T map here
-      const query = `
-        INSERT INTO t_import_sessions (
-          session_name, file_upload_id, tenant_id, is_live, import_type,
-          status, total_records, processed_records, successful_records,
-          failed_records, duplicate_records, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING *
-      `;
+ async createImportSession(params: CreateImportSessionParams): Promise<ImportSession> {
+  try {
+    // Validate and normalize customer lookup method
+    const lookupMethod = this.validateLookupMethod(params.customerLookupMethod);
 
-      const result = await this.db.query(query, [
-        params.sessionName,
-        params.fileUploadId,
-        params.tenantId,
-        params.isLive,
-        params.importType, // Use original value for t_import_sessions
-        'pending', // status
-        0, // total_records
-        0, // processed_records
-        0, // successful_records
-        0, // failed_records
-        0, // duplicate_records
-        params.createdBy
-      ]);
+    // t_import_sessions expects frontend format (CustomerData, TransactionData)
+    // so we DON'T map here
+    const query = `
+      INSERT INTO t_import_sessions (
+        session_name, file_upload_id, tenant_id, is_live, import_type,
+        status, total_records, processed_records, successful_records,
+        failed_records, duplicate_records, created_by, customer_lookup_method
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `;
 
-      return result.rows[0];
-    } catch (error: any) {
-      console.error('Error creating import session:', error);
-      SimpleLogger.error('ImportService', 'Failed to create import session', 'createImportSession', { 
-        sessionName: params.sessionName,
-        importType: params.importType,
-        tenantId: params.tenantId,
-        error: error.message 
-      }, params.createdBy, params.tenantId, error.stack);
-      throw error;
-    }
+    const result = await this.db.query(query, [
+      params.sessionName,
+      params.fileUploadId,
+      params.tenantId,
+      params.isLive,
+      params.importType, // Use original value for t_import_sessions
+      'pending', // status
+      0, // total_records
+      0, // processed_records
+      0, // successful_records
+      0, // failed_records
+      0, // duplicate_records
+      params.createdBy,
+      lookupMethod  // ✅ Now properly typed
+    ]);
+
+    return result.rows[0];
+  } catch (error: any) {
+    console.error('Error creating import session:', error);
+    SimpleLogger.error('ImportService', 'Failed to create import session', 'createImportSession', { 
+      sessionName: params.sessionName,
+      importType: params.importType,
+      tenantId: params.tenantId,
+      error: error.message 
+    }, params.createdBy, params.tenantId, error.stack);
+    throw error;
   }
-
+}
   /**
    * Create import session with prerequisite validation
    * UPDATED VERSION - adds bookmark validation
@@ -736,6 +750,7 @@ export class ImportService {
     filePath: string;
     importType: string;
     mappings: any[];
+    customerLookupMethod?: string; 
   }): Promise<StagingResult> {
     try {
       console.log(`[ImportService] Starting staging population for session ${params.sessionId}`);
@@ -784,6 +799,14 @@ export class ImportService {
         current_stage: 'validating',
         status: 'staged'
       });
+
+      // Store customer lookup method if provided (for TransactionData imports)
+if (params.customerLookupMethod) {
+  const validatedMethod = this.validateLookupMethod(params.customerLookupMethod);
+  await this.updateImportSession(params.tenantId, params.isLive, params.sessionId, {
+    customer_lookup_method: validatedMethod
+  });
+}
 
       return result;
 
@@ -1120,21 +1143,17 @@ export class ImportService {
 
 /**
  * Trigger database function to process import with controlled timing
- * BookmarkData uses BookmarkImportService directly instead of DB functions
+ * Uses StagingProcessorService for Phase 2 processing
  */
 async triggerDatabaseProcessing(
   sessionId: number,
   importType: string,
   targetDurationMs: number = 30000
 ): Promise<{ success: boolean; error?: string }> {
-  let client;
-  
   try {
-    client = await this.db.connect();
-
-    // First, verify session exists and is ready
-    const sessionCheck = await client.query(
-      'SELECT status, staging_total_rows, tenant_id, is_live, created_by FROM t_import_sessions WHERE id = $1',
+    // Verify session exists and is ready
+    const sessionCheck = await this.db.query(
+      'SELECT status, staging_total_rows, tenant_id, is_live, created_by, customer_lookup_method FROM t_import_sessions WHERE id = $1',
       [sessionId]
     );
 
@@ -1155,7 +1174,7 @@ async triggerDatabaseProcessing(
       sessionId,
       {
         current_stage: 'processing',
-        status: 'processing',
+        status: 'pending_processing',  // Changed from 'processing'
         processing_started_at: new Date()
       }
     );
@@ -1165,10 +1184,6 @@ async triggerDatabaseProcessing(
     // ============================================================
     if (importType === 'BookmarkData') {
       console.log('✅ Processing bookmarks via BookmarkImportService for session', sessionId);
-      
-      // Release client BEFORE processing
-      client.release();
-      client = null; // Mark as released
       
       // Process asynchronously using service
       this.processBookmarkImportDirect(sessionId, sessionInfo)
@@ -1187,89 +1202,48 @@ async triggerDatabaseProcessing(
     }
 
     // ============================================================
-    // FOR OTHER IMPORT TYPES, USE DATABASE FUNCTIONS
+    // FOR ALL OTHER IMPORT TYPES, USE StagingProcessorService
     // ============================================================
-    let processingFunction: string;
+    const lookupMethod = this.validateLookupMethod(sessionInfo.customer_lookup_method);
+    console.log(`Starting Phase 2 processing for session ${sessionId}, type: ${importType}, lookup method: ${lookupMethod}`);
 
-    switch(importType) {
-      case 'SchemeData':
-        processingFunction = 'process_scheme_import_with_timing';
-        break;
-      case 'CustomerData':
-        processingFunction = 'process_customer_import_with_timing';
-        break;
-      case 'TransactionData':
-        processingFunction = 'process_transaction_import_with_timing';
-        break;
-      default:
-        console.error(`Unknown import type: ${importType}, defaulting to customer`);
-        SimpleLogger.warn('ImportService', 'Unknown import type, using default', 'triggerDatabaseProcessing', {
-          sessionId, importType, defaulting: 'process_customer_import_with_timing'
-        }, undefined, sessionInfo.tenant_id);
-        processingFunction = 'process_customer_import_with_timing';
-    }
+    // Import StagingProcessorService dynamically
+    const { StagingProcessorService } = await import('./stagingProcessor.service');
+    const processor = new StagingProcessorService();
 
-    console.log(`Calling database function: ${processingFunction} for session ${sessionId}`);
-
-    // Execute processing function - this will run synchronously
-    const processingPromise = client.query(
-      `SELECT ${processingFunction}($1, $2)`,
-      [sessionId, targetDurationMs]
-    ).catch(error => {
-      console.error(`Processing error for session ${sessionId}:`, error);
-      SimpleLogger.error('ImportService', 'Database processing function failed', 'triggerDatabaseProcessing', {
-        sessionId, processingFunction, error: error.message
-      }, undefined, sessionInfo.tenant_id, error.stack);
-      
-      // Update session with error
-      this.updateImportSession(
-        sessionInfo.tenant_id,
-        sessionInfo.is_live,
-        sessionId,
-        {
-          status: 'failed',
-          current_stage: 'failed',
-          error_summary: error.message,
-          processing_completed_at: new Date()
-        }
-      );
-    });
-
-    // Don't await - let it run in background
-    processingPromise.then(result => {
-      if (result && result.rows[0]) {
-        console.log(`Processing completed for session ${sessionId}:`, result.rows[0]);
-        // Update stage to completed
-        this.updateImportSession(
-          sessionInfo.tenant_id,
-          sessionInfo.is_live,
-          sessionId,
-          {
-            current_stage: 'completed'
-          }
-        );
+    // Process asynchronously
+    processor.processSession({
+      sessionId,
+      tenantId: sessionInfo.tenant_id,
+      isLive: sessionInfo.is_live,
+      importType: importType as any,
+      customerLookupMethod: lookupMethod,
+      timeoutMs: targetDurationMs
+    })
+    .then(result => {
+      if (result.success) {
+        console.log(`✅ Processing completed for session ${sessionId}: ${result.successCount}/${result.processedCount} successful`);
+      } else {
+        console.error(`❌ Processing failed for session ${sessionId}:`, result.errorSummary);
       }
+    })
+    .catch(error => {
+      console.error(`❌ Processing error for session ${sessionId}:`, error);
     });
 
     return { success: true };
 
   } catch (error: any) {
-    console.error('Error triggering database processing:', error);
-    SimpleLogger.error('ImportService', 'Failed to trigger database processing', 'triggerDatabaseProcessing', {
+    console.error('Error triggering processing:', error);
+    SimpleLogger.error('ImportService', 'Failed to trigger processing', 'triggerDatabaseProcessing', {
       sessionId, importType, error: error.message
     }, undefined, undefined, error.stack);
     return {
       success: false,
       error: error.message || 'Failed to start processing'
     };
-  } finally {
-    // Only release if not already released
-    if (client) {
-      client.release();
-    }
   }
 }
-
 /**
  * Process bookmark import directly using BookmarkImportService
  * This bypasses the database function approach used for other import types
