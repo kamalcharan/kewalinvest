@@ -132,6 +132,10 @@ CREATE INDEX idx_contacts_tenant ON t_contacts USING btree (tenant_id, is_live);
 CREATE INDEX idx_contacts_is_customer ON t_contacts USING btree (is_customer) WHERE (is_customer = true);
 CREATE INDEX idx_contacts_name ON t_contacts USING btree (name);
 CREATE INDEX idx_contacts_active ON t_contacts USING btree (tenant_id, is_active, is_live);
+-- NEW: Index for normalized name (fuzzy customer matching)
+CREATE INDEX IF NOT EXISTS idx_contacts_normalized_name
+    ON t_contacts(normalized_name)
+    WHERE is_active = true;
 
 CREATE INDEX idx_channels_contact ON t_contact_channels USING btree (contact_id);
 CREATE INDEX idx_channels_email ON t_contact_channels USING btree (channel_value)
@@ -260,13 +264,25 @@ CREATE INDEX idx_staging_data_tenant ON t_import_staging_data USING btree (tenan
 CREATE INDEX idx_staging_data_session ON t_import_staging_data USING btree (session_id);
 CREATE INDEX idx_staging_data_status ON t_import_staging_data USING btree (processing_status);
 
+-- NEW: Indexes for match/edit tracking columns
+CREATE INDEX IF NOT EXISTS idx_staging_requires_review
+    ON t_import_staging_data(session_id, requires_review)
+    WHERE requires_review = true;
+
+CREATE INDEX IF NOT EXISTS idx_staging_processing_status_session
+    ON t_import_staging_data(session_id, processing_status);
+
+CREATE INDEX IF NOT EXISTS idx_staging_edited
+    ON t_import_staging_data(session_id, edited_at)
+    WHERE edited_at IS NOT NULL;
+
 -- Conditional indexes for columns that may not exist
 DO $$
 BEGIN
     -- Check if has_errors column exists
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 't_import_staging_data' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 't_import_staging_data'
         AND column_name = 'has_errors'
     ) THEN
         CREATE INDEX IF NOT EXISTS idx_staging_data_errors ON t_import_staging_data USING btree (has_errors) WHERE (has_errors = true);
@@ -277,8 +293,8 @@ BEGIN
 
     -- Check if is_duplicate column exists
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 't_import_staging_data' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 't_import_staging_data'
         AND column_name = 'is_duplicate'
     ) THEN
         CREATE INDEX IF NOT EXISTS idx_staging_data_duplicates ON t_import_staging_data USING btree (is_duplicate) WHERE (is_duplicate = true);

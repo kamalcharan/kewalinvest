@@ -9,6 +9,58 @@
 -- ============================================================================
 
 -- ============================================================================
+-- SECTION 0.5: UTILITY FUNCTIONS FOR TABLE DEFINITIONS
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Creating Utility Functions for Tables';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: normalize_customer_name
+-- Description: Normalize customer names by removing salutations and special chars
+-- Purpose: Enable fuzzy matching of customer names for import duplicate detection
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION normalize_customer_name(name_input TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  normalized TEXT;
+  salutations TEXT[] := ARRAY['MR', 'MRS', 'MS', 'DR', 'SRI', 'SHRI', 'SMT', 'MISS', 'PROF'];
+  salutation TEXT;
+BEGIN
+  IF name_input IS NULL THEN RETURN NULL; END IF;
+
+  normalized := UPPER(TRIM(name_input));
+
+  -- Remove salutations
+  FOREACH salutation IN ARRAY salutations LOOP
+    IF normalized ~ ('^' || salutation || '\.') THEN
+      normalized := TRIM(REGEXP_REPLACE(normalized, '^' || salutation || '\.', '', 'i'));
+    END IF;
+    IF normalized ~ ('^' || salutation || '\s') THEN
+      normalized := TRIM(REGEXP_REPLACE(normalized, '^' || salutation || '\s+', '', 'i'));
+    END IF;
+    IF normalized = salutation THEN
+      normalized := '';
+    END IF;
+  END LOOP;
+
+  -- Remove special characters, keep spaces
+  normalized := REGEXP_REPLACE(normalized, '[^A-Z0-9\s]', '', 'g');
+  normalized := REGEXP_REPLACE(normalized, '\s+', ' ', 'g');
+  normalized := TRIM(normalized);
+
+  IF normalized = '' THEN RETURN NULL; END IF;
+  RETURN normalized;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+ALTER FUNCTION normalize_customer_name(TEXT) OWNER TO kewal_admin;
+COMMENT ON FUNCTION normalize_customer_name IS 'Normalize customer names for fuzzy matching - removes salutations and special characters';
+
+-- ============================================================================
 -- SECTION 1: CORE FOUNDATION TABLES
 -- ============================================================================
 DO $$
@@ -109,6 +161,7 @@ CREATE TABLE t_contacts (
     is_customer BOOLEAN DEFAULT false,
     prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
     name VARCHAR(255) NOT NULL,
+    normalized_name TEXT GENERATED ALWAYS AS (normalize_customer_name(name)) STORED,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id)
@@ -117,6 +170,7 @@ CREATE TABLE t_contacts (
 COMMENT ON TABLE t_contacts IS 'Base contact information - extended by customers table';
 COMMENT ON COLUMN t_contacts.is_customer IS 'Flag to indicate if contact is also a customer';
 COMMENT ON COLUMN t_contacts.prefix IS 'Title: Mr, Mrs, Ms, Dr, Prof, Sri';
+COMMENT ON COLUMN t_contacts.normalized_name IS 'Computed column: normalized name for fuzzy matching (uppercase, no salutations/special chars)';
 
 -- TABLE: t_contact_channels
 CREATE TABLE t_contact_channels (
@@ -281,7 +335,7 @@ CREATE TABLE t_import_sessions (
     is_live BOOLEAN DEFAULT true,
     import_type VARCHAR(50) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending' CHECK (
-        status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
+        status IN ('pending', 'staged', 'pending_processing', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
@@ -302,13 +356,28 @@ CREATE TABLE t_import_sessions (
     n8n_execution_id VARCHAR(255),
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Restart/Resume columns
+    restart_count INTEGER DEFAULT 0,
+    last_restart_at TIMESTAMP WITH TIME ZONE,
+    can_restart BOOLEAN DEFAULT true,
+    last_processed_staging_id INTEGER,
+    processing_checkpoint JSONB DEFAULT '{}',
+    customer_lookup_method VARCHAR(50) DEFAULT 'iwell_code' CHECK (
+        customer_lookup_method IN ('iwell_code', 'customer_name', 'both')
+    )
 );
 
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
-COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
+COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, pending_processing, processing, completed, completed_with_errors, failed, cancelled';
 COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
+COMMENT ON COLUMN t_import_sessions.restart_count IS 'Number of times this import has been restarted';
+COMMENT ON COLUMN t_import_sessions.last_restart_at IS 'Timestamp of last restart attempt';
+COMMENT ON COLUMN t_import_sessions.can_restart IS 'Whether this session can be restarted (false if too many failures)';
+COMMENT ON COLUMN t_import_sessions.last_processed_staging_id IS 'Last staging record ID that was processed (for resume)';
+COMMENT ON COLUMN t_import_sessions.processing_checkpoint IS 'JSON checkpoint data for resume capability';
+COMMENT ON COLUMN t_import_sessions.customer_lookup_method IS 'Method for customer lookup in transaction imports: iwell_code, customer_name, or both';
 
 -- TABLE: t_import_staging_data
 CREATE TABLE t_import_staging_data (
@@ -321,7 +390,7 @@ CREATE TABLE t_import_staging_data (
     raw_data JSONB NOT NULL,
     mapped_data JSONB,
     processing_status VARCHAR(20) DEFAULT 'pending' CHECK (
-        processing_status IN ('pending', 'processing', 'success', 'failed', 'skipped', 'duplicate', 'orphan')
+        processing_status IN ('pending', 'pending_process', 'processing', 'success', 'failed', 'duplicate', 'orphan', 'skipped')
     ),
     error_messages TEXT[],
     warnings TEXT[],
@@ -331,6 +400,16 @@ CREATE TABLE t_import_staging_data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processing_metadata JSONB DEFAULT '{}'::jsonb,
+    -- Match/Edit tracking columns
+    match_type VARCHAR(50),
+    match_confidence VARCHAR(20),
+    ambiguous_matches JSONB,
+    requires_review BOOLEAN DEFAULT false,
+    edit_history JSONB DEFAULT '[]',
+    edited_at TIMESTAMP WITH TIME ZONE,
+    edited_by INTEGER,
+    reprocess_count INTEGER DEFAULT 0,
+    last_reprocess_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT idx_unique_session_row UNIQUE(session_id, row_number)
 );
 
@@ -338,6 +417,15 @@ COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processi
 COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as received from uploaded file';
 COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
 COMMENT ON COLUMN t_import_staging_data.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
+COMMENT ON COLUMN t_import_staging_data.match_type IS 'Type of customer match: exact_iwell, exact_name, fuzzy_name, no_match';
+COMMENT ON COLUMN t_import_staging_data.match_confidence IS 'Match confidence level: high, medium, low';
+COMMENT ON COLUMN t_import_staging_data.ambiguous_matches IS 'JSON array of multiple possible customer matches';
+COMMENT ON COLUMN t_import_staging_data.requires_review IS 'Flag for records needing manual review before processing';
+COMMENT ON COLUMN t_import_staging_data.edit_history IS 'JSON array tracking all edits made to mapped_data';
+COMMENT ON COLUMN t_import_staging_data.edited_at IS 'Timestamp of last edit';
+COMMENT ON COLUMN t_import_staging_data.edited_by IS 'User ID who made the last edit';
+COMMENT ON COLUMN t_import_staging_data.reprocess_count IS 'Number of times this record was reprocessed';
+COMMENT ON COLUMN t_import_staging_data.last_reprocess_at IS 'Timestamp of last reprocessing attempt';
 
 -- TABLE: t_import_field_mappings
 CREATE TABLE t_import_field_mappings (
@@ -692,12 +780,12 @@ INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, descri
      'Withdrawal or redemption of invested funds'),
 
     ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE,
-     'Funds moved out by switching to another scheme')
+     'Funds moved out by switching to another scheme'),
 
-     ('SELL', 'Sell', 'Deduction', TRUE,
-     'Funds moved out / encashed from the scheme')
+    ('SELL', 'Sell', 'Deduction', TRUE,
+     'Funds moved out / encashed from the scheme'),
 
-     ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
+    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
      'Funds added to system portfolio to balance the transaction records')
 ON CONFLICT (txn_code) DO NOTHING;
 
@@ -962,7 +1050,7 @@ CREATE TABLE t_goal_scheme_allocations (
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL,
     goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-    scheme_id INTEGER NOT NULL REFERENCES t_schemes(id),
+    scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
     allocation_percentage NUMERIC(5,2) NOT NULL CHECK (allocation_percentage >= 0 AND allocation_percentage <= 100),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
