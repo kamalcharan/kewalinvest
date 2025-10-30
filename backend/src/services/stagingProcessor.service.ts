@@ -658,28 +658,44 @@ export class StagingProcessorService {
       created_transaction_id?: number;
     }
   ): Promise<void> {
+    // Store match metadata in processing_metadata JSONB
+    const metadata: any = {};
+    if (result.match_type) metadata.match_type = result.match_type;
+    if (result.match_confidence) metadata.match_confidence = result.match_confidence;
+    if (result.ambiguous_matches) metadata.ambiguous_matches = result.ambiguous_matches;
+
+    // Determine created_record_id and created_record_type
+    let createdRecordId = null;
+    let createdRecordType = null;
+
+    if (result.created_customer_id) {
+      createdRecordId = result.created_customer_id;
+      createdRecordType = 'customer';
+    } else if (result.created_transaction_id) {
+      createdRecordId = result.created_transaction_id;
+      createdRecordType = 'transaction';
+    }
+
     const query = `
       UPDATE t_import_staging_data
       SET
         processing_status = $1,
         error_messages = $2,
         warnings = $3,
-        match_type = $4,
-        match_confidence = $5,
-        ambiguous_matches = $6,
-        created_customer_id = $7,
+        created_record_id = $4,
+        created_record_type = $5,
+        processing_metadata = $6,
         processed_at = NOW()
-      WHERE id = $8
+      WHERE id = $7
     `;
 
     await this.db.query(query, [
       result.status,
       result.error_messages || [],
       result.warnings || [],
-      result.match_type || null,
-      result.match_confidence || null,
-      result.ambiguous_matches ? JSON.stringify(result.ambiguous_matches) : null,
-      result.created_customer_id || null,
+      createdRecordId,
+      createdRecordType,
+      Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
       stagingId
     ]);
   }
