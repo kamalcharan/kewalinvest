@@ -214,20 +214,24 @@ export class StagingProcessorService {
           orphan++;
         }
 
-        // Update staging record with result
-        await this.updateStagingRecord(record.id, result);
+        // IMPORTANT: For CustomerData and SchemeData, the DB function already updated the staging record
+        // Only update staging record for TransactionData (which is processed in TypeScript)
+        if (params.importType === 'TransactionData') {
+          await this.updateStagingRecord(record.id, result);
+        }
 
       } catch (error: any) {
         console.error(`[StagingProcessor] Error processing record ${record.id}:`, error);
         failed++;
 
-        // Update staging record as failed
-        await this.updateStagingRecord(record.id, {
-          status: 'failed',
-          error_messages: [error.message],
-          match_type: 'error',
-          match_confidence: 'not_found'
-        });
+        // Only update staging record for TransactionData
+        // For CustomerData/SchemeData, the DB function handles errors too
+        if (params.importType === 'TransactionData') {
+          await this.updateStagingRecord(record.id, {
+            status: 'failed',
+            error_messages: [error.message]
+          });
+        }
       }
     }
 
@@ -384,50 +388,22 @@ export class StagingProcessorService {
     // CUSTOMER DATA PROCESSING
     // ======================================================================
     if (params.importType === 'CustomerData') {
-      // Call existing database function for customer processing
+      // Call existing database function - it handles EVERYTHING
       try {
-        const result = await this.db.query(
-          'SELECT * FROM process_single_customer_record($1, $2, $3, $4)',
-          [
-            params.sessionId,
-            record.id,
-            params.tenantId,
-            params.isLive
-          ]
+        await this.db.query('SELECT process_single_customer_record($1)', [record.id]);
+
+        // Read the staging record to get the status the DB function set
+        const statusResult = await this.db.query(
+          'SELECT processing_status FROM t_import_staging_data WHERE id = $1',
+          [record.id]
         );
 
-        const dbResult = result.rows[0];
+        const dbStatus = statusResult.rows[0]?.processing_status || 'failed';
+        return { status: dbStatus as any };
 
-        if (dbResult.status === 'success') {
-          return {
-            status: 'success',
-            match_type: 'direct_insert',
-            match_confidence: 'high',
-            created_customer_id: dbResult.customer_id
-          };
-        } else if (dbResult.status === 'duplicate') {
-          return {
-            status: 'duplicate',
-            error_messages: dbResult.errors || ['Duplicate customer detected'],
-            match_type: 'duplicate_check',
-            match_confidence: 'high'
-          };
-        } else {
-          return {
-            status: 'failed',
-            error_messages: dbResult.errors || ['Customer processing failed'],
-            match_type: 'processing_error',
-            match_confidence: 'low'
-          };
-        }
       } catch (error: any) {
         console.error('[StagingProcessor] Customer import DB function error:', error);
-        return {
-          status: 'failed',
-          error_messages: [`Database function error: ${error.message}`],
-          match_type: 'db_error',
-          match_confidence: 'low'
-        };
+        return { status: 'failed' };
       }
     }
 
@@ -435,49 +411,22 @@ export class StagingProcessorService {
     // SCHEME DATA PROCESSING
     // ======================================================================
     if (params.importType === 'SchemeData') {
-      // Call existing database function for scheme processing
+      // Call existing database function - it handles EVERYTHING
       try {
-        const result = await this.db.query(
-          'SELECT * FROM process_single_scheme_record($1, $2, $3, $4)',
-          [
-            params.sessionId,
-            record.id,
-            params.tenantId,
-            params.isLive
-          ]
+        await this.db.query('SELECT process_single_scheme_record($1)', [record.id]);
+
+        // Read the staging record to get the status the DB function set
+        const statusResult = await this.db.query(
+          'SELECT processing_status FROM t_import_staging_data WHERE id = $1',
+          [record.id]
         );
 
-        const dbResult = result.rows[0];
+        const dbStatus = statusResult.rows[0]?.processing_status || 'failed';
+        return { status: dbStatus as any };
 
-        if (dbResult.status === 'success') {
-          return {
-            status: 'success',
-            match_type: 'direct_insert',
-            match_confidence: 'high'
-          };
-        } else if (dbResult.status === 'duplicate') {
-          return {
-            status: 'duplicate',
-            error_messages: dbResult.errors || ['Duplicate scheme detected'],
-            match_type: 'duplicate_check',
-            match_confidence: 'high'
-          };
-        } else {
-          return {
-            status: 'failed',
-            error_messages: dbResult.errors || ['Scheme processing failed'],
-            match_type: 'processing_error',
-            match_confidence: 'low'
-          };
-        }
       } catch (error: any) {
         console.error('[StagingProcessor] Scheme import DB function error:', error);
-        return {
-          status: 'failed',
-          error_messages: [`Database function error: ${error.message}`],
-          match_type: 'db_error',
-          match_confidence: 'low'
-        };
+        return { status: 'failed' };
       }
     }
 
