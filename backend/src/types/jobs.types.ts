@@ -120,6 +120,9 @@ export interface JobStatistics {
   success_rate: number;
   average_duration_ms: number;
   total_executions: number;
+  successful_count: number;
+  failed_count: number;
+  running_count: number;
 }
 
 // ============================================================================

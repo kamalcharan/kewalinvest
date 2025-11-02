@@ -1,0 +1,127 @@
+/* frontend/src/styles/BookmarkImport.css */
+
+.bookmark-import-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.import-header {
+  margin-bottom: 30px;
+}
+
+.import-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.import-header .text-muted {
+  font-size: 14px;
+}
+
+.template-section {
+  margin-bottom: 20px;
+}
+
+.upload-section {
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 30px;
+  margin-bottom: 20px;
+}
+
+.file-input-group {
+  margin-bottom: 20px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.file-info i {
+  font-size: 24px;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.progress-section {
+  margin-bottom: 20px;
+}
+
+.progress {
+  height: 30px;
+  border-radius: 8px;
+}
+
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.stat-item {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+}
+
+.stat-item strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.error-details {
+  margin-top: 15px;
+}
+
+.error-list {
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.error-item {
+  padding: 8px;
+  margin-bottom: 8px;
+  background: white;
+  border-left: 3px solid #ffc107;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.error-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .result-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .upload-actions {
+    flex-direction: column;
+  }
+  
+  .upload-actions button {
+    width: 100%;
+  }
+}

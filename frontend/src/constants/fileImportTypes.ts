@@ -1,14 +1,19 @@
 // frontend/src/constants/fileImportTypes.ts
 
 export const FILE_IMPORT_TYPES = {
+  BOOKMARK_DATA: 'BookmarkData',
   CUSTOMER_DATA: 'CustomerData',
   TRANSACTION_DATA: 'TransactionData',
-  SCHEME_DATA: 'SchemeData'
+  SCHEME_DATA: 'SchemeData',
 } as const;
 
 export type FileImportType = typeof FILE_IMPORT_TYPES[keyof typeof FILE_IMPORT_TYPES];
 
 export const IMPORT_FOLDER_STRUCTURE = {
+  [FILE_IMPORT_TYPES.BOOKMARK_DATA]: {
+    pending: 'UserFiles/bookmarks/pending',
+    processed: 'UserFiles/bookmarks/processed'
+  },
   [FILE_IMPORT_TYPES.CUSTOMER_DATA]: {
     pending: 'UserFiles/customers/pending',
     processed: 'UserFiles/customers/processed'
@@ -24,15 +29,17 @@ export const IMPORT_FOLDER_STRUCTURE = {
 } as const;
 
 export const IMPORT_TYPE_LABELS = {
+  [FILE_IMPORT_TYPES.BOOKMARK_DATA]: 'Scheme Bookmarks',
   [FILE_IMPORT_TYPES.CUSTOMER_DATA]: 'Customer Data',
   [FILE_IMPORT_TYPES.TRANSACTION_DATA]: 'Transaction Data',
-  [FILE_IMPORT_TYPES.SCHEME_DATA]: 'Scheme Data'
+  [FILE_IMPORT_TYPES.SCHEME_DATA]: 'Scheme Data',
 } as const;
 
 export const IMPORT_TYPE_DESCRIPTIONS = {
+  [FILE_IMPORT_TYPES.BOOKMARK_DATA]: 'Import scheme bookmarks to track specific mutual funds for your clients',
   [FILE_IMPORT_TYPES.CUSTOMER_DATA]: 'Import customer information including names, contact details, and PAN',
   [FILE_IMPORT_TYPES.TRANSACTION_DATA]: 'Import transaction history and financial movements',
-  [FILE_IMPORT_TYPES.SCHEME_DATA]: 'Import mutual fund scheme details and NAV information'
+  [FILE_IMPORT_TYPES.SCHEME_DATA]: 'Import mutual fund scheme details and NAV information',
 } as const;
 
 export const ALLOWED_FILE_TYPES = [
@@ -56,6 +63,13 @@ export const RECORD_STATUS = {
   FAILED: 'failed',
   DUPLICATE: 'duplicate',
   SKIPPED: 'skipped'
+} as const;
+
+// Bookmark Data specific field mappings
+export const BOOKMARK_DATA_FIELDS = {
+  SCHEME_CODE: 'scheme_code',
+  ISIN: 'isin',
+  SCHEME_NAME: 'scheme_name'
 } as const;
 
 // Customer Data specific field mappings

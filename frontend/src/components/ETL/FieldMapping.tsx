@@ -6,12 +6,13 @@ import { FileImportType } from '../../types/import.types';
 import { CUSTOMER_DATA_FIELDS, SCHEME_DATA_FIELDS, TRANSFORMATION_RULES } from '../../constants/fileImportTypes';
 import MappingRow from './MappingRow';
 import TemplateManager from './TemplateManager';
+import CustomerLookupSelector, { CustomerLookupMethod } from './CustomerLookupSelector';
 
 interface FieldMappingProps {
   importType: FileImportType;
   sourceHeaders: string[];
   fileName: string;
-  onMappingConfirmed: (mappings: FieldMappingData[]) => void;
+  onMappingConfirmed: (mappings: FieldMappingData[], customerLookupMethod?: CustomerLookupMethod) => void;
   onError: (error: string) => void;
   disabled?: boolean;
 }
@@ -49,6 +50,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
   const [availableTargetFields, setAvailableTargetFields] = useState<TargetField[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [customerLookupMethod, setCustomerLookupMethod] = useState<CustomerLookupMethod>('iwell_code');
 
   // Define target fields based on import type
   useEffect(() => {
@@ -160,6 +162,16 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       ];
     }
     
+    // ADD THIS NEW CASE ↓
+  if (type === 'BookmarkData') {
+    return [
+      { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier from AMFI', group: 'Basic Info' },
+      { field: 'isin', label: 'ISIN', type: 'text', required: true, description: 'International Securities Identification Number', group: 'Basic Info' },
+      { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full name of the scheme as per your software', group: 'Basic Info' }
+    ];
+  }
+
+
     // TransactionData fields (25+ fields)
     // TransactionData fields (25+ fields)
 if (type === 'TransactionData') {
@@ -245,6 +257,13 @@ if (type === 'TransactionData') {
       { patterns: ['country', 'nation'], field: 'country' },
       { patterns: ['pin', 'pincode', 'postal_code', 'zip', 'zipcode'], field: 'pincode' },
       { patterns: ['prefix', 'title', 'salutation'], field: 'prefix' },
+
+
+      // ADD THESE BOOKMARK PATTERNS AT THE TOP ↓
+  { patterns: ['scheme_code', 'scheme code', 'code', 'schemecode'], field: 'scheme_code' },
+  { patterns: ['isin', 'isin number', 'isin_number'], field: 'isin' },
+  { patterns: ['scheme_name', 'scheme name', 'schemename', 'scheme'], field: 'scheme_name' },
+  
       
       // Scheme patterns
       { patterns: ['amc', 'amc_name', 'fund_house'], field: 'amc_name' },
@@ -431,15 +450,19 @@ if (type === 'TransactionData') {
   // Handle confirm mappings
   const handleConfirmMappings = () => {
     const errors = validateMappings();
-    
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       onError(`Mapping validation failed: ${errors.join(', ')}`);
       return;
     }
-    
+
     const activeMappings = mappings.filter(m => m.isActive && m.targetField);
-    onMappingConfirmed(activeMappings);
+    // Pass customerLookupMethod for TransactionData imports
+    onMappingConfirmed(
+      activeMappings,
+      importType === 'TransactionData' ? customerLookupMethod : undefined
+    );
   };
 
   // Group target fields
@@ -476,6 +499,7 @@ if (type === 'TransactionData') {
   const getImportTypeLabel = (type: FileImportType): string => {
     switch (type) {
       case 'CustomerData': return 'Customer Data';
+      case 'BookmarkData': return 'Bookmark Data';
       case 'SchemeData': return 'Scheme Data';
       case 'TransactionData': return 'Transaction Data';
       default: return 'Data';
@@ -634,6 +658,15 @@ if (type === 'TransactionData') {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Customer Lookup Method Selector - Only for Transaction Imports */}
+      {importType === 'TransactionData' && (
+        <CustomerLookupSelector
+          value={customerLookupMethod}
+          onChange={setCustomerLookupMethod}
+          disabled={disabled}
+        />
       )}
 
       {/* Mapping Interface */}

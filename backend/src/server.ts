@@ -1,5 +1,6 @@
 // backend/src/server.ts
-// UPDATED: Added time-series analytics route
+// UPDATED: Added bookmark routes and time-series analytics route
+// UPDATED: Added Jobs Scheduler and Cruise Control routes
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -25,6 +26,9 @@ import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
+import bookmarkRoutes from './routes/bookmark.routes';
+import jobsRoutes from './routes/jobs.routes';
+import cruiseControlRoutes from './routes/cruiseControl.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -103,12 +107,18 @@ app.get('/health', (_req: Request, res: Response) => {
       portfolio: true,
       import: true,
       staging: true,
+      import_customer_name_lookup: true, // NEW: Customer lookup by name with PAN tiebreaker
+      import_two_phase_processing: true, // NEW: Staged processing with restart capability
+      import_record_editing: true, // NEW: Edit and reprocess failed/orphan records
       logs: true,
       nav: true,
       nav_enhanced_bookmarks: true,
       nav_bookmark_gaps: true,
       nav_scheduler: !!navScheduler,
       nav_timeseries_analytics: true, // NEW: Time series analytics
+      bookmarks: true, // NEW: Bookmark import and management
+      bookmark_import: true, // NEW: Bookmark CSV/Excel import
+      bookmark_templates: true, // NEW: Downloadable bookmark templates
       market_data: true,
       market_indices: true,
       market_downloads: true,
@@ -134,6 +144,8 @@ app.get('/health', (_req: Request, res: Response) => {
       customer_meetings: true, // NEW: Customer meeting management
       meeting_summary: true, // NEW: Meeting summary and upcoming
       scheme_aliases: true, // NEW: Scheme alias management for flexible imports
+      jobs_scheduler: true,
+      cruise_control_snapshots: true,
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -165,6 +177,7 @@ app.get('/api', (_req: Request, res: Response) => {
       import: '/api/import',
       logs: '/api/logs',
       nav: '/api/nav',
+      bookmarks: '/api/bookmarks',
       market: '/api/market',
       market_analysis: '/api/market-analysis',
       scheme_analysis: '/api/scheme-analysis',
@@ -172,7 +185,9 @@ app.get('/api', (_req: Request, res: Response) => {
       jtbd: '/api/jtbd',
       goals: '/api/goals',
       user_preferences: '/api/user-preferences',
-      meetings: '/api/meetings'
+      meetings: '/api/meetings',
+      jobs: '/api/jobs',
+      cruise_control: '/api/cruise-control'
     }
   });
 });
@@ -186,6 +201,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/nav', navRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/scheme-analysis', schemeAnalysisRoutes);
@@ -194,6 +210,8 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/jobs', jobsRoutes);
+app.use('/api/cruise-control', cruiseControlRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -300,6 +318,12 @@ app.use((_req: Request, res: Response) => {
       'GET /api/import/staging/:sessionId/status',
       'GET /api/import/staging/:sessionId/records',
       'POST /api/import/staging/:sessionId/retry',
+
+      // Session restart and record reprocessing endpoints
+      'POST /api/import/restart/:sessionId',
+      'PUT /api/import/staging/:stagingId/edit',
+      'POST /api/import/staging/:stagingId/reprocess',
+      'POST /api/import/session/:sessionId/bulk-reprocess',
       
       // NAV endpoints
       'GET /api/nav/schemes/search',
@@ -335,6 +359,14 @@ app.use((_req: Request, res: Response) => {
       'GET /api/nav/scheduler/status',
       'POST /api/nav/scheduler/trigger',
       'GET /api/nav/scheduler/all-active',
+      
+      // Bookmark endpoints
+      'POST /api/bookmarks/import',
+      'GET /api/bookmarks/stats',
+      'GET /api/bookmarks/list',
+      'GET /api/bookmarks/check',
+      'DELETE /api/bookmarks/:id',
+      'GET /api/bookmarks/template',
       
       // Market Data endpoints
       'GET /api/market/indices',
@@ -395,6 +427,27 @@ app.use((_req: Request, res: Response) => {
       'GET /api/user-preferences/chart/:indexId',
       'POST /api/user-preferences/chart/:indexId',
       'DELETE /api/user-preferences/chart/:indexId',
+      
+      // Jobs Scheduler endpoints
+      'GET /api/jobs/types',
+      'GET /api/jobs/:jobType/config',
+      'POST /api/jobs/:jobType/config',
+      'PUT /api/jobs/:jobType/config',
+      'POST /api/jobs/:jobType/execute',
+      'GET /api/jobs/:jobType/executions',
+      'GET /api/jobs/:jobType/statistics',
+      'GET /api/jobs/:jobType/health',
+      
+      // Cruise Control - Portfolio Snapshots
+      'GET /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/config',
+      'PUT /api/cruise-control/snapshots/config',
+      'POST /api/cruise-control/snapshots/execute',
+      'GET /api/cruise-control/snapshots/executions',
+      'GET /api/cruise-control/snapshots/statistics',
+      'GET /api/cruise-control/snapshots/health',
+      'POST /api/cruise-control/snapshots/backfill-smart',
+      'POST /api/cruise-control/snapshots/backfill',
       
       // System logs endpoints
       'GET /api/logs',
@@ -588,6 +641,14 @@ app.listen(PORT, async () => {
 ║  • GET  /api/nav/bookmark-gaps/cust/:id║
 ║  • GET  /api/nav/bookmark-gaps/summary ║
 ║                                        ║
+║  🔖 Bookmark Import & Management:      ║
+║  • POST /api/bookmarks/import          ║
+║  • GET  /api/bookmarks/stats           ║
+║  • GET  /api/bookmarks/list            ║
+║  • GET  /api/bookmarks/check           ║
+║  • DELETE /api/bookmarks/:id           ║
+║  • GET  /api/bookmarks/template        ║
+║                                        ║
 ║  📅 NAV Scheduler:                     ║
 ║  • GET  /api/nav/scheduler/config      ║
 ║  • POST /api/nav/scheduler/config      ║
@@ -662,6 +723,27 @@ app.listen(PORT, async () => {
 ║  • PATCH /api/customers/:id/bookmark   ║
 ║  • DELETE /api/customers/:id/bookmark  ║
 ║                                        ║
+║  ⏰ Jobs Scheduler:                    ║
+║  • GET  /api/jobs/types                ║
+║  • GET  /api/jobs/:jobType/config      ║
+║  • POST /api/jobs/:jobType/config      ║
+║  • PUT  /api/jobs/:jobType/config      ║
+║  • POST /api/jobs/:jobType/execute     ║
+║  • GET  /api/jobs/:jobType/executions  ║
+║  • GET  /api/jobs/:jobType/statistics  ║
+║  • GET  /api/jobs/:jobType/health      ║
+║                                        ║
+║  🚢 Cruise Control Snapshots:         ║
+║  • GET  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • PUT  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • GET  /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║  • POST /api/cruise-control/snapshots..║
+║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
 ║  • GET  /api/import/headers/:fileId    ║
@@ -680,6 +762,12 @@ app.listen(PORT, async () => {
 ║  • GET  /api/import/staging/:id/status ║
 ║  • GET  /api/import/staging/:id/records║
 ║  • POST /api/import/staging/:id/retry  ║
+║                                        ║
+║  Import Restart & Reprocess:           ║
+║  • POST /api/import/restart/:sessionId ║
+║  • PUT  /api/import/staging/:id/edit   ║
+║  • POST /api/import/staging/:id/reprocess
+║  • POST /api/import/session/:id/bulk...║
 ║                                        ║
 ║  System Logs:                          ║
 ║  • GET  /api/logs                      ║
@@ -705,6 +793,9 @@ app.listen(PORT, async () => {
     console.log('✅ NAV time-series analytics ready'); // NEW
     console.log('✅ Enhanced bookmark endpoints ready');
     console.log('✅ Bookmark gap detection ready');
+    console.log('✅ Bookmark import and management ready'); // NEW
+    console.log('✅ Bookmark CSV/Excel import ready'); // NEW
+    console.log('✅ Bookmark template downloads ready'); // NEW
     console.log('✅ Market data endpoints ready');
     console.log('✅ Market indices management ready');
     console.log('✅ Market data downloads ready');
@@ -723,8 +814,14 @@ app.listen(PORT, async () => {
     console.log('✅ Goal history tracking ready');
     console.log('✅ User preferences endpoints ready');
     console.log('✅ Chart preferences management ready');
+    console.log('✅ Jobs Scheduler endpoints ready');
+    console.log('✅ Cruise Control - Portfolio Snapshots ready');
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
+    console.log('✅ Customer name-based lookup ready');
+    console.log('✅ Two-phase import processing ready');
+    console.log('✅ Import session restart capability ready');
+    console.log('✅ Record editing and reprocessing ready');
     console.log('✅ System logs endpoints ready');
     
     // CHANGED: Dynamic import and initialization of NAV Scheduler Service
@@ -760,6 +857,9 @@ app.listen(PORT, async () => {
     // Define all required directories
     const directories = [
       'UserFiles',
+      'UserFiles/bookmarks',           
+      'UserFiles/bookmarks/pending',   
+      'UserFiles/bookmarks/processed', 
       'UserFiles/customers',
       'UserFiles/customers/pending',
       'UserFiles/customers/processed',
@@ -768,7 +868,9 @@ app.listen(PORT, async () => {
       'UserFiles/transactions/processed',
       'UserFiles/schemes',
       'UserFiles/schemes/pending',
-      'UserFiles/schemes/processed'
+      'UserFiles/schemes/processed',
+      'uploads',
+      'uploads/bookmarks'
     ];
     
     // Create directories if they don't exist
@@ -794,6 +896,7 @@ app.listen(PORT, async () => {
 ║  NAV Time Series: ✅ Ready             ║
 ║  Enhanced Bookmarks: ✅ Ready          ║
 ║  Bookmark Gap Detection: ✅ Ready      ║
+║  Bookmark Import: ✅ Ready             ║
 ║  Customer Bookmarks: ✅ Ready          ║
 ║  Customer Activation: ✅ Ready         ║
 ║  Customer Family Accounts: ✅ Ready    ║
@@ -815,6 +918,8 @@ app.listen(PORT, async () => {
 ║  Goal History: ✅ Ready                ║
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
+║  Jobs Scheduler: ✅ Ready              ║
+║  Cruise Control Snapshots: ✅ Ready    ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

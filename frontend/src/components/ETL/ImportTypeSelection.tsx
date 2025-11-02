@@ -25,6 +25,12 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
   const { isSuperAdmin } = useAuth();
 
   // Icon components
+  const BookmarkIcon = () => (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+
   const CustomerDataIcon = () => (
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -56,6 +62,24 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
 
   const allImportTypes = [
     {
+      type: FILE_IMPORT_TYPES.BOOKMARK_DATA,
+      icon: <BookmarkIcon />,
+      title: IMPORT_TYPE_LABELS[FILE_IMPORT_TYPES.BOOKMARK_DATA],
+      description: IMPORT_TYPE_DESCRIPTIONS[FILE_IMPORT_TYPES.BOOKMARK_DATA],
+      features: [
+        'Scheme code and ISIN mapping',
+        'Scheme names from your software',
+        'Auto-generates name variations',
+        'Enables transaction matching',
+        'Required before transaction import'
+      ],
+      examples: 'tracked_schemes.csv, bookmarks.xlsx',
+      adminOnly: false,
+      isPrimary: true,
+      badge: 'Required First',
+      badgeColor: 'warning'
+    },
+    {
       type: FILE_IMPORT_TYPES.CUSTOMER_DATA,
       icon: <CustomerDataIcon />,
       title: IMPORT_TYPE_LABELS[FILE_IMPORT_TYPES.CUSTOMER_DATA],
@@ -68,6 +92,24 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
         'Family relationships'
       ],
       examples: 'customer_master.xlsx, clients_data.csv',
+      adminOnly: false,
+      isPrimary: true,
+      badge: 'Most Common',
+      badgeColor: 'success'
+    },
+    {
+      type: FILE_IMPORT_TYPES.TRANSACTION_DATA,
+      icon: <TransactionDataIcon />,
+      title: IMPORT_TYPE_LABELS[FILE_IMPORT_TYPES.TRANSACTION_DATA],
+      description: IMPORT_TYPE_DESCRIPTIONS[FILE_IMPORT_TYPES.TRANSACTION_DATA],
+      features: [
+        'Transaction records',
+        'Portfolio holdings',
+        'Investment movements',
+        'Financial statements',
+        'Account balances'
+      ],
+      examples: 'portfolio_data.xlsx, transactions.csv',
       adminOnly: false
     },
     {
@@ -84,21 +126,6 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
       ],
       examples: 'scheme_master.xlsx, fund_details.csv',
       adminOnly: true
-    },
-    {
-      type: FILE_IMPORT_TYPES.TRANSACTION_DATA,
-      icon: <TransactionDataIcon />,
-      title: IMPORT_TYPE_LABELS[FILE_IMPORT_TYPES.TRANSACTION_DATA],
-      description: IMPORT_TYPE_DESCRIPTIONS[FILE_IMPORT_TYPES.TRANSACTION_DATA],
-      features: [
-        'Transaction records',
-        'Portfolio holdings',
-        'Investment movements',
-        'Financial statements',
-        'Account balances'
-      ],
-      examples: 'portfolio_data.xlsx, transactions.csv',
-      adminOnly: false
     }
   ];
 
@@ -146,7 +173,6 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
       }}>
         {importTypes.map((importType) => {
           const isSelected = selectedType === importType.type;
-          const isPrimary = importType.type === FILE_IMPORT_TYPES.CUSTOMER_DATA;
           
           return (
             <div
@@ -339,13 +365,15 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
                 {!isSelected && <ArrowRightIcon />}
               </button>
 
-              {/* Popular badge for customer data */}
-              {isPrimary && (
+              {/* Badge */}
+              {importType.badge && (
                 <div style={{
                   position: 'absolute',
                   top: '16px',
                   right: '16px',
-                  backgroundColor: colors.semantic.success,
+                  backgroundColor: importType.badgeColor === 'warning' 
+                    ? colors.semantic.warning 
+                    : colors.semantic.success,
                   color: 'white',
                   fontSize: '10px',
                   fontWeight: '600',
@@ -353,7 +381,7 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
                   borderRadius: '12px',
                   textTransform: 'uppercase' as const
                 }}>
-                  Most Common
+                  {importType.badge}
                 </div>
               )}
             </div>
@@ -403,7 +431,8 @@ const ImportTypeSelection: React.FC<ImportTypeSelectionProps> = ({
               margin: 0,
               lineHeight: '1.5'
             }}>
-              <strong>Customer Data</strong> is for importing new clients and their personal information. 
+              <strong>Scheme Bookmarks</strong> must be imported first to enable transaction matching. 
+              <strong> Customer Data</strong> is for importing new clients and their personal information. 
               <strong> Scheme Data</strong> is for importing mutual fund schemes and NAV details.
               <strong> Transaction Data</strong> is for importing financial records and portfolio information for existing customers.
               You can always change your selection later.
