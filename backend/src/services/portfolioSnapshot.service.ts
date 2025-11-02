@@ -114,6 +114,7 @@ export class PortfolioSnapshotService {
         SELECT
           -- Use transaction's scheme_id if available, otherwise look up from scheme_details
           COALESCE(t.scheme_id, sd.id) as scheme_id,
+          t.scheme_code,
           t.scheme_name,
           SUM(CASE WHEN t.txn_type_id IN (
             SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
@@ -133,7 +134,7 @@ export class PortfolioSnapshotService {
           AND t.tenant_id = $2
           AND t.is_live = $3
           AND t.txn_date <= $4
-        GROUP BY COALESCE(t.scheme_id, sd.id), t.scheme_name
+        GROUP BY COALESCE(t.scheme_id, sd.id), t.scheme_code, t.scheme_name
         HAVING COALESCE(t.scheme_id, sd.id) IS NOT NULL
       ),
       portfolio_with_nav AS (
@@ -143,7 +144,7 @@ export class PortfolioSnapshotService {
           COALESCE(
             (SELECT n.nav_value
              FROM t_nav_data n
-             WHERE n.scheme_id = t.scheme_id
+             WHERE n.scheme_code = t.scheme_code
                AND n.is_live = $3
                AND n.nav_date <= $4
              ORDER BY n.nav_date DESC
