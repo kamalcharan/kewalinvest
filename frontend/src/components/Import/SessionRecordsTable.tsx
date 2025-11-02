@@ -1,4 +1,6 @@
 // frontend/src/components/Import/SessionRecordsTable.tsx
+// FIXED VERSION - Added BookmarkData case to getDisplayColumns
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { apiService } from '../../services/api.service';
@@ -111,23 +113,26 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
     );
   };
 
+  // ✅ FIXED: Added BookmarkData case
   const getDisplayColumns = (): string[] => {
-  if (!session) return [];
-  
-  const importType = session.import_type as string; // Cast to string for comparison
-  
-  if (importType === 'customer_import' || importType === 'CustomerData') {
-    return ['name', 'email', 'mobile', 'pan', 'city'];
-  } else if (importType === 'scheme_import' || importType === 'SchemeData') {
-    return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
-  } else if (importType === 'transaction_import' || importType === 'TransactionData') {
-    // ✅ FIX: Use correct field names that match the staging mapped_data
-    return ['iwell_code', 'txn_date', 'scheme_name', 'total_amount', 'units'];
-  } else {
-    // Fallback for any other import types
-    return ['id', 'name', 'value', 'status', 'date'];
-  }
-};
+    if (!session) return [];
+    
+    const importType = session.import_type as string; // Cast to string for comparison
+    
+    if (importType === 'customer_import' || importType === 'CustomerData') {
+      return ['name', 'email', 'mobile', 'pan', 'city'];
+    } else if (importType === 'bookmark_import' || importType === 'BookmarkData') {
+      // ✅ FIXED: Added bookmark columns
+      return ['scheme_code', 'isin', 'scheme_name'];
+    } else if (importType === 'scheme_import' || importType === 'SchemeData') {
+      return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
+    } else if (importType === 'transaction_import' || importType === 'TransactionData') {
+      return ['iwell_code', 'txn_date', 'scheme_name', 'total_amount', 'units'];
+    } else {
+      // Fallback for any other import types
+      return ['id', 'name', 'value', 'status', 'date'];
+    }
+  };
 
   const getColumnLabel = (column: string): string => {
     return column
@@ -383,7 +388,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                     style={{
                       backgroundColor: index % 2 === 0 
                         ? 'transparent'
-                        : colors.brand.alternate + '20', // Using alternate color with 20% opacity
+                        : colors.brand.alternate + '20',
                       borderTop: `1px solid ${colors.utility.primaryText}05`,
                       cursor: 'pointer',
                       transition: 'background-color 0.2s'
@@ -393,7 +398,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                       setShowModal(true);
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.brand.tertiary + '15'; // Tertiary color on hover
+                      e.currentTarget.style.backgroundColor = colors.brand.tertiary + '15';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = index % 2 === 0 
@@ -410,7 +415,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                       left: 0,
                       backgroundColor: index % 2 === 0 
                         ? colors.utility.primaryBackground
-                        : colors.brand.alternate + '20', // Match row background
+                        : colors.brand.alternate + '20',
                       zIndex: 1,
                       transition: 'background-color 0.2s'
                     }}>

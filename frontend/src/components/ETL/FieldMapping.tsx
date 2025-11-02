@@ -162,31 +162,30 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       ];
     }
     
-    // ADD THIS NEW CASE ↓
-  if (type === 'BookmarkData') {
-    return [
-      { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier from AMFI', group: 'Basic Info' },
-      { field: 'isin', label: 'ISIN', type: 'text', required: true, description: 'International Securities Identification Number', group: 'Basic Info' },
-      { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full name of the scheme as per your software', group: 'Basic Info' }
-    ];
-  }
+    if (type === 'BookmarkData') {
+      return [
+        { field: 'scheme_code', label: 'Scheme Code', type: 'text', required: true, description: 'Unique scheme identifier from AMFI', group: 'Basic Info' },
+        { field: 'isin', label: 'ISIN', type: 'text', required: true, description: 'International Securities Identification Number', group: 'Basic Info' },
+        { field: 'scheme_name', label: 'Scheme Name', type: 'text', required: true, description: 'Full name of the scheme as per your software', group: 'Basic Info' }
+      ];
+    }
 
-
-    // TransactionData fields (25+ fields)
-    // TransactionData fields (25+ fields)
-if (type === 'TransactionData') {
-  return [
-    // Core Transaction Fields
-    { field: 'iwell_code', label: 'IWell Code', type: 'text', required: true, description: 'Customer IWell code for lookup', group: 'Customer Identification' },
-    { field: 'txn_date', label: 'Transaction Date', type: 'date', required: true, description: 'Date of transaction', group: 'Transaction Core' },
-    { field: 'txn_code', label: 'Transaction Type Code', type: 'text', required: true, description: 'SIP, PURCHASE, REDEMPTION, etc.', group: 'Transaction Core' },
-    { field: 'total_amount', label: 'Total Amount', type: 'number', required: true, description: 'Total transaction amount', group: 'Transaction Core' },
-    { field: 'units', label: 'Units', type: 'number', required: true, description: 'Number of units', group: 'Transaction Core' },
-    { field: 'nav', label: 'NAV', type: 'number', required: true, description: 'Net Asset Value', group: 'Transaction Core' },
-    
-    // Scheme Identification (CRITICAL: scheme_name is REQUIRED for lookup)
-    { field: 'scheme_name', label: 'Scheme Name (Required for Lookup)', type: 'text', required: true, description: 'Matched against bookmark aliases to resolve scheme code', group: 'Scheme Info' },
-    { field: 'scheme_code', label: 'Scheme Code (Auto-Resolved)', type: 'text', required: false, description: 'AUTO-POPULATED via bookmarks - Do NOT map unless overriding', group: 'Scheme Info' },    { field: 'folio_no', label: 'Folio Number', type: 'text', required: false, description: 'Fund folio number', group: 'Scheme Info' },
+    // TransactionData fields
+    if (type === 'TransactionData') {
+      return [
+        // Core Transaction Fields
+        { field: 'iwell_code', label: 'IWell Code', type: 'text', required: true, description: 'Customer IWell code for lookup', group: 'Customer Identification' },
+        { field: 'customer_name', label: 'Customer Name', type: 'text', required: false, description: 'Customer name for lookup (when not using IWELL code)', group: 'Customer Identification' },
+        { field: 'txn_date', label: 'Transaction Date', type: 'date', required: true, description: 'Date of transaction', group: 'Transaction Core' },
+        { field: 'txn_code', label: 'Transaction Type Code', type: 'text', required: true, description: 'SIP, PURCHASE, REDEMPTION, etc.', group: 'Transaction Core' },
+        { field: 'total_amount', label: 'Total Amount', type: 'number', required: true, description: 'Total transaction amount', group: 'Transaction Core' },
+        { field: 'units', label: 'Units', type: 'number', required: true, description: 'Number of units', group: 'Transaction Core' },
+        { field: 'nav', label: 'NAV', type: 'number', required: true, description: 'Net Asset Value', group: 'Transaction Core' },
+        
+        // Scheme Identification
+        { field: 'scheme_name', label: 'Scheme Name (Required for Lookup)', type: 'text', required: true, description: 'Matched against bookmark aliases to resolve scheme code', group: 'Scheme Info' },
+        { field: 'scheme_code', label: 'Scheme Code (Auto-Resolved)', type: 'text', required: false, description: 'AUTO-POPULATED via bookmarks - Do NOT map unless overriding', group: 'Scheme Info' },
+        { field: 'folio_no', label: 'Folio Number', type: 'text', required: false, description: 'Fund folio number', group: 'Scheme Info' },
         { field: 'fund_name', label: 'Fund Name', type: 'text', required: false, description: 'AMC/Fund house name', group: 'Scheme Info' },
         
         // Scheme Classification
@@ -218,7 +217,6 @@ if (type === 'TransactionData') {
         { field: 'sb_code', label: 'Sub Broker Code', type: 'text', required: false, description: 'Sub broker code', group: 'Additional Codes' },
         
         // Reference Fields (not stored in transaction table, used for lookup only)
-        { field: 'applicant', label: 'Applicant Name', type: 'text', required: false, description: 'Customer name (for reference)', group: 'Reference' },
         { field: 'family_head', label: 'Family Head', type: 'text', required: false, description: 'Family head name (for reference)', group: 'Reference' },
         { field: 'pan', label: 'PAN', type: 'text', required: false, description: 'Customer PAN (for reference)', group: 'Reference' }
       ];
@@ -258,17 +256,13 @@ if (type === 'TransactionData') {
       { patterns: ['pin', 'pincode', 'postal_code', 'zip', 'zipcode'], field: 'pincode' },
       { patterns: ['prefix', 'title', 'salutation'], field: 'prefix' },
 
-
-      // ADD THESE BOOKMARK PATTERNS AT THE TOP ↓
-  { patterns: ['scheme_code', 'scheme code', 'code', 'schemecode'], field: 'scheme_code' },
-  { patterns: ['isin', 'isin number', 'isin_number'], field: 'isin' },
-  { patterns: ['scheme_name', 'scheme name', 'schemename', 'scheme'], field: 'scheme_name' },
-  
+      // Bookmark patterns
+      { patterns: ['scheme_code', 'scheme code', 'code', 'schemecode'], field: 'scheme_code' },
+      { patterns: ['isin', 'isin number', 'isin_number'], field: 'isin' },
+      { patterns: ['scheme_name', 'scheme name', 'schemename', 'scheme'], field: 'scheme_name' },
       
       // Scheme patterns
       { patterns: ['amc', 'amc_name', 'fund_house'], field: 'amc_name' },
-      { patterns: ['code', 'scheme_code', 'fund_code', 'schemecode'], field: 'scheme_code' },
-      { patterns: ['scheme_name', 'fund_name', 'scheme name'], field: 'scheme_name' },
       { patterns: ['scheme_type', 'fund_type', 'type'], field: 'scheme_type' },
       { patterns: ['category', 'scheme_category', 'fund_category'], field: 'category' },
       { patterns: ['nav', 'nav_name', 'scheme_nav'], field: 'scheme_nav_name' },
@@ -281,6 +275,7 @@ if (type === 'TransactionData') {
       
       // Transaction patterns
       { patterns: ['iwell', 'iwell_code', 'iwellcode'], field: 'iwell_code' },
+      { patterns: ['applicant', 'customer_name', 'customer name', 'customername', 'client_name', 'client name'], field: 'customer_name' },
       { patterns: ['transaction date', 'txn_date', 'txndate', 'trans_date', 'date'], field: 'txn_date' },
       { patterns: ['txntype', 'txn_type', 'transaction_type', 'trans_type', 'type'], field: 'txn_code' },
       { patterns: ['total amount', 'total_amount', 'amount', 'totalamount'], field: 'total_amount' },
@@ -303,9 +298,8 @@ if (type === 'TransactionData') {
       { patterns: ['equity code', 'equity_code'], field: 'equity_code' },
       { patterns: ['app code', 'app_code', 'application_code'], field: 'app_code' },
       { patterns: ['sb code', 'sb_code', 'subbroker'], field: 'sb_code' },
-      { patterns: ['applicant'], field: 'applicant' },
 
-      // Customer family fields - 'family head' alone maps to family_head_name
+      // Customer family fields
       { patterns: ['family head name', 'family_head_name', 'family head', 'family_head'], field: 'family_head_name' },
       { patterns: ['family head code', 'family_head_code', 'family head iwell code', 'family_head_iwell_code'], field: 'family_head_iwell_code' }
     ];

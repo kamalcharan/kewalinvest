@@ -7,6 +7,7 @@
 -- Date: 2025-01-08
 -- Updated: 2025-01-09 (Added transaction import, materialized view, refresh function)
 -- Updated: 2025-01-15 (Added v_tenant_customer_schemes view for NAV refactor)
+-- Updated: 2025-11-02 (Added orphan status tracking, PAN fallback, customer name lookup)
 -- ============================================================================
 
 -- ============================================================================
@@ -53,6 +54,39 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 COMMENT ON FUNCTION current_environment IS 'Get current environment (live/test) from session';
 
+-- ----------------------------------------------------------------------------
+-- FUNCTION: normalize_customer_name
+-- Description: Normalize customer names for matching during imports
+-- Purpose: Remove titles, special chars, standardize for lookups
+-- NEW: Added for customer name-based lookup support
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION normalize_customer_name(p_name TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql IMMUTABLE
+AS $$
+BEGIN
+    IF p_name IS NULL OR TRIM(p_name) = '' THEN
+        RETURN NULL;
+    END IF;
+    
+    -- Remove titles (MR, MRS, MS, DR, PROF, SRI, SMT)
+    -- Remove special characters
+    -- Normalize whitespace
+    -- Convert to uppercase
+    RETURN UPPER(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(p_name, '^(MR|MRS|MS|DR|PROF|SRI|SMT)\.?\s+', '', 'i'),
+                '[^A-Z0-9\s]', '', 'g'
+            ),
+            '\s+', ' ', 'g'
+        )
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION normalize_customer_name IS 'Normalize customer names for matching - removes titles, special chars, standardizes case';
+
 -- ============================================================================
 -- SECTION 2: CUSTOMER IMPORT FUNCTIONS
 -- ============================================================================
@@ -67,6 +101,8 @@ END $$;
 -- NOTE: Uses PLAIN TEXT pan field (not encrypted)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION check_customer_duplicate(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
     p_pan VARCHAR,
     p_email VARCHAR,
     p_mobile VARCHAR
@@ -82,6 +118,8 @@ BEGIN
         SELECT EXISTS(
             SELECT 1 FROM t_customers 
             WHERE pan = UPPER(TRIM(p_pan))
+            AND tenant_id = p_tenant_id
+            AND is_live = p_is_live
             AND is_active = true
         ) INTO v_exists;
         
@@ -93,10 +131,13 @@ BEGIN
     -- Check by email
     IF p_email IS NOT NULL AND p_email != '' THEN
         SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels
-            WHERE channel_type = 'email'
-            AND channel_value = LOWER(TRIM(p_email))
-            AND is_active = true
+            SELECT 1 FROM t_contact_channels cc
+            JOIN t_contacts c ON cc.contact_id = c.id
+            WHERE cc.channel_type = 'email'
+            AND cc.channel_value = LOWER(TRIM(p_email))
+            AND c.tenant_id = p_tenant_id
+            AND c.is_live = p_is_live
+            AND cc.is_active = true
         ) INTO v_exists;
         
         IF v_exists THEN
@@ -107,10 +148,13 @@ BEGIN
     -- Check by mobile
     IF p_mobile IS NOT NULL AND p_mobile != '' THEN
         SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels
-            WHERE channel_type = 'mobile'
-            AND channel_value = REGEXP_REPLACE(p_mobile, '[^0-9]', '', 'g')
-            AND is_active = true
+            SELECT 1 FROM t_contact_channels cc
+            JOIN t_contacts c ON cc.contact_id = c.id
+            WHERE cc.channel_type = 'mobile'
+            AND cc.channel_value = REGEXP_REPLACE(p_mobile, '[^0-9]', '', 'g')
+            AND c.tenant_id = p_tenant_id
+            AND c.is_live = p_is_live
+            AND cc.is_active = true
         ) INTO v_exists;
         
         IF v_exists THEN
@@ -200,6 +244,7 @@ BEGIN
             is_live,
             prefix,
             name,
+            normalized_name,
             is_customer,
             created_at
         ) VALUES (
@@ -207,6 +252,7 @@ BEGIN
             v_staging.is_live,
             v_clean_prefix,
             v_mapped_data->>'name',
+            normalize_customer_name(v_mapped_data->>'name'),
             true,
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_contact_id;
@@ -288,11 +334,6 @@ BEGIN
         -- Extract iwell_code (already uppercase from transformation)
         v_iwell_code := NULLIF(TRIM(v_mapped_data->>'iwell_code'), '');
 
-        -- DEBUG: Log family field values before INSERT
-        RAISE NOTICE '[DEBUG] About to INSERT customer - family_head_name: %, family_head_iwell_code: %',
-            v_mapped_data->>'family_head_name',
-            v_mapped_data->>'family_head_iwell_code';
-
         -- Create customer record with PLAIN TEXT fields
         INSERT INTO t_customers (
             contact_id,
@@ -319,9 +360,6 @@ BEGIN
             v_mapped_data->>'referred_by_name',
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_customer_id;
-
-        -- DEBUG: Verify what was actually inserted
-        RAISE NOTICE '[DEBUG] Customer % created', v_customer_id;
 
         -- Create address if provided
         IF (v_mapped_data->>'address_line1' IS NOT NULL AND TRIM(v_mapped_data->>'address_line1') != '') OR 
@@ -379,7 +417,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - uses plain text PAN/IWELL';
+COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - uses plain text PAN/IWELL and normalized names';
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_customer_import_with_timing
@@ -867,233 +905,377 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: process_transaction_import_with_timing
--- Description: Process transaction imports from staging with controlled timing
--- Target Duration: 30-45 seconds
--- NEW FUNCTION: Added for transaction import support
+-- FUNCTION: process_transaction_import_session
+-- Description: Process transaction imports with flexible customer lookup methods
+-- Methods: iwell_code (default), customer_name, both
+-- Features: PAN fallback, orphan tracking, scheme alias lookup
+-- NEW: Replaces process_transaction_import_with_timing with enhanced features
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION process_transaction_import_with_timing(
-    p_session_id INTEGER, 
-    p_target_duration_ms INTEGER DEFAULT 35000
-) 
+CREATE OR REPLACE FUNCTION process_transaction_import_session(
+    p_session_id INTEGER,
+    p_customer_lookup_method VARCHAR DEFAULT 'iwell_code'
+)
 RETURNS TABLE(
     total_processed INTEGER,
-    successful INTEGER, 
+    successful INTEGER,
     failed INTEGER,
     duplicates INTEGER,
-    duration_ms INTEGER
-)
+    orphans INTEGER,
+    processing_time_seconds NUMERIC
+) 
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_start_time TIMESTAMP;
-    v_end_time TIMESTAMP;
-    v_total_rows INTEGER;
-    v_processed INTEGER := 0;
-    v_success INTEGER := 0;
-    v_failed INTEGER := 0;
-    v_duplicates INTEGER := 0;
-    v_batch_size INTEGER;
-    v_sleep_per_batch NUMERIC;
+    v_start_time TIMESTAMP := NOW();
+    v_batch_size INTEGER := 500;
     v_staging_record RECORD;
+    v_success_count INTEGER := 0;
+    v_failed_count INTEGER := 0;
+    v_duplicate_count INTEGER := 0;
+    v_orphan_count INTEGER := 0;
+    v_processed_count INTEGER := 0;
     v_customer_id INTEGER;
-    v_txn_type_id INTEGER;
-    v_txn_type VARCHAR(20);
-    v_portfolio_id INTEGER;
-    v_is_duplicate BOOLEAN;
+    v_scheme_id INTEGER;
     v_error_msg TEXT;
+    v_txn_id INTEGER;
+    v_session_info RECORD;
 BEGIN
-    v_start_time := clock_timestamp();
-    
-    -- Get total rows to process
-    SELECT COUNT(*) INTO v_total_rows
-    FROM t_import_staging_data
-    WHERE session_id = p_session_id
-        AND processing_status = 'pending';
-    
-    -- Calculate batch size and sleep time to target duration
-    IF v_total_rows > 0 THEN
-        v_batch_size := GREATEST(10, v_total_rows / 20); -- Process in ~20 batches
-        v_sleep_per_batch := (p_target_duration_ms / 20.0) / 1000.0; -- Sleep between batches in seconds
-    ELSE
-        -- No rows to process
-        RETURN QUERY SELECT 0, 0, 0, 0, 0;
-        RETURN;
-    END IF;
-    
-    -- Update session status
-    UPDATE t_import_sessions
-    SET status = 'processing',
-        processing_started_at = v_start_time,
-        total_records = v_total_rows
+    -- Get session info
+    SELECT tenant_id, is_live INTO v_session_info
+    FROM t_import_sessions
     WHERE id = p_session_id;
     
-    -- Process each staging record
-    FOR v_staging_record IN
-        SELECT * FROM t_import_staging_data
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Session % not found', p_session_id;
+    END IF;
+
+    -- Update session status to processing
+    UPDATE t_import_sessions 
+    SET status = 'processing', 
+        processing_started_at = NOW()
+    WHERE id = p_session_id;
+    
+    RAISE NOTICE '[Session %] Starting processing with lookup method: %', p_session_id, p_customer_lookup_method;
+
+    -- Process all pending records
+    FOR v_staging_record IN (
+        SELECT 
+            id,
+            row_number,
+            mapped_data,
+            tenant_id,
+            is_live
+        FROM t_import_staging_data
         WHERE session_id = p_session_id
-            AND processing_status = 'pending'
-        ORDER BY row_number
-    LOOP
+          AND processing_status = 'pending'
+        ORDER BY id
+    ) LOOP
         BEGIN
+            v_customer_id := NULL;
+            v_scheme_id := NULL;
             v_error_msg := NULL;
-            v_is_duplicate := false;
             
-            -- 1. VALIDATE CUSTOMER (by IWELL code) - PLAIN TEXT
-            SELECT c.id INTO v_customer_id
-            FROM t_customers c
-            WHERE c.iwell_code = v_staging_record.mapped_data->>'iwell_code'
-                AND c.tenant_id = v_staging_record.tenant_id
-                AND c.is_live = v_staging_record.is_live
-                AND c.is_active = true;
+            -- ==================================================
+            -- CUSTOMER LOOKUP WITH PAN FALLBACK
+            -- ==================================================
             
+            -- Method 1: IWELL Code (with PAN fallback)
+            IF p_customer_lookup_method = 'iwell_code' THEN
+                IF v_staging_record.mapped_data->>'iwell_code' IS NOT NULL THEN
+                    SELECT c.id INTO v_customer_id
+                    FROM t_customers c
+                    WHERE c.tenant_id = v_staging_record.tenant_id
+                      AND c.is_live = v_staging_record.is_live
+                      AND UPPER(c.iwell_code) = UPPER(v_staging_record.mapped_data->>'iwell_code')
+                      AND c.is_active = true
+                    LIMIT 1;
+                    
+                    -- PAN FALLBACK if IWELL not found
+                    IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
+                        SELECT c.id INTO v_customer_id
+                        FROM t_customers c
+                        WHERE c.tenant_id = v_staging_record.tenant_id
+                          AND c.is_live = v_staging_record.is_live
+                          AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
+                          AND c.is_active = true
+                        LIMIT 1;
+                        
+                        IF v_customer_id IS NOT NULL THEN
+                            RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
+                        END IF;
+                    END IF;
+                    
+                    IF v_customer_id IS NULL THEN
+                        v_error_msg := 'No customer found with IWELL code: ' || (v_staging_record.mapped_data->>'iwell_code');
+                        IF v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
+                            v_error_msg := v_error_msg || ' or PAN: ' || (v_staging_record.mapped_data->>'pan');
+                        END IF;
+                    END IF;
+                ELSE
+                    v_error_msg := 'IWELL code is required but not provided';
+                END IF;
+                
+            -- Method 2: Customer Name (with PAN fallback)
+            ELSIF p_customer_lookup_method = 'customer_name' THEN
+                IF v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
+                    -- Try normalized name match
+                    SELECT c.id INTO v_customer_id
+                    FROM t_customers c
+                    INNER JOIN t_contacts ct ON ct.id = c.contact_id
+                    WHERE c.tenant_id = v_staging_record.tenant_id
+                      AND c.is_live = v_staging_record.is_live
+                      AND ct.normalized_name = normalize_customer_name(v_staging_record.mapped_data->>'customer_name')
+                      AND c.is_active = true
+                      AND ct.is_active = true
+                    LIMIT 1;
+                    
+                    -- PAN FALLBACK if name not found
+                    IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
+                        SELECT c.id INTO v_customer_id
+                        FROM t_customers c
+                        WHERE c.tenant_id = v_staging_record.tenant_id
+                          AND c.is_live = v_staging_record.is_live
+                          AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
+                          AND c.is_active = true
+                        LIMIT 1;
+                        
+                        IF v_customer_id IS NOT NULL THEN
+                            RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
+                        END IF;
+                    END IF;
+                    
+                    IF v_customer_id IS NULL THEN
+                        v_error_msg := 'No customer found with name: ' || (v_staging_record.mapped_data->>'customer_name');
+                        IF v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
+                            v_error_msg := v_error_msg || ' or PAN: ' || (v_staging_record.mapped_data->>'pan');
+                        END IF;
+                    END IF;
+                ELSE
+                    v_error_msg := 'Customer name is required but not provided';
+                END IF;
+                
+            -- Method 3: Both (try IWELL first, fallback to name, then PAN)
+            ELSIF p_customer_lookup_method = 'both' THEN
+                -- Try IWELL code first
+                IF v_staging_record.mapped_data->>'iwell_code' IS NOT NULL THEN
+                    SELECT c.id INTO v_customer_id
+                    FROM t_customers c
+                    WHERE c.tenant_id = v_staging_record.tenant_id
+                      AND c.is_live = v_staging_record.is_live
+                      AND UPPER(c.iwell_code) = UPPER(v_staging_record.mapped_data->>'iwell_code')
+                      AND c.is_active = true
+                    LIMIT 1;
+                END IF;
+                
+                -- Fallback to customer name
+                IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
+                    SELECT c.id INTO v_customer_id
+                    FROM t_customers c
+                    INNER JOIN t_contacts ct ON ct.id = c.contact_id
+                    WHERE c.tenant_id = v_staging_record.tenant_id
+                      AND c.is_live = v_staging_record.is_live
+                      AND ct.normalized_name = normalize_customer_name(v_staging_record.mapped_data->>'customer_name')
+                      AND c.is_active = true
+                      AND ct.is_active = true
+                    LIMIT 1;
+                END IF;
+                
+                -- Final fallback to PAN
+                IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
+                    SELECT c.id INTO v_customer_id
+                    FROM t_customers c
+                    WHERE c.tenant_id = v_staging_record.tenant_id
+                      AND c.is_live = v_staging_record.is_live
+                      AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
+                      AND c.is_active = true
+                    LIMIT 1;
+                    
+                    IF v_customer_id IS NOT NULL THEN
+                        RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
+                    END IF;
+                END IF;
+                
+                IF v_customer_id IS NULL THEN
+                    v_error_msg := 'No customer found with IWELL code, name, or PAN';
+                END IF;
+            END IF;
+            
+            -- If no customer found, mark as orphan and continue
             IF v_customer_id IS NULL THEN
-                v_error_msg := 'Customer data not found for import - IWELL code not matched';
-                RAISE EXCEPTION '%', v_error_msg;
+                UPDATE t_import_staging_data
+                SET processing_status = 'orphan',
+                    error_messages = ARRAY[v_error_msg],
+                    processed_at = NOW()
+                WHERE id = v_staging_record.id;
+                
+                v_orphan_count := v_orphan_count + 1;
+                v_processed_count := v_processed_count + 1;
+                CONTINUE;
+            END IF;
+
+            -- ==================================================
+            -- SCHEME LOOKUP (if scheme_name provided)
+            -- Using t_scheme_aliases table for flexible matching
+            -- ==================================================
+            IF v_staging_record.mapped_data->>'scheme_name' IS NOT NULL AND 
+               TRIM(v_staging_record.mapped_data->>'scheme_name') != '' THEN
+                
+                SELECT scheme_id INTO v_scheme_id
+                FROM t_scheme_aliases
+                WHERE is_active = true
+                  AND LOWER(TRIM(alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
+                LIMIT 1;
             END IF;
             
-            -- 2. VALIDATE TRANSACTION TYPE
-            SELECT id, txn_type INTO v_txn_type_id, v_txn_type
-            FROM m_transaction_types
-            WHERE UPPER(txn_code) = UPPER(v_staging_record.mapped_data->>'txn_code')
-                AND is_active = true;
-            
-            IF v_txn_type_id IS NULL THEN
-                v_error_msg := 'Invalid transaction type: ' || (v_staging_record.mapped_data->>'txn_code');
-                RAISE EXCEPTION '%', v_error_msg;
-            END IF;
-            
-            -- 3. CHECK FOR DUPLICATE
-            SELECT EXISTS (
+            -- ==================================================
+            -- DUPLICATE CHECK
+            -- ==================================================
+            IF EXISTS (
                 SELECT 1 FROM t_transaction_table
                 WHERE customer_id = v_customer_id
-                    AND scheme_code = v_staging_record.mapped_data->>'scheme_code'
-                    AND txn_date = (v_staging_record.mapped_data->>'txn_date')::DATE
-                    AND total_amount = (v_staging_record.mapped_data->>'total_amount')::DECIMAL
-                    AND txn_type_id = v_txn_type_id
-                    AND is_active = true
-            ) INTO v_is_duplicate;
-            
-            -- 4. CREATE/UPDATE PORTFOLIO ENTRY (if not exists)
-            INSERT INTO t_customer_master_portfolio (
-                tenant_id, is_live, customer_id, scheme_code, scheme_name,
-                folio_no, category, sub_category, fund_name, start_date
-            ) VALUES (
-                v_staging_record.tenant_id,
-                v_staging_record.is_live,
-                v_customer_id,
-                v_staging_record.mapped_data->>'scheme_code',
-                v_staging_record.mapped_data->>'scheme_name',
-                v_staging_record.mapped_data->>'folio_no',
-                v_staging_record.mapped_data->>'category',
-                v_staging_record.mapped_data->>'sub_category',
-                v_staging_record.mapped_data->>'fund_name',
-                (v_staging_record.mapped_data->>'txn_date')::DATE
-            )
-            ON CONFLICT (customer_id, scheme_code, tenant_id, is_live)
-            DO NOTHING
-            RETURNING id INTO v_portfolio_id;
-            
-            -- 5. INSERT TRANSACTION
+                  AND tenant_id = v_staging_record.tenant_id
+                  AND is_live = v_staging_record.is_live
+                  AND txn_date = (v_staging_record.mapped_data->>'txn_date')::DATE
+                  AND total_amount = (v_staging_record.mapped_data->>'total_amount')::NUMERIC
+                  AND (
+                    (v_scheme_id IS NULL AND scheme_id IS NULL) OR
+                    (scheme_id = v_scheme_id)
+                  )
+            ) THEN
+                UPDATE t_import_staging_data
+                SET processing_status = 'duplicate',
+                    processed_at = NOW()
+                WHERE id = v_staging_record.id;
+                
+                v_duplicate_count := v_duplicate_count + 1;
+                v_processed_count := v_processed_count + 1;
+                CONTINUE;
+            END IF;
+
+            -- ==================================================
+            -- INSERT TRANSACTION
+            -- ==================================================
             INSERT INTO t_transaction_table (
-                tenant_id, is_live, customer_id, scheme_code, scheme_name, folio_no,
-                txn_type_id, txn_date, total_amount, units, nav, stamp_duty,
-                staging_record_id, import_session_id,
-                is_potential_duplicate, portfolio_flag,
-                duplicate_reason
+                tenant_id,
+                is_live,
+                is_active,
+                customer_id,
+                scheme_id,
+                scheme_code,
+                scheme_name,
+                folio_no,
+                txn_type_id,
+                txn_date,
+                total_amount,
+                units,
+                nav,
+                stamp_duty,
+                stt,
+                tds,
+                txn_description,
+                txn_source,
+                staging_record_id,
+                import_session_id,
+                created_at,
+                updated_at
             ) VALUES (
                 v_staging_record.tenant_id,
                 v_staging_record.is_live,
+                true,
                 v_customer_id,
+                v_scheme_id,
                 v_staging_record.mapped_data->>'scheme_code',
                 v_staging_record.mapped_data->>'scheme_name',
                 v_staging_record.mapped_data->>'folio_no',
-                v_txn_type_id,
+                NULLIF(v_staging_record.mapped_data->>'txn_type_id', '')::INTEGER,
                 (v_staging_record.mapped_data->>'txn_date')::DATE,
-                (v_staging_record.mapped_data->>'total_amount')::DECIMAL,
-                (v_staging_record.mapped_data->>'units')::DECIMAL,
-                (v_staging_record.mapped_data->>'nav')::DECIMAL,
-                (v_staging_record.mapped_data->>'stamp_duty')::DECIMAL,
+                (v_staging_record.mapped_data->>'total_amount')::NUMERIC,
+                NULLIF(v_staging_record.mapped_data->>'units', '')::NUMERIC,
+                NULLIF(v_staging_record.mapped_data->>'nav', '')::NUMERIC,
+                NULLIF(v_staging_record.mapped_data->>'stamp_duty', '')::NUMERIC,
+                NULLIF(v_staging_record.mapped_data->>'stt', '')::NUMERIC,
+                NULLIF(v_staging_record.mapped_data->>'tds', '')::NUMERIC,
+                v_staging_record.mapped_data->>'txn_description',
+                'import',
                 v_staging_record.id,
                 p_session_id,
-                v_is_duplicate,
-                NOT v_is_duplicate, -- portfolio_flag: EXCLUDED for duplicates by default, included for normal records
-                CASE WHEN v_is_duplicate THEN 'Duplicate transaction detected: same customer, scheme, date, amount, and type' ELSE NULL END
-            );
-            
-            -- 6. UPDATE STAGING RECORD
+                NOW(),
+                NOW()
+            ) RETURNING id INTO v_txn_id;
+
+            -- Mark as success
             UPDATE t_import_staging_data
-            SET processing_status = CASE WHEN v_is_duplicate THEN 'duplicate' ELSE 'success' END,
-                processed_at = clock_timestamp(),
-                created_record_type = 'transaction'
+            SET processing_status = 'success',
+                created_record_id = v_txn_id,
+                created_record_type = 'transaction',
+                processed_at = NOW()
             WHERE id = v_staging_record.id;
             
-            IF v_is_duplicate THEN
-                v_duplicates := v_duplicates + 1;
-            ELSE
-                v_success := v_success + 1;
-            END IF;
-            
+            v_success_count := v_success_count + 1;
+            v_processed_count := v_processed_count + 1;
+
         EXCEPTION WHEN OTHERS THEN
-            -- Handle errors
-            v_error_msg := COALESCE(v_error_msg, SQLERRM);
-            
+            -- Mark as failed with error
             UPDATE t_import_staging_data
             SET processing_status = 'failed',
-                error_messages = ARRAY[v_error_msg],
-                processed_at = clock_timestamp()
+                error_messages = ARRAY[SQLERRM],
+                processed_at = NOW()
             WHERE id = v_staging_record.id;
             
-            v_failed := v_failed + 1;
+            v_failed_count := v_failed_count + 1;
+            v_processed_count := v_processed_count + 1;
+            
+            RAISE NOTICE '[Session %] Error processing row %: %', p_session_id, v_staging_record.row_number, SQLERRM;
         END;
-        
-        v_processed := v_processed + 1;
-        
-        -- Update session progress
-        IF v_processed % 10 = 0 THEN
+
+        -- Checkpoint every batch_size records
+        IF v_processed_count % v_batch_size = 0 THEN
             UPDATE t_import_sessions
-            SET processed_records = v_processed,
-                successful_records = v_success,
-                failed_records = v_failed,
-                duplicate_records = v_duplicates
+            SET successful_records = v_success_count,
+                failed_records = v_failed_count,
+                orphan_records = v_orphan_count,
+                duplicate_records = v_duplicate_count,
+                processed_records = v_processed_count,
+                updated_at = NOW()
             WHERE id = p_session_id;
-        END IF;
-        
-        -- Sleep between batches to control duration
-        IF v_processed % v_batch_size = 0 THEN
-            PERFORM pg_sleep(v_sleep_per_batch);
+            
+            RAISE NOTICE '[Session %] Checkpoint: % processed (% success, % failed, % orphan, % duplicate)', 
+                p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count;
         END IF;
     END LOOP;
-    
-    v_end_time := clock_timestamp();
-    
+
     -- Final session update
     UPDATE t_import_sessions
     SET status = CASE 
-            WHEN v_failed > 0 THEN 'completed_with_errors'
+            WHEN v_failed_count + v_orphan_count > 0 THEN 'completed_with_errors'
             ELSE 'completed'
         END,
-        processed_records = v_processed,
-        successful_records = v_success,
-        failed_records = v_failed,
-        duplicate_records = v_duplicates,
-        processing_completed_at = v_end_time
+        successful_records = v_success_count,
+        failed_records = v_failed_count,
+        orphan_records = v_orphan_count,
+        duplicate_records = v_duplicate_count,
+        processed_records = v_processed_count,
+        processing_completed_at = NOW(),
+        updated_at = NOW()
     WHERE id = p_session_id;
-    
-    -- Refresh materialized view
-    PERFORM refresh_portfolio_totals();
-    
+
+    RAISE NOTICE '[Session %] Completed: % total (% success, % failed, % orphan, % duplicate) in % seconds', 
+        p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count,
+        EXTRACT(EPOCH FROM (NOW() - v_start_time));
+
+    -- Return summary
     RETURN QUERY SELECT 
-        v_processed,
-        v_success,
-        v_failed,
-        v_duplicates,
-        EXTRACT(EPOCH FROM (v_end_time - v_start_time))::INTEGER * 1000;
+        v_processed_count,
+        v_success_count,
+        v_failed_count,
+        v_duplicate_count,
+        v_orphan_count,
+        EXTRACT(EPOCH FROM (NOW() - v_start_time))::NUMERIC;
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_with_timing IS 
-'Process transaction imports from staging with controlled timing (30-45 seconds target). Uses plain text iwell_code for customer lookup.';
+COMMENT ON FUNCTION process_transaction_import_session IS 
+'Process transaction imports with flexible customer lookup (iwell_code/customer_name/both), PAN fallback, and orphan tracking. Uses t_scheme_aliases for scheme matching.';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS
@@ -1217,6 +1399,7 @@ RETURNS TABLE (
     pending_records BIGINT,
     processed_records BIGINT,
     failed_records BIGINT,
+    orphan_records BIGINT,
     total_size_estimate TEXT,
     oldest_session_date TIMESTAMP,
     newest_session_date TIMESTAMP
@@ -1233,6 +1416,7 @@ BEGIN
         COUNT(st.id) FILTER (WHERE st.processing_status = 'pending') as pending_records,
         COUNT(st.id) FILTER (WHERE st.processing_status IN ('success', 'duplicate')) as processed_records,
         COUNT(st.id) FILTER (WHERE st.processing_status = 'failed') as failed_records,
+        COUNT(st.id) FILTER (WHERE st.processing_status = 'orphan') as orphan_records,
         pg_size_pretty(
             pg_relation_size('t_import_staging_data') + 
             pg_relation_size('t_import_sessions')
@@ -1244,7 +1428,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION get_staging_storage_stats IS 'Get storage statistics for import staging tables';
+COMMENT ON FUNCTION get_staging_storage_stats IS 'Get storage statistics for import staging tables including orphan tracking';
 
 -- ============================================================================
 -- SECTION 6: VIEWS
@@ -1257,74 +1441,135 @@ END $$;
 -- ----------------------------------------------------------------------------
 -- VIEW: v_import_staging_statistics
 -- Description: Aggregated statistics for staging table by session
+-- UPDATED: Added orphan_rows tracking and enhanced metrics
 -- ----------------------------------------------------------------------------
+DROP VIEW IF EXISTS v_import_staging_statistics CASCADE;
+
 CREATE OR REPLACE VIEW v_import_staging_statistics AS
 SELECT 
     session_id,
     tenant_id,
     is_live,
     import_type,
-    COUNT(*) as total_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'pending') as pending_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'processing') as processing_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'success') as success_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'failed') as failed_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'duplicate') as duplicate_rows,
-    COUNT(*) FILTER (WHERE processing_status = 'skipped') as skipped_rows,
-    MIN(created_at) as staging_started_at,
-    MAX(processed_at) as last_processed_at,
+    
+    -- Total and status counts
+    COUNT(*) AS total_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'pending') AS pending_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'processing') AS processing_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'success') AS success_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'failed') AS failed_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'duplicate') AS duplicate_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'orphan') AS orphan_rows,
+    COUNT(*) FILTER (WHERE processing_status = 'skipped') AS skipped_rows,
+    
+    -- Timestamps
+    MIN(created_at) AS staging_started_at,
+    MAX(processed_at) AS last_processed_at,
+    
+    -- Success rate calculation
     ROUND(
-        CAST(COUNT(*) FILTER (WHERE processing_status = 'success') AS DECIMAL) / 
-        NULLIF(COUNT(*), 0) * 100, 2
-    ) as success_rate
+        COUNT(*) FILTER (WHERE processing_status = 'success')::numeric 
+        / NULLIF(COUNT(*), 0)::numeric * 100::numeric, 
+        2
+    ) AS success_rate,
+    
+    -- Processing success rate (successful + duplicates) / total
+    ROUND(
+        (COUNT(*) FILTER (WHERE processing_status IN ('success', 'duplicate'))::numeric)
+        / NULLIF(COUNT(*), 0)::numeric * 100::numeric,
+        2
+    ) AS processing_success_rate,
+    
+    -- Error rate (failed + orphan) / total
+    ROUND(
+        (COUNT(*) FILTER (WHERE processing_status IN ('failed', 'orphan'))::numeric) 
+        / NULLIF(COUNT(*), 0)::numeric * 100::numeric,
+        2
+    ) AS error_rate
 FROM t_import_staging_data
 GROUP BY session_id, tenant_id, is_live, import_type;
 
-COMMENT ON VIEW v_import_staging_statistics IS 'Aggregated statistics for staging table by session';
+COMMENT ON VIEW v_import_staging_statistics IS 'Aggregated statistics for staging table by session including orphan record tracking';
 
 -- ----------------------------------------------------------------------------
 -- VIEW: v_import_staging_progress
 -- Description: Real-time import progress monitoring
+-- UPDATED: Added orphan tracking and enhanced progress metrics
 -- ----------------------------------------------------------------------------
+DROP VIEW IF EXISTS v_import_staging_progress CASCADE;
+
 CREATE OR REPLACE VIEW v_import_staging_progress AS
 SELECT 
-    s.id as session_id,
+    s.id AS session_id,
     s.session_name,
     s.import_type,
-    s.status as session_status,
+    s.status AS session_status,
     s.staging_total_rows,
     s.current_batch,
     s.total_batches,
     s.last_processed_row,
-    COALESCE(st.pending_rows, 0) as pending_rows,
-    COALESCE(st.processing_rows, 0) as processing_rows,
-    COALESCE(st.success_rows, 0) as success_rows,
-    COALESCE(st.failed_rows, 0) as failed_rows,
-    CASE 
+    
+    -- Real-time counts from staging table
+    COALESCE(st.pending_rows, 0::bigint) AS pending_rows,
+    COALESCE(st.processing_rows, 0::bigint) AS processing_rows,
+    COALESCE(st.success_rows, 0::bigint) AS success_rows,
+    COALESCE(st.failed_rows, 0::bigint) AS failed_rows,
+    COALESCE(st.duplicate_rows, 0::bigint) AS duplicate_rows,
+    COALESCE(st.orphan_rows, 0::bigint) AS orphan_rows,
+    COALESCE(st.skipped_rows, 0::bigint) AS skipped_rows,
+    
+    -- Session-level counts (final after processing completes)
+    s.successful_records,
+    s.failed_records,
+    s.duplicate_records,
+    s.orphan_records,
+    
+    -- Progress calculation
+    CASE
         WHEN s.staging_total_rows > 0 THEN 
-            ROUND(CAST(COALESCE(st.success_rows + st.failed_rows + st.skipped_rows, 0) AS DECIMAL) / 
-                  s.staging_total_rows * 100, 2)
-        ELSE 0 
-    END as completion_percentage,
+            ROUND(
+                COALESCE(st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows + st.skipped_rows, 0::bigint)::numeric 
+                / s.staging_total_rows::numeric * 100::numeric, 
+                2
+            )
+        ELSE 0::numeric
+    END AS completion_percentage,
+    
+    -- Timestamps
     s.processing_started_at,
     s.staging_completed_at,
-    CASE 
-        WHEN s.processing_started_at IS NOT NULL AND st.processing_rows > 0 THEN
-            EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - s.processing_started_at)) / 
-            NULLIF(st.success_rows + st.failed_rows, 0)
-        ELSE NULL
-    END as avg_seconds_per_record
+    s.processing_completed_at,
+    
+    -- Performance metrics
+    CASE
+        WHEN s.processing_started_at IS NOT NULL AND 
+             (st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows) > 0 THEN 
+            EXTRACT(epoch FROM CURRENT_TIMESTAMP - s.processing_started_at::timestamp with time zone) 
+            / NULLIF(st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows, 0)::numeric
+        ELSE NULL::numeric
+    END AS avg_seconds_per_record,
+    
+    -- Estimated time remaining (in seconds)
+    CASE
+        WHEN s.processing_started_at IS NOT NULL AND 
+             st.pending_rows > 0 AND
+             (st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows) > 0 THEN
+            (EXTRACT(epoch FROM CURRENT_TIMESTAMP - s.processing_started_at::timestamp with time zone) 
+            / NULLIF(st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows, 0)::numeric) 
+            * st.pending_rows
+        ELSE NULL::numeric
+    END AS estimated_seconds_remaining
+    
 FROM t_import_sessions s
 LEFT JOIN v_import_staging_statistics st ON s.id = st.session_id;
 
-COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring view';
+COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring view with orphan record tracking';
 
 -- ----------------------------------------------------------------------------
 -- VIEW: v_tenant_customer_schemes
 -- Description: Identify unique schemes used across customer portfolios per tenant
 -- Purpose: Compare with t_scheme_bookmarks to detect unbookmarked schemes
 -- Usage: Find schemes customers use that aren't bookmarked for NAV tracking
--- NEW: Added for NAV schema refactor
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_tenant_customer_schemes AS
 SELECT 
@@ -1364,9 +1609,8 @@ END $$;
 -- ----------------------------------------------------------------------------
 -- MATERIALIZED VIEW: t_customer_portfolio_totals
 -- Description: Pre-calculated portfolio totals with returns
--- NEW: Added complete materialized view for portfolio calculations
 -- ----------------------------------------------------------------------------
-CREATE MATERIALIZED VIEW t_customer_portfolio_totals AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS t_customer_portfolio_totals AS
 SELECT 
     p.tenant_id,
     p.is_live,
@@ -1384,12 +1628,12 @@ SELECT
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Addition' THEN t.id END) as purchase_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Deduction' THEN t.id END) as redemption_count,
     
-    -- Units Totals - FIXED
+    -- Units Totals
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
                      WHEN tt.txn_type = 'Deduction' THEN -t.units 
                      ELSE 0 END), 0) as total_units,
     
-    -- Investment Amount - FIXED
+    -- Investment Amount
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0) as total_invested,
     
@@ -1401,7 +1645,7 @@ SELECT
      ORDER BY txn_date DESC 
      LIMIT 1) as latest_nav,
     
-    -- Current Value - FIXED
+    -- Current Value
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
                      WHEN tt.txn_type = 'Deduction' THEN -t.units 
                      ELSE 0 END), 0) * 
@@ -1412,7 +1656,7 @@ SELECT
               ORDER BY txn_date DESC 
               LIMIT 1), 0) as current_value,
     
-    -- Total Returns - FIXED
+    -- Total Returns
     (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
                       WHEN tt.txn_type = 'Deduction' THEN -t.units 
                       ELSE 0 END), 0) * 
@@ -1425,7 +1669,7 @@ SELECT
     (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
      COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) as total_returns,
     
-    -- Return Percentage - FIXED
+    -- Return Percentage
     CASE 
         WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) > 0
@@ -1469,23 +1713,23 @@ GROUP BY
 COMMENT ON MATERIALIZED VIEW t_customer_portfolio_totals IS 'Pre-calculated portfolio totals with returns and performance metrics';
 
 -- Create unique index for concurrent refresh
-CREATE UNIQUE INDEX idx_portfolio_totals_pk 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_totals_pk 
     ON t_customer_portfolio_totals(customer_id, scheme_code, tenant_id, is_live);
 
 -- Create additional indexes for performance
-CREATE INDEX idx_portfolio_totals_customer 
+CREATE INDEX IF NOT EXISTS idx_portfolio_totals_customer 
     ON t_customer_portfolio_totals(customer_id);
 
-CREATE INDEX idx_portfolio_totals_scheme 
+CREATE INDEX IF NOT EXISTS idx_portfolio_totals_scheme 
     ON t_customer_portfolio_totals(scheme_code);
 
-CREATE INDEX idx_portfolio_totals_tenant 
+CREATE INDEX IF NOT EXISTS idx_portfolio_totals_tenant 
     ON t_customer_portfolio_totals(tenant_id, is_live);
 
-CREATE INDEX idx_portfolio_totals_category 
+CREATE INDEX IF NOT EXISTS idx_portfolio_totals_category 
     ON t_customer_portfolio_totals(category);
 
-CREATE INDEX idx_portfolio_totals_value 
+CREATE INDEX IF NOT EXISTS idx_portfolio_totals_value 
     ON t_customer_portfolio_totals(current_value DESC);
 
 -- Initial population of materialized view
@@ -1504,7 +1748,7 @@ END $$;
 -- Description: Current portfolio values with month-end comparison using NAV data
 -- Purpose: Calculate current portfolio values using latest NAV and compare with month-end
 -- ----------------------------------------------------------------------------
-CREATE MATERIALIZED VIEW v_portfolio_current AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS v_portfolio_current AS
 SELECT 
     t.customer_id,
     t.tenant_id,
@@ -1580,14 +1824,14 @@ COMMENT ON MATERIALIZED VIEW v_portfolio_current IS
 'Current portfolio values with month-end comparison using NAV data from t_nav_data';
 
 -- Create unique index for concurrent refresh
-CREATE UNIQUE INDEX idx_portfolio_current_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_current_unique 
     ON v_portfolio_current(tenant_id, customer_id, scheme_code);
 
 -- Create additional indexes for performance
-CREATE INDEX idx_portfolio_current_tenant_customer 
+CREATE INDEX IF NOT EXISTS idx_portfolio_current_tenant_customer 
     ON v_portfolio_current(tenant_id, customer_id);
 
-CREATE INDEX idx_portfolio_current_scheme_code 
+CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code 
     ON v_portfolio_current(scheme_code);
 
 -- Initial population of materialized view
@@ -1604,7 +1848,6 @@ END $$;
 -- ----------------------------------------------------------------------------
 -- FUNCTION: refresh_portfolio_totals
 -- Description: Refresh the portfolio totals materialized view
--- NEW FUNCTION: Added for materialized view refresh
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION refresh_portfolio_totals()
 RETURNS void
@@ -1640,14 +1883,17 @@ ALTER TABLE t_chat_messages ENABLE ROW LEVEL SECURITY;
 -- ----------------------------------------------------------------------------
 -- RLS POLICIES: Tenant Isolation
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS tenant_isolation_users ON t_users;
 CREATE POLICY tenant_isolation_users ON t_users
     FOR ALL
     USING (tenant_id = current_tenant_id());
 
+DROP POLICY IF EXISTS tenant_isolation_chat_sessions ON t_chat_sessions;
 CREATE POLICY tenant_isolation_chat_sessions ON t_chat_sessions
     FOR ALL
     USING (tenant_id = current_tenant_id());
 
+DROP POLICY IF EXISTS tenant_isolation_chat_messages ON t_chat_messages;
 CREATE POLICY tenant_isolation_chat_messages ON t_chat_messages
     FOR ALL
     USING (tenant_id = current_tenant_id());
@@ -1655,6 +1901,7 @@ CREATE POLICY tenant_isolation_chat_messages ON t_chat_messages
 -- ----------------------------------------------------------------------------
 -- RLS POLICIES: Environment Filtering (Live/Test)
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS environment_filter_users ON t_users;
 CREATE POLICY environment_filter_users ON t_users
     FOR SELECT
     USING (
@@ -1665,6 +1912,7 @@ CREATE POLICY environment_filter_users ON t_users
         END
     );
 
+DROP POLICY IF EXISTS environment_filter_chat_sessions ON t_chat_sessions;
 CREATE POLICY environment_filter_chat_sessions ON t_chat_sessions
     FOR SELECT
     USING (
@@ -1675,6 +1923,7 @@ CREATE POLICY environment_filter_chat_sessions ON t_chat_sessions
         END
     );
 
+DROP POLICY IF EXISTS environment_filter_chat_messages ON t_chat_messages;
 CREATE POLICY environment_filter_chat_messages ON t_chat_messages
     FOR SELECT
     USING (
@@ -1703,26 +1952,13 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO kewal_admin;
 -- Grant execute on all functions
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO kewal_admin;
 
--- Grant execute on specific utility functions
-GRANT EXECUTE ON FUNCTION current_tenant_id() TO kewal_admin;
-GRANT EXECUTE ON FUNCTION current_environment() TO kewal_admin;
+-- Grant usage on schema
+GRANT USAGE ON SCHEMA public TO kewal_admin;
 
--- Grant execute on import functions
-GRANT EXECUTE ON FUNCTION check_customer_duplicate TO kewal_admin;
-GRANT EXECUTE ON FUNCTION process_single_customer_record TO kewal_admin;
-GRANT EXECUTE ON FUNCTION process_customer_import_with_timing TO kewal_admin;
-GRANT EXECUTE ON FUNCTION process_single_scheme_record TO kewal_admin;
-GRANT EXECUTE ON FUNCTION process_scheme_import_with_timing TO kewal_admin;
-GRANT EXECUTE ON FUNCTION lookup_scheme_by_alias TO kewal_admin;
-GRANT EXECUTE ON FUNCTION process_transaction_import_with_timing TO kewal_admin;
-
--- Grant execute on cleanup functions
-GRANT EXECUTE ON FUNCTION cleanup_old_staging_data TO kewal_admin;
-GRANT EXECUTE ON FUNCTION cleanup_session_staging_data TO kewal_admin;
-GRANT EXECUTE ON FUNCTION get_staging_storage_stats TO kewal_admin;
-
--- Grant execute on materialized view refresh function
-GRANT EXECUTE ON FUNCTION refresh_portfolio_totals TO kewal_admin;
+-- Grant specific permissions on views
+GRANT ALL ON TABLE v_import_staging_statistics TO kewal_admin;
+GRANT ALL ON TABLE v_import_staging_progress TO kewal_admin;
+GRANT ALL ON TABLE v_tenant_customer_schemes TO kewal_admin;
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -1761,12 +1997,38 @@ BEGIN
     RAISE NOTICE 'Total views: %', v_view_count;
     RAISE NOTICE 'Total materialized views: %', v_mat_view_count;
     RAISE NOTICE 'Total RLS policies: %', v_policy_count;
-    RAISE NOTICE 'Updates included:';
-    RAISE NOTICE '  - Added process_transaction_import_with_timing()';
-    RAISE NOTICE '  - Added t_customer_portfolio_totals materialized view';
-    RAISE NOTICE '  - Added refresh_portfolio_totals() function';
-    RAISE NOTICE '  - Added v_tenant_customer_schemes view (NAV refactor)';
-    RAISE NOTICE '  - Added v_portfolio_current materialized view (NAV-based valuations)';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'UPDATE NOTES (2025-11-02):';
+    RAISE NOTICE '  ✓ Added orphan status tracking';
+    RAISE NOTICE '  ✓ Added normalize_customer_name() function';
+    RAISE NOTICE '  ✓ Added process_transaction_import_session() with:';
+    RAISE NOTICE '    - Multiple customer lookup methods';
+    RAISE NOTICE '    - PAN fallback for all lookup methods';
+    RAISE NOTICE '    - Scheme alias lookup support';
+    RAISE NOTICE '    - Enhanced orphan detection';
+    RAISE NOTICE '    - Batch checkpoint logging';
+    RAISE NOTICE '  ✓ Updated customer import to store normalized names';
+    RAISE NOTICE '  ✓ Updated v_import_staging_statistics view';
+    RAISE NOTICE '  ✓ Updated v_import_staging_progress view';
+    RAISE NOTICE '  ✓ Updated get_staging_storage_stats()';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'DEPLOYMENT NOTES:';
+    RAISE NOTICE '  - Ensure t_import_sessions has orphan_records column';
+    RAISE NOTICE '  - Ensure t_import_staging_data allows "orphan" status';
+    RAISE NOTICE '  - Ensure t_contacts has normalized_name TEXT column';
+    RAISE NOTICE '  - Test transaction import with all lookup methods';
+    RAISE NOTICE '  - Verify PAN fallback logic works correctly';
+    RAISE NOTICE '  - Test scheme alias matching';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'USAGE:';
+    RAISE NOTICE '  Transaction Import Methods:';
+    RAISE NOTICE '  - iwell_code (default): Lookup by IWELL code with PAN fallback';
+    RAISE NOTICE '  - customer_name: Lookup by normalized name with PAN fallback';
+    RAISE NOTICE '  - both: Try IWELL → Name → PAN in sequence';
+    RAISE NOTICE '';
+    RAISE NOTICE '  Example:';
+    RAISE NOTICE '  SELECT * FROM process_transaction_import_session(123, ''both'');';
+    RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 05_seed_data.sql';
     RAISE NOTICE '========================================';
 END $$;

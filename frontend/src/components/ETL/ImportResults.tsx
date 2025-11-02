@@ -21,13 +21,11 @@ interface ImportSession {
   successful_records: number;
   failed_records: number;
   duplicate_records: number;
+  orphan_records: number; // FIXED: Added directly to interface
   processing_started_at?: string;
   processing_completed_at?: string;
   error_summary?: string;
-  processing_metadata?: {
-    orphan_records?: number;
-    orphan_percentage?: number;
-  };
+  processing_metadata?: any;
 }
 
 interface ImportRecord {
@@ -170,7 +168,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
               total_records: 0,
               successful_records: 0,
               failed_records: 0,
-              duplicate_records: 0
+              duplicate_records: 0,
+              orphan_records: 0
             },
             records: [],
             pagination: {
@@ -360,7 +359,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   };
 
   const isTransactionImport = resultsData?.session?.import_type === 'TransactionData';
-  const orphanCount = resultsData?.session?.processing_metadata?.orphan_records || 0;
+  const orphanCount = resultsData?.session?.orphan_records || 0; // FIXED: Read from correct location
   const isBookmarkImport = resultsData?.session?.import_type === 'BookmarkData';
 
   if (isLoading && !resultsData) {
@@ -521,9 +520,9 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                 margin: 0,
                 lineHeight: '1.5'
               }}>
-                {orphanCount} transaction(s) could not be matched to any scheme in your bookmarks. 
-                These records were <strong>not imported</strong>. Please add the missing schemes to your 
-                bookmarks and re-import these transactions.
+                {orphanCount} transaction(s) could not be matched to any customer. 
+                These records were <strong>not imported</strong>. Please verify the customer data 
+                (IWELL code, customer name, or PAN) and re-import these transactions.
               </p>
             </div>
           </div>
@@ -701,73 +700,230 @@ const ImportResults: React.FC<ImportResultsProps> = ({
               fontSize: '12px',
               color: colors.utility.secondaryText
             }}>
-              Scheme not found in bookmarks
+              Customer not found
             </div>
           </div>
         )}
       </div>
 
-      {/* Filters and Controls */}
+      {/* ENHANCED Filters and Controls */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: '24px',
-        padding: '16px',
+        padding: '20px',
         backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '8px'
+        borderRadius: '12px',
+        border: `1px solid ${colors.utility.primaryText}10`
       }}>
+        {/* Filter Tabs */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '16px'
+          gap: '8px',
+          marginBottom: '16px',
+          flexWrap: 'wrap' as const
         }}>
-          <label style={{
-            fontSize: '14px',
+          <span style={{
+            fontSize: '13px',
             fontWeight: '600',
-            color: colors.utility.primaryText
+            color: colors.utility.secondaryText,
+            marginRight: '8px'
           }}>
-            Filter by status:
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
+            Filter:
+          </span>
+          
+          {/* All Records */}
+          <button
+            onClick={() => {
+              setStatusFilter('all');
               setCurrentPage(1);
             }}
             style={{
-              padding: '6px 12px',
-              border: `1px solid ${colors.utility.primaryText}20`,
+              padding: '8px 16px',
+              border: statusFilter === 'all' 
+                ? `2px solid ${colors.brand.primary}` 
+                : `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText,
-              fontSize: '14px'
+              backgroundColor: statusFilter === 'all' 
+                ? `${colors.brand.primary}15` 
+                : 'transparent',
+              color: statusFilter === 'all' 
+                ? colors.brand.primary 
+                : colors.utility.primaryText,
+              fontSize: '13px',
+              fontWeight: statusFilter === 'all' ? '600' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
             }}
           >
-            <option value="all">All Records</option>
-            <option value="success">Successful Only</option>
-            <option value="failed">Failed Only</option>
-            <option value="duplicate">Duplicates Only</option>
-            {isTransactionImport && <option value="orphan">Orphan Only</option>}
-            <option value="skipped">Skipped Only</option>
-          </select>
+            All ({resultsData?.summary?.totalRows || 0})
+          </button>
+
+          {/* Success */}
+          <button
+            onClick={() => {
+              setStatusFilter('success');
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '8px 16px',
+              border: statusFilter === 'success' 
+                ? `2px solid ${colors.semantic.success}` 
+                : `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              backgroundColor: statusFilter === 'success' 
+                ? `${colors.semantic.success}15` 
+                : 'transparent',
+              color: statusFilter === 'success' 
+                ? colors.semantic.success 
+                : colors.utility.primaryText,
+              fontSize: '13px',
+              fontWeight: statusFilter === 'success' ? '600' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ✓ Success ({resultsData?.summary?.successfulRows || 0})
+          </button>
+
+          {/* Failed */}
+          <button
+            onClick={() => {
+              setStatusFilter('failed');
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '8px 16px',
+              border: statusFilter === 'failed' 
+                ? `2px solid ${colors.semantic.error}` 
+                : `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              backgroundColor: statusFilter === 'failed' 
+                ? `${colors.semantic.error}15` 
+                : 'transparent',
+              color: statusFilter === 'failed' 
+                ? colors.semantic.error 
+                : colors.utility.primaryText,
+              fontSize: '13px',
+              fontWeight: statusFilter === 'failed' ? '600' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ✕ Failed ({resultsData?.summary?.failedRows || 0})
+          </button>
+
+          {/* Duplicates */}
+          <button
+            onClick={() => {
+              setStatusFilter('duplicate');
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '8px 16px',
+              border: statusFilter === 'duplicate' 
+                ? `2px solid ${colors.semantic.warning}` 
+                : `1px solid ${colors.utility.primaryText}20`,
+              borderRadius: '6px',
+              backgroundColor: statusFilter === 'duplicate' 
+                ? `${colors.semantic.warning}15` 
+                : 'transparent',
+              color: statusFilter === 'duplicate' 
+                ? colors.semantic.warning 
+                : colors.utility.primaryText,
+              fontSize: '13px',
+              fontWeight: statusFilter === 'duplicate' ? '600' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ⚠ Duplicates ({resultsData?.summary?.duplicateRows || 0})
+          </button>
+
+          {/* Orphans - Only for Transaction Imports */}
+          {isTransactionImport && (
+            <button
+              onClick={() => {
+                setStatusFilter('orphan');
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '8px 16px',
+                border: statusFilter === 'orphan' 
+                  ? `2px solid #8B7355` 
+                  : `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '6px',
+                backgroundColor: statusFilter === 'orphan' 
+                  ? '#8B735515' 
+                  : 'transparent',
+                color: statusFilter === 'orphan' 
+                  ? '#8B7355' 
+                  : colors.utility.primaryText,
+                fontSize: '13px',
+                fontWeight: statusFilter === 'orphan' ? '600' : '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              ? Orphans ({orphanCount})
+            </button>
+          )}
         </div>
 
-        <button
-          onClick={onStartNewImport}
-          style={{
-            backgroundColor: colors.brand.primary,
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '10px 20px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          Start New Import
-        </button>
+        {/* Action Buttons Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingTop: '16px',
+          borderTop: `1px solid ${colors.utility.primaryText}10`
+        }}>
+          {/* Export Button - Only show if filtered to failed/orphan */}
+          <div>
+            {(statusFilter === 'failed' || statusFilter === 'orphan') && (
+              <button
+                onClick={exportErrors}
+                disabled={isExporting}
+                style={{
+                  padding: '8px 16px',
+                  border: `1px solid ${colors.semantic.error}40`,
+                  borderRadius: '6px',
+                  backgroundColor: 'transparent',
+                  color: colors.semantic.error,
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: isExporting ? 'not-allowed' : 'pointer',
+                  opacity: isExporting ? 0.5 : 1
+                }}
+              >
+                {isExporting ? 'Exporting...' : `📥 Export ${statusFilter === 'failed' ? 'Failed' : 'Orphan'} Records`}
+              </button>
+            )}
+          </div>
+
+          {/* Start New Import Button */}
+          <button
+            onClick={onStartNewImport}
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            🔄 Start New Import
+          </button>
+        </div>
       </div>
 
       {/* Results Table */}
@@ -777,31 +933,31 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         border: `1px solid ${colors.utility.primaryText}10`,
         overflow: 'hidden'
       }}>
-       {/* Table Header */}
-<div style={{
-  display: 'grid',
-  gridTemplateColumns: isTransactionImport
-    ? '60px 80px 1fr 200px 120px 140px 100px'
-    : (isBookmarkImport 
-        ? '60px 80px 200px 1fr 120px 100px'
-        : '60px 80px 1fr 200px 120px 100px'),
-  gap: '16px',
-  padding: '16px 20px',
-  backgroundColor: colors.utility.secondaryBackground,
-  borderBottom: `1px solid ${colors.utility.primaryText}10`,
-  fontSize: '12px',
-  fontWeight: '600',
-  color: colors.utility.secondaryText
-}}>
-  <div style={{ textAlign: 'center' as const }}>ROW</div>
-  <div>STATUS</div>
-  {isBookmarkImport && <div>SCHEME CODE</div>}
-  <div>{isBookmarkImport ? 'SCHEME NAME' : 'DATA PREVIEW'}</div>
-  <div>ISSUES</div>
-  <div>PROCESSED</div>
-  {isTransactionImport && <div style={{ textAlign: 'center' as const }}>PORTFOLIO</div>}
-  <div style={{ textAlign: 'center' as const }}>ACTIONS</div>
-</div>
+        {/* Table Header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isTransactionImport
+            ? '60px 80px 1fr 200px 120px 140px 100px'
+            : (isBookmarkImport 
+                ? '60px 80px 200px 1fr 120px 100px'
+                : '60px 80px 1fr 200px 120px 100px'),
+          gap: '16px',
+          padding: '16px 20px',
+          backgroundColor: colors.utility.secondaryBackground,
+          borderBottom: `1px solid ${colors.utility.primaryText}10`,
+          fontSize: '12px',
+          fontWeight: '600',
+          color: colors.utility.secondaryText
+        }}>
+          <div style={{ textAlign: 'center' as const }}>ROW</div>
+          <div>STATUS</div>
+          {isBookmarkImport && <div>SCHEME CODE</div>}
+          <div>{isBookmarkImport ? 'SCHEME NAME' : 'DATA PREVIEW'}</div>
+          <div>ISSUES</div>
+          <div>PROCESSED</div>
+          {isTransactionImport && <div style={{ textAlign: 'center' as const }}>PORTFOLIO</div>}
+          <div style={{ textAlign: 'center' as const }}>ACTIONS</div>
+        </div>
 
         {/* Table Body */}
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -826,15 +982,15 @@ const ImportResults: React.FC<ImportResultsProps> = ({
               
               return (
                 <div
-  key={record.id}
-  style={{
-    display: 'grid',
-    gridTemplateColumns: isTransactionImport
-      ? '60px 80px 1fr 200px 120px 140px 100px'
-      : (isBookmarkImport 
-          ? '60px 80px 200px 1fr 120px 100px'
-          : '60px 80px 1fr 200px 120px 100px'),
-    gap: '16px',
+                  key={record.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isTransactionImport
+                      ? '60px 80px 1fr 200px 120px 140px 100px'
+                      : (isBookmarkImport 
+                          ? '60px 80px 200px 1fr 120px 100px'
+                          : '60px 80px 1fr 200px 120px 100px'),
+                    gap: '16px',
                     padding: '16px 20px',
                     borderBottom: index < resultsData.records.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none',
                     fontSize: '13px',
@@ -868,52 +1024,54 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                       {record.processing_status}
                     </span>
                   </div>
-{/* Scheme Code (Bookmark only) */}
-{isBookmarkImport && (
-  <div style={{
-    fontSize: '13px',
-    fontWeight: '600',
-    fontFamily: 'monospace',
-    color: colors.brand.primary,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const
-  }}>
-    {record.mapped_data?.scheme_code || 'N/A'}
-  </div>
-)}
 
-{/* Data Preview / Scheme Name */}
-<div style={{
-  fontSize: '12px',
-  fontFamily: isBookmarkImport ? 'inherit' : 'monospace',
-  color: colors.utility.primaryText,
-  overflow: 'hidden'
-}}>
-  {isBookmarkImport ? (
-    <div style={{
-      whiteSpace: 'nowrap' as const,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }}>
-      {record.mapped_data?.scheme_name || 'No name'}
-    </div>
-  ) : (
-    <div style={{
-      whiteSpace: 'nowrap' as const,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }}>
-      {record.raw_data && typeof record.raw_data === 'object' ? 
-        Object.entries(record.raw_data).slice(0, 3).map(([key, value]) => 
-          `${key}: ${value}`
-        ).join(' • ') : 
-        'No data'}
-      {record.raw_data && typeof record.raw_data === 'object' && 
-      Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
-    </div>
-  )}
-</div>
+                  {/* Scheme Code (Bookmark only) */}
+                  {isBookmarkImport && (
+                    <div style={{
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      fontFamily: 'monospace',
+                      color: colors.brand.primary,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap' as const
+                    }}>
+                      {record.mapped_data?.scheme_code || 'N/A'}
+                    </div>
+                  )}
+
+                  {/* Data Preview / Scheme Name */}
+                  <div style={{
+                    fontSize: '12px',
+                    fontFamily: isBookmarkImport ? 'inherit' : 'monospace',
+                    color: colors.utility.primaryText,
+                    overflow: 'hidden'
+                  }}>
+                    {isBookmarkImport ? (
+                      <div style={{
+                        whiteSpace: 'nowrap' as const,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {record.mapped_data?.scheme_name || 'No name'}
+                      </div>
+                    ) : (
+                      <div style={{
+                        whiteSpace: 'nowrap' as const,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {record.raw_data && typeof record.raw_data === 'object' ? 
+                          Object.entries(record.raw_data).slice(0, 3).map(([key, value]) => 
+                            `${key}: ${value}`
+                          ).join(' • ') : 
+                          'No data'}
+                        {record.raw_data && typeof record.raw_data === 'object' && 
+                        Object.keys(record.raw_data).length > 3 ? ' ...' : ''}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Issues */}
                   <div style={{
                     fontSize: '11px',
@@ -1054,7 +1212,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                     </button>
 
                     {/* Edit Icon - For failed/orphan/duplicate/pending records (any non-success) */}
-                    {record.processing_status !== 'success' && (
+                    {((record.processing_status && record.processing_status !== 'success') || 
+                      (record.status && record.status !== 'success')) && (
                       <button
                         onClick={() => handleEditRecord(record)}
                         style={{
