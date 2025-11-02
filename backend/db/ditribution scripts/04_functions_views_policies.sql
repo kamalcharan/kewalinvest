@@ -936,6 +936,7 @@ DECLARE
     v_processed_count INTEGER := 0;
     v_customer_id INTEGER;
     v_scheme_id INTEGER;
+    v_portfolio_id INTEGER;
     v_error_msg TEXT;
     v_txn_id INTEGER;
     v_session_info RECORD;
@@ -973,8 +974,9 @@ BEGIN
         BEGIN
             v_customer_id := NULL;
             v_scheme_id := NULL;
+            v_portfolio_id := NULL;
             v_error_msg := NULL;
-            
+
             -- ==================================================
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
             -- ==================================================
@@ -1151,6 +1153,37 @@ BEGIN
                 v_processed_count := v_processed_count + 1;
                 CONTINUE;
             END IF;
+
+            -- ==================================================
+            -- CREATE/UPDATE PORTFOLIO ENTRY
+            -- Maintains t_customer_master_portfolio for views/reports
+            -- ==================================================
+            INSERT INTO t_customer_master_portfolio (
+                tenant_id,
+                is_live,
+                customer_id,
+                scheme_code,
+                scheme_name,
+                folio_no,
+                category,
+                sub_category,
+                fund_name,
+                start_date
+            ) VALUES (
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_staging_record.mapped_data->>'scheme_code',
+                v_staging_record.mapped_data->>'scheme_name',
+                v_staging_record.mapped_data->>'folio_no',
+                v_staging_record.mapped_data->>'category',
+                v_staging_record.mapped_data->>'sub_category',
+                v_staging_record.mapped_data->>'fund_name',
+                (v_staging_record.mapped_data->>'txn_date')::DATE
+            )
+            ON CONFLICT (customer_id, scheme_code, tenant_id, is_live)
+            DO NOTHING
+            RETURNING id INTO v_portfolio_id;
 
             -- ==================================================
             -- INSERT TRANSACTION
