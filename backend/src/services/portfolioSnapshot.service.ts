@@ -116,15 +116,15 @@ export class PortfolioSnapshotService {
           COALESCE(t.scheme_id, sd.id) as scheme_id,
           t.scheme_code,
           t.scheme_name,
-          SUM(CASE WHEN t.txn_type_id IN (
-            SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
-          ) THEN t.units ELSE 0 END) as total_units_purchased,
-          SUM(CASE WHEN t.txn_type_id IN (
-            SELECT id FROM m_transaction_types WHERE txn_type = 'redemption'
-          ) THEN t.units ELSE 0 END) as total_units_redeemed,
-          SUM(CASE WHEN t.txn_type_id IN (
-            SELECT id FROM m_transaction_types WHERE txn_type = 'purchase'
-          ) THEN t.total_amount ELSE 0 END) as total_invested
+         SUM(CASE WHEN t.txn_type_id IN (
+  SELECT id FROM m_transaction_types WHERE txn_type = 'Addition'
+) THEN t.units ELSE 0 END) as total_units_purchased,
+SUM(CASE WHEN t.txn_type_id IN (
+  SELECT id FROM m_transaction_types WHERE txn_type = 'Deduction'
+) THEN t.units ELSE 0 END) as total_units_redeemed,
+SUM(CASE WHEN t.txn_type_id IN (
+  SELECT id FROM m_transaction_types WHERE txn_type = 'Addition'
+) THEN t.total_amount ELSE 0 END) as total_invested
         FROM t_transaction_table t
         -- Only JOIN to scheme_details if scheme_id is NULL (legacy data)
         LEFT JOIN t_scheme_details sd ON t.scheme_id IS NULL
