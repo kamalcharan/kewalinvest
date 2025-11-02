@@ -3,8 +3,7 @@
   import { IMPORT_STATUS, RECORD_STATUS } from '../constants/fileImportTypes';
 
   // Export the FileImportType from constants
-  export type FileImportType = 'CustomerData' | 'TransactionData' | 'SchemeData';
-
+export type FileImportType = 'BookmarkData' | 'CustomerData' | 'TransactionData' | 'SchemeData';
   // File upload related types
   export interface FileUploadInfo {
     id: number;
@@ -77,6 +76,13 @@
     staging_deleted_at?: string;
     staging_deleted_by?: number;
     staging_deleted_reason?: string;
+    // NEW: Restart and checkpoint fields
+    restart_count?: number;
+    last_restart_at?: string;
+    can_restart?: boolean;
+    last_processed_staging_id?: number;
+    processing_checkpoint?: any;
+    customer_lookup_method?: 'iwell_code' | 'customer_name' | 'both';
     created_at: string;
     updated_at: string;
   }
@@ -93,6 +99,27 @@
     created_contact_id?: number;
     created_customer_id?: number;
     processed_at: string;
+    // NEW: Match tracking fields
+    match_type?: string;
+    match_confidence?: string;
+    ambiguous_matches?: Array<{
+      id: number;
+      name: string;
+      pan: string | null;
+    }>;
+    requires_review?: boolean;
+    // NEW: Edit history fields
+    edit_history?: Array<{
+      edited_at: string;
+      edited_by: number;
+      field: string;
+      old_value: any;
+      new_value: any;
+    }>;
+    edited_at?: string;
+    edited_by?: number;
+    reprocess_count?: number;
+    last_reprocess_at?: string;
   }
 
   // UI state types

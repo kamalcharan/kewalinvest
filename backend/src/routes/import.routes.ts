@@ -14,6 +14,10 @@ const IMPORT_TYPE_CONFIG: Record<FileImportType, {
   folderName: string;
   uploadPath: string;
 }> = {
+  BookmarkData: {
+    folderName: 'bookmarks',
+    uploadPath: 'UserFiles/bookmarks'
+  },
   CustomerData: {
     folderName: 'customers',
     uploadPath: 'UserFiles/customers'
@@ -256,5 +260,11 @@ router.delete('/staging/:sessionId', authenticate, importController.deleteStagin
 router.post('/check-filename-duplicate', authenticate, importController.checkFilenameDuplicate);
 router.get('/check-session-duplicates/:sessionId', authenticate, importController.checkSessionDuplicates);
 router.post('/save-duplicate-decision/:sessionId', authenticate, importController.saveDuplicateDecision);
+
+// Session restart and record reprocessing endpoints
+router.post('/restart/:sessionId', authenticate, importController.restartSession);
+router.put('/staging/:stagingId/edit', authenticate, importController.editStagingRecord);
+router.post('/staging/:stagingId/reprocess', authenticate, importController.reprocessSingleRecord);
+router.post('/session/:sessionId/bulk-reprocess', authenticate, importController.bulkReprocessRecords);
 
 export default router;

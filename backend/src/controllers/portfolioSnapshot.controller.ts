@@ -1,10 +1,13 @@
 // backend/src/controllers/portfolioSnapshot.controller.ts
 // Controller for Portfolio Snapshot Scheduler API endpoints
+// FIXED: Now uses JobSchedulerService for execution tracking to write to t_job_executions
 
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { PortfolioSnapshotSchedulerService } from '../services/portfolioSnapshotScheduler.service';
 import { PortfolioSnapshotService } from '../services/portfolioSnapshot.service';
+import { JobSchedulerService } from '../services/jobScheduler.service';
+import { JobType } from '../types/jobs.types';
 import {
   CreateSnapshotConfigRequest,
   UpdateSnapshotConfigRequest,
@@ -18,10 +21,12 @@ import {
 export class PortfolioSnapshotController {
   private schedulerService: PortfolioSnapshotSchedulerService;
   private snapshotService: PortfolioSnapshotService;
+  private jobSchedulerService: JobSchedulerService;
 
-  constructor() {
+  constructor(jobSchedulerService: JobSchedulerService) {
     this.schedulerService = new PortfolioSnapshotSchedulerService();
     this.snapshotService = new PortfolioSnapshotService();
+    this.jobSchedulerService = jobSchedulerService;
   }
 
   // ==================== CONFIGURATION ENDPOINTS ====================
@@ -85,7 +90,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-
       // Check if config already exists
       const existing = await this.schedulerService.getConfig(tenantId, isLive);
       if (existing) {
@@ -138,7 +142,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-
       const request: UpdateSnapshotConfigRequest = {
         schedule_type: req.body.schedule_type,
         cron_expression: req.body.cron_expression,
@@ -182,7 +185,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-
       console.log(`[SnapshotController] Manual trigger requested by tenant ${tenantId} (${isLive ? 'live' : 'test'})`);
 
       const result = await this.schedulerService.triggerManual(tenantId, isLive);
@@ -220,7 +222,6 @@ export class PortfolioSnapshotController {
         } as GetExecutionsResponse);
         return;
       }
-
 
       const { executions, total } = await this.schedulerService.getExecutions(
         tenantId,
@@ -270,7 +271,6 @@ export class PortfolioSnapshotController {
         return;
       }
 
-
       const statistics = await this.schedulerService.getStatistics(tenantId, isLive);
 
       if (!statistics) {
@@ -300,6 +300,7 @@ export class PortfolioSnapshotController {
   /**
    * POST /api/cruise-control/snapshots/backfill-smart
    * Smart backfill - automatically detects missing months per customer
+   * FIXED: Now uses JobSchedulerService for execution tracking
    */
   smartBackfill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -319,7 +320,34 @@ export class PortfolioSnapshotController {
 
       console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
       console.log(`[SnapshotController] Environment from header: ${req.headers['x-environment']}, is_live: ${isLive}`);
-      const executionId = await this.schedulerService.createExecution(tenantId, userId, isLive, 'manual');
+
+      // FIXED: Use JobSchedulerService to create execution in t_job_executions (NEW table)
+      // First ensure config exists
+      let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
+      
+      if (!config) {
+        // Create default config if it doesn't exist
+        config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
+          user_id: userId,
+          schedule_type: 'weekly',
+          cron_expression: '0 21 * * 5',
+          is_enabled: false,
+          max_retries: 3
+        });
+        console.log(`[SnapshotController] Created default job config for tenant ${tenantId}`);
+      }
+
+      // Create execution record in the NEW generic job system
+      const executionId = await this.jobSchedulerService.createExecution(
+        config.id!,
+        tenantId,
+        isLive,
+        JobType.PORTFOLIO_SNAPSHOT,
+        'manual',
+        0
+      );
+
+      console.log(`[SnapshotController] Created execution ${executionId} in t_job_executions (generic job system)`);
 
       // Execute backfill in background and track it
       this.snapshotService.smartBackfill({
@@ -336,14 +364,31 @@ export class PortfolioSnapshotController {
             duration_ms: result.execution_duration_ms
           });
 
-          // Update execution with results
-          await this.schedulerService.completeExecutionWithResults(executionId, result);
-          console.log(`[SnapshotController] Execution ${executionId} updated with results successfully`);
+          // Update execution with results using JobSchedulerService (writes to t_job_executions)
+          await this.jobSchedulerService.completeExecution(executionId, {
+            success: true,
+            execution_data: {
+              snapshot_month_end: result.snapshot_month_end,
+              customers_processed: result.customers_processed || 0,
+              customers_failed: result.customers_failed || 0,
+              snapshots_created: result.snapshots_created || 0,
+              snapshots_updated: result.snapshots_updated || 0,
+              months_processed: result.months_processed || 0,
+              errors: result.errors || []
+            },
+            execution_duration_ms: result.execution_duration_ms
+          });
+
+          // Update config stats
+          await this.jobSchedulerService.updateConfigStats(config.id!, true);
+
+          console.log(`[SnapshotController] Execution ${executionId} updated successfully in t_job_executions`);
         } catch (updateError: any) {
           console.error(`[SnapshotController] CRITICAL: Failed to update execution ${executionId} with results:`, updateError);
           // Try to mark as failed
           try {
-            await this.schedulerService.failExecutionWithError(executionId, `Failed to update results: ${updateError.message}`);
+            await this.jobSchedulerService.failExecution(executionId, `Failed to update results: ${updateError.message}`);
+            await this.jobSchedulerService.updateConfigStats(config.id!, false);
           } catch (failError) {
             console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
           }
@@ -352,7 +397,8 @@ export class PortfolioSnapshotController {
         try {
           console.error(`[SnapshotController] Smart backfill failed for execution ${executionId}:`, error);
           // Mark execution as failed
-          await this.schedulerService.failExecutionWithError(executionId, error.message);
+          await this.jobSchedulerService.failExecution(executionId, error.message);
+          await this.jobSchedulerService.updateConfigStats(config.id!, false);
           console.log(`[SnapshotController] Execution ${executionId} marked as failed`);
         } catch (failError: any) {
           console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
@@ -445,7 +491,6 @@ export class PortfolioSnapshotController {
         });
         return;
       }
-
 
       const config = await this.schedulerService.getConfig(tenantId, isLive);
       const stats = await this.schedulerService.getStatistics(tenantId, isLive);
