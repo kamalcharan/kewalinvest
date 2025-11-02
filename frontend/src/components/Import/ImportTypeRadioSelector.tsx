@@ -26,6 +26,13 @@ const ImportTypeRadioSelector: React.FC<ImportTypeRadioSelectorProps> = ({
       adminOnly: false
     },
     {
+      value: 'BookmarkData' as FileImportType,
+      label: 'Bookmark Data',
+      icon: '🔖',
+      description: 'Import scheme bookmarks for tracking mutual fund schemes',
+      adminOnly: false
+    },
+    {
       value: 'SchemeData' as FileImportType,
       label: 'Scheme Data',
       icon: '📊',

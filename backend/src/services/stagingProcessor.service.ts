@@ -53,24 +53,68 @@ export class StagingProcessorService {
    */
   async processSession(params: ProcessingParams): Promise<ProcessingResult> {
     const startTime = Date.now();
-    const timeoutMs = params.timeoutMs || 20 * 60 * 1000; // 20 minutes default
-    const batchSize = params.batchSize || 100;
-
+    
     let processedCount = 0;
     let successCount = 0;
     let failedCount = 0;
     let duplicateCount = 0;
     let orphanCount = 0;
     let lastProcessedId: number | undefined;
-    let timedOut = false;
 
-    console.log(`[StagingProcessor] Starting Phase 2 for session ${params.sessionId}, lookup method: ${params.customerLookupMethod}`);
+    console.log(`[StagingProcessor] Starting Phase 2 for session ${params.sessionId}, type: ${params.importType}, lookup method: ${params.customerLookupMethod}`);
 
     try {
       // Update session status to 'processing'
       await this.updateSessionStatus(params.sessionId, 'processing', {
         processing_started_at: new Date()
       });
+
+      // =====================================================
+      // TRANSACTION DATA - Use PostgreSQL Function
+      // =====================================================
+      if (params.importType === 'TransactionData') {
+        console.log(`[StagingProcessor] Using PostgreSQL function for TransactionData processing`);
+        
+        const result = await this.db.query(
+          'SELECT * FROM process_transaction_import_session($1, $2)',
+          [params.sessionId, params.customerLookupMethod || 'iwell_code']
+        );
+
+        const stats = result.rows[0];
+        
+        processedCount = stats.total_processed || 0;
+        successCount = stats.successful || 0;
+        failedCount = stats.failed || 0;
+        duplicateCount = stats.duplicates || 0;
+        orphanCount = stats.orphans || 0;
+
+        console.log(`[StagingProcessor] PostgreSQL processing completed:`, {
+          processed: processedCount,
+          successful: successCount,
+          failed: failedCount,
+          duplicates: duplicateCount,
+          orphans: orphanCount,
+          timeSeconds: stats.processing_time_seconds
+        });
+
+        // Session status already updated by PostgreSQL function
+        return {
+          success: true,
+          processedCount,
+          successCount,
+          failedCount,
+          duplicateCount,
+          orphanCount,
+          timedOut: false
+        };
+      }
+
+      // =====================================================
+      // CUSTOMER DATA & SCHEME DATA - Use Existing Logic
+      // =====================================================
+      const timeoutMs = params.timeoutMs || 20 * 60 * 1000;
+      const batchSize = params.batchSize || 100;
+      let timedOut = false;
 
       // Get checkpoint (if restarting)
       const checkpoint = await this.getCheckpoint(params.sessionId);
@@ -123,7 +167,7 @@ export class StagingProcessorService {
       // Determine final status
       let finalStatus: string;
       if (timedOut) {
-        finalStatus = 'pending_processing'; // Can be restarted
+        finalStatus = 'pending_processing';
       } else if (failedCount > 0 || orphanCount > 0) {
         finalStatus = 'completed_with_errors';
       } else {
@@ -136,6 +180,7 @@ export class StagingProcessorService {
         successful_records: successCount,
         failed_records: failedCount,
         duplicate_records: duplicateCount,
+        orphan_records: orphanCount,
         processing_completed_at: timedOut ? null : new Date(),
         last_processed_staging_id: lastProcessedId,
         can_restart: timedOut
@@ -164,6 +209,7 @@ export class StagingProcessorService {
         successful_records: successCount,
         failed_records: failedCount,
         duplicate_records: duplicateCount,
+        orphan_records: orphanCount,
         last_processed_staging_id: lastProcessedId,
         can_restart: true
       });
@@ -214,24 +260,12 @@ export class StagingProcessorService {
           orphan++;
         }
 
-        // IMPORTANT: For CustomerData and SchemeData, the DB function already updated the staging record
-        // Only update staging record for TransactionData (which is processed in TypeScript)
-        if (params.importType === 'TransactionData') {
-          await this.updateStagingRecord(record.id, result);
-        }
+        // Note: For CustomerData and SchemeData, the DB function already updated the staging record
+        // No need to update staging record here
 
       } catch (error: any) {
         console.error(`[StagingProcessor] Error processing record ${record.id}:`, error);
         failed++;
-
-        // Only update staging record for TransactionData
-        // For CustomerData/SchemeData, the DB function handles errors too
-        if (params.importType === 'TransactionData') {
-          await this.updateStagingRecord(record.id, {
-            status: 'failed',
-            error_messages: [error.message]
-          });
-        }
       }
     }
 
@@ -255,140 +289,24 @@ export class StagingProcessorService {
     status: 'success' | 'failed' | 'duplicate' | 'orphan';
     error_messages?: string[];
     warnings?: string[];
-    match_type?: string;
-    match_confidence?: string;
-    ambiguous_matches?: any;
-    created_customer_id?: number;
-    created_transaction_id?: number;
   }> {
     const data = record.mapped_data;
-    const errors: string[] = [];
-    const warnings: string[] = [];
 
     // ======================================================================
-    // TRANSACTION DATA PROCESSING
+    // TRANSACTION DATA - Should not reach here (handled by PostgreSQL)
     // ======================================================================
     if (params.importType === 'TransactionData') {
-      // Step 1: Customer Lookup
-      const customerResult = await this.customerLookup.findCustomerForTransaction(
-        params.customerLookupMethod,
-        {
-          iwell_code: data.iwell_code,
-          customer_name: data.customer_name,
-          pan: data.pan
-        },
-        params.tenantId,
-        params.isLive
-      );
-
-      if (!customerResult.customerId) {
-        // Customer not found or ambiguous
-        if (customerResult.matchConfidence === 'ambiguous') {
-          return {
-            status: 'failed',
-            error_messages: [customerResult.errorMessage || 'Ambiguous customer match'],
-            match_type: customerResult.matchType,
-            match_confidence: 'ambiguous',
-            ambiguous_matches: customerResult.ambiguousMatches
-          };
-        }
-
-        return {
-          status: 'orphan',
-          error_messages: [customerResult.errorMessage || 'Customer not found'],
-          match_type: customerResult.matchType,
-          match_confidence: 'not_found'
-        };
-      }
-
-      // Step 2: Scheme Lookup (if scheme_name provided)
-      let schemeId: number | null = null;
-      let schemeCode: string | undefined;
-      let schemeName: string | undefined;
-
-      if (data.scheme_name) {
-        const schemeResult = await this.schemeAlias.lookupSchemeByAlias(data.scheme_name);
-
-        if (schemeResult.success && schemeResult.data) {
-          schemeId = schemeResult.data.scheme_id;
-          schemeCode = schemeResult.data.scheme_code;
-          schemeName = schemeResult.data.scheme_name;
-        } else {
-          warnings.push(`Scheme not found for name: ${data.scheme_name}`);
-        }
-      }
-
-      // Handle txn_type_id: convert from string to integer if needed, or accept as-is
-      const txnTypeId = data.txn_type_id ? parseInt(data.txn_type_id, 10) : null;
-
-      // Step 3: Check for duplicates (same customer, scheme, date, amount)
-      const duplicateCheck = await this.checkTransactionDuplicate({
-        customer_id: customerResult.customerId,
-        scheme_id: schemeId,
-        txn_date: data.txn_date || data.transaction_date,
-        total_amount: data.total_amount || data.transaction_amount,
-        txn_type_id: txnTypeId,
-        tenant_id: params.tenantId,
-        is_live: params.isLive
-      });
-
-      if (duplicateCheck.isDuplicate) {
-        return {
-          status: 'duplicate',
-          error_messages: [`Duplicate transaction found (ID: ${duplicateCheck.existingId})`],
-          match_type: customerResult.matchType,
-          match_confidence: customerResult.matchConfidence,
-          warnings
-        };
-      }
-
-      // Step 4: Insert transaction
-      try {
-        const transactionId = await this.insertTransaction({
-          customer_id: customerResult.customerId,
-          scheme_id: schemeId,
-          scheme_code: schemeCode || data.scheme_code,
-          scheme_name: schemeName || data.scheme_name,
-          txn_date: data.txn_date || data.transaction_date,
-          txn_type_id: txnTypeId,
-          total_amount: data.total_amount || data.transaction_amount,
-          units: data.units,
-          nav: data.nav,
-          folio_no: data.folio_no || data.folio_number,
-          txn_description: data.txn_description || data.remarks,
-          stamp_duty: data.stamp_duty,
-          stt: data.stt,
-          tds: data.tds,
-          staging_record_id: record.id,
-          import_session_id: params.sessionId,
-          tenant_id: params.tenantId,
-          is_live: params.isLive
-        });
-
-        return {
-          status: 'success',
-          match_type: customerResult.matchType,
-          match_confidence: customerResult.matchConfidence,
-          created_transaction_id: transactionId,
-          warnings: warnings.length > 0 ? warnings : undefined
-        };
-
-      } catch (insertError: any) {
-        console.error('[StagingProcessor] Transaction insert failed:', insertError);
-        return {
-          status: 'failed',
-          error_messages: [`Database insert failed: ${insertError.message}`],
-          match_type: customerResult.matchType,
-          match_confidence: customerResult.matchConfidence
-        };
-      }
+      console.warn(`[StagingProcessor] TransactionData record reached processRecord - this should not happen`);
+      return {
+        status: 'failed',
+        error_messages: ['TransactionData should be processed by PostgreSQL function']
+      };
     }
 
     // ======================================================================
     // CUSTOMER DATA PROCESSING
     // ======================================================================
     if (params.importType === 'CustomerData') {
-      // Call existing database function - it handles EVERYTHING
       try {
         await this.db.query('SELECT process_single_customer_record($1)', [record.id]);
 
@@ -411,7 +329,6 @@ export class StagingProcessorService {
     // SCHEME DATA PROCESSING
     // ======================================================================
     if (params.importType === 'SchemeData') {
-      // Call existing database function - it handles EVERYTHING
       try {
         await this.db.query('SELECT process_single_scheme_record($1)', [record.id]);
 
@@ -438,138 +355,6 @@ export class StagingProcessorService {
   }
 
   /**
-   * Check if transaction already exists (duplicate detection)
-   */
-  private async checkTransactionDuplicate(data: {
-    customer_id: number;
-    scheme_id: number | null;
-    txn_date: string;
-    total_amount: number;
-    txn_type_id: number | null;
-    tenant_id: number;
-    is_live: boolean;
-  }): Promise<{ isDuplicate: boolean; existingId?: number }> {
-    try {
-      const query = `
-        SELECT id
-        FROM t_transaction_table
-        WHERE customer_id = $1
-          AND tenant_id = $2
-          AND is_live = $3
-          AND txn_date = $4
-          AND total_amount = $5
-          ${data.txn_type_id !== null ? 'AND txn_type_id = $6' : 'AND txn_type_id IS NULL'}
-          ${data.scheme_id ? `AND scheme_id = $${data.txn_type_id !== null ? '7' : '6'}` : 'AND scheme_id IS NULL'}
-        LIMIT 1
-      `;
-
-      const params: any[] = [
-        data.customer_id,
-        data.tenant_id,
-        data.is_live,
-        data.txn_date,
-        data.total_amount
-      ];
-
-      if (data.txn_type_id !== null) {
-        params.push(data.txn_type_id);
-      }
-
-      if (data.scheme_id) {
-        params.push(data.scheme_id);
-      }
-
-      const result = await this.db.query(query, params);
-
-      if (result.rows.length > 0) {
-        return { isDuplicate: true, existingId: result.rows[0].id };
-      }
-
-      return { isDuplicate: false };
-    } catch (error) {
-      console.error('[StagingProcessor] Error checking duplicate:', error);
-      return { isDuplicate: false };
-    }
-  }
-
-  /**
-   * Insert transaction into t_transaction_table
-   */
-  private async insertTransaction(data: {
-    customer_id: number;
-    scheme_id: number | null;
-    scheme_code?: string;
-    scheme_name?: string;
-    txn_date: string;
-    txn_type_id: number | null;
-    total_amount: number;
-    units?: number;
-    nav?: number;
-    folio_no?: string;
-    txn_description?: string;
-    stamp_duty?: number;
-    stt?: number;
-    tds?: number;
-    staging_record_id: number;
-    import_session_id: number;
-    tenant_id: number;
-    is_live: boolean;
-  }): Promise<number> {
-    const query = `
-      INSERT INTO t_transaction_table (
-        tenant_id,
-        is_live,
-        is_active,
-        customer_id,
-        scheme_id,
-        scheme_code,
-        scheme_name,
-        folio_no,
-        txn_type_id,
-        txn_date,
-        total_amount,
-        units,
-        nav,
-        stamp_duty,
-        stt,
-        tds,
-        txn_description,
-        txn_source,
-        staging_record_id,
-        import_session_id,
-        created_at,
-        updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW())
-      RETURNING id
-    `;
-
-    const result = await this.db.query(query, [
-      data.tenant_id,
-      data.is_live,
-      true, // is_active
-      data.customer_id,
-      data.scheme_id,
-      data.scheme_code || null,
-      data.scheme_name || null,
-      data.folio_no || null,
-      data.txn_type_id,
-      data.txn_date,
-      data.total_amount,
-      data.units || null,
-      data.nav || null,
-      data.stamp_duty || null,
-      data.stt || null,
-      data.tds || null,
-      data.txn_description || null,
-      'import', // txn_source
-      data.staging_record_id,
-      data.import_session_id
-    ]);
-
-    return result.rows[0].id;
-  }
-
-  /**
    * Get next batch of staging records to process
    */
   private async getNextBatch(
@@ -589,64 +374,6 @@ export class StagingProcessorService {
 
     const result = await this.db.query(query, [sessionId, startFromId, batchSize]);
     return result.rows;
-  }
-
-  /**
-   * Update staging record with processing result
-   */
-  private async updateStagingRecord(
-    stagingId: number,
-    result: {
-      status: string;
-      error_messages?: string[];
-      warnings?: string[];
-      match_type?: string;
-      match_confidence?: string;
-      ambiguous_matches?: any;
-      created_customer_id?: number;
-      created_transaction_id?: number;
-    }
-  ): Promise<void> {
-    // Store match metadata in processing_metadata JSONB
-    const metadata: any = {};
-    if (result.match_type) metadata.match_type = result.match_type;
-    if (result.match_confidence) metadata.match_confidence = result.match_confidence;
-    if (result.ambiguous_matches) metadata.ambiguous_matches = result.ambiguous_matches;
-
-    // Determine created_record_id and created_record_type
-    let createdRecordId = null;
-    let createdRecordType = null;
-
-    if (result.created_customer_id) {
-      createdRecordId = result.created_customer_id;
-      createdRecordType = 'customer';
-    } else if (result.created_transaction_id) {
-      createdRecordId = result.created_transaction_id;
-      createdRecordType = 'transaction';
-    }
-
-    const query = `
-      UPDATE t_import_staging_data
-      SET
-        processing_status = $1,
-        error_messages = $2,
-        warnings = $3,
-        created_record_id = $4,
-        created_record_type = $5,
-        processing_metadata = $6,
-        processed_at = NOW()
-      WHERE id = $7
-    `;
-
-    await this.db.query(query, [
-      result.status,
-      result.error_messages || [],
-      result.warnings || [],
-      createdRecordId,
-      createdRecordType,
-      Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
-      stagingId
-    ]);
   }
 
   /**
@@ -672,54 +399,57 @@ export class StagingProcessorService {
   }
 
   /**
- * Update checkpoint during processing
- */
-private async updateCheckpoint(
-  sessionId: number,
-  lastProcessedId: number,
-  counts: {
-    processedCount: number;
-    successCount: number;
-    failedCount: number;
-    duplicateCount: number;
-    orphanCount: number;
-  }
-): Promise<void> {
-  const query = `
-    UPDATE t_import_sessions
-    SET
-      last_processed_staging_id = $1,
-      processed_records = $2,
-      successful_records = $3,
-      failed_records = $4,
-      duplicate_records = $5,
-      processing_checkpoint = jsonb_build_object(
-        'last_processed_id', $7::bigint,
-        'processed', $8::integer,
-        'success', $9::integer,
-        'failed', $10::integer,
-        'duplicate', $11::integer,
-        'orphan', $12::integer,
-        'updated_at', NOW()
-      )
-    WHERE id = $6
-  `;
+   * Update checkpoint during processing
+   */
+  private async updateCheckpoint(
+    sessionId: number,
+    lastProcessedId: number,
+    counts: {
+      processedCount: number;
+      successCount: number;
+      failedCount: number;
+      duplicateCount: number;
+      orphanCount: number;
+    }
+  ): Promise<void> {
+    const query = `
+      UPDATE t_import_sessions
+      SET
+        last_processed_staging_id = $1,
+        processed_records = $2,
+        successful_records = $3,
+        failed_records = $4,
+        duplicate_records = $5,
+        orphan_records = $6,
+        processing_checkpoint = jsonb_build_object(
+          'last_processed_id', $7::bigint,
+          'processed', $8::integer,
+          'success', $9::integer,
+          'failed', $10::integer,
+          'duplicate', $11::integer,
+          'orphan', $12::integer,
+          'updated_at', NOW()
+        )
+      WHERE id = $13
+    `;
 
-  await this.db.query(query, [
-    lastProcessedId,           // $1 - for last_processed_staging_id column
-    counts.processedCount,     // $2 - for processed_records column
-    counts.successCount,       // $3 - for successful_records column
-    counts.failedCount,        // $4 - for failed_records column
-    counts.duplicateCount,     // $5 - for duplicate_records column
-    sessionId,                 // $6 - for WHERE clause
-    lastProcessedId,           // $7 - for JSONB (same value, different parameter)
-    counts.processedCount,     // $8 - for JSONB
-    counts.successCount,       // $9 - for JSONB
-    counts.failedCount,        // $10 - for JSONB
-    counts.duplicateCount,     // $11 - for JSONB
-    counts.orphanCount         // $12 - for JSONB
-  ]);
-}
+    await this.db.query(query, [
+      lastProcessedId,           // $1
+      counts.processedCount,     // $2
+      counts.successCount,       // $3
+      counts.failedCount,        // $4
+      counts.duplicateCount,     // $5
+      counts.orphanCount,        // $6
+      lastProcessedId,           // $7 (for JSONB)
+      counts.processedCount,     // $8
+      counts.successCount,       // $9
+      counts.failedCount,        // $10
+      counts.duplicateCount,     // $11
+      counts.orphanCount,        // $12
+      sessionId                  // $13
+    ]);
+  }
+
   /**
    * Update session status and metadata
    */
@@ -733,6 +463,7 @@ private async updateCheckpoint(
       successful_records?: number;
       failed_records?: number;
       duplicate_records?: number;
+      orphan_records?: number;
       error_summary?: string;
       last_processed_staging_id?: number;
       can_restart?: boolean;
@@ -770,6 +501,11 @@ private async updateCheckpoint(
     if (metadata.duplicate_records !== undefined) {
       updates.push(`duplicate_records = $${paramIndex++}`);
       params.push(metadata.duplicate_records);
+    }
+
+    if (metadata.orphan_records !== undefined) {
+      updates.push(`orphan_records = $${paramIndex++}`);
+      params.push(metadata.orphan_records);
     }
 
     if (metadata.error_summary !== undefined) {

@@ -1,0 +1,3 @@
+"id","tenant_id","user_id","is_live","schedule_type","cron_expression","is_enabled","last_executed_at","next_execution_at","execution_count","failure_count","max_retries","created_at","updated_at"
+1,12,12,False,"weekly","0 21 * * 5",False,NULL,"2025-10-31 21:00:00",0,0,3,"2025-10-28 04:58:24.454658","2025-10-28 04:58:24.454658"
+2,12,12,True,"weekly","0 21 * * 5",False,NULL,"2025-10-31 21:00:00",0,0,3,"2025-10-28 06:40:31.10727","2025-10-28 06:40:31.10727"
