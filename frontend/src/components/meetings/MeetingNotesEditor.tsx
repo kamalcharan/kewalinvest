@@ -69,10 +69,9 @@ export const MeetingNotesEditor: React.FC<MeetingNotesEditorProps> = ({
           throw new Error(response.error || 'Failed to complete meeting');
         }
       } else {
-        // Just update notes/outcome
+        // Just update notes (outcome is only in CompleteMeetingRequest)
         const updateData: UpdateMeetingRequest = {
-          notes,
-          outcome
+          notes
         };
 
         const response = await MeetingService.updateMeeting(meeting.id, updateData);

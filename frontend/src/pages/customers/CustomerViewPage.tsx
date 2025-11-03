@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useCustomerGoalSummary } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -31,14 +31,14 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
-import { GoalCard } from '../../components/goals/GoalCard';
-import { GoalSetupModal } from '../../components/goals/GoalSetupModal';
-import { GoalDetailsModal } from '../../components/goals/GoalDetailsModal';
-import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
-import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
-import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
-import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
-import { MeetingsTab } from '../../components/meetings/MeetingsTab';
+import GoalCard from '../../components/goals/GoalCard';
+import GoalSetupModal from '../../components/goals/GoalSetupModal';
+import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
+import GoalProgressTracker from '../../components/goals/GoalProgressTracker';
+import GoalWatchlistPanel from '../../components/goals/GoalWatchlistPanel';
+import AssetAllocationUtilization from '../../components/goals/AssetAllocationUtilization';
+import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
+import MeetingsTab from '../../components/meetings/MeetingsTab';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -93,7 +93,7 @@ const CustomerViewPage: React.FC = () => {
 
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
-  const { data: goalSummary, isLoading: goalSummaryLoading } = useCustomerGoalSummary(customerId || 0);
+  const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -1138,8 +1138,8 @@ comparisonData={comparisonIndexData}
                     margin: 0
                   }}>
                     {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.on_track_count} on track •
-                    {goalSummary.watchlist_count} in watchlist
+                    {goalSummary.goals_on_track} on track •
+                    {goalSummary.goals_behind} behind
                   </p>
                 )}
               </div>
@@ -1408,24 +1408,16 @@ comparisonData={comparisonIndexData}
             setShowGoalDetailsModal(false);
             setSelectedGoalId(null);
           }}
-          onUpdate={() => {
-            refetchGoals();
-          }}
         />
       )}
 
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}
-          customerId={customerId!}
+          isRecalculating={false}
           onClose={() => {
             setShowGoalRecalculationModal(false);
             setSelectedGoalId(null);
-          }}
-          onSuccess={() => {
-            setShowGoalRecalculationModal(false);
-            setSelectedGoalId(null);
-            refetchGoals();
           }}
         />
       )}
