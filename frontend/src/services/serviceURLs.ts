@@ -193,8 +193,18 @@ export const API_ENDPOINTS = {
     HEALTH: (jobType: string) => `${API_BASE}/jobs/${jobType}/health`,
   },
 
-  // Cruise Control - Portfolio Snapshots endpoints
+  // Cruise Control endpoints
   CRUISE_CONTROL: {
+    // Dashboard & Statistics
+    DASHBOARD: `${API_BASE}/cruise-control/dashboard`,
+    NAV_STATISTICS: `${API_BASE}/cruise-control/nav/statistics`,
+    MARKET_STATISTICS: `${API_BASE}/cruise-control/market/statistics`,
+
+    // Manual Triggers
+    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/cruise-control/nav/download/${schemeCode}`,
+    MARKET_DOWNLOAD: (indexId: number) => `${API_BASE}/cruise-control/market/download/${indexId}`,
+
+    // Portfolio Snapshots
     SNAPSHOTS: {
       CONFIG: `${API_BASE}/cruise-control/snapshots/config`,
       EXECUTE: `${API_BASE}/cruise-control/snapshots/execute`,
@@ -203,8 +213,8 @@ export const API_ENDPOINTS = {
       HEALTH: `${API_BASE}/cruise-control/snapshots/health`,
       BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
       BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
-      
-      // NEW: Snapshot Operations
+
+      // Snapshot Operations
       OPERATIONS: {
         DROP_ALL: `${API_BASE}/cruise-control/snapshots/operations/drop-all`,
         GENERATE_MISSING: `${API_BASE}/cruise-control/snapshots/operations/generate-missing`,
