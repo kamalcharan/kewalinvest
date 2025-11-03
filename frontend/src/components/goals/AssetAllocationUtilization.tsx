@@ -42,15 +42,18 @@ export const AssetAllocationUtilization: React.FC<AssetAllocationUtilizationProp
     }
   };
 
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value == null) return '₹0';
     return `₹${Math.abs(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
   };
 
-  const formatPercentage = (value: number): string => {
+  const formatPercentage = (value: number | null | undefined): string => {
+    if (value == null) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
 
-  const getUtilizationColor = (percentage: number): string => {
+  const getUtilizationColor = (percentage: number | null | undefined): string => {
+    if (percentage == null) return colors.utility.secondaryText;
     if (percentage >= 100) return colors.semantic.error;
     if (percentage >= 80) return colors.semantic.warning;
     return colors.semantic.success;
