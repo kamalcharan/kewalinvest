@@ -149,7 +149,7 @@ const CustomerViewPage: React.FC = () => {
 
           if (marketDataResponse.success && marketDataResponse.data?.data) {
             // Extract closing prices and map to portfolio dates
-            const indexValues = marketDataResponse.data.data.map(d => d.close_price);
+            const indexValues = marketDataResponse.data.data.map(d => d.close);
             setComparisonIndexData(indexValues);
           }
         }
