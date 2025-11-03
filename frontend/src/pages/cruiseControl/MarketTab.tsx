@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import IndexCard from '../../components/market/IndexCard';
-import { DefaultIndexSettings } from '../../components/performance/DefaultIndexSettings';
 import type { MarketIndex } from '../../types/market.types';
 
 // Dummy market index data
@@ -245,9 +244,6 @@ export const MarketTab: React.FC = () => {
 
   return (
     <div>
-      {/* Default Index Settings */}
-      <DefaultIndexSettings />
-
       {/* Statistics Cards */}
       <div style={{
         display: 'grid',
