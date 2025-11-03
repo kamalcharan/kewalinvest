@@ -312,18 +312,18 @@ export class UserPreferencesService {
   // ==================== DEFAULT COMPARISON INDEX ====================
 
   /**
-   * Get default comparison index for user
+   * Get default comparison index for tenant
    * Returns null if not set
    */
-  async getDefaultComparisonIndex(userId: number): Promise<number | null> {
+  async getDefaultComparisonIndex(tenantId: number): Promise<number | null> {
     try {
       const query = `
         SELECT default_comparison_index_id
-        FROM t_users
+        FROM t_tenants
         WHERE id = $1
       `;
 
-      const result = await pool.query(query, [userId]);
+      const result = await pool.query(query, [tenantId]);
 
       if (result.rows.length === 0) {
         return null;
@@ -336,7 +336,7 @@ export class UserPreferencesService {
         'UserPreferencesService',
         'Failed to get default comparison index',
         'getDefaultComparisonIndex',
-        { userId, error: error.message },
+        { tenantId, error: error.message },
         undefined,
         undefined,
         error.stack
@@ -346,24 +346,24 @@ export class UserPreferencesService {
   }
 
   /**
-   * Set default comparison index for user
+   * Set default comparison index for tenant
    */
-  async setDefaultComparisonIndex(userId: number, indexId: number): Promise<void> {
+  async setDefaultComparisonIndex(tenantId: number, indexId: number): Promise<void> {
     try {
       const query = `
-        UPDATE t_users
+        UPDATE t_tenants
         SET default_comparison_index_id = $1,
             updated_at = NOW()
         WHERE id = $2
       `;
 
-      await pool.query(query, [indexId, userId]);
+      await pool.query(query, [indexId, tenantId]);
 
       SimpleLogger.info(
         'UserPreferencesService',
         'Default comparison index set',
         'setDefaultComparisonIndex',
-        { userId, indexId }
+        { tenantId, indexId }
       );
 
     } catch (error: any) {
@@ -371,7 +371,7 @@ export class UserPreferencesService {
         'UserPreferencesService',
         'Failed to set default comparison index',
         'setDefaultComparisonIndex',
-        { userId, indexId, error: error.message },
+        { tenantId, indexId, error: error.message },
         undefined,
         undefined,
         error.stack

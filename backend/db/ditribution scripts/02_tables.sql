@@ -28,13 +28,15 @@ CREATE TABLE t_tenants (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     settings JSONB DEFAULT '{}'::jsonb,
     subscription_plan VARCHAR(50) DEFAULT 'basic',
-    is_admin BOOLEAN DEFAULT false
+    is_admin BOOLEAN DEFAULT false,
+    default_comparison_index_id INTEGER
 );
 
 COMMENT ON TABLE t_tenants IS 'Multi-tenant isolation - each client has separate data';
 COMMENT ON COLUMN t_tenants.tenant_code IS 'Unique identifier for tenant (e.g., kewal, localsing)';
 COMMENT ON COLUMN t_tenants.settings IS 'JSON configuration for tenant-specific settings';
 COMMENT ON COLUMN t_tenants.is_admin IS 'System admin tenant flag - only ONE tenant should have this as true (SaaS owner)';
+COMMENT ON COLUMN t_tenants.default_comparison_index_id IS 'Tenant preference for default market index to compare against portfolio performance charts';
 
 -- TABLE: t_users
 CREATE TABLE t_users (
@@ -283,40 +285,28 @@ CREATE TABLE t_import_sessions (
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
-    
-    -- Record counts
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
     successful_records INTEGER DEFAULT 0,
     failed_records INTEGER DEFAULT 0,
     duplicate_records INTEGER DEFAULT 0,
-    orphan_records INTEGER DEFAULT 0,  -- NEW: Records with no matching customer (TransactionData only)
-    
-    -- Staging information
     staging_completed_at TIMESTAMP,
     staging_total_rows INTEGER DEFAULT 0,
-    
-    -- Batch processing
     batch_size INTEGER DEFAULT 100,
     current_batch INTEGER DEFAULT 0,
     total_batches INTEGER DEFAULT 0,
     last_processed_row INTEGER DEFAULT 0,
-    
-    -- Processing metadata and tracking
     processing_metadata JSONB,
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
     error_summary TEXT,
-    
-    -- n8n integration
     n8n_webhook_id VARCHAR(255),
     n8n_execution_id VARCHAR(255),
-    
-    -- Audit fields
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
@@ -1070,6 +1060,13 @@ COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Y
 COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
 COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
 
+-- Add foreign key constraint to t_tenants now that t_market_indices exists
+ALTER TABLE t_tenants
+ADD CONSTRAINT fk_default_comparison_index
+FOREIGN KEY (default_comparison_index_id)
+REFERENCES t_market_indices(id)
+ON DELETE SET NULL;
+
 -- TABLE: t_market_data_records
 CREATE TABLE t_market_data_records (
     id SERIAL PRIMARY KEY,
@@ -1245,6 +1242,7 @@ BEGIN
     RAISE NOTICE 'CRITICAL FIXES IN THIS VERSION:';
     RAISE NOTICE '  - ADDED: t_tenants.is_admin column (was missing!)';
     RAISE NOTICE '  - REMOVED: t_nav_data.tenant_id column (was extra!)';
+    RAISE NOTICE '  - ADDED: t_tenants.default_comparison_index_id column (for portfolio comparison)';
     RAISE NOTICE '  - Schema now 100 percent matches current_schema_utf8.sql';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';

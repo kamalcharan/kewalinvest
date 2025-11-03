@@ -1,5 +1,6 @@
 // frontend/src/services/serviceURLs.ts
 // UPDATED: Added NAV time-series analytics endpoint
+// UPDATED: Added Portfolio Snapshot endpoints
 
 // API Base URL from environment variable
 const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
@@ -61,17 +62,17 @@ export const API_ENDPOINTS = {
   },
 
   // Bookmark management endpoints
-BOOKMARKS: {
-  IMPORT: `${API_BASE}/bookmarks/import`,
-  STATS: (tenantId: number, isLive: boolean) => 
-    `${API_BASE}/bookmarks/stats?tenant_id=${tenantId}&is_live=${isLive}`,
-  LIST: `${API_BASE}/bookmarks/list`,
-  CHECK: (tenantId: number, isLive: boolean) => 
-    `${API_BASE}/bookmarks/check?tenant_id=${tenantId}&is_live=${isLive}`,
-  DELETE: (bookmarkId: number, tenantId: number, isLive: boolean) => 
-    `${API_BASE}/bookmarks/${bookmarkId}?tenant_id=${tenantId}&is_live=${isLive}`,
-  TEMPLATE: `${API_BASE}/bookmarks/template`,
-},
+  BOOKMARKS: {
+    IMPORT: `${API_BASE}/bookmarks/import`,
+    STATS: (tenantId: number, isLive: boolean) => 
+      `${API_BASE}/bookmarks/stats?tenant_id=${tenantId}&is_live=${isLive}`,
+    LIST: `${API_BASE}/bookmarks/list`,
+    CHECK: (tenantId: number, isLive: boolean) => 
+      `${API_BASE}/bookmarks/check?tenant_id=${tenantId}&is_live=${isLive}`,
+    DELETE: (bookmarkId: number, tenantId: number, isLive: boolean) => 
+      `${API_BASE}/bookmarks/${bookmarkId}?tenant_id=${tenantId}&is_live=${isLive}`,
+    TEMPLATE: `${API_BASE}/bookmarks/template`,
+  },
   
   // Scheme management endpoints
   SCHEMES: {
@@ -202,6 +203,35 @@ BOOKMARKS: {
       HEALTH: `${API_BASE}/cruise-control/snapshots/health`,
       BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
       BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
+      
+      // NEW: Snapshot Operations
+      OPERATIONS: {
+        DROP_ALL: `${API_BASE}/cruise-control/snapshots/operations/drop-all`,
+        GENERATE_MISSING: `${API_BASE}/cruise-control/snapshots/operations/generate-missing`,
+        UPDATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/update-all`,
+        REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
+      },
+    },
+  },
+
+  // Portfolio Snapshots (alternative structure for backward compatibility)
+  PORTFOLIO_SNAPSHOTS: {
+    CONFIG_BASE: `${API_BASE}/cruise-control/snapshots/config`,
+    CONFIG: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/config?tenant_id=${tenantId}&is_live=${isLive}`,
+    EXECUTE: `${API_BASE}/cruise-control/snapshots/execute`,
+    EXECUTIONS: `${API_BASE}/cruise-control/snapshots/executions`,
+    STATISTICS: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/statistics?tenant_id=${tenantId}&is_live=${isLive}`,
+    BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
+    BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
+    HEALTH: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/health?tenant_id=${tenantId}&is_live=${isLive}`,
+    OPERATIONS: {
+      DROP_ALL: `${API_BASE}/cruise-control/snapshots/operations/drop-all`,
+      GENERATE_MISSING: `${API_BASE}/cruise-control/snapshots/operations/generate-missing`,
+      UPDATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/update-all`,
+      REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
     },
   },
 
@@ -372,6 +402,7 @@ export type GoalEndpoints = typeof API_ENDPOINTS.GOALS;
 export type UserPreferencesEndpoints = typeof API_ENDPOINTS.USER_PREFERENCES;
 export type JobsEndpoints = typeof API_ENDPOINTS.JOBS;
 export type CruiseControlEndpoints = typeof API_ENDPOINTS.CRUISE_CONTROL;
+export type PortfolioSnapshotsEndpoints = typeof API_ENDPOINTS.PORTFOLIO_SNAPSHOTS;
 export type ImportEndpoints = typeof API_ENDPOINTS.IMPORT;
 export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
@@ -625,6 +656,19 @@ export const CRUISE_CONTROL_URLS = {
 
   backfill: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.BACKFILL}${buildQueryParams(params || {}, environment)}`,
+
+  // NEW: Snapshot Operations URL helpers
+  dropAllSnapshots: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.DROP_ALL}${buildQueryParams({}, environment)}`,
+
+  generateMissingSnapshots: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.GENERATE_MISSING}${buildQueryParams({}, environment)}`,
+
+  updateAllSnapshots: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.UPDATE_ALL}${buildQueryParams({}, environment)}`,
+
+  regenerateAllSnapshots: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.REGENERATE_ALL}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Jobs Scheduler-specific URL helpers
@@ -973,7 +1017,7 @@ if (process.env.NODE_ENV === 'development') {
     BOOKMARK_GAPS_SUMMARY: API_ENDPOINTS.NAV.BOOKMARK_GAPS_SUMMARY,
   });
   
-  console.log('📊 NAV Analytics:', { // NEW
+  console.log('📊 NAV Analytics:', {
     LATEST_NAV: 'GET /api/nav/schemes/:schemeId/latest',
     TIME_SERIES: 'GET /api/nav/timeseries/:schemeId',
   });
@@ -1000,6 +1044,18 @@ if (process.env.NODE_ENV === 'development') {
     CALCULATE_METRICS: 'POST /api/scheme-analysis/calculate-metrics/:schemeId',
     GET_METRICS: 'GET /api/scheme-analysis/metrics/:schemeId',
     BATCH_CALCULATE: API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE,
+  });
+
+  console.log('🚢 Cruise Control - Snapshot Operations:', {
+    DROP_ALL: API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.DROP_ALL,
+    GENERATE_MISSING: API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.GENERATE_MISSING,
+    UPDATE_ALL: API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.UPDATE_ALL,
+    REGENERATE_ALL: API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.OPERATIONS.REGENERATE_ALL,
+  });
+
+  console.log('🚢 Portfolio Snapshots (Backward Compatibility):', {
+    CONFIG: API_ENDPOINTS.PORTFOLIO_SNAPSHOTS.CONFIG_BASE,
+    OPERATIONS: Object.keys(API_ENDPOINTS.PORTFOLIO_SNAPSHOTS.OPERATIONS).length,
   });
 }
 

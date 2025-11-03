@@ -1,6 +1,7 @@
 // backend/src/server.ts
 // UPDATED: Added bookmark routes and time-series analytics route
 // UPDATED: Added Jobs Scheduler and Cruise Control routes
+// UPDATED: Added Portfolio Snapshot operations routes
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -146,6 +147,7 @@ app.get('/health', (_req: Request, res: Response) => {
       scheme_aliases: true, // NEW: Scheme alias management for flexible imports
       jobs_scheduler: true,
       cruise_control_snapshots: true,
+      cruise_control_snapshot_operations: true, // NEW: Snapshot operations (drop, generate, update, regenerate)
       n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
     }
   });
@@ -187,7 +189,8 @@ app.get('/api', (_req: Request, res: Response) => {
       user_preferences: '/api/user-preferences',
       meetings: '/api/meetings',
       jobs: '/api/jobs',
-      cruise_control: '/api/cruise-control'
+      cruise_control: '/api/cruise-control',
+      cruise_control_operations: '/api/cruise-control/snapshots/operations'
     }
   });
 });
@@ -448,6 +451,12 @@ app.use((_req: Request, res: Response) => {
       'GET /api/cruise-control/snapshots/health',
       'POST /api/cruise-control/snapshots/backfill-smart',
       'POST /api/cruise-control/snapshots/backfill',
+      
+      // Cruise Control - Snapshot Operations (NEW)
+      'POST /api/cruise-control/snapshots/operations/drop-all',
+      'POST /api/cruise-control/snapshots/operations/generate-missing',
+      'POST /api/cruise-control/snapshots/operations/update-all',
+      'POST /api/cruise-control/snapshots/operations/regenerate-all',
       
       // System logs endpoints
       'GET /api/logs',
@@ -744,6 +753,16 @@ app.listen(PORT, async () => {
 ║  • POST /api/cruise-control/snapshots..║
 ║  • POST /api/cruise-control/snapshots..║
 ║                                        ║
+║  🔧 Snapshot Operations (NEW):        ║
+║  • POST /api/cruise-control/snapshots..║
+║         /operations/drop-all           ║
+║  • POST /api/cruise-control/snapshots..║
+║         /operations/generate-missing   ║
+║  • POST /api/cruise-control/snapshots..║
+║         /operations/update-all         ║
+║  • POST /api/cruise-control/snapshots..║
+║         /operations/regenerate-all     ║
+║                                        ║
 ║  Import & ETL:                         ║
 ║  • POST /api/import/upload             ║
 ║  • GET  /api/import/headers/:fileId    ║
@@ -816,6 +835,7 @@ app.listen(PORT, async () => {
     console.log('✅ Chart preferences management ready');
     console.log('✅ Jobs Scheduler endpoints ready');
     console.log('✅ Cruise Control - Portfolio Snapshots ready');
+    console.log('✅ Cruise Control - Snapshot Operations ready (drop/generate/update/regenerate)'); // NEW
     console.log('✅ Import & ETL endpoints ready (using express-fileupload)');
     console.log('✅ Staging table system ready');
     console.log('✅ Customer name-based lookup ready');
@@ -920,6 +940,7 @@ app.listen(PORT, async () => {
 ║  Chart Preferences: ✅ Ready           ║
 ║  Jobs Scheduler: ✅ Ready              ║
 ║  Cruise Control Snapshots: ✅ Ready    ║
+║  Snapshot Operations: ✅ Ready         ║
 ║  NAV Scheduler: ${navScheduler ? '✅' : '⚠️ '} ${navScheduler ? 'Active' : 'Failed'}        ║
 ║  N8N Integration: ${process.env.N8N_BASE_URL ? '✅' : '⚠️ '} ${process.env.N8N_BASE_URL ? 'Configured' : 'Missing'}     ║
 ║  File Storage: ✅ Ready                ║

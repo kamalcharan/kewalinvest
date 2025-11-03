@@ -67,3 +67,44 @@ export interface ExecutionHistoryResponse {
     total_pages: number;
   };
 }
+
+// ==================== ADD THESE 3 INTERFACES AT THE END ====================
+
+/**
+ * Portfolio snapshot data from database (monthly portfolio value record)
+ */
+export interface PortfolioSnapshot {
+  id: number;
+  customer_id: number;
+  snapshot_month_end: string;
+  total_invested: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  total_units: number;
+  total_schemes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Portfolio snapshot with calculated month-over-month changes
+ */
+export interface PortfolioSnapshotWithMoM extends PortfolioSnapshot {
+  mom_change_percentage: number | null;
+  mom_change_absolute: number | null;
+}
+
+/**
+ * API response when fetching snapshots for a customer
+ */
+export interface CustomerSnapshotsResponse {
+  success: boolean;
+  data: {
+    customer_id: number;
+    customer_name: string;
+    snapshots: PortfolioSnapshot[];
+    total_snapshots: number;
+  };
+  error?: string;
+}

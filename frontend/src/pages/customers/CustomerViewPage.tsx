@@ -1,13 +1,24 @@
 // frontend/src/pages/customers/CustomerViewPage.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import {
+  toggleFullscreen,
+  isFullscreen,
+  onFullscreenChange,
+  isFullscreenSupported
+} from '../../utils/fullscreenUtils';
+import ChartExport from '../../components/visualizations/chartViewer/export/ChartExport';
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
 import { TransactionService } from '../../services/transaction.service';
+import { UserPreferencesService } from '../../services/userPreferences.service';
+import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
+import { calculatePortfolioMoM, getMoMColor, getMoMArrow } from '../../utils/dataTransformers';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
@@ -19,6 +30,7 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
+import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +47,16 @@ const CustomerViewPage: React.FC = () => {
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
+
+  // Index comparison state
+  const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
+  const [comparisonIndexData, setComparisonIndexData] = useState<number[]>([]);
+  const [isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(true); // User toggle for showing/hiding comparison
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+
+  // Chart element ID for export and fullscreen
+  const performanceChartId = `performance-chart-${customerId}`;
 
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -98,6 +120,104 @@ const CustomerViewPage: React.FC = () => {
     }
   }, [portfolio]);
 
+  // Load default comparison index and its data
+  useEffect(() => {
+    const loadDefaultIndexComparison = async () => {
+      try {
+        setIsLoadingIndexComparison(true);
+
+        // Get user's default comparison index preference
+        const prefResponse = await UserPreferencesService.getDefaultComparisonIndex();
+        if (!prefResponse.success || !prefResponse.data?.default_comparison_index_id) {
+          // No default index set
+          setDefaultComparisonIndex(null);
+          setComparisonIndexData([]);
+          return;
+        }
+
+        const indexId = prefResponse.data.default_comparison_index_id;
+
+        // Fetch index details
+        const indexResponse = await MarketService.getIndexById(indexId);
+        if (!indexResponse.success || !indexResponse.data) {
+          console.error('Failed to fetch index details');
+          return;
+        }
+
+        setDefaultComparisonIndex(indexResponse.data);
+
+        // Fetch index historical data if portfolio performance data exists
+        if (portfolio?.performance && portfolio.performance.length > 0) {
+          // Get date range from portfolio performance
+          const performanceDates = portfolio.performance.map(p => p.date);
+          const startDate = performanceDates[0];
+          const endDate = performanceDates[performanceDates.length - 1];
+
+          // Fetch index market data for the same date range
+          const marketDataResponse = await MarketService.getMarketData(indexId, {
+            start_date: startDate,
+            end_date: endDate,
+            page: 1,
+            page_size: 10000 // Get all data points
+          });
+
+          if (marketDataResponse.success && marketDataResponse.data?.data) {
+            // Align index data with monthly portfolio snapshots
+            // Portfolio snapshots are monthly, but market data is daily
+            // We need to extract month-end closing values to match snapshot dates
+
+            const marketData = marketDataResponse.data.data;
+
+            // Group market data by month (YYYY-MM)
+            const marketDataByMonth = new Map<string, typeof marketData>();
+            marketData.forEach(dataPoint => {
+              const month = dataPoint.date.substring(0, 7); // Extract YYYY-MM
+              if (!marketDataByMonth.has(month)) {
+                marketDataByMonth.set(month, []);
+              }
+              marketDataByMonth.get(month)!.push(dataPoint);
+            });
+
+            // For each portfolio snapshot, find the corresponding month-end index value
+            const alignedIndexValues: number[] = [];
+            portfolio.performance.forEach(snapshot => {
+              const snapshotMonth = snapshot.date.substring(0, 7); // Extract YYYY-MM
+              const monthData = marketDataByMonth.get(snapshotMonth);
+
+              if (monthData && monthData.length > 0) {
+                // Get the last trading day of the month (month-end close)
+                const monthEndClose = monthData[monthData.length - 1].close;
+                alignedIndexValues.push(monthEndClose);
+              } else {
+                // If no data for this month, use previous value or 0
+                alignedIndexValues.push(alignedIndexValues.length > 0 ? alignedIndexValues[alignedIndexValues.length - 1] : 0);
+              }
+            });
+
+            setComparisonIndexData(alignedIndexValues);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading index comparison:', error);
+      } finally {
+        setIsLoadingIndexComparison(false);
+      }
+    };
+
+    loadDefaultIndexComparison();
+  }, [portfolio?.performance]);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+
+    const cleanup = onFullscreenChange(handleFullscreenChange);
+
+    return cleanup;
+  }, []);
+
   useEffect(() => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
@@ -113,6 +233,18 @@ const CustomerViewPage: React.FC = () => {
     console.log('❌ Errors:', { customerError, portfolioError });
     console.groupEnd();
   }, [id, customerId, customer, portfolio, jtbds, customerLoading, portfolioLoading, jtbdLoading, customerError, portfolioError]);
+
+  // Calculate MoM changes for portfolio performance
+  const portfolioWithMoM = useMemo(() => {
+    if (!portfolio?.performance || portfolio.performance.length === 0) return [];
+    return calculatePortfolioMoM(portfolio.performance);
+  }, [portfolio?.performance]);
+
+  // Get latest MoM change for badge
+  const latestMoM = useMemo(() => {
+    if (portfolioWithMoM.length < 2) return null;
+    return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
+  }, [portfolioWithMoM]);
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -402,6 +534,15 @@ const CustomerViewPage: React.FC = () => {
     </div>
   );
 
+  // Fullscreen handler
+  const handleFullscreenToggle = async () => {
+    try {
+      await toggleFullscreen(performanceChartId);
+    } catch (error: any) {
+      console.error('Fullscreen toggle failed:', error);
+    }
+  };
+
   if (!customerId) {
     return <ErrorState 
       message="Invalid Customer ID" 
@@ -494,16 +635,117 @@ const CustomerViewPage: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {/* Portfolio Performance Chart */}
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px'
-                  }}>
+                  <div
+                    id={performanceChartId}
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '24px',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* MoM Badge - Top Right Corner */}
+                    {latestMoM !== null && portfolioWithMoM.length > 1 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '20px',
+                          right: '20px',
+                          zIndex: 10,
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          backgroundColor: latestMoM >= 0
+                            ? colors.semantic.success + '20'
+                            : colors.semantic.error + '20',
+                          border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <span style={{ fontSize: '14px' }}>
+                          {latestMoM >= 0 ? '📈' : '📉'}
+                        </span>
+                        <span style={{
+                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
+                        }}>
+                          {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
+                        </span>
+                        <span style={{
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          vs last month
+                        </span>
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                       <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
                         Portfolio Performance
                       </h3>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        {/* Comparison Toggle */}
+                        {defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                          <button
+                            onClick={() => setShowComparison(!showComparison)}
+                            title={showComparison ? 'Hide index comparison' : 'Show index comparison'}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: showComparison ? colors.brand.primary + '20' : 'transparent',
+                              color: showComparison ? colors.brand.primary : colors.utility.secondaryText,
+                              border: `1px solid ${showComparison ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {showComparison ? 'Hide' : 'Show'} Comparison
+                          </button>
+                        )}
+
+                        {/* Fullscreen Button */}
+                        {isFullscreenSupported() && (
+                          <button
+                            onClick={handleFullscreenToggle}
+                            title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText,
+                              border: `1px solid ${colors.utility.primaryText}20`,
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {isFullscreenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                            {isFullscreenMode ? 'Exit' : 'Fullscreen'}
+                          </button>
+                        )}
+
+                        {/* Export Button */}
+                        <ChartExport
+                          elementId={performanceChartId}
+                          indexName={customer?.name || 'Portfolio'}
+                          colors={colors}
+                        />
+
+                        {/* Timeframe Buttons */}
                         {['1M', '3M', '6M', '1Y', 'ALL'].map(period => (
                           <button
                             key={period}
@@ -528,7 +770,7 @@ const CustomerViewPage: React.FC = () => {
                       {portfolio.performance && portfolio.performance.length > 1 ? (
                         <div style={{ width: '100%', height: '100%' }}>
                           <PerformanceSparkline
-                            performanceData={portfolio.performance}
+                            performanceData={portfolioWithMoM}
                             data={portfolio.performance.map(p => p.current_value ?? 0)}
                             width={600}
                             height={250}
@@ -538,6 +780,9 @@ const CustomerViewPage: React.FC = () => {
                             timeframe={selectedTimeframe}
                             showTimelineMarkers={true}
                             timelineMarkerSize={5}
+                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            comparisonData={comparisonIndexData}
+                            comparisonIndexName={defaultComparisonIndex?.index_name}
                           />
                           <div style={{
                             fontSize: '12px',
@@ -546,6 +791,11 @@ const CustomerViewPage: React.FC = () => {
                             marginTop: '12px'
                           }}>
                             Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
+                            {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                              <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
+                                • Compared with {defaultComparisonIndex.index_name}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (

@@ -922,7 +922,7 @@ RETURNS TABLE(
     duplicates INTEGER,
     orphans INTEGER,
     processing_time_seconds NUMERIC
-) 
+)
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -936,6 +936,10 @@ DECLARE
     v_processed_count INTEGER := 0;
     v_customer_id INTEGER;
     v_scheme_id INTEGER;
+    v_scheme_code VARCHAR;
+    v_scheme_name VARCHAR;
+    v_bookmark_id INTEGER;
+    v_txn_type_id INTEGER;
     v_error_msg TEXT;
     v_txn_id INTEGER;
     v_session_info RECORD;
@@ -944,22 +948,22 @@ BEGIN
     SELECT tenant_id, is_live INTO v_session_info
     FROM t_import_sessions
     WHERE id = p_session_id;
-    
+
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
 
     -- Update session status to processing
-    UPDATE t_import_sessions 
-    SET status = 'processing', 
+    UPDATE t_import_sessions
+    SET status = 'processing',
         processing_started_at = NOW()
     WHERE id = p_session_id;
-    
+
     RAISE NOTICE '[Session %] Starting processing with lookup method: %', p_session_id, p_customer_lookup_method;
 
     -- Process all pending records
     FOR v_staging_record IN (
-        SELECT 
+        SELECT
             id,
             row_number,
             mapped_data,
@@ -973,12 +977,16 @@ BEGIN
         BEGIN
             v_customer_id := NULL;
             v_scheme_id := NULL;
+            v_scheme_code := NULL;
+            v_scheme_name := NULL;
+            v_bookmark_id := NULL;
+            v_txn_type_id := NULL;
             v_error_msg := NULL;
-            
+
             -- ==================================================
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
             -- ==================================================
-            
+
             -- Method 1: IWELL Code (with PAN fallback)
             IF p_customer_lookup_method = 'iwell_code' THEN
                 IF v_staging_record.mapped_data->>'iwell_code' IS NOT NULL THEN
@@ -989,7 +997,7 @@ BEGIN
                       AND UPPER(c.iwell_code) = UPPER(v_staging_record.mapped_data->>'iwell_code')
                       AND c.is_active = true
                     LIMIT 1;
-                    
+
                     -- PAN FALLBACK if IWELL not found
                     IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                         SELECT c.id INTO v_customer_id
@@ -999,12 +1007,12 @@ BEGIN
                           AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
                           AND c.is_active = true
                         LIMIT 1;
-                        
+
                         IF v_customer_id IS NOT NULL THEN
                             RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
                         END IF;
                     END IF;
-                    
+
                     IF v_customer_id IS NULL THEN
                         v_error_msg := 'No customer found with IWELL code: ' || (v_staging_record.mapped_data->>'iwell_code');
                         IF v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
@@ -1014,7 +1022,7 @@ BEGIN
                 ELSE
                     v_error_msg := 'IWELL code is required but not provided';
                 END IF;
-                
+
             -- Method 2: Customer Name (with PAN fallback)
             ELSIF p_customer_lookup_method = 'customer_name' THEN
                 IF v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
@@ -1028,7 +1036,7 @@ BEGIN
                       AND c.is_active = true
                       AND ct.is_active = true
                     LIMIT 1;
-                    
+
                     -- PAN FALLBACK if name not found
                     IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                         SELECT c.id INTO v_customer_id
@@ -1038,12 +1046,12 @@ BEGIN
                           AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
                           AND c.is_active = true
                         LIMIT 1;
-                        
+
                         IF v_customer_id IS NOT NULL THEN
                             RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
                         END IF;
                     END IF;
-                    
+
                     IF v_customer_id IS NULL THEN
                         v_error_msg := 'No customer found with name: ' || (v_staging_record.mapped_data->>'customer_name');
                         IF v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
@@ -1053,7 +1061,7 @@ BEGIN
                 ELSE
                     v_error_msg := 'Customer name is required but not provided';
                 END IF;
-                
+
             -- Method 3: Both (try IWELL first, fallback to name, then PAN)
             ELSIF p_customer_lookup_method = 'both' THEN
                 -- Try IWELL code first
@@ -1066,7 +1074,7 @@ BEGIN
                       AND c.is_active = true
                     LIMIT 1;
                 END IF;
-                
+
                 -- Fallback to customer name
                 IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
@@ -1079,7 +1087,7 @@ BEGIN
                       AND ct.is_active = true
                     LIMIT 1;
                 END IF;
-                
+
                 -- Final fallback to PAN
                 IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
@@ -1089,17 +1097,17 @@ BEGIN
                       AND UPPER(c.pan) = UPPER(v_staging_record.mapped_data->>'pan')
                       AND c.is_active = true
                     LIMIT 1;
-                    
+
                     IF v_customer_id IS NOT NULL THEN
                         RAISE NOTICE '[Session %] Row %: Found customer via PAN fallback', p_session_id, v_staging_record.row_number;
                     END IF;
                 END IF;
-                
+
                 IF v_customer_id IS NULL THEN
                     v_error_msg := 'No customer found with IWELL code, name, or PAN';
                 END IF;
             END IF;
-            
+
             -- If no customer found, mark as orphan and continue
             IF v_customer_id IS NULL THEN
                 UPDATE t_import_staging_data
@@ -1107,26 +1115,126 @@ BEGIN
                     error_messages = ARRAY[v_error_msg],
                     processed_at = NOW()
                 WHERE id = v_staging_record.id;
-                
+
                 v_orphan_count := v_orphan_count + 1;
                 v_processed_count := v_processed_count + 1;
                 CONTINUE;
             END IF;
 
             -- ==================================================
-            -- SCHEME LOOKUP (if scheme_name provided)
-            -- Using t_scheme_aliases table for flexible matching
+            -- TRANSACTION TYPE LOOKUP & VALIDATION
             -- ==================================================
-            IF v_staging_record.mapped_data->>'scheme_name' IS NOT NULL AND 
-               TRIM(v_staging_record.mapped_data->>'scheme_name') != '' THEN
-                
-                SELECT scheme_id INTO v_scheme_id
-                FROM t_scheme_aliases
-                WHERE is_active = true
-                  AND LOWER(TRIM(alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
+            IF v_staging_record.mapped_data->>'txn_code' IS NOT NULL
+               AND TRIM(v_staging_record.mapped_data->>'txn_code') != '' THEN
+
+                -- Look up transaction type by txn_code
+                SELECT id INTO v_txn_type_id
+                FROM m_transaction_types
+                WHERE UPPER(TRIM(txn_code)) = UPPER(TRIM(v_staging_record.mapped_data->>'txn_code'))
+                  AND is_active = true
                 LIMIT 1;
+
+                -- If not found by txn_code, try txn_name
+                IF v_txn_type_id IS NULL THEN
+                    SELECT id INTO v_txn_type_id
+                    FROM m_transaction_types
+                    WHERE UPPER(TRIM(txn_name)) = UPPER(TRIM(v_staging_record.mapped_data->>'txn_code'))
+                      AND is_active = true
+                    LIMIT 1;
+                END IF;
+
+                -- If still not found, FAIL the record
+                IF v_txn_type_id IS NULL THEN
+                    v_error_msg := 'Invalid transaction type: ' ||
+                                  (v_staging_record.mapped_data->>'txn_code') ||
+                                  '. Valid types: SIP, PURCHASE, REDEMPTION, SWITCH IN, SWITCH OUT, STP IN, STP OUT, SELL, OPENING BALANCE';
+
+                    UPDATE t_import_staging_data
+                    SET processing_status = 'failed',
+                        error_messages = ARRAY[v_error_msg],
+                        processed_at = NOW()
+                    WHERE id = v_staging_record.id;
+
+                    v_failed_count := v_failed_count + 1;
+                    v_processed_count := v_processed_count + 1;
+                    RAISE NOTICE '[Session %] Row %: FAILED - %',
+                        p_session_id, v_staging_record.row_number, v_error_msg;
+                    CONTINUE;
+                END IF;
+            ELSE
+                -- txn_code is required
+                v_error_msg := 'Transaction type (txn_code) is required';
+
+                UPDATE t_import_staging_data
+                SET processing_status = 'failed',
+                    error_messages = ARRAY[v_error_msg],
+                    processed_at = NOW()
+                WHERE id = v_staging_record.id;
+
+                v_failed_count := v_failed_count + 1;
+                v_processed_count := v_processed_count + 1;
+                CONTINUE;
             END IF;
-            
+
+            -- ==================================================
+            -- SCHEME LOOKUP - MUST BE IN TENANT'S BOOKMARKS
+            -- ==================================================
+            IF v_staging_record.mapped_data->>'scheme_name' IS NOT NULL AND
+               TRIM(v_staging_record.mapped_data->>'scheme_name') != '' THEN
+
+                -- Step 1: Find scheme_id from alias table
+                SELECT sa.scheme_id INTO v_scheme_id
+                FROM t_scheme_aliases sa
+                WHERE sa.is_active = true
+                  AND LOWER(TRIM(sa.alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
+                LIMIT 1;
+
+                -- Step 2: Check if tenant has bookmarked this scheme
+                IF v_scheme_id IS NOT NULL THEN
+                    SELECT
+                        sb.id,
+                        sb.scheme_code,
+                        sb.scheme_name
+                    INTO
+                        v_bookmark_id,
+                        v_scheme_code,
+                        v_scheme_name
+                    FROM t_scheme_bookmarks sb
+                    WHERE sb.tenant_id = v_staging_record.tenant_id
+                      AND sb.is_live = v_staging_record.is_live
+                      AND sb.scheme_id = v_scheme_id
+                      AND sb.is_active = true
+                    LIMIT 1;
+
+                    -- If not found in bookmarks, try to get from t_scheme_details as fallback
+                    IF v_bookmark_id IS NULL THEN
+                        SELECT scheme_name INTO v_scheme_name
+                        FROM t_scheme_details
+                        WHERE id = v_scheme_id;
+                    END IF;
+                END IF;
+            END IF;
+
+            -- ==================================================
+            -- CRITICAL: FAIL IF SCHEME NOT BOOKMARKED OR NO SCHEME_CODE
+            -- ==================================================
+            IF v_bookmark_id IS NULL OR v_scheme_code IS NULL OR TRIM(v_scheme_code) = '' THEN
+                v_error_msg := 'Scheme not bookmarked by tenant or has no scheme_code: ' ||
+                              COALESCE(v_scheme_name, v_staging_record.mapped_data->>'scheme_name', 'N/A');
+
+                UPDATE t_import_staging_data
+                SET processing_status = 'failed',
+                    error_messages = ARRAY[v_error_msg],
+                    processed_at = NOW()
+                WHERE id = v_staging_record.id;
+
+                v_failed_count := v_failed_count + 1;
+                v_processed_count := v_processed_count + 1;
+                RAISE NOTICE '[Session %] Row %: FAILED - %',
+                    p_session_id, v_staging_record.row_number, v_error_msg;
+                CONTINUE;
+            END IF;
+
             -- ==================================================
             -- DUPLICATE CHECK
             -- ==================================================
@@ -1137,23 +1245,48 @@ BEGIN
                   AND is_live = v_staging_record.is_live
                   AND txn_date = (v_staging_record.mapped_data->>'txn_date')::DATE
                   AND total_amount = (v_staging_record.mapped_data->>'total_amount')::NUMERIC
-                  AND (
-                    (v_scheme_id IS NULL AND scheme_id IS NULL) OR
-                    (scheme_id = v_scheme_id)
-                  )
+                  AND scheme_id = v_scheme_id
             ) THEN
                 UPDATE t_import_staging_data
                 SET processing_status = 'duplicate',
                     processed_at = NOW()
                 WHERE id = v_staging_record.id;
-                
+
                 v_duplicate_count := v_duplicate_count + 1;
                 v_processed_count := v_processed_count + 1;
                 CONTINUE;
             END IF;
 
             -- ==================================================
-            -- INSERT TRANSACTION
+            -- CREATE/UPDATE PORTFOLIO ENTRY
+            -- CRITICAL: Use v_scheme_code from bookmark lookup, NOT mapped_data
+            -- This is REQUIRED for materialized view t_customer_portfolio_totals
+            -- ==================================================
+            INSERT INTO t_customer_master_portfolio (
+                tenant_id,
+                is_live,
+                customer_id,
+                scheme_code,
+                scheme_name,
+                folio_no,
+                start_date
+            ) VALUES (
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_scheme_code,                    -- ← From bookmark lookup
+                v_scheme_name,                    -- ← From bookmark lookup
+                v_staging_record.mapped_data->>'folio_no',
+                (v_staging_record.mapped_data->>'txn_date')::DATE
+            )
+            ON CONFLICT (customer_id, scheme_code, tenant_id, is_live)
+            DO UPDATE SET
+                scheme_name = EXCLUDED.scheme_name,
+                folio_no = COALESCE(EXCLUDED.folio_no, t_customer_master_portfolio.folio_no),
+                updated_at = CURRENT_TIMESTAMP;
+
+            -- ==================================================
+            -- INSERT TRANSACTION WITH BOOKMARKED SCHEME DATA
             -- ==================================================
             INSERT INTO t_transaction_table (
                 tenant_id,
@@ -1184,10 +1317,10 @@ BEGIN
                 true,
                 v_customer_id,
                 v_scheme_id,
-                v_staging_record.mapped_data->>'scheme_code',
-                v_staging_record.mapped_data->>'scheme_name',
+                v_scheme_code,                    -- ← From bookmarks
+                v_scheme_name,                    -- ← From bookmarks
                 v_staging_record.mapped_data->>'folio_no',
-                NULLIF(v_staging_record.mapped_data->>'txn_type_id', '')::INTEGER,
+                v_txn_type_id,
                 (v_staging_record.mapped_data->>'txn_date')::DATE,
                 (v_staging_record.mapped_data->>'total_amount')::NUMERIC,
                 NULLIF(v_staging_record.mapped_data->>'units', '')::NUMERIC,
@@ -1210,7 +1343,7 @@ BEGIN
                 created_record_type = 'transaction',
                 processed_at = NOW()
             WHERE id = v_staging_record.id;
-            
+
             v_success_count := v_success_count + 1;
             v_processed_count := v_processed_count + 1;
 
@@ -1221,10 +1354,10 @@ BEGIN
                 error_messages = ARRAY[SQLERRM],
                 processed_at = NOW()
             WHERE id = v_staging_record.id;
-            
+
             v_failed_count := v_failed_count + 1;
             v_processed_count := v_processed_count + 1;
-            
+
             RAISE NOTICE '[Session %] Error processing row %: %', p_session_id, v_staging_record.row_number, SQLERRM;
         END;
 
@@ -1238,15 +1371,15 @@ BEGIN
                 processed_records = v_processed_count,
                 updated_at = NOW()
             WHERE id = p_session_id;
-            
-            RAISE NOTICE '[Session %] Checkpoint: % processed (% success, % failed, % orphan, % duplicate)', 
+
+            RAISE NOTICE '[Session %] Checkpoint: % processed (% success, % failed, % orphan, % duplicate)',
                 p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count;
         END IF;
     END LOOP;
 
     -- Final session update
     UPDATE t_import_sessions
-    SET status = CASE 
+    SET status = CASE
             WHEN v_failed_count + v_orphan_count > 0 THEN 'completed_with_errors'
             ELSE 'completed'
         END,
@@ -1259,12 +1392,12 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_session_id;
 
-    RAISE NOTICE '[Session %] Completed: % total (% success, % failed, % orphan, % duplicate) in % seconds', 
+    RAISE NOTICE '[Session %] Completed: % total (% success, % failed, % orphan, % duplicate) in % seconds',
         p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count,
         EXTRACT(EPOCH FROM (NOW() - v_start_time));
 
     -- Return summary
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         v_processed_count,
         v_success_count,
         v_failed_count,
@@ -1274,8 +1407,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_session IS 
-'Process transaction imports with flexible customer lookup (iwell_code/customer_name/both), PAN fallback, and orphan tracking. Uses t_scheme_aliases for scheme matching.';
+COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports - validates against tenant bookmarks, requires valid scheme_code and txn_type_id, and maintains t_customer_master_portfolio for materialized view';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS
@@ -1599,19 +1731,20 @@ COMMENT ON COLUMN v_tenant_customer_schemes.total_invested IS
 'Sum of amounts where portfolio_flag = true';
 
 -- ============================================================================
--- SECTION 7: MATERIALIZED VIEW - PORTFOLIO TOTALS
+-- SECTION 7: REGULAR VIEW - PORTFOLIO TOTALS (Always Fresh)
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Creating Materialized View for Portfolio Totals...';
+    RAISE NOTICE 'Creating Regular View for Portfolio Totals (Always Fresh)...';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- MATERIALIZED VIEW: t_customer_portfolio_totals
--- Description: Pre-calculated portfolio totals with returns
+-- VIEW: t_customer_portfolio_totals (Regular View - Always Fresh)
+-- Description: Real-time portfolio totals with returns (calculates on-the-fly)
+-- NOTE: Changed from MATERIALIZED VIEW to regular VIEW for always-fresh data
 -- ----------------------------------------------------------------------------
-CREATE MATERIALIZED VIEW IF NOT EXISTS t_customer_portfolio_totals AS
-SELECT 
+CREATE OR REPLACE VIEW t_customer_portfolio_totals AS
+SELECT
     p.tenant_id,
     p.is_live,
     p.customer_id,
@@ -1622,81 +1755,81 @@ SELECT
     p.sub_category,
     p.fund_name,
     p.start_date,
-    
+
     -- Transaction Counts
     COUNT(DISTINCT t.id) as transaction_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Addition' THEN t.id END) as purchase_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Deduction' THEN t.id END) as redemption_count,
-    
+
     -- Units Totals
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units
                      ELSE 0 END), 0) as total_units,
-    
+
     -- Investment Amount
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0) as total_invested,
-    
+
     -- Latest NAV
-    (SELECT nav FROM t_transaction_table 
-     WHERE customer_id = p.customer_id 
-       AND scheme_code = p.scheme_code 
-       AND is_active = true 
-     ORDER BY txn_date DESC 
+    (SELECT nav FROM t_transaction_table
+     WHERE customer_id = p.customer_id
+       AND scheme_code = p.scheme_code
+       AND is_active = true
+     ORDER BY txn_date DESC
      LIMIT 1) as latest_nav,
-    
+
     -- Current Value
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                     ELSE 0 END), 0) * 
-    COALESCE((SELECT nav FROM t_transaction_table 
-              WHERE customer_id = p.customer_id 
-                AND scheme_code = p.scheme_code 
-                AND is_active = true 
-              ORDER BY txn_date DESC 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units
+                     ELSE 0 END), 0) *
+    COALESCE((SELECT nav FROM t_transaction_table
+              WHERE customer_id = p.customer_id
+                AND scheme_code = p.scheme_code
+                AND is_active = true
+              ORDER BY txn_date DESC
               LIMIT 1), 0) as current_value,
-    
+
     -- Total Returns
-    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                      WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                      ELSE 0 END), 0) * 
-     COALESCE((SELECT nav FROM t_transaction_table 
-               WHERE customer_id = p.customer_id 
-                 AND scheme_code = p.scheme_code 
-                 AND is_active = true 
-               ORDER BY txn_date DESC 
-               LIMIT 1), 0)) - 
-    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                      WHEN tt.txn_type = 'Deduction' THEN -t.units
+                      ELSE 0 END), 0) *
+     COALESCE((SELECT nav FROM t_transaction_table
+               WHERE customer_id = p.customer_id
+                 AND scheme_code = p.scheme_code
+                 AND is_active = true
+               ORDER BY txn_date DESC
+               LIMIT 1), 0)) -
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
      COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) as total_returns,
-    
+
     -- Return Percentage
-    CASE 
-        WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    CASE
+        WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) > 0
-        THEN ((COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                            WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                            ELSE 0 END), 0) * 
-               COALESCE((SELECT nav FROM t_transaction_table 
-                         WHERE customer_id = p.customer_id 
-                           AND scheme_code = p.scheme_code 
-                           AND is_active = true 
-                         ORDER BY txn_date DESC 
-                         LIMIT 1), 0)) - 
-              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
-               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0))) / 
-              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+        THEN ((COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                            WHEN tt.txn_type = 'Deduction' THEN -t.units
+                            ELSE 0 END), 0) *
+               COALESCE((SELECT nav FROM t_transaction_table
+                         WHERE customer_id = p.customer_id
+                           AND scheme_code = p.scheme_code
+                           AND is_active = true
+                         ORDER BY txn_date DESC
+                         LIMIT 1), 0)) -
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
+               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0))) /
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
                COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) * 100
         ELSE 0
     END as return_percentage,
-    
+
     MAX(t.txn_date) as last_transaction_date,
     p.is_active,
     p.id as portfolio_id,
     NOW() as last_refreshed_at
-    
+
 FROM t_customer_master_portfolio p
-LEFT JOIN t_transaction_table t ON 
-    t.customer_id = p.customer_id 
+LEFT JOIN t_transaction_table t ON
+    t.customer_id = p.customer_id
     AND t.scheme_code = p.scheme_code
     AND t.tenant_id = p.tenant_id
     AND t.is_live = p.is_live
@@ -1704,36 +1837,31 @@ LEFT JOIN t_transaction_table t ON
     AND t.portfolio_flag = true
 LEFT JOIN m_transaction_types tt ON t.txn_type_id = tt.id
 WHERE p.is_active = true
-GROUP BY 
+GROUP BY
     p.id, p.tenant_id, p.is_live, p.customer_id,
     p.scheme_code, p.scheme_name, p.folio_no,
     p.category, p.sub_category, p.fund_name,
     p.start_date, p.is_active;
 
-COMMENT ON MATERIALIZED VIEW t_customer_portfolio_totals IS 'Pre-calculated portfolio totals with returns and performance metrics';
+COMMENT ON VIEW t_customer_portfolio_totals IS 'Real-time portfolio totals with returns and performance metrics - calculates on-the-fly for always-fresh data';
 
--- Create unique index for concurrent refresh
-CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_totals_pk 
-    ON t_customer_portfolio_totals(customer_id, scheme_code, tenant_id, is_live);
+-- ============================================================================
+-- PERFORMANCE INDEXES FOR UNDERLYING TABLES (CRITICAL for regular views)
+-- ============================================================================
 
--- Create additional indexes for performance
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_customer 
-    ON t_customer_portfolio_totals(customer_id);
+-- Index on t_customer_master_portfolio for fast customer lookups
+CREATE INDEX IF NOT EXISTS idx_portfolio_customer_lookup
+ON t_customer_master_portfolio(customer_id, tenant_id, is_live, is_active);
 
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_scheme 
-    ON t_customer_portfolio_totals(scheme_code);
+-- Index on t_customer_master_portfolio for scheme lookups
+CREATE INDEX IF NOT EXISTS idx_portfolio_scheme_lookup
+ON t_customer_master_portfolio(scheme_code, tenant_id, is_live);
 
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_tenant 
-    ON t_customer_portfolio_totals(tenant_id, is_live);
-
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_category 
-    ON t_customer_portfolio_totals(category);
-
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_value 
-    ON t_customer_portfolio_totals(current_value DESC);
-
--- Initial population of materialized view
-REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+-- Comprehensive index on t_transaction_table for portfolio calculations
+-- INCLUDE clause adds additional columns to the index for covering queries
+CREATE INDEX IF NOT EXISTS idx_transactions_portfolio_calc
+ON t_transaction_table(customer_id, scheme_code, tenant_id, is_live, is_active, portfolio_flag)
+INCLUDE (txn_date, units, total_amount, nav, txn_type_id);
 
 -- ============================================================================
 -- SECTION 7B: v_portfolio_current MATERIALIZED VIEW
@@ -1838,34 +1966,32 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code
 REFRESH MATERIALIZED VIEW v_portfolio_current;
 
 -- ============================================================================
--- SECTION 8: MATERIALIZED VIEW REFRESH FUNCTION
+-- SECTION 8: PORTFOLIO VIEW COMPATIBILITY FUNCTIONS
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Creating Materialized View Refresh Function...';
+    RAISE NOTICE 'Creating Portfolio View Compatibility Functions...';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: refresh_portfolio_totals
--- Description: Refresh the portfolio totals materialized view
+-- FUNCTION: refresh_portfolio_totals (NO-OP)
+-- Description: No longer needed - t_customer_portfolio_totals is now a regular view
+-- NOTE: Kept for backward compatibility with existing code that calls it
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION refresh_portfolio_totals()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- Refresh the materialized view concurrently (if possible)
-    -- CONCURRENTLY allows reads during refresh but requires unique index
-    REFRESH MATERIALIZED VIEW CONCURRENTLY t_customer_portfolio_totals;
-    
-EXCEPTION WHEN OTHERS THEN
-    -- If concurrent refresh fails (e.g., no unique index), do regular refresh
-    REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+    -- No-op: t_customer_portfolio_totals is now a regular VIEW (always fresh)
+    -- This function is kept for backward compatibility
+    -- Regular views don't need refreshing - they calculate on-the-fly
+    RAISE NOTICE 't_customer_portfolio_totals is now a regular VIEW - no refresh needed';
 END;
 $$;
 
-COMMENT ON FUNCTION refresh_portfolio_totals IS 
-'Refreshes the t_customer_portfolio_totals materialized view. Attempts concurrent refresh first.';
+COMMENT ON FUNCTION refresh_portfolio_totals IS
+'NO-OP function for backward compatibility. t_customer_portfolio_totals is now a regular VIEW (always fresh, no refresh needed).';
 
 -- ============================================================================
 -- SECTION 9: ROW LEVEL SECURITY (RLS) POLICIES
