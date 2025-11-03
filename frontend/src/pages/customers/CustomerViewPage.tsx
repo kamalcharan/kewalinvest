@@ -2,7 +2,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import {
+  toggleFullscreen,
+  isFullscreen,
+  onFullscreenChange,
+  isFullscreenSupported
+} from '../../utils/fullscreenUtils';
+import ChartExport from '../../components/visualizations/chartViewer/export/ChartExport';
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
@@ -44,6 +52,11 @@ const CustomerViewPage: React.FC = () => {
   const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
   const [comparisonIndexData, setComparisonIndexData] = useState<number[]>([]);
   const [isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(true); // User toggle for showing/hiding comparison
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+
+  // Chart element ID for export and fullscreen
+  const performanceChartId = `performance-chart-${customerId}`;
 
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -149,9 +162,39 @@ const CustomerViewPage: React.FC = () => {
           });
 
           if (marketDataResponse.success && marketDataResponse.data?.data) {
-            // Extract closing prices and map to portfolio dates
-            const indexValues = marketDataResponse.data.data.map(d => d.close);
-            setComparisonIndexData(indexValues);
+            // Align index data with monthly portfolio snapshots
+            // Portfolio snapshots are monthly, but market data is daily
+            // We need to extract month-end closing values to match snapshot dates
+
+            const marketData = marketDataResponse.data.data;
+
+            // Group market data by month (YYYY-MM)
+            const marketDataByMonth = new Map<string, typeof marketData>();
+            marketData.forEach(dataPoint => {
+              const month = dataPoint.date.substring(0, 7); // Extract YYYY-MM
+              if (!marketDataByMonth.has(month)) {
+                marketDataByMonth.set(month, []);
+              }
+              marketDataByMonth.get(month)!.push(dataPoint);
+            });
+
+            // For each portfolio snapshot, find the corresponding month-end index value
+            const alignedIndexValues: number[] = [];
+            portfolio.performance.forEach(snapshot => {
+              const snapshotMonth = snapshot.date.substring(0, 7); // Extract YYYY-MM
+              const monthData = marketDataByMonth.get(snapshotMonth);
+
+              if (monthData && monthData.length > 0) {
+                // Get the last trading day of the month (month-end close)
+                const monthEndClose = monthData[monthData.length - 1].close;
+                alignedIndexValues.push(monthEndClose);
+              } else {
+                // If no data for this month, use previous value or 0
+                alignedIndexValues.push(alignedIndexValues.length > 0 ? alignedIndexValues[alignedIndexValues.length - 1] : 0);
+              }
+            });
+
+            setComparisonIndexData(alignedIndexValues);
           }
         }
       } catch (error) {
@@ -163,6 +206,17 @@ const CustomerViewPage: React.FC = () => {
 
     loadDefaultIndexComparison();
   }, [portfolio?.performance]);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+
+    const cleanup = onFullscreenChange(handleFullscreenChange);
+
+    return cleanup;
+  }, []);
 
   useEffect(() => {
     setSearchParams({ tab: activeTab });
@@ -480,6 +534,15 @@ const CustomerViewPage: React.FC = () => {
     </div>
   );
 
+  // Fullscreen handler
+  const handleFullscreenToggle = async () => {
+    try {
+      await toggleFullscreen(performanceChartId);
+    } catch (error: any) {
+      console.error('Fullscreen toggle failed:', error);
+    }
+  };
+
   if (!customerId) {
     return <ErrorState 
       message="Invalid Customer ID" 
@@ -572,12 +635,15 @@ const CustomerViewPage: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {/* Portfolio Performance Chart */}
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px',
-                    position: 'relative'
-                  }}>
+                  <div
+                    id={performanceChartId}
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '24px',
+                      position: 'relative'
+                    }}
+                  >
                     {/* MoM Badge - Top Right Corner */}
                     {latestMoM !== null && portfolioWithMoM.length > 1 && (
                       <div
@@ -588,8 +654,8 @@ const CustomerViewPage: React.FC = () => {
                           zIndex: 10,
                           padding: '8px 16px',
                           borderRadius: '8px',
-                          backgroundColor: latestMoM >= 0 
-                            ? colors.semantic.success + '20' 
+                          backgroundColor: latestMoM >= 0
+                            ? colors.semantic.success + '20'
                             : colors.semantic.error + '20',
                           border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
                           display: 'flex',
@@ -603,14 +669,14 @@ const CustomerViewPage: React.FC = () => {
                         <span style={{ fontSize: '14px' }}>
                           {latestMoM >= 0 ? '📈' : '📉'}
                         </span>
-                        <span style={{ 
-                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error 
+                        <span style={{
+                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
                         }}>
                           {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
                         </span>
-                        <span style={{ 
+                        <span style={{
                           fontSize: '11px',
-                          color: colors.utility.secondaryText 
+                          color: colors.utility.secondaryText
                         }}>
                           vs last month
                         </span>
@@ -621,7 +687,65 @@ const CustomerViewPage: React.FC = () => {
                       <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
                         Portfolio Performance
                       </h3>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        {/* Comparison Toggle */}
+                        {defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                          <button
+                            onClick={() => setShowComparison(!showComparison)}
+                            title={showComparison ? 'Hide index comparison' : 'Show index comparison'}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: showComparison ? colors.brand.primary + '20' : 'transparent',
+                              color: showComparison ? colors.brand.primary : colors.utility.secondaryText,
+                              border: `1px solid ${showComparison ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {showComparison ? 'Hide' : 'Show'} Comparison
+                          </button>
+                        )}
+
+                        {/* Fullscreen Button */}
+                        {isFullscreenSupported() && (
+                          <button
+                            onClick={handleFullscreenToggle}
+                            title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText,
+                              border: `1px solid ${colors.utility.primaryText}20`,
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {isFullscreenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                            {isFullscreenMode ? 'Exit' : 'Fullscreen'}
+                          </button>
+                        )}
+
+                        {/* Export Button */}
+                        <ChartExport
+                          elementId={performanceChartId}
+                          indexName={customer?.name || 'Portfolio'}
+                          colors={colors}
+                        />
+
+                        {/* Timeframe Buttons */}
                         {['1M', '3M', '6M', '1Y', 'ALL'].map(period => (
                           <button
                             key={period}
@@ -656,7 +780,7 @@ const CustomerViewPage: React.FC = () => {
                             timeframe={selectedTimeframe}
                             showTimelineMarkers={true}
                             timelineMarkerSize={5}
-                            showComparison={!isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
                             comparisonData={comparisonIndexData}
                             comparisonIndexName={defaultComparisonIndex?.index_name}
                           />
@@ -667,7 +791,7 @@ const CustomerViewPage: React.FC = () => {
                             marginTop: '12px'
                           }}>
                             Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
-                            {defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                            {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
                               <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
                                 • Compared with {defaultComparisonIndex.index_name}
                               </span>
