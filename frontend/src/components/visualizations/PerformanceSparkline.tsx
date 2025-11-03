@@ -18,11 +18,11 @@ interface PerformanceSparklineProps {
   gradientColor?: string;
   interactive?: boolean;
   showTooltip?: boolean;
-  timeframe?: '1M' | '3M' | '6M' | '1Y' | 'ALL';  // Component handles filtering
-  showTimelineMarkers?: boolean;                   // Enable/disable timeline markers
+  timeframe?: '1M' | '3M' | '6M' | '1Y' | 'ALL';
+  showTimelineMarkers?: boolean;
   timelineMarkerSize?: number;
   // Comparison props
-  comparisonData?: number[];                       // Index comparison data
+comparisonData?: Array<{date: string, value: number}>; 
   comparisonIndexName?: string;                    // Name of comparison index
   showComparison?: boolean;                        // Enable/disable comparison overlay
 }
@@ -53,9 +53,8 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 });
 
   // ============================================
-  // TIMELINE LOGIC - INTERNAL TO COMPONENT
+  // TIMELINE LOGIC
   // ============================================
-
   const filterPerformanceByTimeframe = (
     performanceData: PortfolioPerformanceMetric[],
     timeframe: '1M' | '3M' | '6M' | '1Y' | 'ALL'
@@ -122,9 +121,8 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   }, [performanceData, timeframe, showTimelineMarkers]);
 
   // ============================================
-  // EXISTING CHART LOGIC
+  // CHART RENDERING LOGIC
   // ============================================
-
   const isPositive = useMemo(() => {
     if (data.length < 2) return true;
     return data[data.length - 1] >= data[0];
@@ -272,40 +270,40 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
         />
 
         {/* Dots - with timeline marker logic */}
-{(showDots || hoveredIndex !== null) && points.map((point, index) => {
-  const isTimelineMarker = getTimelineMarkers.includes(index);
-  const dotRadius = hoveredIndex === index 
-    ? 5 
-    : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
-  
-  // Determine dot color based on MoM change
-  let dotColor = lineColor;
-  if (isTimelineMarker && performanceData && performanceData[index]) {
-    const momChange = performanceData[index].mom_change_percentage;
-    if (momChange !== null && momChange !== undefined) {
-      dotColor = momChange >= 0 ? '#10B981' : '#EF4444'; // Green for positive, Red for negative
-    }
-  }
-  
-  return (
-    <circle
-      key={index}
-      cx={point.x}
-      cy={point.y}
-      r={dotRadius}
-      fill={dotColor}
-      stroke="white"
-      strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
-      style={{
-        transition: 'all 0.2s ease',
-        opacity: hoveredIndex === index 
-          ? 1 
-          : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
-        filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
-      }}
-    />
-  );
-})}
+        {(showDots || hoveredIndex !== null) && points.map((point, index) => {
+          const isTimelineMarker = getTimelineMarkers.includes(index);
+          const dotRadius = hoveredIndex === index 
+            ? 5 
+            : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
+          
+          let dotColor = lineColor;
+          if (isTimelineMarker && performanceData && performanceData[index]) {
+            const momChange = performanceData[index].mom_change_percentage;
+            if (momChange !== null && momChange !== undefined) {
+              dotColor = momChange >= 0 ? '#10B981' : '#EF4444';
+            }
+          }
+          
+          return (
+            <circle
+              key={index}
+              cx={point.x}
+              cy={point.y}
+              r={dotRadius}
+              fill={dotColor}
+              stroke="white"
+              strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
+              style={{
+                transition: 'all 0.2s ease',
+                opacity: hoveredIndex === index 
+                  ? 1 
+                  : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
+                filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
+              }}
+            />
+          );
+        })}
+
         {/* Interactive overlay */}
         {interactive && (
           <rect
@@ -319,15 +317,16 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
         )}
       </svg>
 
-      {/* Index Comparison Overlay */}
-      {showComparison && comparisonData && comparisonData.length > 0 && (
+      {/* Index Comparison Overlay - WITH DATE MATCHING */}
+      {showComparison && comparisonData && comparisonData.length > 0 && performanceData && (
         <IndexComparisonOverlay
-          portfolioData={data}
-          indexData={comparisonData}
+          portfolioData={performanceData.map(p => ({ date: p.date, value: p.current_value }))}
+  indexData={comparisonData}  // ✅ Just pass it through!
           width={width}
           height={height}
-          indexName={comparisonIndexName}
+          indexName={comparisonIndexName || 'Index'}
           showLabel={true}
+          useDateMatching={true}
         />
       )}
 
@@ -375,7 +374,7 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
             {formatValue(points[hoveredIndex].value)}
           </div>
           
-          {/* Total Returns (from inception) */}
+          {/* Total Returns */}
           {hoveredIndex > 0 && (
             <div style={{
               display: 'flex',
@@ -401,7 +400,7 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
             </div>
           )}
           
-          {/* Month-over-Month Change - NEW! */}
+          {/* Month-over-Month Change */}
           {hoveredIndex > 0 && 
            performanceData[hoveredIndex].mom_change_percentage !== null && 
            performanceData[hoveredIndex].mom_change_percentage !== undefined && (
