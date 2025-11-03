@@ -1135,7 +1135,7 @@ private async getGoalPortfolioValue(
       // Get customer's portfolio holdings
       const portfolioQuery = `
         SELECT scheme_code, scheme_name, current_value
-        FROM t_portfolio_holdings
+        FROM t_customer_portfolio_totals
         WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
       `;
       const portfolioResult = await client.query(portfolioQuery, [tenantId, isLive, customerId]);
