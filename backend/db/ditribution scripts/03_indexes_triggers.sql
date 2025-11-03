@@ -119,6 +119,7 @@ END $$;
 CREATE INDEX idx_tenants_active ON t_tenants USING btree (is_active);
 CREATE INDEX idx_tenants_code ON t_tenants USING btree (tenant_code) WHERE (is_active = true);
 CREATE INDEX idx_tenants_is_admin ON t_tenants USING btree (is_admin) WHERE (is_admin = true);
+CREATE INDEX idx_tenants_default_comparison_index ON t_tenants USING btree (default_comparison_index_id) WHERE (default_comparison_index_id IS NOT NULL);
 
 CREATE INDEX idx_users_email ON t_users USING btree (email);
 CREATE INDEX idx_users_tenant ON t_users USING btree (tenant_id);
