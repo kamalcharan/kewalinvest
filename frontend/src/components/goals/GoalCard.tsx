@@ -536,7 +536,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
                       }}>
                         {scheme.allocation_percentage}%
                       </div>
-                      {allocationInfo && (
+                      {allocationInfo && allocationInfo.available_percentage != null && (
                         <div style={{
                           fontSize: '9px',
                           color: getAvailabilityColor(allocationInfo.available_percentage),
