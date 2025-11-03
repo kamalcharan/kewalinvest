@@ -121,7 +121,9 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
     customEndDate,
     lineColor,
     showVolume,
-    baselineValue
+    baselineValue,
+    showComparison: false,        
+    comparisonIndexId: null 
   }), [chartType, viewMode, displayMode, granularity, timePeriod, customStartDate, customEndDate, lineColor, showVolume, baselineValue]);
 
   // Chart configuration
@@ -327,7 +329,9 @@ const ChartViewer: React.FC<ChartViewerProps> = ({
           customDates: handleCustomDateApply,
           color: handleColorChange,
           volume: handleVolumeToggle,
-          baseline: handleBaselineChange
+          baseline: handleBaselineChange,
+          comparison: () => {},           
+          comparisonIndex: () => {}   
         }}
         colors={colors}
         showColorPicker={showColorPicker}

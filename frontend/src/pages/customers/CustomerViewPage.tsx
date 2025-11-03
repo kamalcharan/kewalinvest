@@ -48,11 +48,11 @@ const CustomerViewPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
-  // Index comparison state
+  // Index comparison state - FIXED: Changed to date-aware format
   const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
-  const [comparisonIndexData, setComparisonIndexData] = useState<number[]>([]);
+  const [comparisonIndexData, setComparisonIndexData] = useState<Array<{date: string, value: number}>>([]);
   const [isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
-  const [showComparison, setShowComparison] = useState(true); // User toggle for showing/hiding comparison
+  const [showComparison, setShowComparison] = useState(true);
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
 
   // Chart element ID for export and fullscreen
@@ -120,9 +120,13 @@ const CustomerViewPage: React.FC = () => {
     }
   }, [portfolio]);
 
-  // Load default comparison index and its data
+  // FIXED: Load default comparison index and its data using new API method
   useEffect(() => {
     const loadDefaultIndexComparison = async () => {
+      if (!portfolio?.performance || portfolio.performance.length === 0) {
+        return;
+      }
+
       try {
         setIsLoadingIndexComparison(true);
 
@@ -146,56 +150,21 @@ const CustomerViewPage: React.FC = () => {
 
         setDefaultComparisonIndex(indexResponse.data);
 
-        // Fetch index historical data if portfolio performance data exists
-        if (portfolio?.performance && portfolio.performance.length > 0) {
-          // Get date range from portfolio performance
-          const performanceDates = portfolio.performance.map(p => p.date);
-          const startDate = performanceDates[0];
-          const endDate = performanceDates[performanceDates.length - 1];
+        // Get date range from portfolio performance
+        const performanceDates = portfolio.performance.map(p => p.date);
+        const startDate = performanceDates[0];
+        const endDate = performanceDates[performanceDates.length - 1];
 
-          // Fetch index market data for the same date range
-          const marketDataResponse = await MarketService.getMarketData(indexId, {
-            start_date: startDate,
-            end_date: endDate,
-            page: 1,
-            page_size: 10000 // Get all data points
-          });
+        // FIXED: Use the new method that returns monthly data with dates
+        const monthlyDataResponse = await MarketService.getIndexMonthlyDataForComparison(
+          indexId,
+          startDate,
+          endDate
+        );
 
-          if (marketDataResponse.success && marketDataResponse.data?.data) {
-            // Align index data with monthly portfolio snapshots
-            // Portfolio snapshots are monthly, but market data is daily
-            // We need to extract month-end closing values to match snapshot dates
-
-            const marketData = marketDataResponse.data.data;
-
-            // Group market data by month (YYYY-MM)
-            const marketDataByMonth = new Map<string, typeof marketData>();
-            marketData.forEach(dataPoint => {
-              const month = dataPoint.date.substring(0, 7); // Extract YYYY-MM
-              if (!marketDataByMonth.has(month)) {
-                marketDataByMonth.set(month, []);
-              }
-              marketDataByMonth.get(month)!.push(dataPoint);
-            });
-
-            // For each portfolio snapshot, find the corresponding month-end index value
-            const alignedIndexValues: number[] = [];
-            portfolio.performance.forEach(snapshot => {
-              const snapshotMonth = snapshot.date.substring(0, 7); // Extract YYYY-MM
-              const monthData = marketDataByMonth.get(snapshotMonth);
-
-              if (monthData && monthData.length > 0) {
-                // Get the last trading day of the month (month-end close)
-                const monthEndClose = monthData[monthData.length - 1].close;
-                alignedIndexValues.push(monthEndClose);
-              } else {
-                // If no data for this month, use previous value or 0
-                alignedIndexValues.push(alignedIndexValues.length > 0 ? alignedIndexValues[alignedIndexValues.length - 1] : 0);
-              }
-            });
-
-            setComparisonIndexData(alignedIndexValues);
-          }
+        if (monthlyDataResponse.success && monthlyDataResponse.data) {
+          // Data is already in {date, value} format
+          setComparisonIndexData(monthlyDataResponse.data);
         }
       } catch (error) {
         console.error('Error loading index comparison:', error);
@@ -688,8 +657,8 @@ const CustomerViewPage: React.FC = () => {
                         Portfolio Performance
                       </h3>
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        {/* Comparison Toggle */}
-                        {defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                        {/* FIXED: Proper comparison toggle with state check */}
+                        {!isLoadingIndexComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
                           <button
                             onClick={() => setShowComparison(!showComparison)}
                             title={showComparison ? 'Hide index comparison' : 'Show index comparison'}
@@ -709,7 +678,7 @@ const CustomerViewPage: React.FC = () => {
                             }}
                           >
                             {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {showComparison ? 'Hide' : 'Show'} Comparison
+                            {showComparison ? 'Hide' : 'Show'} {defaultComparisonIndex.index_name}
                           </button>
                         )}
 
@@ -744,46 +713,28 @@ const CustomerViewPage: React.FC = () => {
                           indexName={customer?.name || 'Portfolio'}
                           colors={colors}
                         />
-
-                        {/* Timeframe Buttons */}
-                        {['1M', '3M', '6M', '1Y', 'ALL'].map(period => (
-                          <button
-                            key={period}
-                            onClick={() => setSelectedTimeframe(period as any)}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: selectedTimeframe === period ? colors.brand.primary : 'transparent',
-                              color: selectedTimeframe === period ? 'white' : colors.utility.secondaryText,
-                              border: `1px solid ${selectedTimeframe === period ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {period}
-                          </button>
-                        ))}
                       </div>
                     </div>
                     
                     <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {portfolio.performance && portfolio.performance.length > 1 ? (
                         <div style={{ width: '100%', height: '100%' }}>
+                          {/* FIXED: Proper props with comparison data */}
                           <PerformanceSparkline
-                            performanceData={portfolioWithMoM}
-                            data={portfolio.performance.map(p => p.current_value ?? 0)}
-                            width={600}
-                            height={250}
-                            showArea={true}
-                            showDots={true}
-                            interactive={true}
-                            timeframe={selectedTimeframe}
-                            showTimelineMarkers={true}
-                            timelineMarkerSize={5}
-                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-                            comparisonData={comparisonIndexData}
-                            comparisonIndexName={defaultComparisonIndex?.index_name}
-                          />
+  performanceData={portfolioWithMoM}
+  data={portfolio.performance.map(p => p.current_value ?? 0)}
+  width={600}
+  height={250}
+  showArea={true}
+  showDots={true}
+  interactive={true}
+  timeframe={selectedTimeframe}
+  showTimelineMarkers={true}
+  timelineMarkerSize={5}
+  showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+comparisonData={comparisonIndexData}
+  comparisonIndexName={defaultComparisonIndex?.index_name}
+/>
                           <div style={{
                             fontSize: '12px',
                             color: colors.utility.secondaryText,
