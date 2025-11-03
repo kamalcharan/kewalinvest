@@ -289,23 +289,23 @@ export class UserPreferencesController {
   // ==================== DEFAULT COMPARISON INDEX ====================
 
   /**
-   * Get default comparison index for authenticated user
+   * Get default comparison index for authenticated tenant
    * GET /api/user-preferences/default-comparison-index
    */
   getDefaultComparisonIndex = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const startTime = Date.now();
 
     try {
-      const userId = req.user!.user_id;
+      const tenantId = req.environment!.tenant_id;
 
       SimpleLogger.info(
         'UserPreferencesController',
         'Fetching default comparison index',
         'getDefaultComparisonIndex',
-        { userId }
+        { tenantId }
       );
 
-      const result = await userPreferencesService.getDefaultComparisonIndex(userId);
+      const result = await userPreferencesService.getDefaultComparisonIndex(tenantId);
 
       res.json({
         success: true,
@@ -332,7 +332,7 @@ export class UserPreferencesController {
   };
 
   /**
-   * Set default comparison index for authenticated user
+   * Set default comparison index for authenticated tenant
    * POST /api/user-preferences/default-comparison-index
    * Body: { default_comparison_index_id: number }
    */
@@ -340,7 +340,7 @@ export class UserPreferencesController {
     const startTime = Date.now();
 
     try {
-      const userId = req.user!.user_id;
+      const tenantId = req.environment!.tenant_id;
       const { default_comparison_index_id } = req.body;
 
       // Validation
@@ -356,10 +356,10 @@ export class UserPreferencesController {
         'UserPreferencesController',
         'Setting default comparison index',
         'setDefaultComparisonIndex',
-        { userId, default_comparison_index_id }
+        { tenantId, default_comparison_index_id }
       );
 
-      await userPreferencesService.setDefaultComparisonIndex(userId, default_comparison_index_id);
+      await userPreferencesService.setDefaultComparisonIndex(tenantId, default_comparison_index_id);
 
       res.json({
         success: true,
