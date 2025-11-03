@@ -14,6 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
+import { useCustomerGoals, useCustomerGoalSummary } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -30,6 +31,13 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
+import { GoalCard } from '../../components/goals/GoalCard';
+import { GoalSetupModal } from '../../components/goals/GoalSetupModal';
+import { GoalDetailsModal } from '../../components/goals/GoalDetailsModal';
+import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
+import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
+import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
+import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -47,6 +55,12 @@ const CustomerViewPage: React.FC = () => {
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
+
+  // Goal modal states
+  const [showGoalSetupModal, setShowGoalSetupModal] = useState(false);
+  const [showGoalDetailsModal, setShowGoalDetailsModal] = useState(false);
+  const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
 
   // Index comparison state - FIXED: Changed to date-aware format
   const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
@@ -75,6 +89,10 @@ const CustomerViewPage: React.FC = () => {
   });
   
   const { data: jtbds, isLoading: jtbdLoading } = useCustomerJTBDs(customerId || undefined);
+
+  // Load goals data
+  const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
+  const { data: goalSummary, isLoading: goalSummaryLoading } = useCustomerGoalSummary(customerId || 0);
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -1097,14 +1115,161 @@ comparisonData={comparisonIndexData}
         {/* Goals & Actions Tab */}
         {activeTab === 'goals' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <JTBDList
-              customerId={customerId}
-              onSetupNew={() => setShowJTBDSetupModal(true)}
-              onEdit={(jtbdId) => {
-                console.log('Edit JTBD:', jtbdId);
-              }}
-              showFilters={true}
-            />
+            {/* Header with Action Button */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h2 style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: colors.utility.primaryText,
+                  margin: '0 0 8px 0'
+                }}>
+                  Goals & Tracking
+                </h2>
+                {goalSummary && (
+                  <p style={{
+                    fontSize: '14px',
+                    color: colors.utility.secondaryText,
+                    margin: 0
+                  }}>
+                    {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
+                    {goalSummary.on_track_count} on track •
+                    {goalSummary.watchlist_count} in watchlist
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowGoalSetupModal(true)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span style={{ fontSize: '18px' }}>+</span>
+                Create New Goal
+              </button>
+            </div>
+
+            {goalsLoading ? (
+              <div style={{
+                padding: '40px',
+                textAlign: 'center',
+                color: colors.utility.secondaryText
+              }}>
+                Loading goals...
+              </div>
+            ) : goals.length === 0 ? (
+              <div style={{
+                padding: '60px 40px',
+                textAlign: 'center',
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                border: `2px dashed ${colors.utility.primaryText}20`
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  marginBottom: '8px'
+                }}>
+                  No Goals Set
+                </h3>
+                <p style={{
+                  fontSize: '14px',
+                  color: colors.utility.secondaryText,
+                  marginBottom: '24px'
+                }}>
+                  Create your first investment goal to start tracking progress
+                </p>
+                <button
+                  onClick={() => setShowGoalSetupModal(true)}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: colors.brand.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Create First Goal
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+                {/* Left Column - Goals List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Active Goals */}
+                  {goals.filter(g => g.is_active).map(goal => (
+                    <GoalCard
+                      key={goal.id}
+                      goal={goal}
+                      onEdit={(goalId) => {
+                        setSelectedGoalId(goalId);
+                        setShowGoalDetailsModal(true);
+                      }}
+                      onRecalculate={(goalId) => {
+                        setSelectedGoalId(goalId);
+                        setShowGoalRecalculationModal(true);
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Right Column - Tracking Panels */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Progress Tracker */}
+                  <GoalProgressTracker
+                    customerId={customerId!}
+                    onWatchlistChange={() => refetchGoals()}
+                  />
+
+                  {/* Watchlist Panel */}
+                  <GoalWatchlistPanel customerId={customerId!} />
+
+                  {/* Asset Allocation Utilization */}
+                  <AssetAllocationUtilization customerId={customerId!} />
+                </div>
+              </div>
+            )}
+
+            {/* Legacy JTBD Section */}
+            {jtbds && jtbds.length > 0 && (
+              <div style={{ marginTop: '24px' }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  marginBottom: '16px'
+                }}>
+                  Alerts & Reminders
+                </h3>
+                <JTBDList
+                  customerId={customerId}
+                  onSetupNew={() => setShowJTBDSetupModal(true)}
+                  onEdit={(jtbdId) => {
+                    console.log('Edit JTBD:', jtbdId);
+                  }}
+                  showFilters={true}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1211,6 +1376,47 @@ comparisonData={comparisonIndexData}
           onClose={() => setShowJTBDSetupModal(false)}
           onSuccess={() => {
             setShowJTBDSetupModal(false);
+          }}
+        />
+      )}
+
+      {/* Goal Modals */}
+      {showGoalSetupModal && (
+        <GoalSetupModal
+          customerId={customerId!}
+          onClose={() => setShowGoalSetupModal(false)}
+          onSuccess={() => {
+            setShowGoalSetupModal(false);
+            refetchGoals();
+          }}
+        />
+      )}
+
+      {showGoalDetailsModal && selectedGoalId && (
+        <GoalDetailsModal
+          goalId={selectedGoalId}
+          onClose={() => {
+            setShowGoalDetailsModal(false);
+            setSelectedGoalId(null);
+          }}
+          onUpdate={() => {
+            refetchGoals();
+          }}
+        />
+      )}
+
+      {showGoalRecalculationModal && selectedGoalId && (
+        <GoalRecalculationModal
+          goalId={selectedGoalId}
+          customerId={customerId!}
+          onClose={() => {
+            setShowGoalRecalculationModal(false);
+            setSelectedGoalId(null);
+          }}
+          onSuccess={() => {
+            setShowGoalRecalculationModal(false);
+            setSelectedGoalId(null);
+            refetchGoals();
           }}
         />
       )}
