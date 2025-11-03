@@ -1,6 +1,6 @@
 // backend/src/controllers/portfolioSnapshot.controller.ts
 // Controller for Portfolio Snapshot Scheduler API endpoints
-// FIXED: Now uses JobSchedulerService for execution tracking to write to t_job_executions
+// FIXED: All operations now use JobSchedulerService for execution tracking
 
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
@@ -300,7 +300,6 @@ export class PortfolioSnapshotController {
   /**
    * POST /api/cruise-control/snapshots/backfill-smart
    * Smart backfill - automatically detects missing months per customer
-   * FIXED: Now uses JobSchedulerService for execution tracking
    */
   smartBackfill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -319,14 +318,11 @@ export class PortfolioSnapshotController {
       const { customer_ids } = req.body;
 
       console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
-      console.log(`[SnapshotController] Environment from header: ${req.headers['x-environment']}, is_live: ${isLive}`);
 
-      // FIXED: Use JobSchedulerService to create execution in t_job_executions (NEW table)
-      // First ensure config exists
+      // Get or create config
       let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
       
       if (!config) {
-        // Create default config if it doesn't exist
         config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
           user_id: userId,
           schedule_type: 'weekly',
@@ -334,10 +330,9 @@ export class PortfolioSnapshotController {
           is_enabled: false,
           max_retries: 3
         });
-        console.log(`[SnapshotController] Created default job config for tenant ${tenantId}`);
       }
 
-      // Create execution record in the NEW generic job system
+      // Create execution record
       const executionId = await this.jobSchedulerService.createExecution(
         config.id!,
         tenantId,
@@ -347,24 +342,13 @@ export class PortfolioSnapshotController {
         0
       );
 
-      console.log(`[SnapshotController] Created execution ${executionId} in t_job_executions (generic job system)`);
-
-      // Execute backfill in background and track it
+      // Execute backfill in background
       this.snapshotService.smartBackfill({
         tenant_id: tenantId,
         is_live: isLive,
         customer_ids: customer_ids
       }).then(async (result) => {
         try {
-          console.log(`[SnapshotController] Smart backfill completed for execution ${executionId}. Result:`, {
-            customers_processed: result.customers_processed,
-            customers_failed: result.customers_failed,
-            snapshots_created: result.snapshots_created,
-            snapshots_updated: result.snapshots_updated,
-            duration_ms: result.execution_duration_ms
-          });
-
-          // Update execution with results using JobSchedulerService (writes to t_job_executions)
           await this.jobSchedulerService.completeExecution(executionId, {
             success: true,
             execution_data: {
@@ -378,30 +362,16 @@ export class PortfolioSnapshotController {
             },
             execution_duration_ms: result.execution_duration_ms
           });
-
-          // Update config stats
           await this.jobSchedulerService.updateConfigStats(config.id!, true);
-
-          console.log(`[SnapshotController] Execution ${executionId} updated successfully in t_job_executions`);
         } catch (updateError: any) {
-          console.error(`[SnapshotController] CRITICAL: Failed to update execution ${executionId} with results:`, updateError);
-          // Try to mark as failed
-          try {
-            await this.jobSchedulerService.failExecution(executionId, `Failed to update results: ${updateError.message}`);
-            await this.jobSchedulerService.updateConfigStats(config.id!, false);
-          } catch (failError) {
-            console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
-          }
+          console.error(`[SnapshotController] Failed to update execution ${executionId}:`, updateError);
         }
       }).catch(async (error) => {
         try {
-          console.error(`[SnapshotController] Smart backfill failed for execution ${executionId}:`, error);
-          // Mark execution as failed
           await this.jobSchedulerService.failExecution(executionId, error.message);
           await this.jobSchedulerService.updateConfigStats(config.id!, false);
-          console.log(`[SnapshotController] Execution ${executionId} marked as failed`);
-        } catch (failError: any) {
-          console.error(`[SnapshotController] CRITICAL: Failed to mark execution as failed:`, failError);
+        } catch (failError) {
+          console.error(`[SnapshotController] Failed to mark execution as failed:`, failError);
         }
       });
 
@@ -425,7 +395,7 @@ export class PortfolioSnapshotController {
 
   /**
    * POST /api/cruise-control/snapshots/backfill
-   * Backfill historical snapshots with manual date range (Admin only)
+   * Backfill historical snapshots with manual date range
    */
   backfillSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -514,6 +484,411 @@ export class PortfolioSnapshotController {
       res.status(500).json({
         success: false,
         error: error.message || 'Health check failed'
+      });
+    }
+  };
+
+  // ==================== NEW OPERATION ENDPOINTS ====================
+
+  /**
+   * POST /api/cruise-control/snapshots/operations/drop-all
+   * Drop all snapshots (DANGEROUS operation)
+   */
+  dropAllSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!tenantId || !userId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      const customerIds = req.body.customer_ids;
+
+      console.log(`[SnapshotController] Drop all snapshots requested by user ${userId} for tenant ${tenantId}`);
+
+      // Get or create config
+      let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
+      if (!config) {
+        config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
+          user_id: userId,
+          schedule_type: 'weekly',
+          cron_expression: '0 21 * * 5',
+          is_enabled: false,
+          max_retries: 3
+        });
+      }
+
+      // Create execution record
+      const executionId = await this.jobSchedulerService.createExecution(
+        config.id!,
+        tenantId,
+        isLive,
+        JobType.PORTFOLIO_SNAPSHOT,
+        'manual',
+        0
+      );
+
+      // Execute in background
+      this.snapshotService.dropAllSnapshots({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: customerIds
+      }).then(async (result) => {
+        try {
+          if (result.success) {
+            await this.jobSchedulerService.completeExecution(executionId, {
+              success: true,
+              execution_data: {
+                operation: 'drop_all',
+                deleted_count: result.deleted_count,
+                message: result.message,
+                customers_processed: 0,
+                customers_failed: 0,
+                snapshots_created: 0,
+                snapshots_updated: 0
+              },
+              execution_duration_ms: result.execution_duration_ms
+            });
+            await this.jobSchedulerService.updateConfigStats(config.id!, true);
+            console.log(`[SnapshotController] Drop all completed: ${result.deleted_count} snapshots deleted`);
+          } else {
+            await this.jobSchedulerService.failExecution(executionId, result.message);
+            await this.jobSchedulerService.updateConfigStats(config.id!, false);
+          }
+        } catch (updateError: any) {
+          console.error(`[SnapshotController] Failed to update execution ${executionId}:`, updateError);
+        }
+      }).catch(async (error) => {
+        try {
+          console.error('[SnapshotController] Drop all failed:', error);
+          await this.jobSchedulerService.failExecution(executionId, error.message);
+          await this.jobSchedulerService.updateConfigStats(config.id!, false);
+        } catch (failError) {
+          console.error(`[SnapshotController] Failed to mark execution as failed:`, failError);
+        }
+      });
+
+      res.status(202).json({
+        success: true,
+        data: {
+          execution_id: executionId,
+          status: 'running',
+          message: 'Dropping snapshots. This may take a few moments.'
+        }
+      });
+    } catch (error: any) {
+      console.error('[SnapshotController] Error dropping snapshots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to drop snapshots'
+      });
+    }
+  };
+
+  /**
+   * POST /api/cruise-control/snapshots/operations/generate-missing
+   * Generate only missing snapshots (safe operation)
+   */
+  generateMissingSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!tenantId || !userId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      const customerIds = req.body.customer_ids;
+
+      console.log(`[SnapshotController] Generate missing snapshots requested by user ${userId} for tenant ${tenantId}`);
+
+      // Get or create config
+      let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
+      if (!config) {
+        config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
+          user_id: userId,
+          schedule_type: 'weekly',
+          cron_expression: '0 21 * * 5',
+          is_enabled: false,
+          max_retries: 3
+        });
+      }
+
+      // Create execution record
+      const executionId = await this.jobSchedulerService.createExecution(
+        config.id!,
+        tenantId,
+        isLive,
+        JobType.PORTFOLIO_SNAPSHOT,
+        'manual',
+        0
+      );
+
+      // Execute in background
+      this.snapshotService.generateMissingSnapshots({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: customerIds
+      }).then(async (result) => {
+        try {
+          await this.jobSchedulerService.completeExecution(executionId, {
+            success: true,
+            execution_data: {
+              operation: 'generate_missing',
+              snapshot_month_end: result.snapshot_month_end,
+              customers_processed: result.customers_processed,
+              customers_failed: result.customers_failed,
+              snapshots_created: result.snapshots_created,
+              snapshots_updated: 0,
+              snapshots_skipped: result.snapshots_skipped,
+              months_processed: result.months_processed,
+              errors: result.errors
+            },
+            execution_duration_ms: result.execution_duration_ms
+          });
+          await this.jobSchedulerService.updateConfigStats(config.id!, true);
+          console.log(`[SnapshotController] Generate missing completed: ${result.snapshots_created} created, ${result.snapshots_skipped} skipped`);
+        } catch (updateError: any) {
+          console.error(`[SnapshotController] Failed to update execution ${executionId}:`, updateError);
+        }
+      }).catch(async (error) => {
+        try {
+          console.error('[SnapshotController] Generate missing failed:', error);
+          await this.jobSchedulerService.failExecution(executionId, error.message);
+          await this.jobSchedulerService.updateConfigStats(config.id!, false);
+        } catch (failError) {
+          console.error(`[SnapshotController] Failed to mark execution as failed:`, failError);
+        }
+      });
+
+      res.status(202).json({
+        success: true,
+        data: {
+          execution_id: executionId,
+          status: 'running',
+          message: 'Generating missing snapshots. This may take a few minutes.'
+        }
+      });
+    } catch (error: any) {
+      console.error('[SnapshotController] Error generating missing snapshots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to generate missing snapshots'
+      });
+    }
+  };
+
+  /**
+   * POST /api/cruise-control/snapshots/operations/update-all
+   * Update all snapshots (CREATE + UPDATE)
+   */
+  updateAllSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!tenantId || !userId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      const customerIds = req.body.customer_ids;
+
+      console.log(`[SnapshotController] Update all snapshots requested by user ${userId} for tenant ${tenantId}`);
+
+      // Get or create config
+      let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
+      if (!config) {
+        config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
+          user_id: userId,
+          schedule_type: 'weekly',
+          cron_expression: '0 21 * * 5',
+          is_enabled: false,
+          max_retries: 3
+        });
+      }
+
+      // Create execution record
+      const executionId = await this.jobSchedulerService.createExecution(
+        config.id!,
+        tenantId,
+        isLive,
+        JobType.PORTFOLIO_SNAPSHOT,
+        'manual',
+        0
+      );
+
+      // Execute in background
+      this.snapshotService.updateAllSnapshots({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: customerIds
+      }).then(async (result) => {
+        try {
+          await this.jobSchedulerService.completeExecution(executionId, {
+            success: true,
+            execution_data: {
+              operation: 'update_all',
+              snapshot_month_end: result.snapshot_month_end,
+              customers_processed: result.customers_processed,
+              customers_failed: result.customers_failed,
+              snapshots_created: result.snapshots_created,
+              snapshots_updated: result.snapshots_updated,
+              months_processed: result.months_processed,
+              errors: result.errors
+            },
+            execution_duration_ms: result.execution_duration_ms
+          });
+          await this.jobSchedulerService.updateConfigStats(config.id!, true);
+          console.log(`[SnapshotController] Update all completed: ${result.snapshots_created} created, ${result.snapshots_updated} updated`);
+        } catch (updateError: any) {
+          console.error(`[SnapshotController] Failed to update execution ${executionId}:`, updateError);
+        }
+      }).catch(async (error) => {
+        try {
+          console.error('[SnapshotController] Update all failed:', error);
+          await this.jobSchedulerService.failExecution(executionId, error.message);
+          await this.jobSchedulerService.updateConfigStats(config.id!, false);
+        } catch (failError) {
+          console.error(`[SnapshotController] Failed to mark execution as failed:`, failError);
+        }
+      });
+
+      res.status(202).json({
+        success: true,
+        data: {
+          execution_id: executionId,
+          status: 'running',
+          message: 'Updating all snapshots. This may take a few minutes.'
+        }
+      });
+    } catch (error: any) {
+      console.error('[SnapshotController] Error updating all snapshots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update all snapshots'
+      });
+    }
+  };
+
+  /**
+   * POST /api/cruise-control/snapshots/operations/regenerate-all
+   * Regenerate all snapshots (DROP + CREATE - VERY DANGEROUS)
+   */
+  regenerateAllSnapshots = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      // ADD THIS LOGGING BLOCK
+    console.log('🔍 REGENERATE ALL - REQUEST DETAILS:');
+    console.log('   User ID:', userId);
+    console.log('   Tenant ID:', tenantId);
+    console.log('   Environment Header:', req.headers['x-environment']);
+    console.log('   Is Live:', isLive);
+    console.log('   Customer IDs:', req.body.customer_ids);
+    console.log('   User Object:', JSON.stringify(req.user, null, 2));
+
+      if (!tenantId || !userId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      const customerIds = req.body.customer_ids;
+
+      console.log(`[SnapshotController] Regenerate all snapshots requested by user ${userId} for tenant ${tenantId}`);
+
+      // Get or create config
+      let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
+      if (!config) {
+        config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
+          user_id: userId,
+          schedule_type: 'weekly',
+          cron_expression: '0 21 * * 5',
+          is_enabled: false,
+          max_retries: 3
+        });
+      }
+
+      // Create execution record
+      const executionId = await this.jobSchedulerService.createExecution(
+        config.id!,
+        tenantId,
+        isLive,
+        JobType.PORTFOLIO_SNAPSHOT,
+        'manual',
+        0
+      );
+
+      // Execute in background
+      this.snapshotService.regenerateAllSnapshots({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: customerIds
+      }).then(async (result) => {
+        try {
+          await this.jobSchedulerService.completeExecution(executionId, {
+            success: true,
+            execution_data: {
+              operation: 'regenerate_all',
+              snapshot_month_end: result.snapshot_month_end,
+              customers_processed: result.customers_processed,
+              customers_failed: result.customers_failed,
+              snapshots_created: result.snapshots_created,
+              snapshots_updated: 0,
+              snapshots_deleted: result.snapshots_deleted,
+              months_processed: result.months_processed,
+              errors: result.errors
+            },
+            execution_duration_ms: result.execution_duration_ms
+          });
+          await this.jobSchedulerService.updateConfigStats(config.id!, true);
+          console.log(`[SnapshotController] Regenerate all completed: ${result.snapshots_deleted} deleted, ${result.snapshots_created} created`);
+        } catch (updateError: any) {
+          console.error(`[SnapshotController] Failed to update execution ${executionId}:`, updateError);
+        }
+      }).catch(async (error) => {
+        try {
+          console.error('[SnapshotController] Regenerate all failed:', error);
+          await this.jobSchedulerService.failExecution(executionId, error.message);
+          await this.jobSchedulerService.updateConfigStats(config.id!, false);
+        } catch (failError) {
+          console.error(`[SnapshotController] Failed to mark execution as failed:`, failError);
+        }
+      });
+
+      res.status(202).json({
+        success: true,
+        data: {
+          execution_id: executionId,
+          status: 'running',
+          message: 'Regenerating all snapshots (dropping and recreating). This may take several minutes.'
+        }
+      });
+    } catch (error: any) {
+      console.error('[SnapshotController] Error regenerating all snapshots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to regenerate all snapshots'
       });
     }
   };

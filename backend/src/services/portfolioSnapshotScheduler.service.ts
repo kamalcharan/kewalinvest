@@ -1,9 +1,13 @@
 // backend/src/services/portfolioSnapshotScheduler.service.ts
 // Scheduler service for automated portfolio snapshot generation with retry logic
+// REFACTORED: Now uses JobSchedulerService for all execution and config tracking
+// FIXED BASED ON ACTUAL API: Removed next_execution_at from update requests
 
 import { Pool } from 'pg';
 import { pool } from '../config/database';
 import { PortfolioSnapshotService } from './portfolioSnapshot.service';
+import { JobSchedulerService } from './jobScheduler.service';
+import { JobType } from '../types/jobs.types';
 import {
   PortfolioSnapshotConfig,
   CreateSnapshotConfigRequest,
@@ -23,11 +27,13 @@ interface ScheduledTimer {
 export class PortfolioSnapshotSchedulerService {
   private db: Pool;
   private snapshotService: PortfolioSnapshotService;
+  private jobSchedulerService: JobSchedulerService;
   private activeTimers = new Map<string, ScheduledTimer>();
 
   constructor() {
     this.db = pool;
     this.snapshotService = new PortfolioSnapshotService();
+    this.jobSchedulerService = new JobSchedulerService();
   }
 
   // ==================== SCHEDULER INITIALIZATION ====================
@@ -73,121 +79,97 @@ export class PortfolioSnapshotSchedulerService {
 
   /**
    * Create new scheduler configuration for a tenant
+   * REFACTORED: Now uses JobSchedulerService
    */
   async createConfig(tenantId: number, isLive: boolean, request: CreateSnapshotConfigRequest): Promise<PortfolioSnapshotConfig> {
-    const query = `
-      INSERT INTO t_portfolio_snapshot_configs (
-        tenant_id,
-        user_id,
-        is_live,
-        schedule_type,
-        cron_expression,
-        is_enabled,
-        max_retries,
-        next_execution_at,
-        created_at,
-        updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING *
-    `;
-
     const scheduleType = request.schedule_type || 'weekly';
     const cronExpression = request.cron_expression || '0 21 * * 5'; // Default: Friday 9 PM
     const maxRetries = request.max_retries ?? 3;
-    const nextExecution = this.calculateNextExecution(cronExpression);
 
-    const result = await this.db.query(query, [
+    // FIXED: JobSchedulerService.createConfig already calculates and sets next_execution_at
+    // We don't need to update it separately
+    const jobConfig = await this.jobSchedulerService.createConfig(
       tenantId,
-      request.user_id,
       isLive,
-      scheduleType,
-      cronExpression,
-      request.is_enabled ?? true,
-      maxRetries,
-      nextExecution
-    ]);
+      JobType.PORTFOLIO_SNAPSHOT,
+      {
+        user_id: request.user_id,
+        schedule_type: scheduleType,
+        cron_expression: cronExpression,
+        is_enabled: request.is_enabled ?? true,
+        max_retries: maxRetries
+      }
+    );
 
-    const config = this.mapRowToConfig(result.rows[0]);
+    // Convert to PortfolioSnapshotConfig
+    const config = this.mapJobConfigToSnapshotConfig(jobConfig);
 
     // Start timer if enabled
     if (config.is_enabled) {
       this.startTimer(config);
     }
 
-    console.log(`[SnapshotScheduler] Created configuration for tenant ${tenantId}, next run: ${nextExecution?.toISOString()}`);
+    console.log(`[SnapshotScheduler] Created configuration for tenant ${tenantId}`);
 
     return config;
   }
 
   /**
    * Get configuration for a tenant
+   * REFACTORED: Now uses JobSchedulerService
    */
   async getConfig(tenantId: number, isLive: boolean): Promise<PortfolioSnapshotConfig | null> {
-    const query = `
-      SELECT * FROM t_portfolio_snapshot_configs
-      WHERE tenant_id = $1 AND is_live = $2
-    `;
+    const jobConfig = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
 
-    const result = await this.db.query(query, [tenantId, isLive]);
-
-    if (result.rows.length === 0) {
+    if (!jobConfig) {
       return null;
     }
 
-    return this.mapRowToConfig(result.rows[0]);
+    return this.mapJobConfigToSnapshotConfig(jobConfig);
   }
 
   /**
    * Update scheduler configuration
+   * REFACTORED: Now uses JobSchedulerService
    */
   async updateConfig(tenantId: number, isLive: boolean, request: UpdateSnapshotConfigRequest): Promise<PortfolioSnapshotConfig> {
     const existing = await this.getConfig(tenantId, isLive);
 
-    if (!existing) {
+    if (!existing || !existing.id) {
       throw new Error(`No configuration found for tenant ${tenantId}`);
     }
 
-    const updates: string[] = [];
-    const values: any[] = [];
-    let paramCount = 1;
+    // Prepare update data
+    const updateData: any = {};
 
     if (request.schedule_type !== undefined) {
-      updates.push(`schedule_type = $${paramCount++}`);
-      values.push(request.schedule_type);
+      updateData.schedule_type = request.schedule_type;
     }
 
     if (request.cron_expression !== undefined) {
-      updates.push(`cron_expression = $${paramCount++}`);
-      values.push(request.cron_expression);
-      // Recalculate next execution
-      const nextExec = this.calculateNextExecution(request.cron_expression);
-      updates.push(`next_execution_at = $${paramCount++}`);
-      values.push(nextExec);
+      updateData.cron_expression = request.cron_expression;
+      // NOTE: JobSchedulerService.updateConfig automatically calculates
+      // and updates next_execution_at when cron_expression is changed (line ~200-210)
     }
 
     if (request.is_enabled !== undefined) {
-      updates.push(`is_enabled = $${paramCount++}`);
-      values.push(request.is_enabled);
+      updateData.is_enabled = request.is_enabled;
     }
 
     if (request.max_retries !== undefined) {
-      updates.push(`max_retries = $${paramCount++}`);
-      values.push(request.max_retries);
+      updateData.max_retries = request.max_retries;
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    // FIXED: Use correct signature and don't include next_execution_at
+    // Signature: updateConfig(tenantId, isLive, jobType, request)
+    const updatedJobConfig = await this.jobSchedulerService.updateConfig(
+      tenantId,
+      isLive,
+      JobType.PORTFOLIO_SNAPSHOT,
+      updateData
+    );
 
-    values.push(tenantId, isLive);
-
-    const query = `
-      UPDATE t_portfolio_snapshot_configs
-      SET ${updates.join(', ')}
-      WHERE tenant_id = $${paramCount++} AND is_live = $${paramCount++}
-      RETURNING *
-    `;
-
-    const result = await this.db.query(query, values);
-    const updatedConfig = this.mapRowToConfig(result.rows[0]);
+    const updatedConfig = this.mapJobConfigToSnapshotConfig(updatedJobConfig);
 
     // Restart timer with new config
     this.stopTimer(tenantId, isLive);
@@ -204,6 +186,7 @@ export class PortfolioSnapshotSchedulerService {
 
   /**
    * Execute snapshot generation with retry logic
+   * REFACTORED: Now uses JobSchedulerService for execution tracking
    */
   async executeWithRetry(
     tenantId: number,
@@ -213,16 +196,23 @@ export class PortfolioSnapshotSchedulerService {
   ): Promise<void> {
     const config = await this.getConfig(tenantId, isLive);
 
-    if (!config) {
+    if (!config || !config.id) {
       throw new Error(`No configuration found for tenant ${tenantId}`);
     }
 
-    const executionId = await this.createExecutionRecord(config.id!, tenantId, isLive, triggerSource, attempt);
+    // Create execution record using JobSchedulerService
+    const executionId = await this.jobSchedulerService.createExecution(
+      config.id,
+      tenantId,
+      isLive,
+      JobType.PORTFOLIO_SNAPSHOT,
+      triggerSource,
+      attempt
+    );
+
+    console.log(`[SnapshotScheduler] Created execution ${executionId} for tenant ${tenantId} (attempt ${attempt + 1})`);
 
     try {
-      // Mark as running
-      await this.updateExecutionStatus(executionId, 'running');
-
       // Execute snapshot generation
       const result = await this.snapshotService.generateSnapshots({
         tenant_id: tenantId,
@@ -231,36 +221,47 @@ export class PortfolioSnapshotSchedulerService {
         scheduler_config_id: config.id
       });
 
-      // Update execution record with results
-      await this.completeExecution(executionId, result);
+      // Update execution record with results using JobSchedulerService
+      await this.jobSchedulerService.completeExecution(executionId, {
+        success: true,
+        execution_data: {
+          snapshot_month_end: result.snapshot_month_end,
+          customers_processed: result.customers_processed || 0,
+          customers_failed: result.customers_failed || 0,
+          snapshots_created: result.snapshots_created || 0,
+          snapshots_updated: result.snapshots_updated || 0,
+          errors: result.errors || []
+        },
+        execution_duration_ms: result.execution_duration_ms
+      });
 
       // Update config stats
-      await this.updateConfigStats(config.id!, true);
+      await this.jobSchedulerService.updateConfigStats(config.id, true);
 
-      console.log(`[SnapshotScheduler] Execution completed successfully for tenant ${tenantId}`);
+      console.log(`[SnapshotScheduler] Execution ${executionId} completed successfully for tenant ${tenantId}`);
 
     } catch (error: any) {
-      console.error(`[SnapshotScheduler] Execution failed for tenant ${tenantId}, attempt ${attempt + 1}/${config.max_retries + 1}:`, error.message);
+      console.error(`[SnapshotScheduler] Execution ${executionId} failed for tenant ${tenantId}, attempt ${attempt + 1}/${config.max_retries + 1}:`, error.message);
 
       // Check if retries remaining
       if (attempt < config.max_retries) {
         // Mark as retrying
-        await this.updateExecutionStatus(executionId, 'retrying', error.message);
+        await this.jobSchedulerService.updateExecutionStatus(executionId, 'retrying', error.message);
 
         // Calculate retry delay with exponential backoff
         const delay = this.calculateRetryDelay(attempt);
-        console.log(`[SnapshotScheduler] Retrying in ${delay / 1000 / 60} minutes...`);
+        console.log(`[SnapshotScheduler] Retrying execution ${executionId} in ${delay / 1000 / 60} minutes...`);
 
         // Wait and retry
         await this.sleep(delay);
         return this.executeWithRetry(tenantId, isLive, triggerSource, attempt + 1);
 
       } else {
-        // Max retries exhausted
-        await this.failExecution(executionId, error.message);
-        await this.updateConfigStats(config.id!, false);
+        // Max retries exhausted - fail execution
+        await this.jobSchedulerService.failExecution(executionId, error.message);
+        await this.jobSchedulerService.updateConfigStats(config.id, false);
 
-        console.error(`[SnapshotScheduler] Execution failed after ${config.max_retries} retries for tenant ${tenantId}`);
+        console.error(`[SnapshotScheduler] Execution ${executionId} failed after ${config.max_retries} retries for tenant ${tenantId}`);
       }
     }
   }
@@ -366,132 +367,109 @@ export class PortfolioSnapshotSchedulerService {
       console.error('[SnapshotScheduler] Scheduled execution failed:', err);
     });
 
-    // Calculate and update next execution
-    const nextExecution = this.calculateNextExecution(config.cron_expression);
-    await this.updateNextExecution(config.id!, nextExecution);
-
-    // Reload config and restart timer
+    // FIXED: Don't manually update next_execution_at
+    // JobSchedulerService manages this internally, just need to reload config
+    
+    // Reload config (it will have updated next_execution_at from DB)
     const updatedConfig = await this.getConfig(config.tenant_id, config.is_live);
     if (updatedConfig && updatedConfig.is_enabled) {
-      this.startTimer(updatedConfig);
+      // If next_execution_at wasn't updated, calculate it manually
+      if (!updatedConfig.next_execution_at || new Date(updatedConfig.next_execution_at) <= new Date()) {
+        const nextExecution = this.calculateNextExecution(updatedConfig.cron_expression);
+        if (nextExecution) {
+          // Update via cron_expression (will trigger recalculation)
+          await this.jobSchedulerService.updateConfig(
+            config.tenant_id,
+            config.is_live,
+            JobType.PORTFOLIO_SNAPSHOT,
+            {
+              cron_expression: updatedConfig.cron_expression  // Re-set same value to trigger recalc
+            }
+          );
+          // Reload again
+          const reloadedConfig = await this.getConfig(config.tenant_id, config.is_live);
+          if (reloadedConfig) {
+            this.startTimer(reloadedConfig);
+          }
+        }
+      } else {
+        this.startTimer(updatedConfig);
+      }
     }
   }
 
-  // ==================== EXECUTION TRACKING ====================
+  // ==================== STATISTICS & MONITORING ====================
 
-  private async createExecutionRecord(
-    configId: number,
+  /**
+   * Get execution history for a tenant
+   * REFACTORED: Now uses JobSchedulerService
+   */
+  async getExecutions(
     tenantId: number,
     isLive: boolean,
-    triggerSource: 'scheduled' | 'manual',
-    retryAttempt: number
-  ): Promise<number> {
-    const query = `
-      INSERT INTO t_portfolio_snapshot_executions (
-        scheduler_config_id,
-        tenant_id,
-        is_live,
-        execution_time,
-        status,
-        trigger_source,
-        retry_attempt,
-        started_at
-      ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'running', $4, $5, CURRENT_TIMESTAMP)
-      RETURNING id
-    `;
+    page: number = 1,
+    pageSize: number = 20
+  ): Promise<{ executions: SnapshotExecution[]; total: number }> {
+    const result = await this.jobSchedulerService.getExecutions(
+      tenantId,
+      isLive,
+      JobType.PORTFOLIO_SNAPSHOT,
+      page,
+      pageSize
+    );
 
-    const result = await this.db.query(query, [configId, tenantId, isLive, triggerSource, retryAttempt]);
-    return result.rows[0].id;
+    // Map JobExecution to SnapshotExecution format
+    const executions: SnapshotExecution[] = result.executions.map(exec => this.mapJobExecutionToSnapshotExecution(exec));
+
+    return {
+      executions,
+      total: result.total
+    };
   }
 
-  private async updateExecutionStatus(executionId: number, status: string, errorMessage?: string): Promise<void> {
-    const query = `
-      UPDATE t_portfolio_snapshot_executions
-      SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-    `;
+  /**
+   * Get statistics for a tenant
+   * REFACTORED: Now uses JobSchedulerService
+   */
+  async getStatistics(tenantId: number, isLive: boolean): Promise<SnapshotStatistics | null> {
+    const config = await this.getConfig(tenantId, isLive);
 
-    await this.db.query(query, [status, errorMessage || null, executionId]);
-  }
-
-  private async completeExecution(executionId: number, result: any): Promise<void> {
-    // Determine final status based on results
-    // - 'success' if no customers failed
-    // - 'failed' if all customers failed or no customers were processed
-    // - 'success' with error_details if some customers failed (partial success)
-    let finalStatus = 'success';
-
-    if (result.customers_processed === 0) {
-      finalStatus = 'failed'; // No customers processed at all
-    } else if (result.customers_failed > 0 && result.customers_failed === result.customers_processed) {
-      finalStatus = 'failed'; // All customers failed
-    } else if (result.customers_failed > 0) {
-      finalStatus = 'success'; // Partial success - some failed but not all
+    if (!config) {
+      return null;
     }
 
-    const query = `
-      UPDATE t_portfolio_snapshot_executions
-      SET
-        status = $1,
-        snapshot_month_end = $2,
-        customers_processed = $3,
-        customers_failed = $4,
-        snapshots_created = $5,
-        snapshots_updated = $6,
-        execution_duration_ms = $7,
-        completed_at = CURRENT_TIMESTAMP,
-        error_details = $8
-      WHERE id = $9
-    `;
+    // Get recent executions
+    const { executions } = await this.getExecutions(tenantId, isLive, 1, 10);
 
-    await this.db.query(query, [
-      finalStatus,
-      result.snapshot_month_end,
-      result.customers_processed,
-      result.customers_failed,
-      result.snapshots_created,
-      result.snapshots_updated,
-      result.execution_duration_ms,
-      result.errors.length > 0 ? JSON.stringify(result.errors) : null,
-      executionId
-    ]);
-  }
+    // Get job statistics from JobSchedulerService
+    const jobStats = await this.jobSchedulerService.getStatistics(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
 
-  private async failExecution(executionId: number, errorMessage: string): Promise<void> {
-    const query = `
-      UPDATE t_portfolio_snapshot_executions
-      SET
-        status = 'failed',
-        error_message = $1,
-        completed_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `;
+    if (!jobStats) {
+      return null;
+    }
 
-    await this.db.query(query, [errorMessage, executionId]);
-  }
+    // Check if scheduler is running
+    const key = this.getTimerKey(tenantId, isLive);
+    const isRunning = this.activeTimers.has(key) && this.activeTimers.get(key)!.isActive;
 
-  private async updateConfigStats(configId: number, success: boolean): Promise<void> {
-    const query = `
-      UPDATE t_portfolio_snapshot_configs
-      SET
-        execution_count = execution_count + 1,
-        failure_count = failure_count + ${success ? 0 : 1},
-        last_executed_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-    `;
+    // Calculate total snapshots from execution data
+    let totalSnapshotsGenerated = 0;
+    for (const exec of executions) {
+      if (exec.execution_data) {
+        totalSnapshotsGenerated += (exec.execution_data.snapshots_created || 0) + (exec.execution_data.snapshots_updated || 0);
+      }
+    }
 
-    await this.db.query(query, [configId]);
-  }
-
-  private async updateNextExecution(configId: number, nextExecution: Date | null): Promise<void> {
-    const query = `
-      UPDATE t_portfolio_snapshot_configs
-      SET next_execution_at = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `;
-
-    await this.db.query(query, [nextExecution, configId]);
+    return {
+      config,
+      is_running: isRunning,
+      last_execution: executions.length > 0 ? executions[0] : undefined,
+      next_scheduled_run: config.next_execution_at || undefined,
+      recent_executions: executions,
+      success_rate: jobStats.success_rate,
+      average_duration_ms: jobStats.average_duration_ms,
+      total_snapshots_generated: totalSnapshotsGenerated
+    };
   }
 
   // ==================== UTILITY METHODS ====================
@@ -500,14 +478,25 @@ export class PortfolioSnapshotSchedulerService {
    * Get all active configurations
    */
   private async getActiveConfigs(): Promise<PortfolioSnapshotConfig[]> {
+    // Query database directly
     const query = `
-      SELECT * FROM t_portfolio_snapshot_configs
-      WHERE is_enabled = true
-      ORDER BY tenant_id, is_live
+      SELECT DISTINCT tenant_id, is_live
+      FROM t_job_scheduler_configs
+      WHERE job_type = $1 AND is_enabled = true
     `;
-
-    const result = await this.db.query(query);
-    return result.rows.map(row => this.mapRowToConfig(row));
+    
+    const result = await this.db.query(query, [JobType.PORTFOLIO_SNAPSHOT]);
+    
+    const configs: PortfolioSnapshotConfig[] = [];
+    
+    for (const row of result.rows) {
+      const config = await this.getConfig(row.tenant_id, row.is_live);
+      if (config) {
+        configs.push(config);
+      }
+    }
+    
+    return configs;
   }
 
   /**
@@ -515,30 +504,35 @@ export class PortfolioSnapshotSchedulerService {
    * Simplified version - only handles weekly schedule for now
    */
   private calculateNextExecution(cronExpression: string): Date | null {
-    // Default: Friday 9 PM (cron: 0 21 * * 5)
-    const now = new Date();
-    const [minute, hour, , , dayOfWeek] = cronExpression.split(' ').map(Number);
+    try {
+      // Default: Friday 9 PM (cron: 0 21 * * 5)
+      const now = new Date();
+      const [minute, hour, , , dayOfWeek] = cronExpression.split(' ').map(Number);
 
-    const targetDay = dayOfWeek; // 0 = Sunday, 5 = Friday
-    const currentDay = now.getDay();
+      const targetDay = dayOfWeek; // 0 = Sunday, 5 = Friday
+      const currentDay = now.getDay();
 
-    let daysUntilTarget = (targetDay - currentDay + 7) % 7;
-    if (daysUntilTarget === 0) {
-      // Same day - check if time has passed
-      const targetTime = new Date(now);
-      targetTime.setHours(hour, minute, 0, 0);
+      let daysUntilTarget = (targetDay - currentDay + 7) % 7;
+      if (daysUntilTarget === 0) {
+        // Same day - check if time has passed
+        const targetTime = new Date(now);
+        targetTime.setHours(hour, minute, 0, 0);
 
-      if (now >= targetTime) {
-        // Already passed, schedule for next week
-        daysUntilTarget = 7;
+        if (now >= targetTime) {
+          // Already passed, schedule for next week
+          daysUntilTarget = 7;
+        }
       }
+
+      const nextRun = new Date(now);
+      nextRun.setDate(now.getDate() + daysUntilTarget);
+      nextRun.setHours(hour, minute, 0, 0);
+
+      return nextRun;
+    } catch (error) {
+      console.error('[SnapshotScheduler] Error calculating next execution:', error);
+      return null;
     }
-
-    const nextRun = new Date(now);
-    nextRun.setDate(now.getDate() + daysUntilTarget);
-    nextRun.setHours(hour, minute, 0, 0);
-
-    return nextRun;
   }
 
   /**
@@ -567,197 +561,54 @@ export class PortfolioSnapshotSchedulerService {
   }
 
   /**
-   * Map database row to config object
+   * Map JobConfig to PortfolioSnapshotConfig
    */
-  private mapRowToConfig(row: any): PortfolioSnapshotConfig {
+  private mapJobConfigToSnapshotConfig(jobConfig: any): PortfolioSnapshotConfig {
     return {
-      id: row.id,
-      tenant_id: row.tenant_id,
-      user_id: row.user_id,
-      is_live: row.is_live,
-      schedule_type: row.schedule_type,
-      cron_expression: row.cron_expression,
-      is_enabled: row.is_enabled,
-      last_executed_at: row.last_executed_at,
-      next_execution_at: row.next_execution_at,
-      execution_count: row.execution_count,
-      failure_count: row.failure_count,
-      max_retries: row.max_retries,
-      created_at: row.created_at,
-      updated_at: row.updated_at
-    };
-  }
-
-  // ==================== STATISTICS & MONITORING ====================
-
-  /**
-   * Get execution history for a tenant
-   */
-  async getExecutions(
-    tenantId: number,
-    isLive: boolean,
-    page: number = 1,
-    pageSize: number = 20
-  ): Promise<{ executions: SnapshotExecution[]; total: number }> {
-    const offset = (page - 1) * pageSize;
-
-    const query = `
-      SELECT * FROM t_portfolio_snapshot_executions
-      WHERE tenant_id = $1 AND is_live = $2
-      ORDER BY execution_time DESC
-      LIMIT $3 OFFSET $4
-    `;
-
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM t_portfolio_snapshot_executions
-      WHERE tenant_id = $1 AND is_live = $2
-    `;
-
-    const [execResult, countResult] = await Promise.all([
-      this.db.query(query, [tenantId, isLive, pageSize, offset]),
-      this.db.query(countQuery, [tenantId, isLive])
-    ]);
-
-    return {
-      executions: execResult.rows.map(row => this.mapRowToExecution(row)),
-      total: parseInt(countResult.rows[0].total)
+      id: jobConfig.id,
+      tenant_id: jobConfig.tenant_id,
+      user_id: jobConfig.user_id,
+      is_live: jobConfig.is_live,
+      schedule_type: jobConfig.schedule_type,
+      cron_expression: jobConfig.cron_expression,
+      is_enabled: jobConfig.is_enabled,
+      last_executed_at: jobConfig.last_executed_at,
+      next_execution_at: jobConfig.next_execution_at,
+      execution_count: jobConfig.execution_count,
+      failure_count: jobConfig.failure_count,
+      max_retries: jobConfig.max_retries,
+      created_at: jobConfig.created_at,
+      updated_at: jobConfig.updated_at
     };
   }
 
   /**
-   * Get statistics for a tenant
+   * Map JobExecution to SnapshotExecution
    */
-  async getStatistics(tenantId: number, isLive: boolean): Promise<SnapshotStatistics | null> {
-    const config = await this.getConfig(tenantId, isLive);
-
-    if (!config) {
-      return null;
-    }
-
-    const recentQuery = `
-      SELECT * FROM t_portfolio_snapshot_executions
-      WHERE tenant_id = $1 AND is_live = $2
-      ORDER BY execution_time DESC
-      LIMIT 10
-    `;
-
-    const statsQuery = `
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'success') as success_count,
-        COUNT(*) as total_count,
-        AVG(execution_duration_ms) FILTER (WHERE status = 'success') as avg_duration,
-        SUM(snapshots_created + snapshots_updated) as total_snapshots
-      FROM t_portfolio_snapshot_executions
-      WHERE tenant_id = $1 AND is_live = $2
-    `;
-
-    const [recentResult, statsResult] = await Promise.all([
-      this.db.query(recentQuery, [tenantId, isLive]),
-      this.db.query(statsQuery, [tenantId, isLive])
-    ]);
-
-    const stats = statsResult.rows[0];
-    const successRate = stats.total_count > 0 ? (stats.success_count / stats.total_count) * 100 : 0;
-
-    const key = this.getTimerKey(tenantId, isLive);
-    const isRunning = this.activeTimers.has(key) && this.activeTimers.get(key)!.isActive;
-
+  private mapJobExecutionToSnapshotExecution(jobExec: any): SnapshotExecution {
+    const execData = jobExec.execution_data || {};
+    
     return {
-      config,
-      is_running: isRunning,
-      last_execution: recentResult.rows.length > 0 ? this.mapRowToExecution(recentResult.rows[0]) : undefined,
-      next_scheduled_run: config.next_execution_at || undefined,
-      recent_executions: recentResult.rows.map(row => this.mapRowToExecution(row)),
-      success_rate: successRate,
-      average_duration_ms: parseFloat(stats.avg_duration) || 0,
-      total_snapshots_generated: parseInt(stats.total_snapshots) || 0
+      id: jobExec.id,
+      scheduler_config_id: jobExec.scheduler_config_id,
+      tenant_id: jobExec.tenant_id,
+      is_live: jobExec.is_live,
+      execution_time: jobExec.execution_time,
+      status: jobExec.status,
+      trigger_source: jobExec.trigger_source,
+      snapshot_month_end: execData.snapshot_month_end,
+      customers_processed: execData.customers_processed || 0,
+      customers_failed: execData.customers_failed || 0,
+      snapshots_created: execData.snapshots_created || 0,
+      snapshots_updated: execData.snapshots_updated || 0,
+      retry_attempt: jobExec.retry_attempt,
+      error_message: jobExec.error_message,
+      error_details: jobExec.error_details,
+      execution_duration_ms: jobExec.execution_duration_ms,
+      started_at: jobExec.started_at,
+      completed_at: jobExec.completed_at,
+      created_at: jobExec.created_at,
+      execution_data: execData
     };
-  }
-
-  /**
-   * Map database row to execution object
-   */
-  private mapRowToExecution(row: any): SnapshotExecution {
-    return {
-      id: row.id,
-      scheduler_config_id: row.scheduler_config_id,
-      tenant_id: row.tenant_id,
-      is_live: row.is_live,
-      execution_time: row.execution_time,
-      status: row.status,
-      trigger_source: row.trigger_source,
-      snapshot_month_end: row.snapshot_month_end,
-      customers_processed: row.customers_processed,
-      customers_failed: row.customers_failed,
-      snapshots_created: row.snapshots_created,
-      snapshots_updated: row.snapshots_updated,
-      retry_attempt: row.retry_attempt,
-      error_message: row.error_message,
-      error_details: row.error_details,
-      execution_duration_ms: row.execution_duration_ms,
-      started_at: row.started_at,
-      completed_at: row.completed_at,
-      created_at: row.created_at,
-      // Wrap snapshot-specific data in execution_data for frontend compatibility
-      execution_data: {
-        snapshot_month_end: row.snapshot_month_end,
-        customers_processed: row.customers_processed || 0,
-        customers_failed: row.customers_failed || 0,
-        snapshots_created: row.snapshots_created || 0,
-        snapshots_updated: row.snapshots_updated || 0,
-        errors: row.error_details ? (Array.isArray(row.error_details) ? row.error_details : []) : []
-      }
-    };
-  }
-
-  /**
-   * Public method to create execution record for manual operations (like backfill)
-   */
-  async createExecution(tenantId: number, userId: number, isLive: boolean, triggerSource: 'scheduled' | 'manual'): Promise<number> {
-    // Get or create config for this tenant
-    let config = await this.getConfig(tenantId, isLive);
-
-    if (!config) {
-      // Create default config if it doesn't exist
-      config = await this.createConfig(tenantId, isLive, {
-        user_id: userId,
-        schedule_type: 'weekly',
-        cron_expression: '0 21 * * 5',
-        is_enabled: false,
-        max_retries: 3
-      });
-    }
-
-    const query = `
-      INSERT INTO t_portfolio_snapshot_executions (
-        scheduler_config_id,
-        tenant_id,
-        is_live,
-        execution_time,
-        status,
-        trigger_source,
-        retry_attempt,
-        started_at
-      ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'running', $4, 0, CURRENT_TIMESTAMP)
-      RETURNING id
-    `;
-
-    const result = await this.db.query(query, [config.id, tenantId, isLive, triggerSource]);
-    return result.rows[0].id;
-  }
-
-  /**
-   * Public method to complete execution with results
-   */
-  async completeExecutionWithResults(executionId: number, result: any): Promise<void> {
-    await this.completeExecution(executionId, result);
-  }
-
-  /**
-   * Public method to fail execution with error
-   */
-  async failExecutionWithError(executionId: number, errorMessage: string): Promise<void> {
-    await this.failExecution(executionId, errorMessage);
   }
 }

@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Play, Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, Activity, TrendingUp } from 'lucide-react';
 import JobsService from '../../services/jobs.service';
-import PortfolioSnapshotService from '../../services/portfolioSnapshot.service';
+import { SnapshotOperationsButtonGroup } from '../../components/cruiseControl/SnapshotOperationsButtonGroup';
 import { toastService } from '../../services/toast.service';
 import type { JobStatistics, JobExecution, JobType, PortfolioSnapshotExecutionData } from '../../types/jobs.types';
 
@@ -18,7 +18,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
   const [statistics, setStatistics] = useState<JobStatistics | null>(null);
   const [executions, setExecutions] = useState<JobExecution[]>([]);
   const [loading, setLoading] = useState(true);
-  const [triggering, setTriggering] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -53,26 +52,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [environment, page]);
-
-  // Generate snapshots - full history from first transaction
-  const handleManualTrigger = async () => {
-    setTriggering(true);
-    try {
-      const response = await PortfolioSnapshotService.smartBackfill(environment);
-      if (response.success) {
-        const message = response.message || 'Snapshot generation completed successfully';
-        toastService.success(message);
-        // Refresh after 2 seconds
-        setTimeout(fetchData, 2000);
-      } else {
-        toastService.error(response.error || 'Failed to generate snapshots');
-      }
-    } catch (error: any) {
-      toastService.error('Failed to generate snapshots');
-    } finally {
-      setTriggering(false);
-    }
-  };
 
   // Format date
   const formatDate = (dateString?: string) => {
@@ -135,7 +114,29 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     }
   };
 
-  // Get execution result summary
+  // Get operation type display
+  const getOperationDisplay = (execData: PortfolioSnapshotExecutionData | undefined) => {
+    const operation = (execData as any)?.operation;
+    
+    const operationMap: Record<string, { label: string; color: string; icon: string }> = {
+      drop_all: { label: 'Drop All', color: '#EF4444', icon: '🗑️' },
+      generate_missing: { label: 'Generate Missing', color: '#10B981', icon: '➕' },
+      update_all: { label: 'Update All', color: '#3B82F6', icon: '🔄' },
+      regenerate_all: { label: 'Regenerate All', color: '#F59E0B', icon: '♻️' }
+    };
+
+    if (!operation || !operationMap[operation]) {
+      return {
+        label: 'Snapshot',
+        color: colors.utility.secondaryText,
+        icon: '📸'
+      };
+    }
+
+    return operationMap[operation];
+  };
+
+  // Get execution result summary - UPDATED to handle different operation types
   const getExecutionResult = (execData: PortfolioSnapshotExecutionData | undefined, status: string) => {
     if (status === 'running') {
       return { message: 'Processing...', color: '#3B82F6', icon: '⏳' };
@@ -145,22 +146,138 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       return { message: 'No data', color: colors.utility.secondaryText, icon: '—' };
     }
 
+    // Check operation type to handle different result structures
+    const operation = (execData as any).operation;
+
+    // Handle DROP ALL operation
+    if (operation === 'drop_all') {
+      const deletedCount = (execData as any).deleted_count || 0;
+      
+      if (deletedCount === 0) {
+        return {
+          message: 'No snapshots found',
+          color: '#F59E0B',
+          icon: '⚠️'
+        };
+      }
+      
+      return {
+        message: `${deletedCount} snapshots deleted`,
+        color: '#EF4444',
+        icon: '🗑️'
+      };
+    }
+
+    // Handle GENERATE MISSING operation
+    if (operation === 'generate_missing') {
+      const snapshotsCreated = execData.snapshots_created || 0;
+      const snapshotsSkipped = (execData as any).snapshots_skipped || 0;
+      const customersProcessed = execData.customers_processed || 0;
+
+      if (customersProcessed === 0) {
+        return {
+          message: 'No active customers',
+          color: '#F59E0B',
+          icon: '⚠️'
+        };
+      }
+
+      if (snapshotsCreated === 0 && snapshotsSkipped > 0) {
+        return {
+          message: `All up-to-date (${snapshotsSkipped})`,
+          color: '#10B981',
+          icon: '✓'
+        };
+      }
+
+      if (snapshotsCreated === 0) {
+        return {
+          message: 'No missing snapshots',
+          color: '#10B981',
+          icon: '✓'
+        };
+      }
+
+      return {
+        message: `${snapshotsCreated} new, ${snapshotsSkipped} existing`,
+        color: '#10B981',
+        icon: '✓'
+      };
+    }
+
+    // Handle UPDATE ALL operation
+    if (operation === 'update_all') {
+      const snapshotsCreated = execData.snapshots_created || 0;
+      const snapshotsUpdated = execData.snapshots_updated || 0;
+      const customersProcessed = execData.customers_processed || 0;
+
+      if (customersProcessed === 0) {
+        return {
+          message: 'No active customers',
+          color: '#F59E0B',
+          icon: '⚠️'
+        };
+      }
+
+      if (snapshotsCreated === 0 && snapshotsUpdated === 0) {
+        return {
+          message: 'No changes needed',
+          color: '#10B981',
+          icon: '✓'
+        };
+      }
+
+      return {
+        message: `${snapshotsCreated}C / ${snapshotsUpdated}U`,
+        color: '#10B981',
+        icon: '✓'
+      };
+    }
+
+    // Handle REGENERATE ALL operation
+    if (operation === 'regenerate_all') {
+      const snapshotsDeleted = (execData as any).snapshots_deleted || 0;
+      const snapshotsCreated = execData.snapshots_created || 0;
+      const customersProcessed = execData.customers_processed || 0;
+
+      if (customersProcessed === 0) {
+        return {
+          message: 'No active customers',
+          color: '#F59E0B',
+          icon: '⚠️'
+        };
+      }
+
+      if (snapshotsDeleted === 0 && snapshotsCreated === 0) {
+        return {
+          message: 'No snapshots to regenerate',
+          color: '#F59E0B',
+          icon: '⚠️'
+        };
+      }
+
+      return {
+        message: `${snapshotsDeleted}D → ${snapshotsCreated}C`,
+        color: '#F59E0B',
+        icon: '🔄'
+      };
+    }
+
+    // Default handling for regular snapshots (scheduled/manual without operation type)
     const customersProcessed = execData.customers_processed || 0;
     const customersFailed = execData.customers_failed || 0;
     const snapshotsCreated = execData.snapshots_created || 0;
     const snapshotsUpdated = execData.snapshots_updated || 0;
     const totalSnapshots = snapshotsCreated + snapshotsUpdated;
 
-    // No customers found
     if (customersProcessed === 0) {
       return {
-        message: 'No customers found',
+        message: 'No active customers',
         color: '#F59E0B',
         icon: '⚠️'
       };
     }
 
-    // No snapshots generated
     if (totalSnapshots === 0) {
       return {
         message: 'No snapshots generated',
@@ -169,7 +286,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       };
     }
 
-    // All customers failed
     if (customersFailed > 0 && customersFailed === customersProcessed) {
       return {
         message: 'All customers failed',
@@ -178,7 +294,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       };
     }
 
-    // Partial success
     if (customersFailed > 0) {
       return {
         message: `${customersProcessed - customersFailed}/${customersProcessed} successful`,
@@ -187,7 +302,6 @@ export const PortfolioSnapshotsTab: React.FC = () => {
       };
     }
 
-    // Full success
     return {
       message: `${totalSnapshots} snapshots generated`,
       color: '#10B981',
@@ -331,7 +445,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <Activity size={20} style={{ color: colors.brand.tertiary }} />
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Total Snapshots
+              Total Executions
             </h3>
           </div>
           <div style={{ fontSize: '32px', fontWeight: '700', color: colors.utility.primaryText, marginBottom: '4px' }}>
@@ -343,48 +457,27 @@ export const PortfolioSnapshotsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Manual Trigger Button */}
+      {/* Snapshot Operations */}
       <div style={{
         marginBottom: '32px',
         padding: '20px',
         backgroundColor: colors.utility.secondaryBackground,
         borderRadius: '12px',
-        border: `1px solid ${colors.utility.primaryText}10`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        border: `1px solid ${colors.utility.primaryText}10`
       }}>
-        <div>
+        <div style={{ marginBottom: '16px' }}>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-            Generate Portfolio Snapshots
+            Snapshot Operations
           </h3>
           <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
-            Generates complete snapshot history for all customers from their first transaction to last month. Existing snapshots will be updated with latest values.
+            Choose an operation to manage portfolio snapshots. "Generate Missing" only creates new snapshots (safe), while "Update All" recalculates existing data.
           </p>
         </div>
-        <button
-          onClick={handleManualTrigger}
-          disabled={triggering || statistics.is_running}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: triggering || statistics.is_running ? colors.utility.secondaryText : colors.brand.primary,
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: triggering || statistics.is_running ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            opacity: triggering || statistics.is_running ? 0.6 : 1,
-            flexShrink: 0,
-            marginLeft: '20px'
-          }}
-        >
-          <Play size={16} />
-          {triggering ? 'Starting...' : statistics.is_running ? 'Running...' : 'Generate Now'}
-        </button>
+        
+        <SnapshotOperationsButtonGroup
+          onOperationComplete={fetchData}
+          isRunning={statistics.is_running}
+        />
       </div>
 
       {/* Execution History Table */}
@@ -437,6 +530,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                 <thead>
                   <tr style={{ backgroundColor: colors.utility.primaryBackground }}>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Date/Time</th>
+                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Operation</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Status</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Result</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: colors.utility.secondaryText, textTransform: 'uppercase' }}>Trigger</th>
@@ -450,6 +544,8 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                   {executions.map((exec, idx) => {
                     const statusDisplay = getStatusDisplay(exec.status);
                     const execData = exec.execution_data as PortfolioSnapshotExecutionData | undefined;
+                    const operationDisplay = getOperationDisplay(execData);
+                    
                     return (
                       <tr
                         key={exec.id}
@@ -459,6 +555,19 @@ export const PortfolioSnapshotsTab: React.FC = () => {
                       >
                         <td style={{ padding: '16px 20px', fontSize: '14px', color: colors.utility.primaryText }}>
                           {formatDate(exec.execution_time)}
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            color: operationDisplay.color
+                          }}>
+                            <span>{operationDisplay.icon}</span>
+                            <span>{operationDisplay.label}</span>
+                          </span>
                         </td>
                         <td style={{ padding: '16px 20px' }}>
                           <span style={{

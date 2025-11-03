@@ -1,5 +1,6 @@
 // backend/src/types/portfolioSnapshot.types.ts
 // Types for Portfolio Snapshot Scheduler feature
+// UPDATED: Added operation types for different snapshot generation modes
 
 // ============================================================================
 // SCHEDULER CONFIGURATION TYPES
@@ -35,6 +36,78 @@ export interface UpdateSnapshotConfigRequest {
   cron_expression?: string;
   is_enabled?: boolean;
   max_retries?: number;
+}
+
+// ============================================================================
+// SNAPSHOT OPERATION TYPES (NEW)
+// ============================================================================
+
+/**
+ * Operation types for different snapshot generation modes
+ */
+export type SnapshotOperationType = 
+  | 'generate_missing'    // Only create missing snapshots (safe)
+  | 'update_all'         // Create + update existing (current smartBackfill behavior)
+  | 'regenerate_all'     // Drop all then create fresh (dangerous)
+  | 'drop_all';          // Delete all snapshots (very dangerous)
+
+/**
+ * Request for snapshot operations
+ */
+export interface SnapshotOperationRequest {
+  operation_type: SnapshotOperationType;
+  customer_ids?: number[];
+}
+
+/**
+ * Response for snapshot operations
+ */
+export interface SnapshotOperationResponse {
+  success: boolean;
+  data?: {
+    execution_id: number;
+    status: 'running' | 'completed' | 'failed';
+    message: string;
+  };
+  error?: string;
+}
+
+/**
+ * Result from dropping all snapshots
+ */
+export interface DropAllSnapshotsResult {
+  success: boolean;
+  deleted_count: number;
+  execution_duration_ms: number;
+  message: string;
+}
+
+/**
+ * Result from generating missing snapshots only
+ */
+export interface GenerateMissingResult {
+  snapshot_month_end: Date;
+  customers_processed: number;
+  customers_failed: number;
+  snapshots_created: number;
+  snapshots_skipped: number;  // NEW: Tracks how many were skipped (already exist)
+  months_processed: number;
+  errors: any[];
+  execution_duration_ms: number;
+}
+
+/**
+ * Result from regenerating all snapshots (drop + create)
+ */
+export interface RegenerateAllResult {
+  snapshot_month_end: Date;
+  customers_processed: number;
+  customers_failed: number;
+  snapshots_created: number;
+  snapshots_deleted: number;  // NEW: Tracks how many were deleted
+  months_processed: number;
+  errors: any[];
+  execution_duration_ms: number;
 }
 
 // ============================================================================
