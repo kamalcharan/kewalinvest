@@ -79,6 +79,9 @@ export interface ChartFilters {
   lineColor: string;
   showVolume: boolean;
   baselineValue: number | null;
+  // NEW: Comparison fields
+  showComparison: boolean;           // Toggle for index comparison overlay
+  comparisonIndexId: number | null;  // Selected comparison index ID
 }
 
 /**
@@ -199,9 +202,13 @@ export interface CompactFilterToolbarProps {
     color: (color: string) => void;
     volume: (show: boolean) => void;
     baseline: (value: number | null) => void;
+    // NEW: Comparison callbacks
+    comparison: (show: boolean) => void;
+    comparisonIndex: (indexId: number | null) => void;
   };
   colors: ChartColors;
   showColorPicker?: boolean;
+  showComparison?: boolean;  // NEW: Enable/disable comparison section in toolbar
   allowExport?: boolean;
   onExport?: () => void;
 }
