@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useGoalSummary, useRecalculateGoal } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary, useRecalculateGoal, useAddToWatchlist, useRemoveFromWatchlist } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -34,8 +34,6 @@ import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTr
 import GoalCard from '../../components/goals/GoalCard';
 import GoalSetupModal from '../../components/goals/GoalSetupModal';
 import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
-import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
-import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import type { MarketIndex } from '../../types/market.types';
@@ -63,8 +61,10 @@ const CustomerViewPage: React.FC = () => {
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
 
-  // Goal recalculation mutation
+  // Goal mutation hooks
   const recalculateGoalMutation = useRecalculateGoal();
+  const addToWatchlistMutation = useAddToWatchlist();
+  const removeFromWatchlistMutation = useRemoveFromWatchlist();
 
   // Index comparison state - FIXED: Changed to date-aware format
   const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
@@ -531,6 +531,26 @@ const CustomerViewPage: React.FC = () => {
       await toggleFullscreen(performanceChartId);
     } catch (error: any) {
       console.error('Fullscreen toggle failed:', error);
+    }
+  };
+
+  // Watchlist toggle handler
+  const handleWatchlistToggle = async (goalId: number, isInWatchlist: boolean) => {
+    try {
+      if (isInWatchlist) {
+        // Remove from watchlist
+        await removeFromWatchlistMutation.mutateAsync(goalId);
+      } else {
+        // Add to watchlist - with a default reason
+        await addToWatchlistMutation.mutateAsync({
+          goalId,
+          reason: 'Manual watchlist addition by user'
+        });
+      }
+      // Refetch goals to update the UI
+      refetchGoals();
+    } catch (error: any) {
+      console.error('Watchlist toggle failed:', error);
     }
   };
 
@@ -1216,58 +1236,45 @@ comparisonData={comparisonIndexData}
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-                {/* Left Column - Goals List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Active Goals */}
-                  {goals.filter(g => g.is_active).map(goal => (
-                    <GoalCard
-                      key={goal.id}
-                      goal={goal}
-                      onEdit={(goalId: number) => {
-                        setSelectedGoalId(goalId);
-                        setShowGoalDetailsModal(true);
-                      }}
-                      onRecalculate={async (goalId: number) => {
-                        setSelectedGoalId(goalId);
-                        setShowGoalRecalculationModal(true);
-                        setRecalculationResult(null);
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Comprehensive Goal Cards */}
+                {goals.filter(g => g.is_active).map(goal => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    onEdit={(goalId: number) => {
+                      setSelectedGoalId(goalId);
+                      setShowGoalDetailsModal(true);
+                    }}
+                    onRecalculate={async (goalId: number) => {
+                      setSelectedGoalId(goalId);
+                      setShowGoalRecalculationModal(true);
+                      setRecalculationResult(null);
 
-                        try {
-                          const result = await recalculateGoalMutation.mutateAsync(goalId);
-                          setRecalculationResult({
-                            previousCorpus: result.current_value,
-                            newCorpus: result.projected_corpus,
-                            error: false
-                          });
-                          refetchGoals();
-                        } catch (error) {
-                          setRecalculationResult({ error: true });
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-
-                {/* Right Column - Tracking Panels */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Progress Tracker */}
-                  <GoalProgressTracker
-                    customerId={customerId!}
-                    onWatchlistChange={() => refetchGoals()}
+                      try {
+                        const result = await recalculateGoalMutation.mutateAsync(goalId);
+                        setRecalculationResult({
+                          previousCorpus: result.current_value,
+                          newCorpus: result.projected_corpus,
+                          error: false
+                        });
+                        refetchGoals();
+                      } catch (error) {
+                        setRecalculationResult({ error: true });
+                      }
+                    }}
+                    onToggleWatchlist={handleWatchlistToggle}
+                    showAllocations={true}
                   />
+                ))}
 
-                  {/* Watchlist Panel */}
-                  <GoalWatchlistPanel customerId={customerId!} />
-
-                  {/* Asset Allocation Utilization */}
-                  <AssetAllocationUtilization customerId={customerId!} />
-                </div>
+                {/* Asset Allocation Utilization */}
+                <AssetAllocationUtilization customerId={customerId!} />
               </div>
             )}
 
-            {/* Legacy JTBD Section */}
-            {jtbds && jtbds.length > 0 && (
+            {/* Alerts & Reminders Section - excluding goals */}
+            {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
               <div style={{ marginTop: '24px' }}>
                 <h3 style={{
                   fontSize: '18px',
