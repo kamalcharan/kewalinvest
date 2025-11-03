@@ -91,6 +91,9 @@ export interface PortfolioPerformanceMetric {
   current_value: number;
   returns: number;
   return_percentage: number;
+  // Month-over-Month change fields
+  mom_change_percentage?: number | null;
+  mom_change_absolute?: number | null;
 }
 
 export interface CustomerPortfolioResponse {
