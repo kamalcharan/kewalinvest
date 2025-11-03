@@ -6,11 +6,11 @@
 ALTER TABLE t_tenants
 ADD COLUMN IF NOT EXISTS default_comparison_index_id INTEGER;
 
--- Add foreign key constraint to m_market_indices
+-- Add foreign key constraint to t_market_indices
 ALTER TABLE t_tenants
 ADD CONSTRAINT fk_default_comparison_index
 FOREIGN KEY (default_comparison_index_id)
-REFERENCES m_market_indices(id)
+REFERENCES t_market_indices(id)
 ON DELETE SET NULL;
 
 -- Add comment
