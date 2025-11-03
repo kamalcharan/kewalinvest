@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getMoMColor, getMoMArrow } from '../../utils/dataTransformers';
 import { PortfolioPerformanceMetric } from '../../types/portfolio.types';
 import { IndexComparisonOverlay } from '../performance/IndexComparisonOverlay';
 
@@ -271,32 +272,40 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
         />
 
         {/* Dots - with timeline marker logic */}
-        {(showDots || hoveredIndex !== null) && points.map((point, index) => {
-          const isTimelineMarker = getTimelineMarkers.includes(index);
-          const dotRadius = hoveredIndex === index 
-            ? 5 
-            : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
-          
-          return (
-            <circle
-              key={index}
-              cx={point.x}
-              cy={point.y}
-              r={dotRadius}
-              fill={lineColor}
-              stroke="white"
-              strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
-              style={{
-                transition: 'all 0.2s ease',
-                opacity: hoveredIndex === index 
-                  ? 1 
-                  : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
-                filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
-              }}
-            />
-          );
-        })}
-
+{(showDots || hoveredIndex !== null) && points.map((point, index) => {
+  const isTimelineMarker = getTimelineMarkers.includes(index);
+  const dotRadius = hoveredIndex === index 
+    ? 5 
+    : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
+  
+  // Determine dot color based on MoM change
+  let dotColor = lineColor;
+  if (isTimelineMarker && performanceData && performanceData[index]) {
+    const momChange = performanceData[index].mom_change_percentage;
+    if (momChange !== null && momChange !== undefined) {
+      dotColor = momChange >= 0 ? '#10B981' : '#EF4444'; // Green for positive, Red for negative
+    }
+  }
+  
+  return (
+    <circle
+      key={index}
+      cx={point.x}
+      cy={point.y}
+      r={dotRadius}
+      fill={dotColor}
+      stroke="white"
+      strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
+      style={{
+        transition: 'all 0.2s ease',
+        opacity: hoveredIndex === index 
+          ? 1 
+          : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
+        filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
+      }}
+    />
+  );
+})}
         {/* Interactive overlay */}
         {interactive && (
           <rect
@@ -323,42 +332,129 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
       )}
 
       {/* Tooltip */}
-      {showTooltip && interactive && hoveredIndex !== null && points[hoveredIndex] && (
+      {showTooltip && interactive && hoveredIndex !== null && points[hoveredIndex] && performanceData && performanceData[hoveredIndex] && (
         <div
           style={{
             position: 'fixed',
             left: mousePosition.x + 10,
-            top: mousePosition.y - 40,
+            top: mousePosition.y - 60,
             backgroundColor: colors.utility.secondaryBackground,
             border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '6px',
-            padding: '6px 10px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             zIndex: 9999,
             pointerEvents: 'none',
-            fontSize: '11px'
+            fontSize: '11px',
+            minWidth: '160px'
           }}
         >
+          {/* Date */}
           <div style={{
             color: colors.utility.secondaryText,
-            marginBottom: '2px'
+            marginBottom: '6px',
+            fontSize: '10px',
+            fontWeight: '500'
           }}>
-            {getMonthName(hoveredIndex)}
+            {performanceData[hoveredIndex].date 
+              ? new Date(performanceData[hoveredIndex].date).toLocaleDateString('en-IN', { 
+                  month: 'short', 
+                  year: 'numeric' 
+                })
+              : getMonthName(hoveredIndex)
+            }
           </div>
+          
+          {/* Portfolio Value */}
           <div style={{
             color: colors.utility.primaryText,
-            fontWeight: '600'
+            fontWeight: '700',
+            fontSize: '14px',
+            marginBottom: '6px'
           }}>
             {formatValue(points[hoveredIndex].value)}
           </div>
+          
+          {/* Total Returns (from inception) */}
           {hoveredIndex > 0 && (
             <div style={{
-              color: points[hoveredIndex].value >= data[0] ? '#10B981' : '#EF4444',
-              fontSize: '10px',
-              marginTop: '2px'
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '4px',
+              paddingBottom: '6px'
             }}>
-              {points[hoveredIndex].value >= data[0] ? '+' : ''}{points[hoveredIndex].percentage}%
+              <span style={{ 
+                color: colors.utility.secondaryText, 
+                fontSize: '10px' 
+              }}>
+                Total Return:
+              </span>
+              <span style={{
+                color: points[hoveredIndex].value >= data[0] ? '#10B981' : '#EF4444',
+                fontSize: '11px',
+                fontWeight: '600'
+              }}>
+                {points[hoveredIndex].value >= data[0] ? '+' : ''}
+                {points[hoveredIndex].percentage}%
+              </span>
             </div>
+          )}
+          
+          {/* Month-over-Month Change - NEW! */}
+          {hoveredIndex > 0 && 
+           performanceData[hoveredIndex].mom_change_percentage !== null && 
+           performanceData[hoveredIndex].mom_change_percentage !== undefined && (
+            <>
+              <div style={{
+                height: '1px',
+                backgroundColor: colors.utility.primaryText + '15',
+                margin: '6px 0'
+              }} />
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: getMoMColor(performanceData[hoveredIndex].mom_change_percentage!) + '10',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                marginTop: '4px'
+              }}>
+                <span style={{ 
+                  color: colors.utility.secondaryText, 
+                  fontSize: '10px',
+                  fontWeight: '500'
+                }}>
+                  vs Prev Month:
+                </span>
+                <span style={{
+                  color: getMoMColor(performanceData[hoveredIndex].mom_change_percentage!),
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span>{getMoMArrow(performanceData[hoveredIndex].mom_change_percentage!)}</span>
+                  <span>{Math.abs(performanceData[hoveredIndex].mom_change_percentage!).toFixed(2)}%</span>
+                </span>
+              </div>
+              
+              {/* Absolute Change Amount */}
+              {performanceData[hoveredIndex].mom_change_absolute !== null && 
+               performanceData[hoveredIndex].mom_change_absolute !== undefined && (
+                <div style={{
+                  fontSize: '9px',
+                  color: colors.utility.secondaryText,
+                  textAlign: 'right',
+                  marginTop: '2px',
+                  fontStyle: 'italic'
+                }}>
+                  {performanceData[hoveredIndex].mom_change_absolute! >= 0 ? '+' : ''}
+                  {formatValue(Math.abs(performanceData[hoveredIndex].mom_change_absolute!))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -393,3 +393,77 @@ export function validateChartData(data: ChartDataPoint[]): {
     issues
   };
 }
+
+
+/**
+ * Calculate month-over-month changes for portfolio performance data
+ * Adds mom_change_percentage and mom_change_absolute fields to each data point
+ * 
+ * @param performanceData - Portfolio performance data from API
+ * @returns Performance data with MoM calculations
+ */
+export function calculatePortfolioMoM<T extends { current_value?: number | null; date: string }>(
+  performanceData: T[]
+): (T & { mom_change_percentage: number | null; mom_change_absolute: number | null })[] {
+  if (!performanceData || performanceData.length === 0) return [];
+
+  // Sort by date ascending
+  const sorted = [...performanceData].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  return sorted.map((point, index) => {
+    // First data point has no previous month to compare
+    if (index === 0) {
+      return {
+        ...point,
+        mom_change_percentage: null,
+        mom_change_absolute: null,
+      };
+    }
+
+    const currentValue = point.current_value ?? 0;
+    const previousValue = sorted[index - 1].current_value ?? 0;
+
+    // Handle division by zero
+    if (previousValue === 0) {
+      return {
+        ...point,
+        mom_change_percentage: null,
+        mom_change_absolute: currentValue - previousValue,
+      };
+    }
+
+    // Calculate MoM change
+    const momChangeAbsolute = currentValue - previousValue;
+    const momChangePercentage = (momChangeAbsolute / previousValue) * 100;
+
+    return {
+      ...point,
+      mom_change_percentage: parseFloat(momChangePercentage.toFixed(2)),
+      mom_change_absolute: parseFloat(momChangeAbsolute.toFixed(2)),
+    };
+  });
+}
+
+/**
+ * Get color for month-over-month change
+ * 
+ * @param change - MoM change percentage
+ * @returns CSS color string
+ */
+export function getMoMColor(change: number | null): string {
+  if (change === null) return '#6B7280'; // Gray
+  return change >= 0 ? '#10B981' : '#EF4444'; // Green or Red
+}
+
+/**
+ * Get arrow icon for month-over-month change
+ * 
+ * @param change - MoM change percentage
+ * @returns Arrow character
+ */
+export function getMoMArrow(change: number | null): string {
+  if (change === null) return '→';
+  return change >= 0 ? '▲' : '▼';
+}

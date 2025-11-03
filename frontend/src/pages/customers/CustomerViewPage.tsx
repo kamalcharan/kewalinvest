@@ -1,6 +1,6 @@
 // frontend/src/pages/customers/CustomerViewPage.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomer } from '../../hooks/useCustomers';
@@ -10,6 +10,7 @@ import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
+import { calculatePortfolioMoM, getMoMColor, getMoMArrow } from '../../utils/dataTransformers';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
@@ -178,6 +179,18 @@ const CustomerViewPage: React.FC = () => {
     console.log('❌ Errors:', { customerError, portfolioError });
     console.groupEnd();
   }, [id, customerId, customer, portfolio, jtbds, customerLoading, portfolioLoading, jtbdLoading, customerError, portfolioError]);
+
+  // Calculate MoM changes for portfolio performance
+  const portfolioWithMoM = useMemo(() => {
+    if (!portfolio?.performance || portfolio.performance.length === 0) return [];
+    return calculatePortfolioMoM(portfolio.performance);
+  }, [portfolio?.performance]);
+
+  // Get latest MoM change for badge
+  const latestMoM = useMemo(() => {
+    if (portfolioWithMoM.length < 2) return null;
+    return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
+  }, [portfolioWithMoM]);
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -562,8 +575,48 @@ const CustomerViewPage: React.FC = () => {
                   <div style={{
                     backgroundColor: colors.utility.secondaryBackground,
                     borderRadius: '12px',
-                    padding: '24px'
+                    padding: '24px',
+                    position: 'relative'
                   }}>
+                    {/* MoM Badge - Top Right Corner */}
+                    {latestMoM !== null && portfolioWithMoM.length > 1 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '20px',
+                          right: '20px',
+                          zIndex: 10,
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          backgroundColor: latestMoM >= 0 
+                            ? colors.semantic.success + '20' 
+                            : colors.semantic.error + '20',
+                          border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <span style={{ fontSize: '14px' }}>
+                          {latestMoM >= 0 ? '📈' : '📉'}
+                        </span>
+                        <span style={{ 
+                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error 
+                        }}>
+                          {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
+                        </span>
+                        <span style={{ 
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText 
+                        }}>
+                          vs last month
+                        </span>
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                       <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
                         Portfolio Performance
@@ -593,7 +646,7 @@ const CustomerViewPage: React.FC = () => {
                       {portfolio.performance && portfolio.performance.length > 1 ? (
                         <div style={{ width: '100%', height: '100%' }}>
                           <PerformanceSparkline
-                            performanceData={portfolio.performance}
+                            performanceData={portfolioWithMoM}
                             data={portfolio.performance.map(p => p.current_value ?? 0)}
                             width={600}
                             height={250}
