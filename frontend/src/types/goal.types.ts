@@ -119,6 +119,12 @@ export interface GoalConfiguration {
   priority: 'critical' | 'high' | 'medium' | 'low';
   is_active: boolean;
   config_data: GoalConfig;
+
+  // Watchlist tracking
+  is_in_watchlist?: boolean;
+  watchlist_reason?: string;
+  watchlist_added_at?: string;
+
   next_alert_date?: string; // Not used for goals
   created_by: number;
   created_at: string;
