@@ -14,14 +14,17 @@ import {
 } from '../types/transaction.types';
 import { TransactionUtil } from '../utils/transaction.util';
 import { SchemeAliasService } from './schemeAlias.service';
+import { GoalRecalculationJob } from './goal.recalculation.job';
 
 export class TransactionService {
   private db: Pool;
   private schemeAliasService: SchemeAliasService;
+  private goalRecalcJob: GoalRecalculationJob;
 
   constructor() {
     this.db = pool;
     this.schemeAliasService = new SchemeAliasService();
+    this.goalRecalcJob = new GoalRecalculationJob();
   }
 
   /**
@@ -293,7 +296,23 @@ export class TransactionService {
 
       await client.query('COMMIT');
 
-      return result.rows[0];
+      const createdTransaction = result.rows[0];
+
+      // Trigger portfolio totals refresh and goal recalculation (async, don't wait)
+      this.refreshPortfolioTotals()
+        .then(() => {
+          // After portfolio refresh, recalculate goals for this customer
+          return this.goalRecalcJob.recalculateOnPortfolioUpdate(
+            tenantId,
+            isLive,
+            data.customer_id
+          );
+        })
+        .catch(err => {
+          console.error('Error refreshing portfolio/goals after transaction:', err);
+        });
+
+      return createdTransaction;
     } catch (error: any) {
       await client.query('ROLLBACK');
       console.error('Error creating transaction:', error);
@@ -414,7 +433,24 @@ export class TransactionService {
 
       await client.query('COMMIT');
 
-      return result.rows[0];
+      const updatedTransaction = result.rows[0];
+      const customerId = checkResult.rows[0].customer_id;
+
+      // Trigger portfolio totals refresh and goal recalculation (async, don't wait)
+      this.refreshPortfolioTotals()
+        .then(() => {
+          // After portfolio refresh, recalculate goals for this customer
+          return this.goalRecalcJob.recalculateOnPortfolioUpdate(
+            tenantId,
+            isLive,
+            customerId
+          );
+        })
+        .catch(err => {
+          console.error('Error refreshing portfolio/goals after transaction update:', err);
+        });
+
+      return updatedTransaction;
     } catch (error: any) {
       await client.query('ROLLBACK');
       console.error('Error updating transaction:', error);
@@ -438,7 +474,7 @@ export class TransactionService {
         UPDATE t_transaction_table
         SET portfolio_flag = $1, updated_at = CURRENT_TIMESTAMP
         WHERE id = $2 AND tenant_id = $3 AND is_live = $4
-        RETURNING id, portfolio_flag
+        RETURNING id, portfolio_flag, customer_id
       `;
 
       const result = await this.db.query(query, [
@@ -452,12 +488,24 @@ export class TransactionService {
         return null;
       }
 
-      // Trigger portfolio totals refresh (async, don't wait)
-      this.refreshPortfolioTotals().catch(err => {
-        console.error('Error refreshing portfolio totals:', err);
-      });
+      const updatedRow = result.rows[0];
+      const customerId = updatedRow.customer_id;
 
-      return result.rows[0];
+      // Trigger portfolio totals refresh and goal recalculation (async, don't wait)
+      this.refreshPortfolioTotals()
+        .then(() => {
+          // After portfolio refresh, recalculate goals for this customer
+          return this.goalRecalcJob.recalculateOnPortfolioUpdate(
+            tenantId,
+            isLive,
+            customerId
+          );
+        })
+        .catch(err => {
+          console.error('Error refreshing portfolio/goals after portfolio flag update:', err);
+        });
+
+      return { id: updatedRow.id, portfolio_flag: updatedRow.portfolio_flag };
     } catch (error: any) {
       console.error('Error updating portfolio flag:', error);
       throw new Error(`Failed to update portfolio flag: ${error.message}`);

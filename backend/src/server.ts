@@ -859,7 +859,21 @@ app.listen(PORT, async () => {
       console.log('📅 NAV Scheduler will be available but no active schedules will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
-    
+
+    // Initialize Goal Scheduler
+    try {
+      console.log('🎯 Initializing Goal Scheduler Service...');
+
+      const { initializeGoalScheduler } = await import('./schedulers/goal.scheduler');
+      const goalScheduler = initializeGoalScheduler();
+
+      console.log('✅ Goal Scheduler Service initialized successfully');
+    } catch (goalSchedulerError: any) {
+      console.error('⚠️  Goal Scheduler initialization failed:', goalSchedulerError.message);
+      console.log('🎯 Goals will function but automatic recalculation will not run');
+      // Don't fail server startup if scheduler fails - just log the error
+    }
+
     // Check N8N configuration
     if (process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_URL) {
       console.log('✅ N8N integration configured');
@@ -936,6 +950,7 @@ app.listen(PORT, async () => {
 ║  Goals: ✅ Ready                       ║
 ║  Goal Recalculation: ✅ Ready          ║
 ║  Goal History: ✅ Ready                ║
+║  Goal Scheduler: ✅ Active             ║
 ║  User Preferences: ✅ Ready            ║
 ║  Chart Preferences: ✅ Ready           ║
 ║  Jobs Scheduler: ✅ Ready              ║
