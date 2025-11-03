@@ -8,19 +8,21 @@ import { NavTab } from './NavTab';
 import { MarketTab } from './MarketTab';
 import { AlertsTab } from './AlertsTab';
 import { PortfolioSnapshotsTab } from './PortfolioSnapshotsTab';
+import { SettingsTab } from './SettingsTab';
 
 export const CruiseControlPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const { isSuperAdmin } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [activeTab, setActiveTab] = useState<'nav' | 'market' | 'alerts' | 'snapshots'>('nav');
+  const [activeTab, setActiveTab] = useState<'nav' | 'market' | 'alerts' | 'snapshots' | 'settings'>('nav');
 
   const tabs = [
     { id: 'nav' as const, label: 'NAV Downloads', icon: '📊' },
     { id: 'market' as const, label: 'Market Downloads', icon: '📈' },
     { id: 'alerts' as const, label: 'Alerts', icon: '🔔' },
-    { id: 'snapshots' as const, label: 'Portfolio Snapshots', icon: '📸' }
+    { id: 'snapshots' as const, label: 'Portfolio Snapshots', icon: '📸' },
+    { id: 'settings' as const, label: 'Settings', icon: '⚙️' }
   ];
 
   return (
@@ -174,6 +176,7 @@ export const CruiseControlPage: React.FC = () => {
         {activeTab === 'market' && <MarketTab />}
         {activeTab === 'alerts' && <AlertsTab />}
         {activeTab === 'snapshots' && <PortfolioSnapshotsTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
   );
