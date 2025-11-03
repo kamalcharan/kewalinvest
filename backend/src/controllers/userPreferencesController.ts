@@ -296,7 +296,7 @@ export class UserPreferencesController {
     const startTime = Date.now();
 
     try {
-      const tenantId = req.environment!.tenant_id;
+      const tenantId = req.user!.tenant_id;
 
       SimpleLogger.info(
         'UserPreferencesController',
@@ -340,7 +340,7 @@ export class UserPreferencesController {
     const startTime = Date.now();
 
     try {
-      const tenantId = req.environment!.tenant_id;
+      const tenantId = req.user!.tenant_id;
       const { default_comparison_index_id } = req.body;
 
       // Validation
