@@ -9,13 +9,16 @@ import ViewModeSelector from './ViewModeSelector';
 import TimePeriodSelector from './TimePeriodSelector';
 import CustomDatePopover from './CustomDatePopover';
 import ColorPickerPopover from './ColorPickerPopover';
+import { IndexSelector } from '../../../performance/IndexSelector';
 import type { CompactFilterToolbarProps } from '../../../../types/chartViewer.types';
+import type { MarketIndex } from '../../../../types/market.types';
 
 const CompactFilterToolbar: React.FC<CompactFilterToolbarProps> = ({
   filters,
   onFilterChange,
   colors,
   showColorPicker = true,
+  showComparison = false,
   allowExport = false,
   onExport
 }) => {
@@ -32,6 +35,11 @@ const CompactFilterToolbar: React.FC<CompactFilterToolbarProps> = ({
       aria-orientation="vertical"
     />
   );
+
+  // Handle index selection from IndexSelector
+  const handleIndexSelect = (index: MarketIndex | null) => {
+    onFilterChange.comparisonIndex(index?.id || null);
+  };
 
   return (
     <div
@@ -156,7 +164,70 @@ const CompactFilterToolbar: React.FC<CompactFilterToolbarProps> = ({
           </>
         )}
 
-        {/* Section 5: Export (if enabled) */}
+        {/* Section 5: Comparison (NEW) */}
+        {showComparison && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '70px'
+                }}
+              >
+                Compare:
+              </span>
+              
+              {/* Comparison Toggle Checkbox */}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={filters.showComparison}
+                  onChange={(e) => onFilterChange.comparison(e.target.checked)}
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    cursor: 'pointer',
+                    accentColor: colors.brand.primary
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    color: colors.utility.primaryText
+                  }}
+                >
+                  Show Index
+                </span>
+              </label>
+
+              {/* Index Selector - enabled only when comparison is ON */}
+              <div style={{ minWidth: '200px' }}>
+                <IndexSelector
+                  selectedIndexId={filters.comparisonIndexId}
+                  onIndexSelect={handleIndexSelect}
+                  disabled={!filters.showComparison}
+                  placeholder="Select index to compare"
+                />
+              </div>
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {/* Section 6: Export (if enabled) */}
         {allowExport && onExport && (
           <>
             <button
@@ -262,6 +333,25 @@ const CompactFilterToolbar: React.FC<CompactFilterToolbarProps> = ({
               year: 'numeric'
             })}
           </span>
+        </div>
+      )}
+
+      {/* Comparison Active Indicator (Optional - shows when comparison is ON) */}
+      {showComparison && filters.showComparison && filters.comparisonIndexId && (
+        <div
+          style={{
+            padding: '8px 12px',
+            backgroundColor: colors.semantic.success + '10',
+            border: `1px solid ${colors.semantic.success}30`,
+            borderRadius: '6px',
+            fontSize: '12px',
+            color: colors.semantic.success,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span style={{ fontWeight: '600' }}>✓ Index Comparison Active</span>
         </div>
       )}
     </div>

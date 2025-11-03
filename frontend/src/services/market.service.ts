@@ -119,6 +119,82 @@ export class MarketService {
   }
 
   /**
+   * Get monthly index data for portfolio comparison
+   * Fetches index data at monthly granularity for the same date range as portfolio
+   * GET /api/market-analysis/index-returns
+   */
+  static async getIndexMonthlyDataForComparison(
+    indexId: number,
+    startDate: string | Date,
+    endDate: string | Date
+  ): Promise<{
+    success: boolean;
+    data?: Array<{ date: string; value: number }>;
+    index_name?: string;
+    error?: string;
+  }> {
+    try {
+      // Convert dates to ISO format (YYYY-MM-DD)
+      const start = typeof startDate === 'string' 
+        ? startDate 
+        : startDate.toISOString().split('T')[0];
+      const end = typeof endDate === 'string' 
+        ? endDate 
+        : endDate.toISOString().split('T')[0];
+
+      // Build query parameters
+      const params = {
+        index_id: indexId,
+        granularity: 'monthly',
+        start_date: start,
+        end_date: end,
+        periods: '1m,3m,6m,1y,all' // Required by backend, but we'll use close values
+      };
+
+      const queryString = this.buildQueryString(params);
+      const endpoint = `/market-analysis/index-returns${queryString}`;
+
+      // Fetch data from backend
+      const response = await apiService.get<any>(endpoint);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch comparison data');
+      }
+
+      // Transform data to simple date-value pairs
+      // Backend returns array with close prices and various metrics
+      const transformedData = response.data.map((point: any) => ({
+        date: point.date,
+        value: point.close // Use close price as the comparison value
+      }));
+
+      // Get index name
+      let indexName = 'Index';
+      try {
+        const indexInfo = await this.getIndexById(indexId);
+        if (indexInfo.success && indexInfo.data?.index_name) {
+          indexName = indexInfo.data.index_name;
+        }
+      } catch (err) {
+        console.warn('Could not fetch index name:', err);
+      }
+
+      return {
+        success: true,
+        data: transformedData,
+        index_name: indexName
+      };
+
+    } catch (error: any) {
+      console.error('Error fetching comparison data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch comparison data'
+      };
+    }
+  }
+
+  /**
    * Delete all data for an index
    * DELETE /api/market/data/:indexId
    */
