@@ -1,12 +1,17 @@
 // backend/src/routes/portfolioSnapshot.routes.ts
 // Routes for Portfolio Snapshot Scheduler API
+// FIXED: Added JobSchedulerService dependency injection
 
 import { Router } from 'express';
 import { PortfolioSnapshotController } from '../controllers/portfolioSnapshot.controller';
+import { JobSchedulerService } from '../services/jobScheduler.service';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
-const controller = new PortfolioSnapshotController();
+
+// Initialize JobSchedulerService and pass to controller
+const jobSchedulerService = new JobSchedulerService();
+const controller = new PortfolioSnapshotController(jobSchedulerService);
 
 // ==================== CONFIGURATION ROUTES ====================
 
@@ -92,5 +97,43 @@ router.post('/backfill', authenticate, controller.backfillSnapshots);
  * @query   environment - 'live' or 'test'
  */
 router.get('/health', authenticate, controller.healthCheck);
+
+// ==================== NEW OPERATION ROUTES ====================
+
+/**
+ * @route   POST /api/cruise-control/snapshots/operations/drop-all
+ * @desc    Drop all snapshots (DANGEROUS operation)
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @body    { customer_ids?: number[] }  // Optional: specific customers, omit for all
+ */
+router.post('/operations/drop-all', authenticate, controller.dropAllSnapshots);
+
+/**
+ * @route   POST /api/cruise-control/snapshots/operations/generate-missing
+ * @desc    Generate only missing snapshots (safe operation)
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @body    { customer_ids?: number[] }  // Optional: specific customers, omit for all
+ */
+router.post('/operations/generate-missing', authenticate, controller.generateMissingSnapshots);
+
+/**
+ * @route   POST /api/cruise-control/snapshots/operations/update-all
+ * @desc    Update all snapshots (CREATE + UPDATE)
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @body    { customer_ids?: number[] }  // Optional: specific customers, omit for all
+ */
+router.post('/operations/update-all', authenticate, controller.updateAllSnapshots);
+
+/**
+ * @route   POST /api/cruise-control/snapshots/operations/regenerate-all
+ * @desc    Regenerate all snapshots (DROP + CREATE - VERY DANGEROUS)
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @body    { customer_ids?: number[] }  // Optional: specific customers, omit for all
+ */
+router.post('/operations/regenerate-all', authenticate, controller.regenerateAllSnapshots);
 
 export default router;

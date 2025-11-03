@@ -283,40 +283,28 @@ CREATE TABLE t_import_sessions (
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
-    
-    -- Record counts
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
     successful_records INTEGER DEFAULT 0,
     failed_records INTEGER DEFAULT 0,
     duplicate_records INTEGER DEFAULT 0,
-    orphan_records INTEGER DEFAULT 0,  -- NEW: Records with no matching customer (TransactionData only)
-    
-    -- Staging information
     staging_completed_at TIMESTAMP,
     staging_total_rows INTEGER DEFAULT 0,
-    
-    -- Batch processing
     batch_size INTEGER DEFAULT 100,
     current_batch INTEGER DEFAULT 0,
     total_batches INTEGER DEFAULT 0,
     last_processed_row INTEGER DEFAULT 0,
-    
-    -- Processing metadata and tracking
     processing_metadata JSONB,
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
     error_summary TEXT,
-    
-    -- n8n integration
     n8n_webhook_id VARCHAR(255),
     n8n_execution_id VARCHAR(255),
-    
-    -- Audit fields
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
