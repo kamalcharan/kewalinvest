@@ -1731,19 +1731,20 @@ COMMENT ON COLUMN v_tenant_customer_schemes.total_invested IS
 'Sum of amounts where portfolio_flag = true';
 
 -- ============================================================================
--- SECTION 7: MATERIALIZED VIEW - PORTFOLIO TOTALS
+-- SECTION 7: REGULAR VIEW - PORTFOLIO TOTALS (Always Fresh)
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Creating Materialized View for Portfolio Totals...';
+    RAISE NOTICE 'Creating Regular View for Portfolio Totals (Always Fresh)...';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- MATERIALIZED VIEW: t_customer_portfolio_totals
--- Description: Pre-calculated portfolio totals with returns
+-- VIEW: t_customer_portfolio_totals (Regular View - Always Fresh)
+-- Description: Real-time portfolio totals with returns (calculates on-the-fly)
+-- NOTE: Changed from MATERIALIZED VIEW to regular VIEW for always-fresh data
 -- ----------------------------------------------------------------------------
-CREATE MATERIALIZED VIEW IF NOT EXISTS t_customer_portfolio_totals AS
-SELECT 
+CREATE OR REPLACE VIEW t_customer_portfolio_totals AS
+SELECT
     p.tenant_id,
     p.is_live,
     p.customer_id,
@@ -1754,81 +1755,81 @@ SELECT
     p.sub_category,
     p.fund_name,
     p.start_date,
-    
+
     -- Transaction Counts
     COUNT(DISTINCT t.id) as transaction_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Addition' THEN t.id END) as purchase_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Deduction' THEN t.id END) as redemption_count,
-    
+
     -- Units Totals
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units
                      ELSE 0 END), 0) as total_units,
-    
+
     -- Investment Amount
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0) as total_invested,
-    
+
     -- Latest NAV
-    (SELECT nav FROM t_transaction_table 
-     WHERE customer_id = p.customer_id 
-       AND scheme_code = p.scheme_code 
-       AND is_active = true 
-     ORDER BY txn_date DESC 
+    (SELECT nav FROM t_transaction_table
+     WHERE customer_id = p.customer_id
+       AND scheme_code = p.scheme_code
+       AND is_active = true
+     ORDER BY txn_date DESC
      LIMIT 1) as latest_nav,
-    
+
     -- Current Value
-    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                     WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                     ELSE 0 END), 0) * 
-    COALESCE((SELECT nav FROM t_transaction_table 
-              WHERE customer_id = p.customer_id 
-                AND scheme_code = p.scheme_code 
-                AND is_active = true 
-              ORDER BY txn_date DESC 
+    COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                     WHEN tt.txn_type = 'Deduction' THEN -t.units
+                     ELSE 0 END), 0) *
+    COALESCE((SELECT nav FROM t_transaction_table
+              WHERE customer_id = p.customer_id
+                AND scheme_code = p.scheme_code
+                AND is_active = true
+              ORDER BY txn_date DESC
               LIMIT 1), 0) as current_value,
-    
+
     -- Total Returns
-    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                      WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                      ELSE 0 END), 0) * 
-     COALESCE((SELECT nav FROM t_transaction_table 
-               WHERE customer_id = p.customer_id 
-                 AND scheme_code = p.scheme_code 
-                 AND is_active = true 
-               ORDER BY txn_date DESC 
-               LIMIT 1), 0)) - 
-    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                      WHEN tt.txn_type = 'Deduction' THEN -t.units
+                      ELSE 0 END), 0) *
+     COALESCE((SELECT nav FROM t_transaction_table
+               WHERE customer_id = p.customer_id
+                 AND scheme_code = p.scheme_code
+                 AND is_active = true
+               ORDER BY txn_date DESC
+               LIMIT 1), 0)) -
+    (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
      COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) as total_returns,
-    
+
     -- Return Percentage
-    CASE 
-        WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+    CASE
+        WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) > 0
-        THEN ((COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units 
-                            WHEN tt.txn_type = 'Deduction' THEN -t.units 
-                            ELSE 0 END), 0) * 
-               COALESCE((SELECT nav FROM t_transaction_table 
-                         WHERE customer_id = p.customer_id 
-                           AND scheme_code = p.scheme_code 
-                           AND is_active = true 
-                         ORDER BY txn_date DESC 
-                         LIMIT 1), 0)) - 
-              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
-               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0))) / 
-              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) - 
+        THEN ((COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
+                            WHEN tt.txn_type = 'Deduction' THEN -t.units
+                            ELSE 0 END), 0) *
+               COALESCE((SELECT nav FROM t_transaction_table
+                         WHERE customer_id = p.customer_id
+                           AND scheme_code = p.scheme_code
+                           AND is_active = true
+                         ORDER BY txn_date DESC
+                         LIMIT 1), 0)) -
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
+               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0))) /
+              (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
                COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) * 100
         ELSE 0
     END as return_percentage,
-    
+
     MAX(t.txn_date) as last_transaction_date,
     p.is_active,
     p.id as portfolio_id,
     NOW() as last_refreshed_at
-    
+
 FROM t_customer_master_portfolio p
-LEFT JOIN t_transaction_table t ON 
-    t.customer_id = p.customer_id 
+LEFT JOIN t_transaction_table t ON
+    t.customer_id = p.customer_id
     AND t.scheme_code = p.scheme_code
     AND t.tenant_id = p.tenant_id
     AND t.is_live = p.is_live
@@ -1836,36 +1837,31 @@ LEFT JOIN t_transaction_table t ON
     AND t.portfolio_flag = true
 LEFT JOIN m_transaction_types tt ON t.txn_type_id = tt.id
 WHERE p.is_active = true
-GROUP BY 
+GROUP BY
     p.id, p.tenant_id, p.is_live, p.customer_id,
     p.scheme_code, p.scheme_name, p.folio_no,
     p.category, p.sub_category, p.fund_name,
     p.start_date, p.is_active;
 
-COMMENT ON MATERIALIZED VIEW t_customer_portfolio_totals IS 'Pre-calculated portfolio totals with returns and performance metrics';
+COMMENT ON VIEW t_customer_portfolio_totals IS 'Real-time portfolio totals with returns and performance metrics - calculates on-the-fly for always-fresh data';
 
--- Create unique index for concurrent refresh
-CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_totals_pk 
-    ON t_customer_portfolio_totals(customer_id, scheme_code, tenant_id, is_live);
+-- ============================================================================
+-- PERFORMANCE INDEXES FOR UNDERLYING TABLES (CRITICAL for regular views)
+-- ============================================================================
 
--- Create additional indexes for performance
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_customer 
-    ON t_customer_portfolio_totals(customer_id);
+-- Index on t_customer_master_portfolio for fast customer lookups
+CREATE INDEX IF NOT EXISTS idx_portfolio_customer_lookup
+ON t_customer_master_portfolio(customer_id, tenant_id, is_live, is_active);
 
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_scheme 
-    ON t_customer_portfolio_totals(scheme_code);
+-- Index on t_customer_master_portfolio for scheme lookups
+CREATE INDEX IF NOT EXISTS idx_portfolio_scheme_lookup
+ON t_customer_master_portfolio(scheme_code, tenant_id, is_live);
 
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_tenant 
-    ON t_customer_portfolio_totals(tenant_id, is_live);
-
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_category 
-    ON t_customer_portfolio_totals(category);
-
-CREATE INDEX IF NOT EXISTS idx_portfolio_totals_value 
-    ON t_customer_portfolio_totals(current_value DESC);
-
--- Initial population of materialized view
-REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+-- Comprehensive index on t_transaction_table for portfolio calculations
+-- INCLUDE clause adds additional columns to the index for covering queries
+CREATE INDEX IF NOT EXISTS idx_transactions_portfolio_calc
+ON t_transaction_table(customer_id, scheme_code, tenant_id, is_live, is_active, portfolio_flag)
+INCLUDE (txn_date, units, total_amount, nav, txn_type_id);
 
 -- ============================================================================
 -- SECTION 7B: v_portfolio_current MATERIALIZED VIEW
@@ -1970,34 +1966,32 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code
 REFRESH MATERIALIZED VIEW v_portfolio_current;
 
 -- ============================================================================
--- SECTION 8: MATERIALIZED VIEW REFRESH FUNCTION
+-- SECTION 8: PORTFOLIO VIEW COMPATIBILITY FUNCTIONS
 -- ============================================================================
-DO $$ 
+DO $$
 BEGIN
-    RAISE NOTICE 'Creating Materialized View Refresh Function...';
+    RAISE NOTICE 'Creating Portfolio View Compatibility Functions...';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: refresh_portfolio_totals
--- Description: Refresh the portfolio totals materialized view
+-- FUNCTION: refresh_portfolio_totals (NO-OP)
+-- Description: No longer needed - t_customer_portfolio_totals is now a regular view
+-- NOTE: Kept for backward compatibility with existing code that calls it
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION refresh_portfolio_totals()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- Refresh the materialized view concurrently (if possible)
-    -- CONCURRENTLY allows reads during refresh but requires unique index
-    REFRESH MATERIALIZED VIEW CONCURRENTLY t_customer_portfolio_totals;
-    
-EXCEPTION WHEN OTHERS THEN
-    -- If concurrent refresh fails (e.g., no unique index), do regular refresh
-    REFRESH MATERIALIZED VIEW t_customer_portfolio_totals;
+    -- No-op: t_customer_portfolio_totals is now a regular VIEW (always fresh)
+    -- This function is kept for backward compatibility
+    -- Regular views don't need refreshing - they calculate on-the-fly
+    RAISE NOTICE 't_customer_portfolio_totals is now a regular VIEW - no refresh needed';
 END;
 $$;
 
-COMMENT ON FUNCTION refresh_portfolio_totals IS 
-'Refreshes the t_customer_portfolio_totals materialized view. Attempts concurrent refresh first.';
+COMMENT ON FUNCTION refresh_portfolio_totals IS
+'NO-OP function for backward compatibility. t_customer_portfolio_totals is now a regular VIEW (always fresh, no refresh needed).';
 
 -- ============================================================================
 -- SECTION 9: ROW LEVEL SECURITY (RLS) POLICIES
