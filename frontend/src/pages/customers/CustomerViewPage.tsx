@@ -536,19 +536,24 @@ const CustomerViewPage: React.FC = () => {
 
   // Watchlist toggle handler
   const handleWatchlistToggle = async (goalId: number, isInWatchlist: boolean) => {
+    if (!customerId) return;
+
     try {
       if (isInWatchlist) {
         // Remove from watchlist
-        await removeFromWatchlistMutation.mutateAsync(goalId);
+        await removeFromWatchlistMutation.mutateAsync({
+          goalId,
+          customerId
+        });
       } else {
         // Add to watchlist - with a default reason
         await addToWatchlistMutation.mutateAsync({
           goalId,
+          customerId,
           reason: 'Manual watchlist addition by user'
         });
       }
-      // Refetch goals to update the UI
-      refetchGoals();
+      // Query invalidation in the hooks will automatically refetch
     } catch (error: any) {
       console.error('Watchlist toggle failed:', error);
     }

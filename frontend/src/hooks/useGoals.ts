@@ -437,14 +437,14 @@ export function useAddToWatchlist() {
   const queryClient = useQueryClient();
   const { user, tenantId, environment } = useAuth();
 
-  return useMutation<GoalConfiguration, Error, { goalId: number; reason: string }>({
-    mutationFn: async ({ goalId, reason }): Promise<GoalConfiguration> => {
+  return useMutation<{ goalId: number; customerId: number }, Error, { goalId: number; customerId: number; reason: string }>({
+    mutationFn: async ({ goalId, customerId, reason }): Promise<{ goalId: number; customerId: number }> => {
       if (!user || !tenantId) {
         throw new Error('Authentication required');
       }
 
       const endpoint = `${API_ENDPOINTS.GOALS.ADD_TO_WATCHLIST(goalId)}${buildQueryParams({}, environment)}`;
-      const response = await apiService.post<{ success: boolean; data: GoalConfiguration; error?: string }>(
+      const response = await apiService.post<{ success: boolean; message?: string; error?: string }>(
         endpoint,
         { reason }
       );
@@ -453,22 +453,19 @@ export function useAddToWatchlist() {
         throw new Error(response.error || 'Failed to add goal to watchlist');
       }
 
-      return response.data;
+      return { goalId, customerId };
     },
-    onSuccess: (updatedGoal) => {
-      // Get customer ID from the updated goal
-      const customerId = updatedGoal.customer_id;
-
-      // Invalidate customer goals list
+    onSuccess: ({ goalId, customerId }) => {
+      // Invalidate customer goals list to refetch with updated watchlist status
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.customerGoals(customerId) });
 
       // Invalidate customer summary
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.summary(customerId) });
 
-      // Update goal detail in cache
-      queryClient.setQueryData(GOAL_QUERY_KEYS.detail(updatedGoal.id), updatedGoal);
+      // Invalidate goal detail
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.detail(goalId) });
 
-      toastService.success(`Goal "${updatedGoal.title}" added to watchlist`);
+      toastService.success('Goal added to watchlist');
     },
     onError: (error) => {
       handleAPIError(error, 'Failed to add goal to watchlist');
@@ -484,35 +481,32 @@ export function useRemoveFromWatchlist() {
   const queryClient = useQueryClient();
   const { user, tenantId, environment } = useAuth();
 
-  return useMutation<GoalConfiguration, Error, number>({
-    mutationFn: async (goalId: number): Promise<GoalConfiguration> => {
+  return useMutation<{ goalId: number; customerId: number }, Error, { goalId: number; customerId: number }>({
+    mutationFn: async ({ goalId, customerId }): Promise<{ goalId: number; customerId: number }> => {
       if (!user || !tenantId) {
         throw new Error('Authentication required');
       }
 
       const endpoint = `${API_ENDPOINTS.GOALS.REMOVE_FROM_WATCHLIST(goalId)}${buildQueryParams({}, environment)}`;
-      const response = await apiService.delete<{ success: boolean; data: GoalConfiguration; error?: string }>(endpoint);
+      const response = await apiService.delete<{ success: boolean; message?: string; error?: string }>(endpoint);
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to remove goal from watchlist');
       }
 
-      return response.data;
+      return { goalId, customerId };
     },
-    onSuccess: (updatedGoal) => {
-      // Get customer ID from the updated goal
-      const customerId = updatedGoal.customer_id;
-
-      // Invalidate customer goals list
+    onSuccess: ({ goalId, customerId }) => {
+      // Invalidate customer goals list to refetch with updated watchlist status
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.customerGoals(customerId) });
 
       // Invalidate customer summary
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.summary(customerId) });
 
-      // Update goal detail in cache
-      queryClient.setQueryData(GOAL_QUERY_KEYS.detail(updatedGoal.id), updatedGoal);
+      // Invalidate goal detail
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.detail(goalId) });
 
-      toastService.success(`Goal "${updatedGoal.title}" removed from watchlist`);
+      toastService.success('Goal removed from watchlist');
     },
     onError: (error) => {
       handleAPIError(error, 'Failed to remove goal from watchlist');
