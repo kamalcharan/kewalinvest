@@ -1,6 +1,10 @@
 // frontend/src/pages/cruiseControl/NavTab.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Loader2 } from 'lucide-react';
+import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import toastService from '../../services/toast.service';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
 import type { SchemeBookmark } from '../../types/nav.types';
 
@@ -153,14 +157,61 @@ export const NavTab: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'no-data' | null>(null);
+  const [stats, setStats] = useState({
+    totalActive: 0,
+    pendingDownloads: 0,
+    failedDownloads: 0,
+    pendingBeyondDaily: 0,
+    metricsPending: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Dummy stats
-  const stats = {
-    totalActive: 1247,
-    pendingDownloads: 23,
-    failedDownloads: 4,
-    pendingBeyondDaily: 2,
-    metricsPending: 15
+  useEffect(() => {
+    fetchNavStats();
+  }, []);
+
+  const fetchNavStats = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.NAV_STATISTICS) as any;
+
+      if (response.success && response.data) {
+        setStats({
+          totalActive: response.data.total_active_navs || 0,
+          pendingDownloads: response.data.pending_downloads || 0,
+          failedDownloads: response.data.failed_downloads || 0,
+          pendingBeyondDaily: response.data.pending_beyond_daily || 0,
+          metricsPending: response.data.metrics_pending || 0
+        });
+      } else {
+        setError(response.error || 'Failed to load NAV statistics');
+      }
+    } catch (err: any) {
+      console.error('Error fetching NAV stats:', err);
+      setError('Failed to load NAV statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadNow = async (schemeCode: string) => {
+    try {
+      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.NAV_DOWNLOAD(schemeCode)) as any;
+
+      if (response.success) {
+        toastService.success(response.message || 'NAV download triggered successfully');
+        // Refresh stats after download
+        fetchNavStats();
+      } else {
+        toastService.error(response.error || 'Failed to trigger NAV download');
+      }
+    } catch (err: any) {
+      console.error('Error triggering NAV download:', err);
+      toastService.error('Failed to trigger NAV download');
+    }
   };
 
   // Filter bookmarks based on selected filter
@@ -186,6 +237,49 @@ export const NavTab: React.FC = () => {
   };
 
   const filteredBookmarks = getFilteredBookmarks();
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        color: colors.utility.secondaryText
+      }}>
+        <Loader2 size={24} className="animate-spin" style={{ marginRight: '8px' }} />
+        Loading NAV statistics...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: `${colors.semantic.error}10`,
+        border: `1px solid ${colors.semantic.error}40`,
+        borderRadius: '8px',
+        color: colors.semantic.error
+      }}>
+        <strong>Error:</strong> {error}
+        <button
+          onClick={fetchNavStats}
+          style={{
+            marginLeft: '12px',
+            padding: '6px 12px',
+            backgroundColor: colors.semantic.error,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -328,8 +422,8 @@ export const NavTab: React.FC = () => {
                   key={bookmark.id}
                   bookmark={bookmark}
                   showActions
-                  onHistoricalDownload={(b) => alert(`Download NAV for: ${b.scheme_name}`)}
-                  onCalculateMetrics={(b) => alert(`Calculate metrics for: ${b.scheme_name}`)}
+                  onHistoricalDownload={(b) => handleDownloadNow(b.scheme_code)}
+                  onCalculateMetrics={(b) => toastService.info('Metrics calculation feature coming soon')}
                 />
               ))}
             </div>

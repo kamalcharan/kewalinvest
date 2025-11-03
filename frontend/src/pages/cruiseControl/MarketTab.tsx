@@ -1,6 +1,10 @@
 // frontend/src/pages/cruiseControl/MarketTab.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Loader2 } from 'lucide-react';
+import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import toastService from '../../services/toast.service';
 import IndexCard from '../../components/market/IndexCard';
 import type { MarketIndex } from '../../types/market.types';
 
@@ -208,14 +212,61 @@ export const MarketTab: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'no-data' | null>(null);
-
-  // Dummy stats
-  const stats = {
-    totalIndices: 12,
-    downloadCompleted: 10,
+  const [stats, setStats] = useState({
+    totalIndices: 0,
+    downloadCompleted: 0,
     pendingBeyondOneDay: 0,
-    failedDownloads: 2,
-    metricsPending: 3
+    failedDownloads: 0,
+    metricsPending: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMarketStats();
+  }, []);
+
+  const fetchMarketStats = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.MARKET_STATISTICS) as any;
+
+      if (response.success && response.data) {
+        setStats({
+          totalIndices: response.data.total_active_indices || 0,
+          downloadCompleted: response.data.download_completed_today || 0,
+          pendingBeyondOneDay: response.data.pending_over_one_day || 0,
+          failedDownloads: response.data.failed_downloads || 0,
+          metricsPending: response.data.pending_over_one_day || 0
+        });
+      } else {
+        setError(response.error || 'Failed to load market statistics');
+      }
+    } catch (err: any) {
+      console.error('Error fetching market stats:', err);
+      setError('Failed to load market statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadNow = async (indexId: number) => {
+    try {
+      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.MARKET_DOWNLOAD(indexId)) as any;
+
+      if (response.success) {
+        toastService.success(response.message || 'Market download triggered successfully');
+        // Refresh stats after download
+        fetchMarketStats();
+      } else {
+        toastService.error(response.error || 'Failed to trigger market download');
+      }
+    } catch (err: any) {
+      console.error('Error triggering market download:', err);
+      toastService.error('Failed to trigger market download');
+    }
   };
 
   // Filter indices based on selected filter
@@ -241,6 +292,49 @@ export const MarketTab: React.FC = () => {
   };
 
   const filteredIndices = getFilteredIndices();
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        color: colors.utility.secondaryText
+      }}>
+        <Loader2 size={24} className="animate-spin" style={{ marginRight: '8px' }} />
+        Loading market statistics...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: `${colors.semantic.error}10`,
+        border: `1px solid ${colors.semantic.error}40`,
+        borderRadius: '8px',
+        color: colors.semantic.error
+      }}>
+        <strong>Error:</strong> {error}
+        <button
+          onClick={fetchMarketStats}
+          style={{
+            marginLeft: '12px',
+            padding: '6px 12px',
+            backgroundColor: colors.semantic.error,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -381,12 +475,12 @@ export const MarketTab: React.FC = () => {
                 <IndexCard
                   key={index.id}
                   index={index}
-                  onDownloadHistorical={(idx) => alert(`Download historical for: ${idx.index_name}`)}
-                  onDownloadEOD={(idx) => alert(`Download EOD for: ${idx.index_name}`)}
+                  onDownloadHistorical={(idx) => handleDownloadNow(idx.id)}
+                  onDownloadEOD={(idx) => handleDownloadNow(idx.id)}
                   onDelete={(idx) => {
                     // eslint-disable-next-line no-restricted-globals
                     if (window.confirm(`Delete all data for ${idx.index_name}?`)) {
-                      alert(`Deleted ${idx.total_records} records`);
+                      toastService.info('Delete functionality coming soon');
                     }
                   }}
                 />

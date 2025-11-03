@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
-import JobsService from '../../services/jobs.service';
-import { JobType } from '../../types/jobs.types';
+import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 
 interface StatCardProps {
   title: string;
@@ -107,19 +107,17 @@ export const DashboardOverview: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await JobsService.getStatistics(
-        JobType.PORTFOLIO_SNAPSHOT, 
-        environment
-      );
-      
+
+      // Call new Cruise Control dashboard API
+      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.DASHBOARD) as any;
+
       if (response.success && response.data) {
-        // Use the new aggregated counts from backend
+        // Map backend response to stats
         setStats({
-          totalJobs: response.data.total_executions || 0,
-          successful: response.data.successful_count || 0,
-          failed: response.data.failed_count || 0,
-          pending: response.data.running_count || 0
+          totalJobs: response.data.total_jobs || 0,
+          successful: response.data.successful_jobs || 0,
+          failed: response.data.failed_jobs || 0,
+          pending: response.data.pending_downloads || 0
         });
       } else {
         setError(response.error || 'Failed to load dashboard statistics');
