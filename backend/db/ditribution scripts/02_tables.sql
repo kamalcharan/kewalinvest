@@ -905,17 +905,17 @@ CREATE TABLE t_jtbd_configurations (
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
     is_active BOOLEAN NOT NULL DEFAULT true,
     config_data JSONB NOT NULL,
-    is_watchlisted BOOLEAN DEFAULT FALSE,
-    watchlist_auto_added BOOLEAN DEFAULT FALSE,
+    is_in_watchlist BOOLEAN DEFAULT FALSE,
     watchlist_added_at TIMESTAMP,
+    watchlist_reason TEXT,
     next_alert_date DATE,
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert and reminder configurations';
-COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger';
+COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert, reminder, and goal tracking configurations';
+COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger, goal_tracking';
 
 -- TABLE: t_goal_alerts
 CREATE TABLE t_goal_alerts (

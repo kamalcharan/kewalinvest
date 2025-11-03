@@ -376,19 +376,19 @@ BEGIN
         RAISE NOTICE '⊘ Skipping t_customer_goals indexes - table does not exist';
     END IF;
 
-    -- t_goal_allocations indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_allocations') THEN
-        CREATE INDEX IF NOT EXISTS idx_goal_allocations_goal ON t_goal_allocations USING btree (goal_id);
-        CREATE INDEX IF NOT EXISTS idx_goal_allocations_portfolio ON t_goal_allocations USING btree (customer_id, scheme_code);
-        RAISE NOTICE '✓ Created indexes for t_goal_allocations';
+    -- t_goal_scheme_allocations indexes
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_scheme_allocations') THEN
+        CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_goal ON t_goal_scheme_allocations USING btree (goal_id);
+        CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_portfolio ON t_goal_scheme_allocations USING btree (customer_id, scheme_id);
+        RAISE NOTICE '✓ Created indexes for t_goal_scheme_allocations';
     ELSE
-        RAISE NOTICE '⊘ Skipping t_goal_allocations indexes - table does not exist';
+        RAISE NOTICE '⊘ Skipping t_goal_scheme_allocations indexes - table does not exist';
     END IF;
 
     -- t_goal_progress_snapshots indexes
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_progress_snapshots') THEN
         CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
-        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live);
         RAISE NOTICE '✓ Created indexes for t_goal_progress_snapshots';
     ELSE
         RAISE NOTICE '⊘ Skipping t_goal_progress_snapshots indexes - table does not exist';
@@ -396,8 +396,8 @@ BEGIN
 
     -- t_goal_alerts indexes
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_alerts') THEN
-        CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
-        CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
+        CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (customer_id, is_acknowledged) WHERE (is_acknowledged = false);
         RAISE NOTICE '✓ Created indexes for t_goal_alerts';
     ELSE
         RAISE NOTICE '⊘ Skipping t_goal_alerts indexes - table does not exist';
