@@ -7,6 +7,8 @@ import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
 import { TransactionService } from '../../services/transaction.service';
+import { UserPreferencesService } from '../../services/userPreferences.service';
+import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
@@ -19,6 +21,7 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
+import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +38,11 @@ const CustomerViewPage: React.FC = () => {
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
+
+  // Index comparison state
+  const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
+  const [comparisonIndexData, setComparisonIndexData] = useState<number[]>([]);
+  const [isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
 
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -97,6 +105,63 @@ const CustomerViewPage: React.FC = () => {
       setSelectedSchemeForTracking(portfolio.holdings[0].scheme_code);
     }
   }, [portfolio]);
+
+  // Load default comparison index and its data
+  useEffect(() => {
+    const loadDefaultIndexComparison = async () => {
+      try {
+        setIsLoadingIndexComparison(true);
+
+        // Get user's default comparison index preference
+        const prefResponse = await UserPreferencesService.getDefaultComparisonIndex();
+        if (!prefResponse.success || !prefResponse.data?.default_comparison_index_id) {
+          // No default index set
+          setDefaultComparisonIndex(null);
+          setComparisonIndexData([]);
+          return;
+        }
+
+        const indexId = prefResponse.data.default_comparison_index_id;
+
+        // Fetch index details
+        const indexResponse = await MarketService.getIndexById(indexId);
+        if (!indexResponse.success || !indexResponse.data) {
+          console.error('Failed to fetch index details');
+          return;
+        }
+
+        setDefaultComparisonIndex(indexResponse.data);
+
+        // Fetch index historical data if portfolio performance data exists
+        if (portfolio?.performance && portfolio.performance.length > 0) {
+          // Get date range from portfolio performance
+          const performanceDates = portfolio.performance.map(p => p.date);
+          const startDate = performanceDates[0];
+          const endDate = performanceDates[performanceDates.length - 1];
+
+          // Fetch index market data for the same date range
+          const marketDataResponse = await MarketService.getMarketData(indexId, {
+            start_date: startDate,
+            end_date: endDate,
+            page: 1,
+            page_size: 10000 // Get all data points
+          });
+
+          if (marketDataResponse.success && marketDataResponse.data?.data) {
+            // Extract closing prices and map to portfolio dates
+            const indexValues = marketDataResponse.data.data.map(d => d.close_price);
+            setComparisonIndexData(indexValues);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading index comparison:', error);
+      } finally {
+        setIsLoadingIndexComparison(false);
+      }
+    };
+
+    loadDefaultIndexComparison();
+  }, [portfolio?.performance]);
 
   useEffect(() => {
     setSearchParams({ tab: activeTab });
@@ -538,6 +603,9 @@ const CustomerViewPage: React.FC = () => {
                             timeframe={selectedTimeframe}
                             showTimelineMarkers={true}
                             timelineMarkerSize={5}
+                            showComparison={!isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            comparisonData={comparisonIndexData}
+                            comparisonIndexName={defaultComparisonIndex?.index_name}
                           />
                           <div style={{
                             fontSize: '12px',
@@ -546,6 +614,11 @@ const CustomerViewPage: React.FC = () => {
                             marginTop: '12px'
                           }}>
                             Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
+                            {defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                              <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
+                                • Compared with {defaultComparisonIndex.index_name}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (
