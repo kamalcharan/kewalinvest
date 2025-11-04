@@ -589,7 +589,7 @@ const CustomerViewPage: React.FC = () => {
       {/* Tabs */}
       <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'transactions'].map(tab => (
+          {['overview', 'portfolio', 'goals', 'meetings', 'transactions'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -1301,6 +1301,11 @@ comparisonData={comparisonIndexData}
               </div>
             )}
           </div>
+        )}
+
+        {/* Meetings Tab */}
+        {activeTab === 'meetings' && customerId && (
+          <MeetingsList customerId={customerId} />
         )}
 
         {/* Transactions Tab */}
