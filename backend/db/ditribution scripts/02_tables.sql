@@ -208,26 +208,40 @@ COMMENT ON TABLE t_customer_addresses IS 'Multiple addresses per customer with t
 COMMENT ON COLUMN t_customer_addresses.is_primary IS 'Primary address for the customer';
 
 -- TABLE: t_customer_meetings
-CREATE TABLE t_customer_meetings (
+CREATE TABLE IF NOT EXISTS t_customer_meetings (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
-    is_live BOOLEAN NOT NULL,
+    is_live BOOLEAN NOT NULL DEFAULT true,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
-    meeting_date TIMESTAMP NOT NULL,
     meeting_type VARCHAR(50) NOT NULL,
-    meeting_mode VARCHAR(20) NOT NULL CHECK (meeting_mode IN ('in-person', 'video-call', 'phone-call', 'email')),
+    meeting_mode VARCHAR(20) NOT NULL,
+    scheduled_date DATE NOT NULL,
+    scheduled_time TIME NOT NULL,
+    duration_minutes INTEGER DEFAULT 60,
+    meeting_location VARCHAR(255),
+    meeting_link VARCHAR(500),
     agenda TEXT,
     notes TEXT,
-    follow_up_required BOOLEAN DEFAULT FALSE,
-    follow_up_date DATE,
+    status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+    outcome TEXT,
+    completed_at TIMESTAMP,
+    cancelled_at TIMESTAMP,
+    cancellation_reason TEXT,
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_customer_meetings IS 'Customer meeting tracking and follow-up management';
-COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: in-person, video-call, phone-call, email';
-COMMENT ON COLUMN t_customer_meetings.follow_up_required IS 'Flag indicating if follow-up action is needed';
+CREATE INDEX IF NOT EXISTS idx_meetings_customer ON t_customer_meetings(customer_id, tenant_id, is_live);
+CREATE INDEX IF NOT EXISTS idx_meetings_scheduled ON t_customer_meetings(scheduled_date, scheduled_time) WHERE status = 'scheduled';
+CREATE INDEX IF NOT EXISTS idx_meetings_status ON t_customer_meetings(status, tenant_id, is_live);
+
+COMMENT ON TABLE t_customer_meetings IS 'Customer meeting tracking and management with comprehensive scheduling';
+COMMENT ON COLUMN t_customer_meetings.meeting_type IS 'Type: REVIEW, PLANNING, ONBOARDING, GOAL_REVIEW, QUARTERLY_REVIEW, etc.';
+COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: IN_PERSON, VIRTUAL, PHONE, EMAIL';
+COMMENT ON COLUMN t_customer_meetings.status IS 'Status: scheduled, completed, cancelled';
+COMMENT ON COLUMN t_customer_meetings.outcome IS 'Meeting outcome summary (when completed)';
+COMMENT ON COLUMN t_customer_meetings.duration_minutes IS 'Meeting duration in minutes (default 60)';
 
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
