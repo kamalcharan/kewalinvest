@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useCustomerGoalSummary } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -31,13 +31,15 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
-import { GoalCard } from '../../components/goals/GoalCard';
-import { GoalSetupModal } from '../../components/goals/GoalSetupModal';
-import { GoalDetailsModal } from '../../components/goals/GoalDetailsModal';
+import GoalCard from '../../components/goals/GoalCard';
+import GoalSetupModal from '../../components/goals/GoalSetupModal';
+import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
 import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
-import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
+import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
+import { MeetingsList } from '../../components/meetings/MeetingsList';
+import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -48,12 +50,14 @@ const CustomerViewPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const customerId = id ? parseInt(id) : null;
-  
-  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'transactions') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>(initialTab);
+
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions') || 'overview';
+  const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
+  const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
   // Goal modal states
@@ -92,7 +96,7 @@ const CustomerViewPage: React.FC = () => {
 
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
-  const { data: goalSummary, isLoading: goalSummaryLoading } = useCustomerGoalSummary(customerId || 0);
+  const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -206,8 +210,12 @@ const CustomerViewPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setSearchParams({ tab: activeTab });
-  }, [activeTab, setSearchParams]);
+    const params: { tab: string; view?: string } = { tab: activeTab };
+    if (viewMode === 'family') {
+      params.view = 'family';
+    }
+    setSearchParams(params);
+  }, [activeTab, viewMode, setSearchParams]);
 
   useEffect(() => {
     console.group('CustomerViewPage Debug Info');
@@ -581,7 +589,7 @@ const CustomerViewPage: React.FC = () => {
       {/* Tabs */}
       <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'transactions'].map(tab => (
+          {['overview', 'portfolio', 'goals', 'meetings', 'transactions'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -607,8 +615,30 @@ const CustomerViewPage: React.FC = () => {
 
       {/* Content Area */}
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
+        {/* Family View Mode */}
+        {viewMode === 'family' && customer.family_code ? (
+          <>
+            {(() => {
+              const familyHeadCode = customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code;
+              console.log('🔍 Family View Debug:', {
+                viewMode,
+                family_code: customer.family_code,
+                is_family_head: customer.is_family_head,
+                iwell_code: customer.iwell_code,
+                family_head_iwell_code: customer.family_head_iwell_code,
+                computed_familyHeadCode: familyHeadCode
+              });
+              return null;
+            })()}
+            <FamilyPortfolioView
+              familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
+              onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
+            />
+          </>
+        ) : (
+          <>
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
           <>
             {!portfolio ? (
               <EmptyState
@@ -1137,8 +1167,8 @@ comparisonData={comparisonIndexData}
                     margin: 0
                   }}>
                     {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.on_track_count} on track •
-                    {goalSummary.watchlist_count} in watchlist
+                    {goalSummary.goals_on_track} on track •
+                    {goalSummary.goals_behind} behind
                   </p>
                 )}
               </div>
@@ -1220,11 +1250,11 @@ comparisonData={comparisonIndexData}
                     <GoalCard
                       key={goal.id}
                       goal={goal}
-                      onEdit={(goalId) => {
+                      onEdit={(goalId: number) => {
                         setSelectedGoalId(goalId);
                         setShowGoalDetailsModal(true);
                       }}
-                      onRecalculate={(goalId) => {
+                      onRecalculate={(goalId: number) => {
                         setSelectedGoalId(goalId);
                         setShowGoalRecalculationModal(true);
                       }}
@@ -1271,6 +1301,11 @@ comparisonData={comparisonIndexData}
               </div>
             )}
           </div>
+        )}
+
+        {/* Meetings Tab */}
+        {activeTab === 'meetings' && customerId && (
+          <MeetingsList customerId={customerId} />
         )}
 
         {/* Transactions Tab */}
@@ -1367,6 +1402,8 @@ comparisonData={comparisonIndexData}
             )}
           </>
         )}
+          </>
+        )}
       </div>
 
       {/* JTBD Setup Modal */}
@@ -1398,8 +1435,6 @@ comparisonData={comparisonIndexData}
           onClose={() => {
             setShowGoalDetailsModal(false);
             setSelectedGoalId(null);
-          }}
-          onUpdate={() => {
             refetchGoals();
           }}
         />
@@ -1408,12 +1443,8 @@ comparisonData={comparisonIndexData}
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}
-          customerId={customerId!}
+          isRecalculating={false}
           onClose={() => {
-            setShowGoalRecalculationModal(false);
-            setSelectedGoalId(null);
-          }}
-          onSuccess={() => {
             setShowGoalRecalculationModal(false);
             setSelectedGoalId(null);
             refetchGoals();
