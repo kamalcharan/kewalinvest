@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useGoalSummary } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary, useRecalculateGoal } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -37,7 +37,6 @@ import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
 import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
-import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -59,7 +58,6 @@ const CustomerViewPage: React.FC = () => {
   // Goal modal states
   const [showGoalSetupModal, setShowGoalSetupModal] = useState(false);
   const [showGoalDetailsModal, setShowGoalDetailsModal] = useState(false);
-  const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
 
   // Index comparison state - FIXED: Changed to date-aware format
@@ -93,6 +91,7 @@ const CustomerViewPage: React.FC = () => {
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
   const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
+  const recalculateGoalMutation = useRecalculateGoal();
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -1137,8 +1136,8 @@ comparisonData={comparisonIndexData}
                     margin: 0
                   }}>
                     {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.on_track_count} on track •
-                    {goalSummary.watchlist_count} in watchlist
+                    {goalSummary.goals_on_track} on track •
+                    {goalSummary.goals_behind} behind
                   </p>
                 )}
               </div>
@@ -1225,8 +1224,7 @@ comparisonData={comparisonIndexData}
                         setShowGoalDetailsModal(true);
                       }}
                       onRecalculate={(goalId: number) => {
-                        setSelectedGoalId(goalId);
-                        setShowGoalRecalculationModal(true);
+                        recalculateGoalMutation.mutate(goalId);
                       }}
                     />
                   ))}
@@ -1398,28 +1396,11 @@ comparisonData={comparisonIndexData}
           onClose={() => {
             setShowGoalDetailsModal(false);
             setSelectedGoalId(null);
-          }}
-          onUpdate={() => {
             refetchGoals();
           }}
         />
       )}
 
-      {showGoalRecalculationModal && selectedGoalId && (
-        <GoalRecalculationModal
-          goalId={selectedGoalId}
-          customerId={customerId!}
-          onClose={() => {
-            setShowGoalRecalculationModal(false);
-            setSelectedGoalId(null);
-          }}
-          onSuccess={() => {
-            setShowGoalRecalculationModal(false);
-            setSelectedGoalId(null);
-            refetchGoals();
-          }}
-        />
-      )}
     </div>
   );
 };
