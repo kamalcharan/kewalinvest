@@ -211,6 +211,11 @@ const CustomerViewPage: React.FC = () => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
 
+  // Debug viewMode changes
+  useEffect(() => {
+    console.log('📊 ViewMode changed to:', viewMode);
+  }, [viewMode]);
+
   useEffect(() => {
     console.group('CustomerViewPage Debug Info');
     console.log('🔍 URL Param ID:', id);

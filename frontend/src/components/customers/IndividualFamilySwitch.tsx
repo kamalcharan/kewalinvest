@@ -17,6 +17,7 @@ export const IndividualFamilySwitch: React.FC<IndividualFamilySwitchProps> = ({
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const handleToggle = () => {
+    console.log('🎯 Toggle clicked! Current mode:', mode, '→ Switching to:', mode === 'individual' ? 'family' : 'individual');
     if (!disabled) {
       onChange(mode === 'individual' ? 'family' : 'individual');
     }
