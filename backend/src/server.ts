@@ -25,12 +25,6 @@ import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
-import meetingRoutes from './routes/meeting.routes';
-import familyRoutes from './routes/family.routes';
-import schemeAliasRoutes from './routes/schemeAlias.routes';
-import bookmarkRoutes from './routes/bookmark.routes';
-import jobsRoutes from './routes/jobs.routes';
-import cruiseControlRoutes from './routes/cruiseControl.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -213,10 +207,6 @@ app.use('/api/scheme-aliases', schemeAliasRoutes);
 app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
-app.use('/api/meetings', meetingRoutes);
-app.use('/api/family', familyRoutes);
-app.use('/api/jobs', jobsRoutes);
-app.use('/api/cruise-control', cruiseControlRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);

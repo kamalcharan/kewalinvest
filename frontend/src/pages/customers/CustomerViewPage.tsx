@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useGoalSummary } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary, useRecalculateGoal, useAddToWatchlist, useRemoveFromWatchlist } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -65,6 +65,12 @@ const CustomerViewPage: React.FC = () => {
   const [showGoalDetailsModal, setShowGoalDetailsModal] = useState(false);
   const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
+  const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
+
+  // Goal mutation hooks
+  const recalculateGoalMutation = useRecalculateGoal();
+  const addToWatchlistMutation = useAddToWatchlist();
+  const removeFromWatchlistMutation = useRemoveFromWatchlist();
 
   // Index comparison state - FIXED: Changed to date-aware format
   const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
@@ -240,6 +246,25 @@ const CustomerViewPage: React.FC = () => {
     if (portfolioWithMoM.length < 2) return null;
     return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
   }, [portfolioWithMoM]);
+
+  // Watchlist toggle handler
+  const handleWatchlistToggle = async (goalId: number, isInWatchlist: boolean) => {
+    if (!customerId) return;
+
+    try {
+      if (isInWatchlist) {
+        await removeFromWatchlistMutation.mutateAsync({ goalId, customerId });
+      } else {
+        await addToWatchlistMutation.mutateAsync({
+          goalId,
+          customerId,
+          reason: 'Manual watchlist addition by user'
+        });
+      }
+    } catch (error: any) {
+      console.error('Watchlist toggle failed:', error);
+    }
+  };
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -769,20 +794,20 @@ const CustomerViewPage: React.FC = () => {
                         <div style={{ width: '100%', height: '100%' }}>
                           {/* FIXED: Proper props with comparison data */}
                           <PerformanceSparkline
-  performanceData={portfolioWithMoM}
-  data={portfolio.performance.map(p => p.current_value ?? 0)}
-  width={600}
-  height={250}
-  showArea={true}
-  showDots={true}
-  interactive={true}
-  timeframe={selectedTimeframe}
-  showTimelineMarkers={true}
-  timelineMarkerSize={5}
-  showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-comparisonData={comparisonIndexData}
-  comparisonIndexName={defaultComparisonIndex?.index_name}
-/>
+                            performanceData={portfolioWithMoM}
+                            data={portfolio.performance.map(p => p.current_value ?? 0)}
+                            width={600}
+                            height={250}
+                            showArea={true}
+                            showDots={true}
+                            interactive={true}
+                            timeframe={selectedTimeframe}
+                            showTimelineMarkers={true}
+                            timelineMarkerSize={5}
+                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            comparisonData={comparisonIndexData}
+                            comparisonIndexName={defaultComparisonIndex?.index_name}
+                          />
                           <div style={{
                             fontSize: '12px',
                             color: colors.utility.secondaryText,
@@ -1254,10 +1279,25 @@ comparisonData={comparisonIndexData}
                         setSelectedGoalId(goalId);
                         setShowGoalDetailsModal(true);
                       }}
-                      onRecalculate={(goalId: number) => {
+                      onRecalculate={async (goalId: number) => {
                         setSelectedGoalId(goalId);
                         setShowGoalRecalculationModal(true);
+                        setRecalculationResult(null);
+
+                        try {
+                          const result = await recalculateGoalMutation.mutateAsync(goalId);
+                          setRecalculationResult({
+                            previousCorpus: result.current_value,
+                            newCorpus: result.projected_corpus,
+                            error: false
+                          });
+                          refetchGoals();
+                        } catch (error) {
+                          setRecalculationResult({ error: true });
+                        }
                       }}
+                      onToggleWatchlist={handleWatchlistToggle}
+                      showAllocations={true}
                     />
                   ))}
                 </div>
@@ -1443,12 +1483,15 @@ comparisonData={comparisonIndexData}
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}
-          isRecalculating={false}
+          isRecalculating={recalculateGoalMutation.isPending}
           onClose={() => {
             setShowGoalRecalculationModal(false);
             setSelectedGoalId(null);
-            refetchGoals();
+            setRecalculationResult(null);
           }}
+          previousCorpus={recalculationResult?.previousCorpus}
+          newCorpus={recalculationResult?.newCorpus}
+          error={recalculationResult?.error}
         />
       )}
     </div>
