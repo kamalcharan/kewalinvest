@@ -1,9 +1,10 @@
 # Kewalinvest Platform - Handover Document
 
 ## Document Overview
-**Date**: November 3, 2025
+**Date**: November 4, 2025
 **Branch**: `claude/review-previous-branch-011CUmKY8xZRV9A6h2AU8EoL`
-**Completion Status**: 47% (8/17 major features complete)
+**Completion Status**: 53% (9/17 major features complete)
+**Latest Update**: Added Operational Dashboard (Backend + Frontend)
 
 ---
 
@@ -101,7 +102,55 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 3. Goal Tracking System ✅
+### 3. Operational Dashboard ✅
+**Status**: 100% Complete (Backend + Frontend)
+
+**Components**:
+- `frontend/src/pages/OperationalDashboard.tsx` - Main dashboard (640+ lines)
+
+**Backend**:
+- `backend/src/services/dashboard.service.ts` - Business logic for operational metrics
+- `backend/src/controllers/dashboard.controller.ts` - API endpoints
+- `backend/src/routes/dashboard.routes.ts` - Route registration
+
+**Features**:
+- **Alerts Banner** - Shows active alerts in header (goal deviations, system issues)
+- **Statistics Cards** - Total Customers, Bookmarked Goals, Goals Behind, Upcoming Meetings
+- **Top Goal Deviations** - Goals that are BEHIND or AT_RISK (bookmarked only)
+- **Upcoming Meetings** - Next 30 days across all customers with countdown
+- **Quick Actions** - Navigate to Goals Explorer, Customers, Cruise Control
+- **Real-time Data** - Parallel API fetching for performance
+- **Click-through Navigation** - Cards link to customer detail pages
+- **Status Color Coding** - Red (Behind), Yellow (At Risk), Green (On Track)
+
+**API Endpoints**:
+```
+GET /api/dashboard/statistics          - Overall stats (customers, goals, meetings counts)
+GET /api/dashboard/goal-deviations     - Goals behind/at risk (bookmarked only)
+GET /api/dashboard/upcoming-meetings   - Meetings in next 30 days
+GET /api/dashboard/bookmarked-goals    - All bookmarked goals with filters/pagination
+GET /api/dashboard/alerts              - System alerts aggregated from goals
+```
+
+**Key Difference from Customer Dashboard**:
+- **Operational Focus**: Shows aggregated data across ALL customers
+- **Not Customer-Specific**: Overview of entire operation, not single portfolio
+- **Goal Monitoring**: Only shows bookmarked goals (flagged for attention)
+- **Meeting Calendar**: All upcoming meetings across all customers
+
+**Testing**:
+```bash
+# Navigate to /dashboard
+# Verify alerts banner appears if goals are behind
+# Check statistics cards load correctly
+# Click on goal deviation cards to navigate to customer page
+# Verify upcoming meetings show with countdown
+# Test quick action navigation
+```
+
+---
+
+### 4. Goal Tracking System ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -118,7 +167,7 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 4. Customer Management ✅
+### 5. Customer Management ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -134,7 +183,7 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 5. Transaction Management ✅
+### 6. Transaction Management ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -143,7 +192,7 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 6. NAV Data Management ✅
+### 7. NAV Data Management ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -152,7 +201,7 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 7. Market Data Management ✅
+### 8. Market Data Management ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -161,7 +210,7 @@ POST /api/cruise-control/market/download/:indexId     - Trigger market download
 
 ---
 
-### 8. Portfolio Snapshot Scheduler ✅
+### 9. Portfolio Snapshot Scheduler ✅
 **Status**: 100% Complete
 
 **Location**:
@@ -644,13 +693,13 @@ Backend:
 ```
 
 ### Feature Completion
-- **Complete**: 8 features (47%)
+- **Complete**: 9 features (53%)
 - **Partial**: 2 features (12%)
-- **Not Started**: 7 features (41%)
+- **Not Started**: 6 features (35%)
 
 ### Time Investment
-- **Completed Work**: ~120 hours
-- **Remaining Work**: ~130 hours
+- **Completed Work**: ~130 hours (includes Operational Dashboard: ~10 hours)
+- **Remaining Work**: ~120 hours
 - **Total Project**: ~250 hours
 
 ---
@@ -730,16 +779,17 @@ For questions or issues:
 
 - [x] Cruise Control frontend completed
 - [x] Meeting Management integrated
+- [x] Operational Dashboard completed (Backend + Frontend)
 - [x] Code committed to branch
 - [x] Build verified successful
 - [x] Handover document created
-- [ ] Distribution script created (next step)
+- [x] Distribution script created
 - [ ] Team trained on new features
 - [ ] Staging deployment completed
 - [ ] User acceptance testing completed
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: November 3, 2025
+**Document Version**: 1.1
+**Last Updated**: November 4, 2025
 **Prepared By**: Claude Code Assistant
