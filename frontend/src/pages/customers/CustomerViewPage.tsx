@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals } from '../../hooks/useGoals';
+import { useCustomerGoals, useGoalSummary } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -96,7 +96,7 @@ const CustomerViewPage: React.FC = () => {
 
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
-  const { data: goalSummary, isLoading: goalSummaryLoading } = useCustomerGoalSummary(customerId || 0);
+  const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -1430,8 +1430,6 @@ comparisonData={comparisonIndexData}
           onClose={() => {
             setShowGoalDetailsModal(false);
             setSelectedGoalId(null);
-          }}
-          onUpdate={() => {
             refetchGoals();
           }}
         />
@@ -1440,12 +1438,8 @@ comparisonData={comparisonIndexData}
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}
-          customerId={customerId!}
+          isRecalculating={false}
           onClose={() => {
-            setShowGoalRecalculationModal(false);
-            setSelectedGoalId(null);
-          }}
-          onSuccess={() => {
             setShowGoalRecalculationModal(false);
             setSelectedGoalId(null);
             refetchGoals();
