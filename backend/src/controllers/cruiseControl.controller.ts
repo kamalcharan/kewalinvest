@@ -1,10 +1,21 @@
 // backend/src/controllers/cruiseControl.controller.ts
 // Cruise Control Controller - API endpoints for monitoring dashboard
 
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
 import CruiseControlService from '../services/cruiseControl.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: number;
+    user_id: number;
+    tenant_id: number;
+  };
+  environment: {
+    tenant_id: number;
+    is_live: boolean;
+  };
+}
 
 export class CruiseControlController {
   private service: CruiseControlService;
