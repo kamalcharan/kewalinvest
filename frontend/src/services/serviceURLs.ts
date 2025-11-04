@@ -183,6 +183,15 @@ export const API_ENDPOINTS = {
     GET_CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/meetings/customer/${customerId}/summary`,
   },
 
+  // Family endpoints
+  FAMILY: {
+    MEMBERS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/members`,
+    PORTFOLIO: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/portfolio`,
+    ASSET_ALLOCATION: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/asset-allocation`,
+    GOALS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/goals`,
+    MEETINGS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/meetings`,
+  },
+
   // Generic Jobs Scheduler endpoints
   JOBS: {
     TYPES: `${API_BASE}/jobs/types`,
