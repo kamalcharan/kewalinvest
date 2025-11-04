@@ -43,7 +43,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
         borderRadius: '12px'
       }}>
         <p>Failed to load family portfolio</p>
-        <p style={{ fontSize: '14px', marginTop: '8px' }}>{portfolioError || 'No data available'}</p>
+        <p style={{ fontSize: '14px', marginTop: '8px' }}>{portfolioError?.message || 'No data available'}</p>
       </div>
     );
   }
