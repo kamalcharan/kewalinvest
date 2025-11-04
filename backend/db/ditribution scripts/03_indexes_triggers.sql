@@ -133,6 +133,7 @@ CREATE INDEX idx_contacts_tenant ON t_contacts USING btree (tenant_id, is_live);
 CREATE INDEX idx_contacts_is_customer ON t_contacts USING btree (is_customer) WHERE (is_customer = true);
 CREATE INDEX idx_contacts_name ON t_contacts USING btree (name);
 CREATE INDEX idx_contacts_active ON t_contacts USING btree (tenant_id, is_active, is_live);
+CREATE INDEX idx_contacts_normalized_name ON t_contacts USING btree (normalized_name) WHERE (is_active = true);
 
 CREATE INDEX idx_channels_contact ON t_contact_channels USING btree (contact_id);
 CREATE INDEX idx_channels_email ON t_contact_channels USING btree (channel_value)
@@ -310,6 +311,7 @@ CREATE INDEX idx_scheme_details_nav_available ON t_scheme_details USING btree (s
 CREATE INDEX idx_scheme_aliases_lookup ON t_scheme_aliases USING btree (alias_name_normalized) WHERE (is_active = true);
 CREATE INDEX idx_scheme_aliases_scheme ON t_scheme_aliases USING btree (scheme_id, is_active);
 CREATE INDEX idx_scheme_aliases_active ON t_scheme_aliases USING btree (is_active, created_at DESC);
+CREATE INDEX idx_scheme_aliases_scheme_alias ON t_scheme_aliases USING btree (scheme_id, alias_name_normalized) WHERE (is_active = true);
 
 -- Conditional indexes for t_scheme_bookmarks (may not have scheme_code column)
 DO $$

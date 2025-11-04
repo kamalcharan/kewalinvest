@@ -111,6 +111,7 @@ CREATE TABLE t_contacts (
     is_customer BOOLEAN DEFAULT false,
     prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
     name VARCHAR(255) NOT NULL,
+    normalized_name TEXT GENERATED ALWAYS AS (normalize_customer_name(name)) STORED,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id)
@@ -302,6 +303,12 @@ CREATE TABLE t_import_sessions (
     error_summary TEXT,
     n8n_webhook_id VARCHAR(255),
     n8n_execution_id VARCHAR(255),
+    restart_count INTEGER DEFAULT 0,
+    last_restart_at TIMESTAMP,
+    can_restart BOOLEAN DEFAULT true,
+    last_processed_staging_id INTEGER,
+    processing_checkpoint JSONB DEFAULT '{}',
+    customer_lookup_method VARCHAR(50) DEFAULT 'iwell_code' CHECK (customer_lookup_method IN ('iwell_code', 'customer_name', 'both')),
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -497,7 +504,7 @@ CREATE TABLE t_scheme_aliases (
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+    CONSTRAINT unique_scheme_alias UNIQUE (scheme_id, alias_name_normalized)
 );
 
 COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Aliases are shared across all tenants.';
