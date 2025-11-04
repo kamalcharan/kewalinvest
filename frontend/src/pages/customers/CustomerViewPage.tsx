@@ -38,6 +38,8 @@ import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker'
 import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
+import { MeetingsList } from '../../components/meetings/MeetingsList';
+import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -607,8 +609,16 @@ const CustomerViewPage: React.FC = () => {
 
       {/* Content Area */}
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
+        {/* Family View Mode */}
+        {viewMode === 'family' && customer.family_code ? (
+          <FamilyPortfolioView
+            familyHeadIwellCode={customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code}
+            onMemberClick={(memberId) => navigate(`/customers/${memberId}`)}
+          />
+        ) : (
+          <>
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
           <>
             {!portfolio ? (
               <EmptyState
@@ -1365,6 +1375,8 @@ comparisonData={comparisonIndexData}
                 />
               </div>
             )}
+          </>
+        )}
           </>
         )}
       </div>
