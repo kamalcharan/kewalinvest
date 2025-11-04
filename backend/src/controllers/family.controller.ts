@@ -8,10 +8,7 @@ interface AuthenticatedRequest extends Request {
     user_id: number;
     tenant_id: number;
   };
-  environment?: {
-    tenant_id: number;
-    is_live: boolean;
-  };
+  environment?: 'live' | 'test';
 }
 
 export class FamilyController {
@@ -27,7 +24,9 @@ export class FamilyController {
    */
   getFamilyMembers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { environment } = req;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const { familyHeadIwellCode } = req.params;
 
       if (!familyHeadIwellCode) {
@@ -39,8 +38,8 @@ export class FamilyController {
       }
 
       const members = await this.familyService.getFamilyMembers(
-        environment!.tenant_id,
-        environment!.is_live,
+        tenantId,
+        isLive,
         familyHeadIwellCode
       );
 
@@ -63,7 +62,9 @@ export class FamilyController {
    */
   getFamilyPortfolio = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { environment } = req;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const { familyHeadIwellCode } = req.params;
 
       if (!familyHeadIwellCode) {
@@ -75,8 +76,8 @@ export class FamilyController {
       }
 
       const portfolio = await this.familyService.getFamilyPortfolioSummary(
-        environment!.tenant_id,
-        environment!.is_live,
+        tenantId,
+        isLive,
         familyHeadIwellCode
       );
 
@@ -99,7 +100,9 @@ export class FamilyController {
    */
   getFamilyAssetAllocation = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { environment } = req;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const { familyHeadIwellCode } = req.params;
 
       if (!familyHeadIwellCode) {
@@ -111,8 +114,8 @@ export class FamilyController {
       }
 
       const allocation = await this.familyService.getFamilyAssetAllocation(
-        environment!.tenant_id,
-        environment!.is_live,
+        tenantId,
+        isLive,
         familyHeadIwellCode
       );
 
@@ -135,7 +138,9 @@ export class FamilyController {
    */
   getFamilyGoals = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { environment } = req;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const { familyHeadIwellCode } = req.params;
 
       if (!familyHeadIwellCode) {
@@ -147,8 +152,8 @@ export class FamilyController {
       }
 
       const goals = await this.familyService.getFamilyGoalSummary(
-        environment!.tenant_id,
-        environment!.is_live,
+        tenantId,
+        isLive,
         familyHeadIwellCode
       );
 
@@ -171,7 +176,9 @@ export class FamilyController {
    */
   getFamilyMeetings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { environment } = req;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const { familyHeadIwellCode } = req.params;
 
       if (!familyHeadIwellCode) {
@@ -183,8 +190,8 @@ export class FamilyController {
       }
 
       const meetings = await this.familyService.getFamilyMeetingSummary(
-        environment!.tenant_id,
-        environment!.is_live,
+        tenantId,
+        isLive,
         familyHeadIwellCode
       );
 
