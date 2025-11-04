@@ -388,9 +388,9 @@ export function useRecalculateCustomerGoals() {
       }
 
       const endpoint = `${API_ENDPOINTS.GOALS.RECALCULATE_CUSTOMER(customerId)}${buildQueryParams({}, environment)}`;
-      const response = await apiService.post<{ 
-        success: boolean; 
-        data: GoalRecalculationResult[]; 
+      const response = await apiService.post<{
+        success: boolean;
+        data: GoalRecalculationResult[];
         message?: string;
         error?: string;
       }>(endpoint, {});
@@ -404,19 +404,19 @@ export function useRecalculateCustomerGoals() {
     onSuccess: (results, customerId) => {
       // Invalidate all customer goals
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.customerGoals(customerId) });
-      
+
       // Invalidate customer summary
       queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.summary(customerId) });
-      
+
       // Invalidate each goal's detail and history
       results.forEach(result => {
         queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.detail(result.goal_id) });
         queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.history(result.goal_id) });
       });
-      
+
       // Count alerts triggered
       const totalAlerts = results.reduce((sum, r) => sum + (r.alerts_triggered?.length || 0), 0);
-      
+
       if (totalAlerts > 0) {
         toastService.warning(`Recalculated ${results.length} goal(s). ${totalAlerts} alert(s) triggered.`);
       } else {
@@ -425,6 +425,91 @@ export function useRecalculateCustomerGoals() {
     },
     onError: (error) => {
       handleAPIError(error, 'Failed to recalculate customer goals');
+    }
+  });
+}
+
+/**
+ * Mutation for adding a goal to watchlist
+ * Marks goal for special monitoring and tracking
+ */
+export function useAddToWatchlist() {
+  const queryClient = useQueryClient();
+  const { user, tenantId, environment } = useAuth();
+
+  return useMutation<{ goalId: number; customerId: number }, Error, { goalId: number; customerId: number; reason: string }>({
+    mutationFn: async ({ goalId, customerId, reason }): Promise<{ goalId: number; customerId: number }> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const endpoint = `${API_ENDPOINTS.GOALS.ADD_TO_WATCHLIST(goalId)}${buildQueryParams({}, environment)}`;
+      const response = await apiService.post<{ success: boolean; message?: string; error?: string }>(
+        endpoint,
+        { reason }
+      );
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to add goal to watchlist');
+      }
+
+      return { goalId, customerId };
+    },
+    onSuccess: ({ goalId, customerId }) => {
+      // Invalidate customer goals list to refetch with updated watchlist status
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.customerGoals(customerId) });
+
+      // Invalidate customer summary
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.summary(customerId) });
+
+      // Invalidate goal detail
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.detail(goalId) });
+
+      toastService.success('Goal added to watchlist');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to add goal to watchlist');
+    }
+  });
+}
+
+/**
+ * Mutation for removing a goal from watchlist
+ * Removes special monitoring flag from goal
+ */
+export function useRemoveFromWatchlist() {
+  const queryClient = useQueryClient();
+  const { user, tenantId, environment } = useAuth();
+
+  return useMutation<{ goalId: number; customerId: number }, Error, { goalId: number; customerId: number }>({
+    mutationFn: async ({ goalId, customerId }): Promise<{ goalId: number; customerId: number }> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const endpoint = `${API_ENDPOINTS.GOALS.REMOVE_FROM_WATCHLIST(goalId)}${buildQueryParams({}, environment)}`;
+      const response = await apiService.delete<{ success: boolean; message?: string; error?: string }>(endpoint);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to remove goal from watchlist');
+      }
+
+      return { goalId, customerId };
+    },
+    onSuccess: ({ goalId, customerId }) => {
+      // Invalidate customer goals list to refetch with updated watchlist status
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.customerGoals(customerId) });
+
+      // Invalidate customer summary
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.summary(customerId) });
+
+      // Invalidate goal detail
+      queryClient.invalidateQueries({ queryKey: GOAL_QUERY_KEYS.detail(goalId) });
+
+      toastService.success('Goal removed from watchlist');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to remove goal from watchlist');
     }
   });
 }
