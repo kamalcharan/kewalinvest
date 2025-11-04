@@ -1,8 +1,15 @@
 // backend/src/controllers/dashboard.controller.ts
 
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
 import { DashboardService } from '../services/dashboard.service';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    tenant_id: number;
+  };
+  environment?: 'live' | 'test';
+}
 
 export class DashboardController {
   private dashboardService: DashboardService;
@@ -17,9 +24,11 @@ export class DashboardController {
    */
   async getStatistics(req: AuthenticatedRequest, res: Response) {
     try {
-      const { tenant_id, is_live } = req.environment!;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
 
-      const statistics = await this.dashboardService.getDashboardStatistics(tenant_id, is_live);
+      const statistics = await this.dashboardService.getDashboardStatistics(tenantId, isLive);
 
       return res.json({
         success: true,
@@ -40,10 +49,12 @@ export class DashboardController {
    */
   async getGoalDeviations(req: AuthenticatedRequest, res: Response) {
     try {
-      const { tenant_id, is_live } = req.environment!;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
 
-      const deviations = await this.dashboardService.getGoalDeviations(tenant_id, is_live, limit);
+      const deviations = await this.dashboardService.getGoalDeviations(tenantId, isLive, limit);
 
       return res.json({
         success: true,
@@ -64,10 +75,12 @@ export class DashboardController {
    */
   async getUpcomingMeetings(req: AuthenticatedRequest, res: Response) {
     try {
-      const { tenant_id, is_live } = req.environment!;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
 
-      const meetings = await this.dashboardService.getUpcomingMeetings(tenant_id, is_live, limit);
+      const meetings = await this.dashboardService.getUpcomingMeetings(tenantId, isLive, limit);
 
       return res.json({
         success: true,
@@ -88,7 +101,9 @@ export class DashboardController {
    */
   async getBookmarkedGoals(req: AuthenticatedRequest, res: Response) {
     try {
-      const { tenant_id, is_live } = req.environment!;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
 
       const filters = {
         status: req.query.status as string,
@@ -97,7 +112,7 @@ export class DashboardController {
         page_size: req.query.page_size ? parseInt(req.query.page_size as string) : 20
       };
 
-      const result = await this.dashboardService.getBookmarkedGoals(tenant_id, is_live, filters);
+      const result = await this.dashboardService.getBookmarkedGoals(tenantId, isLive, filters);
 
       return res.json({
         success: true,
@@ -119,10 +134,12 @@ export class DashboardController {
    */
   async getAlerts(req: AuthenticatedRequest, res: Response) {
     try {
-      const { tenant_id, is_live } = req.environment!;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
 
-      const alerts = await this.dashboardService.getDashboardAlerts(tenant_id, is_live, limit);
+      const alerts = await this.dashboardService.getDashboardAlerts(tenantId, isLive, limit);
 
       return res.json({
         success: true,
