@@ -1,6 +1,6 @@
 // frontend/src/hooks/useFamily.ts
 
-import { useQuery } from '@tantml/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { FamilyService } from '../services/family.service';
 import type {
   FamilyMember,
