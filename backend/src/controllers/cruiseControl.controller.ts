@@ -1,10 +1,17 @@
 // backend/src/controllers/cruiseControl.controller.ts
 // Cruise Control Controller - API endpoints for monitoring dashboard
 
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { Request, Response } from 'express';
 import CruiseControlService from '../services/cruiseControl.service';
 import { SimpleLogger } from '../services/simpleLogger.service';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    tenant_id: number;
+  };
+  environment?: 'live' | 'test';
+}
 
 export class CruiseControlController {
   private service: CruiseControlService;
@@ -19,9 +26,11 @@ export class CruiseControlController {
    */
   async getDashboardStats(req: AuthenticatedRequest, res: Response): Promise<Response> {
     try {
-      const { tenant_id, is_live } = req.environment;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
 
-      const stats = await this.service.getDashboardStatistics(tenant_id, is_live);
+      const stats = await this.service.getDashboardStatistics(tenantId, isLive);
 
       return res.json({
         success: true,
@@ -34,8 +43,8 @@ export class CruiseControlController {
         'Failed to get dashboard stats',
         'getDashboardStats',
         { error: error.message },
-        req.user?.id,
-        req.environment.tenant_id,
+        req.user?.user_id,
+        req.user?.tenant_id,
         error.stack
       );
 
@@ -52,10 +61,12 @@ export class CruiseControlController {
    */
   async getNavStats(req: AuthenticatedRequest, res: Response): Promise<Response> {
     try {
-      const { tenant_id, is_live } = req.environment;
-      const userId = req.user!.id;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
+      const userId = user!.user_id;
 
-      const stats = await this.service.getNavStatistics(tenant_id, is_live, userId);
+      const stats = await this.service.getNavStatistics(tenantId, isLive, userId);
 
       return res.json({
         success: true,
@@ -68,8 +79,8 @@ export class CruiseControlController {
         'Failed to get NAV stats',
         'getNavStats',
         { error: error.message },
-        req.user?.id,
-        req.environment.tenant_id,
+        req.user?.user_id,
+        req.user?.tenant_id,
         error.stack
       );
 
@@ -99,8 +110,8 @@ export class CruiseControlController {
         'Failed to get market stats',
         'getMarketStats',
         { error: error.message },
-        req.user?.id,
-        req.environment.tenant_id,
+        req.user?.user_id,
+        req.user?.tenant_id,
         error.stack
       );
 
@@ -117,8 +128,10 @@ export class CruiseControlController {
    */
   async triggerNavDownload(req: AuthenticatedRequest, res: Response): Promise<Response> {
     try {
-      const { tenant_id, is_live } = req.environment;
-      const userId = req.user!.id;
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
+      const userId = user!.user_id;
       const { schemeCode } = req.params;
 
       if (!schemeCode) {
@@ -129,8 +142,8 @@ export class CruiseControlController {
       }
 
       const result = await this.service.triggerNavDownload(
-        tenant_id,
-        is_live,
+        tenantId,
+        isLive,
         userId,
         schemeCode
       );
@@ -143,8 +156,8 @@ export class CruiseControlController {
         'Failed to trigger NAV download',
         'triggerNavDownload',
         { schemeCode: req.params.schemeCode, error: error.message },
-        req.user?.id,
-        req.environment.tenant_id,
+        req.user?.user_id,
+        req.user?.tenant_id,
         error.stack
       );
 
@@ -181,8 +194,8 @@ export class CruiseControlController {
         'Failed to trigger market download',
         'triggerMarketDownload',
         { indexId: req.params.indexId, error: error.message },
-        req.user?.id,
-        req.environment.tenant_id,
+        req.user?.user_id,
+        req.user?.tenant_id,
         error.stack
       );
 
