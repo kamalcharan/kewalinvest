@@ -611,10 +611,24 @@ const CustomerViewPage: React.FC = () => {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
         {/* Family View Mode */}
         {viewMode === 'family' && customer.family_code ? (
-          <FamilyPortfolioView
-            familyHeadIwellCode={customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code}
-            onMemberClick={(memberId) => navigate(`/customers/${memberId}`)}
-          />
+          <>
+            {(() => {
+              const familyHeadCode = customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code;
+              console.log('🔍 Family View Debug:', {
+                viewMode,
+                family_code: customer.family_code,
+                is_family_head: customer.is_family_head,
+                iwell_code: customer.iwell_code,
+                family_head_iwell_code: customer.family_head_iwell_code,
+                computed_familyHeadCode: familyHeadCode
+              });
+              return null;
+            })()}
+            <FamilyPortfolioView
+              familyHeadIwellCode={customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code}
+              onMemberClick={(memberId) => navigate(`/customers/${memberId}`)}
+            />
+          </>
         ) : (
           <>
             {/* Overview Tab */}
