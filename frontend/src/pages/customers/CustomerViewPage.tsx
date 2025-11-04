@@ -38,6 +38,7 @@ import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker'
 import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
+import { MeetingsList } from '../../components/meetings/MeetingsList';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -49,8 +50,8 @@ const CustomerViewPage: React.FC = () => {
   
   const customerId = id ? parseInt(id) : null;
   
-  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'transactions') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'transactions'>(initialTab);
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions') || 'overview';
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
@@ -581,7 +582,7 @@ const CustomerViewPage: React.FC = () => {
       {/* Tabs */}
       <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'transactions'].map(tab => (
+          {['overview', 'portfolio', 'goals', 'meetings', 'transactions'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -1271,6 +1272,11 @@ comparisonData={comparisonIndexData}
               </div>
             )}
           </div>
+        )}
+
+        {/* Meetings Tab */}
+        {activeTab === 'meetings' && customerId && (
+          <MeetingsList customerId={customerId} />
         )}
 
         {/* Transactions Tab */}
