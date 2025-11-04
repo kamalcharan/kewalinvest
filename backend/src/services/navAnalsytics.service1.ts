@@ -148,7 +148,7 @@ SimpleLogger.info(
             include_metrics
           ));
 
-          / ADD THIS DEBUG LOGGING
+          // ADD THIS DEBUG LOGGING
 SimpleLogger.info(
   'NavAnalyticsService',
   '🔍 DEBUG: Time-series data retrieved',
