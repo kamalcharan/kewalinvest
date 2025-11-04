@@ -224,6 +224,15 @@ export const API_ENDPOINTS = {
     },
   },
 
+  // Dashboard endpoints (Operational Dashboard)
+  DASHBOARD: {
+    STATISTICS: `${API_BASE}/dashboard/statistics`,
+    GOAL_DEVIATIONS: `${API_BASE}/dashboard/goal-deviations`,
+    UPCOMING_MEETINGS: `${API_BASE}/dashboard/upcoming-meetings`,
+    BOOKMARKED_GOALS: `${API_BASE}/dashboard/bookmarked-goals`,
+    ALERTS: `${API_BASE}/dashboard/alerts`,
+  },
+
   // Portfolio Snapshots (alternative structure for backward compatibility)
   PORTFOLIO_SNAPSHOTS: {
     CONFIG_BASE: `${API_BASE}/cruise-control/snapshots/config`,

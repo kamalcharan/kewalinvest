@@ -30,6 +30,7 @@ import schemeAliasRoutes from './routes/schemeAlias.routes';
 import bookmarkRoutes from './routes/bookmark.routes';
 import jobsRoutes from './routes/jobs.routes';
 import cruiseControlRoutes from './routes/cruiseControl.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -215,6 +216,7 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/cruise-control', cruiseControlRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
