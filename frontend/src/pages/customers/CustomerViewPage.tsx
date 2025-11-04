@@ -50,12 +50,14 @@ const CustomerViewPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const customerId = id ? parseInt(id) : null;
-  
+
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions') || 'overview';
+  const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
+
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'individual' | 'family'>('individual');
+  const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
   // Goal modal states
@@ -208,8 +210,12 @@ const CustomerViewPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setSearchParams({ tab: activeTab });
-  }, [activeTab, setSearchParams]);
+    const params: { tab: string; view?: string } = { tab: activeTab };
+    if (viewMode === 'family') {
+      params.view = 'family';
+    }
+    setSearchParams(params);
+  }, [activeTab, viewMode, setSearchParams]);
 
   // Debug viewMode changes
   useEffect(() => {
