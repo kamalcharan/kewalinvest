@@ -1167,8 +1167,8 @@ comparisonData={comparisonIndexData}
                     margin: 0
                   }}>
                     {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.on_track_count} on track •
-                    {goalSummary.watchlist_count} in watchlist
+                    {goalSummary.goals_on_track} on track •
+                    {goalSummary.goals_behind} behind
                   </p>
                 )}
               </div>
