@@ -208,7 +208,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm('Are you sure you want to delete this meeting?')) {
+                  if (window.confirm('Are you sure you want to delete this meeting?')) {
                     onDelete(meeting);
                   }
                 }}
