@@ -119,7 +119,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
               {formatPrice(Math.abs(portfolio.total_returns))}
             </div>
             <div style={{ fontSize: '14px', color: returnColor, marginTop: '4px' }}>
-              {portfolio.total_return_percentage >= 0 ? '+' : ''}{portfolio.total_return_percentage.toFixed(2)}%
+              {portfolio.total_return_percentage >= 0 ? '+' : ''}{Number(portfolio.total_return_percentage).toFixed(2)}%
             </div>
           </div>
         </div>
@@ -301,7 +301,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                     fontSize: '12px',
                     color: member.returns >= 0 ? colors.semantic.success : colors.semantic.error
                   }}>
-                    {member.return_percentage >= 0 ? '+' : ''}{member.return_percentage.toFixed(2)}%
+                    {member.return_percentage >= 0 ? '+' : ''}{Number(member.return_percentage).toFixed(2)}%
                   </div>
                 </div>
               </div>
