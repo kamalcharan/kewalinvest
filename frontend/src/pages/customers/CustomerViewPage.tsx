@@ -14,7 +14,7 @@ import ChartExport from '../../components/visualizations/chartViewer/export/Char
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
-import { useCustomerGoals, useCustomerGoalSummary } from '../../hooks/useGoals';
+import { useCustomerGoals } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
@@ -31,13 +31,13 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
-import { GoalCard } from '../../components/goals/GoalCard';
-import { GoalSetupModal } from '../../components/goals/GoalSetupModal';
-import { GoalDetailsModal } from '../../components/goals/GoalDetailsModal';
+import GoalCard from '../../components/goals/GoalCard';
+import GoalSetupModal from '../../components/goals/GoalSetupModal';
+import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
 import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
-import { GoalRecalculationModal } from '../../components/goals/GoalRecalculationModal';
+import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
@@ -617,10 +617,24 @@ const CustomerViewPage: React.FC = () => {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
         {/* Family View Mode */}
         {viewMode === 'family' && customer.family_code ? (
-          <FamilyPortfolioView
-            familyHeadIwellCode={customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code}
-            onMemberClick={(memberId) => navigate(`/customers/${memberId}`)}
-          />
+          <>
+            {(() => {
+              const familyHeadCode = customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code;
+              console.log('🔍 Family View Debug:', {
+                viewMode,
+                family_code: customer.family_code,
+                is_family_head: customer.is_family_head,
+                iwell_code: customer.iwell_code,
+                family_head_iwell_code: customer.family_head_iwell_code,
+                computed_familyHeadCode: familyHeadCode
+              });
+              return null;
+            })()}
+            <FamilyPortfolioView
+              familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
+              onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
+            />
+          </>
         ) : (
           <>
             {/* Overview Tab */}
@@ -1236,11 +1250,11 @@ comparisonData={comparisonIndexData}
                     <GoalCard
                       key={goal.id}
                       goal={goal}
-                      onEdit={(goalId) => {
+                      onEdit={(goalId: number) => {
                         setSelectedGoalId(goalId);
                         setShowGoalDetailsModal(true);
                       }}
-                      onRecalculate={(goalId) => {
+                      onRecalculate={(goalId: number) => {
                         setSelectedGoalId(goalId);
                         setShowGoalRecalculationModal(true);
                       }}

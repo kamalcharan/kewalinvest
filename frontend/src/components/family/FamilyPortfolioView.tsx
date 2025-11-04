@@ -4,7 +4,8 @@ import React from 'react';
 import { Users, TrendingUp, TrendingDown, Target, Calendar, PieChart } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFamilyPortfolio, useFamilyAssetAllocation, useFamilyGoals, useFamilyMeetings } from '../../hooks/useFamily';
-import { formatCurrency } from '../../utils/formatters';
+import { formatPrice } from '../../utils/formatters';
+import type { FamilyMemberPortfolio, FamilyAssetCategory } from '../../types/family.types';
 
 interface FamilyPortfolioViewProps {
   familyHeadIwellCode: string;
@@ -94,7 +95,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
               Total Invested
             </div>
             <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {formatCurrency(portfolio.total_invested)}
+              {formatPrice(portfolio.total_invested)}
             </div>
           </div>
 
@@ -103,7 +104,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
               Current Value
             </div>
             <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {formatCurrency(portfolio.total_current_value)}
+              {formatPrice(portfolio.total_current_value)}
             </div>
           </div>
 
@@ -113,7 +114,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
             </div>
             <div style={{ fontSize: '28px', fontWeight: '700', color: returnColor, display: 'flex', alignItems: 'center', gap: '8px' }}>
               {portfolio.total_returns >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-              {formatCurrency(Math.abs(portfolio.total_returns))}
+              {formatPrice(Math.abs(portfolio.total_returns))}
             </div>
             <div style={{ fontSize: '14px', color: returnColor, marginTop: '4px' }}>
               {portfolio.total_return_percentage >= 0 ? '+' : ''}{portfolio.total_return_percentage.toFixed(2)}%
@@ -194,7 +195,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
               {assetAllocation.allocations.length}
             </div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              Total value: {formatCurrency(assetAllocation.total_value)}
+              Total value: {formatPrice(assetAllocation.total_value)}
             </div>
           </div>
         )}
@@ -206,7 +207,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
           Family Members Portfolio
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {portfolio.members.map((member) => (
+          {portfolio.members.map((member: FamilyMemberPortfolio) => (
             <div
               key={member.customer_id}
               onClick={() => onMemberClick?.(member.customer_id)}
@@ -270,7 +271,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                     Invested
                   </div>
                   <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-                    {formatCurrency(member.total_invested)}
+                    {formatPrice(member.total_invested)}
                   </div>
                 </div>
 
@@ -279,7 +280,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                     Current Value
                   </div>
                   <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-                    {formatCurrency(member.current_value)}
+                    {formatPrice(member.current_value)}
                   </div>
                 </div>
 
@@ -292,7 +293,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                     fontWeight: '600',
                     color: member.returns >= 0 ? colors.semantic.success : colors.semantic.error
                   }}>
-                    {member.returns >= 0 ? '+' : ''}{formatCurrency(member.returns)}
+                    {member.returns >= 0 ? '+' : ''}{formatPrice(member.returns)}
                   </div>
                   <div style={{
                     fontSize: '12px',
@@ -322,7 +323,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {assetAllocation.allocations.map((allocation, index) => (
+              {assetAllocation.allocations.map((allocation: FamilyAssetCategory, index: number) => (
                 <div key={index}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <div>
@@ -335,7 +336,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-                        {formatCurrency(allocation.value)}
+                        {formatPrice(allocation.value)}
                       </div>
                       <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
                         {allocation.percentage.toFixed(1)}%

@@ -116,15 +116,15 @@ export class FamilyService {
     const memberPortfolios: FamilyMemberPortfolio[] = portfolioResult.rows;
 
     // Calculate totals
-    const totalInvested = memberPortfolios.reduce((sum, m) => sum + parseFloat(m.total_invested), 0);
-    const totalCurrentValue = memberPortfolios.reduce((sum, m) => sum + parseFloat(m.current_value), 0);
+    const totalInvested = memberPortfolios.reduce((sum, m) => sum + Number(m.total_invested), 0);
+    const totalCurrentValue = memberPortfolios.reduce((sum, m) => sum + Number(m.current_value), 0);
     const totalReturns = totalCurrentValue - totalInvested;
     const totalReturnPercentage = totalInvested > 0 ? (totalReturns / totalInvested) * 100 : 0;
 
     // Add portfolio percentage for each member
     const membersWithPercentage = memberPortfolios.map((m) => ({
       ...m,
-      portfolio_percentage: totalCurrentValue > 0 ? (parseFloat(m.current_value) / totalCurrentValue) * 100 : 0
+      portfolio_percentage: totalCurrentValue > 0 ? (Number(m.current_value) / totalCurrentValue) * 100 : 0
     }));
 
     return {
