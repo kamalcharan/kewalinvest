@@ -384,14 +384,7 @@ export const API_ENDPOINTS = {
       STATUS: (importId: number) => `${API_BASE}/files/import/${importId}/status`,
     }
   },
-  
-  // Dashboard endpoints (for future sprints)
-  DASHBOARD: {
-    STATS: `${API_BASE}/dashboard/stats`,
-    RECENT_ACTIVITY: `${API_BASE}/dashboard/recent-activity`,
-    PORTFOLIO_SUMMARY: `${API_BASE}/dashboard/portfolio-summary`,
-  },
-  
+
   // Communication/Alert endpoints (for future sprints)
   COMMUNICATIONS: {
     CAMPAIGNS: `${API_BASE}/communications/campaigns`,

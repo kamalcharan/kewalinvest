@@ -17,7 +17,7 @@ import Register from './pages/auth/Register';
 import MainLayout from './components/layout/MainLayout';
 
 // Dashboard page
-import Dashboard from './pages/Dashboard';
+import Dashboard from './pages/OperationalDashboard';
 
 // NAV Pages
 import NavSearchPage from './pages/nav/NavSearchPage';
