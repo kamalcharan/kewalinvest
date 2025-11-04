@@ -26,6 +26,7 @@ import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
 import meetingRoutes from './routes/meeting.routes';
+import familyRoutes from './routes/family.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
 import bookmarkRoutes from './routes/bookmark.routes';
 import jobsRoutes from './routes/jobs.routes';
@@ -213,6 +214,7 @@ app.use('/api/jtbd', jtbdRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/family', familyRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/cruise-control', cruiseControlRoutes);
 
