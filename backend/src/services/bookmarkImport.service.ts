@@ -63,13 +63,7 @@ export class BookmarkImportService {
         const row = rows[i];
         const rowNumber = i + 1;
 
-        // Create a savepoint for this row
-        const savepointName = `row_${rowNumber}`;
-        
         try {
-          // Start savepoint for this row
-          await client.query(`SAVEPOINT ${savepointName}`);
-
           // Validate row data
           if (!row.scheme_code || !row.scheme_name) {
             errors.push({
@@ -77,7 +71,6 @@ export class BookmarkImportService {
               scheme_code: row.scheme_code || 'MISSING',
               error: 'Missing required fields: scheme_code or scheme_name'
             });
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -101,7 +94,6 @@ export class BookmarkImportService {
               scheme_code: cleanSchemeCode,
               error: `Scheme code not found in master data (t_scheme_details)`
             });
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -143,7 +135,6 @@ export class BookmarkImportService {
           }
 
           // Step 3: Auto-generate aliases for this bookmark
-          // IMPORTANT: Alias failures should NOT block bookmark creation
           const aliasVariations = this.generateAliasVariations(
             cleanSchemeName,        // Customer's name
             masterScheme.scheme_name,    // Master scheme_name
@@ -151,14 +142,7 @@ export class BookmarkImportService {
           );
 
           for (const aliasName of aliasVariations) {
-            // Create a nested savepoint for alias to prevent bookmark rollback
-            const aliasSavepoint = `alias_${rowNumber}_${aliasVariations.indexOf(aliasName)}`;
-            
             try {
-              await client.query(`SAVEPOINT ${aliasSavepoint}`);
-              
-              // NOTE: Aliases are universal/global across all tenants
-              // ON CONFLICT DO NOTHING handles duplicates from other tenants
               const aliasQuery = `
                 INSERT INTO t_scheme_aliases (
                   scheme_id, scheme_code, alias_name, source, created_by
@@ -177,38 +161,14 @@ export class BookmarkImportService {
 
               if (aliasResult.rows.length > 0) {
                 aliasesCreated++;
-              } else {
-                // Alias already exists (from this or another tenant) - this is OK
-                console.log(`[BookmarkImport] Alias "${aliasName}" already exists (universal) - skipping`);
               }
-              
-              // Release alias savepoint on success
-              await client.query(`RELEASE SAVEPOINT ${aliasSavepoint}`);
-              
             } catch (aliasError: any) {
-              // Rollback only the alias savepoint, NOT the bookmark
-              try {
-                await client.query(`ROLLBACK TO SAVEPOINT ${aliasSavepoint}`);
-              } catch (rollbackErr) {
-                // Ignore rollback errors
-              }
-              
               // Log but don't fail bookmark import if alias creation fails
               console.warn(`[BookmarkImport] Alias creation failed for "${aliasName}":`, aliasError.message);
             }
           }
 
-          // Release savepoint if row processed successfully
-          await client.query(`RELEASE SAVEPOINT ${savepointName}`);
-
         } catch (error: any) {
-          // Rollback to savepoint to continue with next row
-          try {
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-          } catch (rollbackError) {
-            console.error(`[BookmarkImport] Failed to rollback savepoint for row ${rowNumber}:`, rollbackError);
-          }
-          
           errors.push({
             row: rowNumber,
             scheme_code: row.scheme_code || 'UNKNOWN',
