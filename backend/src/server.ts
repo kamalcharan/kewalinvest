@@ -2,6 +2,7 @@
 // UPDATED: Added bookmark routes and time-series analytics route
 // UPDATED: Added Jobs Scheduler and Cruise Control routes
 // UPDATED: Added Portfolio Snapshot operations routes
+// UPDATED: Added Market Analysis bulk metrics calculation
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -126,6 +127,7 @@ app.get('/health', (_req: Request, res: Response) => {
       market_downloads: true,
       market_analysis: true,
       market_analysis_metrics: true,
+      market_analysis_bulk_metrics: true, // NEW: Bulk metrics calculation for multiple indices
       market_analysis_dashboard: true,
       market_analysis_returns: true,
       market_analysis_volatility: true,
@@ -388,6 +390,7 @@ app.use((_req: Request, res: Response) => {
       // Market Analysis endpoints
       'GET /api/market-analysis/health',
       'POST /api/market-analysis/calculate-metrics/:indexId',
+      'POST /api/market-analysis/bulk-calculate-metrics', // NEW: Bulk metrics calculation
       'GET /api/market-analysis/metrics/:indexId',
       'GET /api/market-analysis/dashboard-statistics',
       'GET /api/market-analysis/index-returns',
@@ -680,7 +683,8 @@ app.listen(PORT, async () => {
 ║                                        ║
 ║  📈 Market Analysis:                   ║
 ║  • GET  /api/market-analysis/health    ║
-║  • POST /api/market-analysis/calc      ║
+║  • POST /api/market-analysis/calc/:id  ║
+║  • POST /api/market-analysis/bulk-calc ║
 ║  • GET  /api/market-analysis/metrics   ║
 ║  • GET  /api/market-analysis/dashboard ║
 ║  • GET  /api/market-analysis/returns   ║
@@ -822,6 +826,7 @@ app.listen(PORT, async () => {
     console.log('✅ Market data downloads ready');
     console.log('✅ Market analysis endpoints ready');
     console.log('✅ Market analysis metrics endpoints ready');
+    console.log('✅ Market analysis bulk metrics calculation ready'); // NEW
     console.log('✅ Market analysis dashboard endpoints ready');
     console.log('✅ Market analysis returns endpoints ready');
     console.log('✅ Market analysis volatility endpoints ready');
@@ -927,6 +932,7 @@ app.listen(PORT, async () => {
 ║  Market Downloads: ✅ Ready            ║
 ║  Market Analysis: ✅ Ready             ║
 ║  Market Analysis Metrics: ✅ Ready     ║
+║  Market Analysis Bulk Calc: ✅ Ready   ║
 ║  Market Analysis Dashboard: ✅ Ready   ║
 ║  Market Analysis Returns: ✅ Ready     ║
 ║  Market Analysis Volatility: ✅ Ready  ║

@@ -2,6 +2,7 @@
 // Market Data Download Service - Orchestrates downloads from Yahoo Finance
 
 import { MarketService, CreateMarketDataRequest } from './market.service';
+import { MarketIndex } from '../types/market.types';
 import { YahooFinanceService, YahooFinanceRecord } from './yahooFinance.service';
 import { SimpleLogger } from './simpleLogger.service';
 
@@ -23,6 +24,47 @@ export class MarketDownloadService {
   constructor() {
     this.marketService = new MarketService();
     this.yahooService = new YahooFinanceService();
+  }
+
+  // ==================== PROVIDER VALIDATION ====================
+
+  /**
+   * Validate that the index has a configured and enabled data provider
+   */
+  private validateProvider(index: any): { valid: boolean; error?: string } {
+    // Check if provider is enabled
+    if (!index.provider_enabled) {
+      return {
+        valid: false,
+        error: `Data provider not enabled for ${index.index_name}. Current provider: ${index.data_provider}`
+      };
+    }
+
+    // Check if provider is configured
+    if (index.data_provider === 'not_configured') {
+      return {
+        valid: false,
+        error: `Data provider not configured for ${index.index_name}. Please configure a data provider first.`
+      };
+    }
+
+    // Currently only Yahoo Finance is supported
+    if (index.data_provider !== 'yahoo_finance') {
+      return {
+        valid: false,
+        error: `Data provider '${index.data_provider}' not yet supported for ${index.index_name}. Currently only 'yahoo_finance' is supported.`
+      };
+    }
+
+    // Check if provider symbol exists
+    if (!index.provider_symbol) {
+      return {
+        valid: false,
+        error: `Provider symbol not configured for ${index.index_name}`
+      };
+    }
+
+    return { valid: true };
   }
 
   // ==================== HISTORICAL DOWNLOAD ====================
@@ -49,10 +91,17 @@ export class MarketDownloadService {
         throw new Error('Index not found');
       }
 
+      // ====== NEW: Validate provider ======
+      const providerValidation = this.validateProvider(index);
+      if (!providerValidation.valid) {
+        throw new Error(providerValidation.error);
+      }
+
       SimpleLogger.info('MarketDownload', 'Starting historical download', 'downloadHistoricalData', {
         indexId,
         indexName: index.index_name,
-        yahooSymbol: index.yahoo_symbol,
+        provider: index.data_provider,
+        providerSymbol: index.provider_symbol,
         dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
         skipExisting
       });
@@ -107,9 +156,9 @@ export class MarketDownloadService {
         status: 'running'
       });
 
-      // Download data from Yahoo Finance
+      // ====== MODIFIED: Use provider_symbol instead of yahoo_symbol ======
       const yahooResponse = await this.yahooService.downloadHistoricalData(
-        index.yahoo_symbol,
+        index.provider_symbol,
         startDate,
         endDate,
         {
@@ -228,6 +277,99 @@ export class MarketDownloadService {
     }
   }
 
+  // ==================== NEW: BULK HISTORICAL DOWNLOAD ====================
+
+  /**
+   * Download historical data for multiple indices sequentially
+   * @param indexIds Array of index IDs to download
+   * @param startDate Start date for download
+   * @param endDate End date for download
+   * @param onProgress Optional callback for progress updates
+   */
+  async bulkDownloadHistorical(
+    indexIds: number[],
+    startDate: Date,
+    endDate: Date,
+    onProgress?: (current: number, total: number, result: DownloadResult) => void
+  ): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+    results: DownloadResult[];
+  }> {
+    const startTime = Date.now();
+
+    try {
+      SimpleLogger.info('MarketDownload', 'Starting bulk historical download', 'bulkDownloadHistorical', {
+        totalIndices: indexIds.length,
+        dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+      });
+
+      const results: DownloadResult[] = [];
+      let successful = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (let i = 0; i < indexIds.length; i++) {
+        const indexId = indexIds[i];
+
+        SimpleLogger.info('MarketDownload', `Processing bulk download ${i + 1}/${indexIds.length}`, 'bulkDownloadHistorical', {
+          indexId,
+          progress: `${i + 1}/${indexIds.length}`
+        });
+
+        const result = await this.downloadHistoricalData(indexId, startDate, endDate, true);
+        results.push(result);
+
+        if (result.success) {
+          if (result.recordsInserted > 0 || result.recordsUpdated > 0) {
+            successful++;
+          } else {
+            skipped++;
+          }
+        } else {
+          failed++;
+        }
+
+        // Call progress callback if provided
+        if (onProgress) {
+          onProgress(i + 1, indexIds.length, result);
+        }
+
+        // Rate limiting: 1 second delay between downloads (except last one)
+        if (i < indexIds.length - 1) {
+          await this.sleep(1000);
+        }
+      }
+
+      const totalTime = Date.now() - startTime;
+
+      SimpleLogger.info('MarketDownload', 'Bulk historical download completed', 'bulkDownloadHistorical', {
+        total: indexIds.length,
+        successful,
+        failed,
+        skipped,
+        executionTimeMs: totalTime
+      });
+
+      return {
+        total: indexIds.length,
+        successful,
+        failed,
+        skipped,
+        results
+      };
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketDownload', 'Bulk historical download failed', 'bulkDownloadHistorical', {
+        error: error.message
+      }, undefined, undefined, error.stack);
+
+      throw error;
+    }
+  }
+
   // ==================== EOD DOWNLOAD ====================
 
   /**
@@ -243,10 +385,17 @@ export class MarketDownloadService {
         throw new Error('Index not found');
       }
 
+      // ====== NEW: Validate provider ======
+      const providerValidation = this.validateProvider(index);
+      if (!providerValidation.valid) {
+        throw new Error(providerValidation.error);
+      }
+
       SimpleLogger.info('MarketDownload', 'Starting EOD download', 'downloadEODData', {
         indexId,
         indexName: index.index_name,
-        yahooSymbol: index.yahoo_symbol
+        provider: index.data_provider,
+        providerSymbol: index.provider_symbol
       });
 
       // Create download job
@@ -262,9 +411,9 @@ export class MarketDownloadService {
         status: 'running'
       });
 
-      // Download latest data from Yahoo Finance
+      // ====== MODIFIED: Use provider_symbol instead of yahoo_symbol ======
       const yahooResponse = await this.yahooService.downloadLatestData(
-        index.yahoo_symbol,
+        index.provider_symbol,
         {
           requestId: `eod_${index.index_code}_${job.id}`,
           retryAttempts: 3,
@@ -418,14 +567,20 @@ export class MarketDownloadService {
     try {
       SimpleLogger.info('MarketDownload', 'Starting bulk EOD download for all indices', 'downloadEODForAllIndices');
 
-      // Get all active indices
+      // ====== MODIFIED: Filter for enabled providers only ======
       const { indices } = await this.marketService.getAllIndices({
         page: 1,
         page_size: 1000
       });
 
-      if (indices.length === 0) {
-        SimpleLogger.warn('MarketDownload', 'No active indices found for EOD download', 'downloadEODForAllIndices');
+      // Filter for only provider-enabled indices
+      const enabledIndices = indices.filter(idx => idx.provider_enabled);
+
+      if (enabledIndices.length === 0) {
+        SimpleLogger.warn('MarketDownload', 'No provider-enabled indices found for EOD download', 'downloadEODForAllIndices', {
+          totalIndices: indices.length,
+          enabledIndices: 0
+        });
         return {
           total: 0,
           successful: 0,
@@ -435,16 +590,21 @@ export class MarketDownloadService {
         };
       }
 
+      SimpleLogger.info('MarketDownload', 'Processing EOD for provider-enabled indices', 'downloadEODForAllIndices', {
+        totalIndices: indices.length,
+        enabledIndices: enabledIndices.length
+      });
+
       const results: DownloadResult[] = [];
       let successful = 0;
       let failed = 0;
       let skipped = 0;
 
-      // Download for each index with rate limiting
-      for (let i = 0; i < indices.length; i++) {
-        const index = indices[i];
+      // Download for each enabled index with rate limiting
+      for (let i = 0; i < enabledIndices.length; i++) {
+        const index = enabledIndices[i];
         
-        SimpleLogger.info('MarketDownload', `Processing EOD for index ${i + 1}/${indices.length}`, 'downloadEODForAllIndices', {
+        SimpleLogger.info('MarketDownload', `Processing EOD for index ${i + 1}/${enabledIndices.length}`, 'downloadEODForAllIndices', {
           indexId: index.id,
           indexName: index.index_name
         });
@@ -463,7 +623,7 @@ export class MarketDownloadService {
         }
 
         // Rate limiting: wait 500ms between requests (except for last one)
-        if (i < indices.length - 1) {
+        if (i < enabledIndices.length - 1) {
           await this.sleep(500);
         }
       }
@@ -471,7 +631,7 @@ export class MarketDownloadService {
       const totalTime = Date.now() - startTime;
 
       SimpleLogger.info('MarketDownload', 'Bulk EOD download completed', 'downloadEODForAllIndices', {
-        total: indices.length,
+        total: enabledIndices.length,
         successful,
         failed,
         skipped,
@@ -479,7 +639,7 @@ export class MarketDownloadService {
       });
 
       return {
-        total: indices.length,
+        total: enabledIndices.length,
         successful,
         failed,
         skipped,
@@ -528,7 +688,7 @@ export class MarketDownloadService {
     }
 
     // Check if date range is too large (more than 20 years)
-    const maxRangeDays = Math.floor(20 * 365.25)
+    const maxRangeDays = Math.floor(20 * 365.25);
     const rangeDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     
     if (rangeDays > maxRangeDays) {

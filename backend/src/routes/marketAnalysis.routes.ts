@@ -62,6 +62,45 @@ router.get(
 );
 
 /**
+ * @route   POST /api/market-analysis/bulk-calculate-metrics
+ * @desc    Calculate metrics for multiple indices sequentially
+ * @body    { index_ids: number[], recalculate?: boolean }
+ * @access  Private
+ * 
+ * Request body:
+ * {
+ *   index_ids: number[],      // Array of index IDs (max 50)
+ *   recalculate?: boolean     // If true, recalculate all records (default: false)
+ * }
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   summary: {
+ *     total_indices: number,
+ *     successful: number,
+ *     failed: number,
+ *     total_records_processed: number,
+ *     total_time_ms: number,
+ *     average_time_per_index_ms: number
+ *   },
+ *   results: Array<{
+ *     index_id: number,
+ *     index_name: string,
+ *     success: boolean,
+ *     records_processed: number,
+ *     error?: string,
+ *     calculation_time_ms: number
+ *   }>,
+ *   message: string
+ * }
+ */
+router.post(
+  '/bulk-calculate-metrics',
+  marketAnalysisController.bulkCalculateMetrics
+);
+
+/**
  * @route   GET /api/market-analysis/index-returns
  * @desc    Get time-series returns data for an index
  * @query   index_id (required), periods, start_date, end_date, granularity

@@ -329,162 +329,220 @@ END $$;
 -- Tracking fields (total_records, dates, download status) are NULL initially
 -- Will be populated when users download historical data via UI
 -- ----------------------------------------------------------------------------
+-- ========================================
+-- SEED DATA: Market Indices with Provider Configuration
+-- Date: 2025-01-XX
+-- Purpose: Insert all 50 NSE indices with provider setup
+-- ========================================
+
 INSERT INTO t_market_indices (
     index_code, index_name, yahoo_symbol, category, 
-    description, is_active, priority
+    description, is_active, priority,
+    data_provider, provider_symbol, provider_enabled
 ) VALUES
     -- BROAD MARKET INDICES (Priority 1-15)
     ('NSEI', 'Nifty 50', '^NSEI', 'broad', 
-     'Top 50 companies by market cap on NSE', TRUE, 1),
+     'Top 50 companies by market cap on NSE', TRUE, 1,
+     'yahoo_finance', '^NSEI', TRUE),
     
     ('NSMIDCP', 'Nifty Next 50', '^NSMIDCP', 'broad',
-     'Next 50 companies after Nifty 50', TRUE, 2),
+     'Next 50 companies after Nifty 50', TRUE, 2,
+     'not_configured', NULL, FALSE),
     
     ('CNX100', 'Nifty 100', '^CNX100', 'broad',
-     'Top 100 companies - Nifty 50 + Next 50', TRUE, 3),
+     'Top 100 companies - Nifty 50 + Next 50', TRUE, 3,
+     'yahoo_finance', '^CNX100', TRUE),
     
     ('CNX200', 'Nifty 200', '^CNX200', 'broad',
-     'Top 200 companies by market cap', TRUE, 4),
+     'Top 200 companies by market cap', TRUE, 4,
+     'not_configured', NULL, FALSE),
     
     ('CNX500', 'Nifty 500', '^CNX500', 'broad',
-     'Top 500 companies - broad market index', TRUE, 5),
+     'Top 500 companies - broad market index', TRUE, 5,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMID50', 'Nifty Midcap 50', '^NSEMDCP50', 'broad',
-     'Top 50 mid-cap companies', TRUE, 6),
+     'Top 50 mid-cap companies', TRUE, 6,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMID100', 'Nifty Midcap 100', '^NSEMDCP100', 'broad',
-     'Top 100 mid-cap companies', TRUE, 7),
+     'Top 100 mid-cap companies', TRUE, 7,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMID150', 'Nifty Midcap 150', '^NSEMDCP150', 'broad',
-     'Top 150 mid-cap companies', TRUE, 8),
+     'Top 150 mid-cap companies', TRUE, 8,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYSML50', 'Nifty Smallcap 50', '^NSMCP50', 'broad',
-     'Top 50 small-cap companies', TRUE, 9),
+     'Top 50 small-cap companies', TRUE, 9,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYSML100', 'Nifty Smallcap 100', '^NSMCP100', 'broad',
-     'Top 100 small-cap companies', TRUE, 10),
+     'Top 100 small-cap companies', TRUE, 10,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYSML250', 'Nifty Smallcap 250', '^NSMCP250', 'broad',
-     'Top 250 small-cap companies', TRUE, 11),
+     'Top 250 small-cap companies', TRUE, 11,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMICRO250', 'Nifty Microcap 250', '^CNXMICRO', 'broad',
-     'Top 250 micro-cap companies', TRUE, 12),
+     'Top 250 micro-cap companies', TRUE, 12,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYLRGMID250', 'Nifty LargeMidcap 250', '^CNXLRGMID', 'broad',
-     'Large and mid-cap companies combined', TRUE, 13),
+     'Large and mid-cap companies combined', TRUE, 13,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYTM', 'Nifty Total Market', '^NIFTYTM', 'broad',
-     'Represents entire NSE market', TRUE, 14),
+     'Represents entire NSE market', TRUE, 14,
+     'not_configured', NULL, FALSE),
     
     ('INDIAVIX', 'India VIX', '^INDIAVIX', 'broad',
-     'Volatility Index - market fear gauge', TRUE, 15),
+     'Volatility Index - market fear gauge', TRUE, 15,
+     'not_configured', NULL, FALSE),
     
     -- SECTORAL INDICES (Priority 20-39)
     ('BANKNIFTY', 'Nifty Bank', '^NSEBANK', 'sectoral',
-     'Banking sector index', TRUE, 20),
+     'Banking sector index', TRUE, 20,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYIT', 'Nifty IT', '^CNXIT', 'sectoral',
-     'Information Technology sector', TRUE, 21),
+     'Information Technology sector', TRUE, 21,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYAUTO', 'Nifty Auto', '^CNXAUTO', 'sectoral',
-     'Automobile sector index', TRUE, 22),
+     'Automobile sector index', TRUE, 22,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYFMCG', 'Nifty FMCG', '^CNXFMCG', 'sectoral',
-     'Fast Moving Consumer Goods sector', TRUE, 23),
+     'Fast Moving Consumer Goods sector', TRUE, 23,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYPHARMA', 'Nifty Pharma', '^CNXPHARMA', 'sectoral',
-     'Pharmaceutical sector index', TRUE, 24),
+     'Pharmaceutical sector index', TRUE, 24,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMETAL', 'Nifty Metal', '^CNXMETAL', 'sectoral',
-     'Metals and mining sector', TRUE, 25),
+     'Metals and mining sector', TRUE, 25,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYREALTY', 'Nifty Realty', '^CNXREALTY', 'sectoral',
-     'Real estate sector index', TRUE, 26),
+     'Real estate sector index', TRUE, 26,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYENERGY', 'Nifty Energy', '^CNXENERGY', 'sectoral',
-     'Energy sector index', TRUE, 27),
+     'Energy sector index', TRUE, 27,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYFINSRV', 'Nifty Financial Services', '^CNXFIN', 'sectoral',
-     'Financial services sector', TRUE, 28),
+     'Financial services sector', TRUE, 28,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMEDIA', 'Nifty Media', '^CNXMEDIA', 'sectoral',
-     'Media and entertainment sector', TRUE, 29),
+     'Media and entertainment sector', TRUE, 29,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYPVTBANK', 'Nifty Private Bank', '^NIFTYPVTBANK', 'sectoral',
-     'Private sector banks', TRUE, 30),
+     'Private sector banks', TRUE, 30,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYPSUBANK', 'Nifty PSU Bank', '^NIFTYPSUBANK', 'sectoral',
-     'Public sector banks', TRUE, 31),
+     'Public sector banks', TRUE, 31,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYOILGAS', 'Nifty Oil & Gas', '^CNXOILGAS', 'sectoral',
-     'Oil and gas sector', TRUE, 32),
+     'Oil and gas sector', TRUE, 32,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYHEALTH', 'Nifty Healthcare', '^CNXHEALTH', 'sectoral',
-     'Healthcare sector index', TRUE, 33),
+     'Healthcare sector index', TRUE, 33,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYCONSDUR', 'Nifty Consumer Durables', '^CNXCONSDUR', 'sectoral',
-     'Consumer durables sector', TRUE, 34),
+     'Consumer durables sector', TRUE, 34,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYCOMMODITIES', 'Nifty Commodities', '^CNXCOMMODITIES', 'sectoral',
-     'Commodities sector index', TRUE, 35),
+     'Commodities sector index', TRUE, 35,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYINFRA', 'Nifty Infrastructure', '^CNXINFRA', 'sectoral',
-     'Infrastructure sector', TRUE, 36),
+     'Infrastructure sector', TRUE, 36,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYSERV', 'Nifty Services', '^CNXSERVICE', 'sectoral',
-     'Services sector index', TRUE, 37),
+     'Services sector index', TRUE, 37,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMNC', 'Nifty MNC', '^NIFTYMNC', 'sectoral',
-     'Multinational corporations', TRUE, 38),
+     'Multinational corporations', TRUE, 38,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYPSE', 'Nifty PSE', '^NIFTYPSE', 'sectoral',
-     'Public sector enterprises', TRUE, 39),
+     'Public sector enterprises', TRUE, 39,
+     'not_configured', NULL, FALSE),
     
     -- THEMATIC INDICES (Priority 40-54)
     ('NIFTYDIV50', 'Nifty Dividend Opportunities 50', '^NIFTYDIV50', 'thematic',
-     'High dividend yielding stocks', TRUE, 40),
+     'High dividend yielding stocks', TRUE, 40,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYGS15', 'Nifty Growth Sectors 15', '^NIFTYGS15', 'thematic',
-     'Growth-oriented sectors', TRUE, 41),
+     'Growth-oriented sectors', TRUE, 41,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYCONSUM', 'Nifty India Consumption', '^NIFTYCONSUM', 'thematic',
-     'Consumption theme index', TRUE, 42),
+     'Consumption theme index', TRUE, 42,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYDIGITAL', 'Nifty India Digital', '^NIFTYDIGITAL', 'thematic',
-     'Digital economy theme', TRUE, 43),
+     'Digital economy theme', TRUE, 43,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMFG', 'Nifty India Manufacturing', '^NIFTYMFG', 'thematic',
-     'Manufacturing theme index', TRUE, 44),
+     'Manufacturing theme index', TRUE, 44,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYHOUSING', 'Nifty Housing', '^NIFTYHOUSING', 'thematic',
-     'Housing and real estate theme', TRUE, 45),
+     'Housing and real estate theme', TRUE, 45,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYTRANSPORT', 'Nifty Transport & Logistics', '^NIFTYTRANSPORT', 'thematic',
-     'Transportation sector', TRUE, 46),
+     'Transportation sector', TRUE, 46,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMOBILITY', 'Nifty Mobility', '^NIFTYMOBILITY', 'thematic',
-     'Mobility and transportation theme', TRUE, 47),
+     'Mobility and transportation theme', TRUE, 47,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYMIDSML400', 'Nifty MidSmallcap 400', '^NIFTYMIDSML400', 'thematic',
-     'Mid and small-cap combination', TRUE, 48),
+     'Mid and small-cap combination', TRUE, 48,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYQLTY30', 'Nifty Quality 30', '^NIFTYQLTY30', 'thematic',
-     'Quality stocks based on ROE, financial leverage, and earnings stability', TRUE, 49),
+     'Quality stocks based on ROE, financial leverage, and earnings stability', TRUE, 49,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYALPHA50', 'Nifty Alpha 50', '^NIFTYALPHA50', 'thematic',
-     'High alpha generating stocks', TRUE, 50),
+     'High alpha generating stocks', TRUE, 50,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYLOWVOL30', 'Nifty Low Volatility 30', '^NIFTYLOWVOL30', 'thematic',
-     'Low volatility stocks', TRUE, 51),
+     'Low volatility stocks', TRUE, 51,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYCPSE', 'Nifty CPSE', '^NIFTYCPSE', 'thematic',
-     'Central Public Sector Enterprises', TRUE, 52),
+     'Central Public Sector Enterprises', TRUE, 52,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYSME', 'Nifty SME Emerge', '^NIFTYSME', 'thematic',
-     'Small and Medium Enterprises', TRUE, 53),
+     'Small and Medium Enterprises', TRUE, 53,
+     'not_configured', NULL, FALSE),
     
     ('NIFTYRURAL', 'Nifty Rural', '^NIFTYRURAL', 'thematic',
-     'Rural economy theme index', TRUE, 54)
+     'Rural economy theme index', TRUE, 54,
+     'not_configured', NULL, FALSE)
+
 ON CONFLICT (index_code) DO UPDATE 
     SET index_name = EXCLUDED.index_name,
         yahoo_symbol = EXCLUDED.yahoo_symbol,
@@ -492,8 +550,37 @@ ON CONFLICT (index_code) DO UPDATE
         description = EXCLUDED.description,
         is_active = EXCLUDED.is_active,
         priority = EXCLUDED.priority,
+        data_provider = EXCLUDED.data_provider,
+        provider_symbol = EXCLUDED.provider_symbol,
+        provider_enabled = EXCLUDED.provider_enabled,
         updated_at = CURRENT_TIMESTAMP;
 
+-- ========================================
+-- VERIFICATION QUERIES
+-- ========================================
+
+-- Count by provider
+SELECT 
+    data_provider,
+    provider_enabled,
+    COUNT(*) as count
+FROM t_market_indices
+GROUP BY data_provider, provider_enabled
+ORDER BY data_provider, provider_enabled;
+
+-- Expected output:
+-- yahoo_finance  | true  | 2   (NSEI, CNX100)
+-- not_configured | false | 48  (all others)
+
+-- List enabled indices
+SELECT index_code, index_name, data_provider, provider_symbol
+FROM t_market_indices
+WHERE provider_enabled = true
+ORDER BY priority;
+
+-- Expected output:
+-- NSEI    | Nifty 50   | yahoo_finance | ^NSEI
+-- CNX100  | Nifty 100  | yahoo_finance | ^CNX100
 DO $$
 BEGIN
     RAISE NOTICE 'Market Indices seeded: % total (% active)',

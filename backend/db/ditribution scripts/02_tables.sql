@@ -1053,6 +1053,8 @@ CREATE TABLE t_market_indices (
     description TEXT,
     is_active BOOLEAN DEFAULT true,
     priority INTEGER DEFAULT 0,
+    
+    -- Download tracking fields
     total_records INTEGER DEFAULT 0,
     earliest_date DATE,
     latest_date DATE,
@@ -1060,16 +1062,39 @@ CREATE TABLE t_market_indices (
     last_download_at TIMESTAMP,
     last_download_error TEXT,
     historical_data_available BOOLEAN DEFAULT false,
+    
+    -- EOD retry fields
     next_eod_retry_at TIMESTAMP,
     eod_retry_count INTEGER DEFAULT 0,
     last_successful_eod_download_at TIMESTAMP,
+    
+    -- NEW: Data provider fields (added in migration 06)
+    data_provider VARCHAR(50) DEFAULT 'not_configured',
+    provider_symbol VARCHAR(100),
+    provider_enabled BOOLEAN DEFAULT false,
+    
+    -- Timestamp fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT chk_data_provider 
+        CHECK (data_provider IN ('yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'))
 );
 
-COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Yahoo Finance integration';
-COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
+-- Table comments
+COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with multi-provider support';
+COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50) - kept for backward compatibility';
 COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
+COMMENT ON COLUMN t_market_indices.data_provider IS 'Data source provider: yahoo_finance, nse_official, google_sheets, or not_configured';
+COMMENT ON COLUMN t_market_indices.provider_symbol IS 'Provider-specific symbol (e.g., ^NSEI for Yahoo, NIFTY 50 for NSE)';
+COMMENT ON COLUMN t_market_indices.provider_enabled IS 'Whether data provider is configured and enabled for this index';
+
+-- Indexes
+CREATE INDEX idx_market_indices_code ON t_market_indices(index_code) WHERE is_active = true;
+CREATE INDEX idx_market_indices_category ON t_market_indices(category) WHERE is_active = true;
+CREATE INDEX idx_market_indices_provider ON t_market_indices(data_provider, provider_enabled) WHERE is_active = true;
+*/
 
 -- Add foreign key constraint to t_tenants now that t_market_indices exists
 ALTER TABLE t_tenants

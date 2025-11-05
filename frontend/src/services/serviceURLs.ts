@@ -1,6 +1,7 @@
 // frontend/src/services/serviceURLs.ts
 // UPDATED: Added NAV time-series analytics endpoint
 // UPDATED: Added Portfolio Snapshot endpoints
+// UPDATED: Added Market Analysis bulk metrics calculation endpoint
 
 // API Base URL from environment variable
 const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
@@ -331,6 +332,7 @@ export const API_ENDPOINTS = {
   MARKET_ANALYSIS: {
     HEALTH: `${API_BASE}/market-analysis/health`,
     CALCULATE_METRICS: (indexId: number) => `${API_BASE}/market-analysis/calculate-metrics/${indexId}`,
+    BULK_CALCULATE_METRICS: `${API_BASE}/market-analysis/bulk-calculate-metrics`, // NEW: Bulk metrics calculation
     GET_METRICS: (indexId: number) => `${API_BASE}/market-analysis/metrics/${indexId}`,
     DASHBOARD_STATISTICS: `${API_BASE}/market-analysis/dashboard-statistics`,
     INDEX_RETURNS: `${API_BASE}/market-analysis/index-returns`,
@@ -929,6 +931,10 @@ export const MARKET_ANALYSIS_URLS = {
   calculateMetrics: (indexId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.CALCULATE_METRICS(indexId)}${buildQueryParams(params || {}, environment)}`,
   
+  // NEW: Bulk metrics calculation helper
+  bulkCalculateMetrics: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS}${buildQueryParams(params || {}, environment)}`,
+  
   getLatestMetrics: (indexId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.GET_METRICS(indexId)}${buildQueryParams({}, environment)}`,
   
@@ -1042,6 +1048,7 @@ if (process.env.NODE_ENV === 'development') {
   console.log('📊 Market Analysis Endpoints:', {
     HEALTH: API_ENDPOINTS.MARKET_ANALYSIS.HEALTH,
     CALCULATE_METRICS: 'POST /api/market-analysis/calculate-metrics/:indexId',
+    BULK_CALCULATE_METRICS: API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS, // NEW
     GET_METRICS: 'GET /api/market-analysis/metrics/:indexId',
     DASHBOARD_STATISTICS: API_ENDPOINTS.MARKET_ANALYSIS.DASHBOARD_STATISTICS,
     INDEX_RETURNS: API_ENDPOINTS.MARKET_ANALYSIS.INDEX_RETURNS,
