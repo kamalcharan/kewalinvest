@@ -1,31 +1,35 @@
 -- ============================================================================
 -- File: 05_seed_data.sql
--- Description: Seed data for transaction types and initial tenants
--- Purpose: Master data and test tenants for INITIAL DATABASE SETUP
+-- Description: Seed data for global master data and admin tenants
+-- Purpose: Master data for INITIAL DATABASE SETUP
 -- Execution: Run FIFTH (last) after 04_functions_views_policies.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-01-23 - Added automatic tenant seeding on signup
+-- Updated: 2025-01-30 - Added market indices, clarified admin tenant structure
 -- ============================================================================
 --
 -- IMPORTANT NOTES:
 -- ================
--- 1. NEW TENANT SIGNUP: Starting from 2025-01-23, when a new tenant signs up
---    via the /register endpoint, the following data is AUTOMATICALLY seeded:
---    - Transaction types (17 types) for both LIVE and TEST environments
---    - Bookmark reasons (8 reasons) for both LIVE and TEST environments
---    See: backend/src/services/tenantSeed.service.ts
+-- 1. GLOBAL MASTER DATA: This script seeds GLOBAL master data shared across
+--    all tenants:
+--    - Transaction Types (7 types)
+--    - Job Types (1 type: PORTFOLIO_SNAPSHOT)
+--    - Market Indices (50 NSE indices)
 --
--- 2. THIS SCRIPT PURPOSE: This script is now primarily used for:
---    - Initial database setup (fresh deployment)
---    - Seeding pre-existing tenants (Kewal, Staging, QA) during deployment
---    - Backfilling data for tenants created before auto-seeding was implemented
---    - Development/testing environments where you need multiple tenants setup
+-- 2. ADMIN TENANTS (IDs 1-3): Pre-configured admin/system tenants for
+--    deployment with full configuration:
+--    - Tenant records (marked with is_admin=true)
+--    - Bookmark Reasons (8 reasons × 2 environments per tenant)
+--    - IDs 1-3 are reserved for: Kewal, Staging, QA
 --
--- 3. DEPLOYMENT: When deploying to a client:
---    - Run this script ONCE during initial setup to seed pre-configured tenants
---    - Future tenants will be automatically seeded via the signup flow
---    - No need to modify this script when adding new tenants via signup
+-- 3. CLIENT TENANTS (ID 4+): Created via /register endpoint with automatic
+--    seeding via tenantSeed.service.ts:
+--    - Bookmark Reasons (8 reasons × 2 environments)
+--    - Job Scheduler Configs
+--    - Portfolio Snapshot Configs
+--
+-- 4. MARKET INDICES: Seeded with NULL tracking data. Historical data will be
+--    populated when users download data via the Market Indices management UI.
 --
 -- ============================================================================
 
@@ -100,8 +104,7 @@ VALUES
     ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE, 
      'Systematic transfer of funds to another scheme (outgoing)'),
     
-    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 
-     'Withdrawal or redemption of invested funds'),
+    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 'Withdrawal or redemption of invested funds'),
     
     ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE, 
      'Funds moved out by switching to another scheme')
@@ -120,57 +123,85 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- SECTION 3: SEED TENANTS
+-- SECTION 3: SEED JOB TYPES
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seeding Job Types';
+    RAISE NOTICE '========================================';
+END $$;
+
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active) VALUES
+('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true)
+ON CONFLICT (code) DO UPDATE
+    SET name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        default_cron_expression = EXCLUDED.default_cron_expression,
+        default_max_retries = EXCLUDED.default_max_retries,
+        is_active = EXCLUDED.is_active,
+        updated_at = CURRENT_TIMESTAMP;
+
+DO $$
+BEGIN
+    RAISE NOTICE 'Job types seeded: % total, % active',
+        (SELECT COUNT(*) FROM m_job_types),
+        (SELECT COUNT(*) FROM m_job_types WHERE is_active = true);
+END $$;
+
+-- ============================================================================
+-- SECTION 4: SEED ADMIN TENANTS
 -- ============================================================================
 DO $$ 
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Seeding Tenants';
+    RAISE NOTICE 'Seeding Admin Tenants';
     RAISE NOTICE '========================================';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- Insert initial tenants
--- ID 1: Primary/Production tenant
--- ID 2: Staging/UAT tenant
--- ID 3: QA/Testing tenant
+-- Insert admin tenants for initial deployment
+-- NOTE: is_admin flag marks these as system/admin tenants
+-- IDs 1-3 are reserved for admin purposes
+-- Client tenants created via /register start from ID 4+
 -- ----------------------------------------------------------------------------
-INSERT INTO t_tenants (id, tenant_name, tenant_code, is_active, created_at, updated_at)
+INSERT INTO t_tenants (id, tenant_name, tenant_code, is_admin, is_active, created_at, updated_at)
 VALUES 
-    (1, 'Kewal Investments', 'KEWAL', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    (2, 'Staging Environment', 'STAGING', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    (3, 'QA Tenant', 'QA', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    (1, 'Kewal Investments', 'KEWAL', TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    (2, 'Staging Environment', 'STAGING', TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    (3, 'QA Tenant', 'QA', TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE 
     SET tenant_name = EXCLUDED.tenant_name,
         tenant_code = EXCLUDED.tenant_code,
+        is_admin = EXCLUDED.is_admin,
         is_active = EXCLUDED.is_active,
         updated_at = CURRENT_TIMESTAMP;
 
--- Reset sequence to highest ID to prevent conflicts
+-- Reset sequence to highest ID to prevent conflicts with client tenants
 SELECT setval('t_tenants_id_seq', 
     (SELECT GREATEST(MAX(id), 3) FROM t_tenants), 
     true);
 
 DO $$
 BEGIN
-    RAISE NOTICE 'Tenants seeded: % total, % active',
-        (SELECT COUNT(*) FROM t_tenants),
-        (SELECT COUNT(*) FROM t_tenants WHERE is_active = true);
+    RAISE NOTICE 'Admin Tenants seeded: % total (% marked as admin)',
+        (SELECT COUNT(*) FROM t_tenants WHERE id <= 3),
+        (SELECT COUNT(*) FROM t_tenants WHERE is_admin = true);
 END $$;
 
 -- ============================================================================
--- SECTION 4: SEED BOOKMARK REASONS
+-- SECTION 5: SEED BOOKMARK REASONS (ADMIN TENANTS ONLY)
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Seeding Bookmark Reasons';
+    RAISE NOTICE 'Seeding Bookmark Reasons for Admin Tenants';
     RAISE NOTICE '========================================';
 END $$;
 
 -- ----------------------------------------------------------------------------
--- Insert bookmark reasons for all tenants (both live and test environments)
--- Standard bookmark reasons for customer management
+-- Insert bookmark reasons for admin tenants (IDs 1-3) in both environments
+-- Client tenants (ID 4+) get bookmark reasons via tenantSeed.service.ts
 -- ----------------------------------------------------------------------------
 
 -- Bookmark reasons for tenant 1 (Kewal Investments) - LIVE
@@ -277,84 +308,246 @@ ON CONFLICT (tenant_id, is_live, reason_code) DO UPDATE
 
 DO $$
 BEGIN
-    RAISE NOTICE 'Bookmark Reasons seeded: % total (% per tenant x 2 environments x 3 tenants)',
-        (SELECT COUNT(*) FROM m_bookmark_reasons),
-        (SELECT COUNT(DISTINCT reason_code) FROM m_bookmark_reasons);
+    RAISE NOTICE 'Bookmark Reasons seeded: % total (8 reasons × 3 tenants × 2 environments)',
+        (SELECT COUNT(*) FROM m_bookmark_reasons WHERE tenant_id IN (1, 2, 3));
     RAISE NOTICE 'Active Bookmark Reasons: %',
-        (SELECT COUNT(*) FROM m_bookmark_reasons WHERE is_active = true);
+        (SELECT COUNT(*) FROM m_bookmark_reasons WHERE tenant_id IN (1, 2, 3) AND is_active = true);
 END $$;
 
 -- ============================================================================
--- SECTION 5: SEED JOB TYPES
+-- SECTION 6: SEED MARKET INDICES
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Seeding Job Types';
+    RAISE NOTICE 'Seeding Market Indices';
     RAISE NOTICE '========================================';
 END $$;
 
--- Insert job types
-INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active) VALUES
-('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true)
-ON CONFLICT (code) DO NOTHING;
+-- ----------------------------------------------------------------------------
+-- Insert all NSE market indices (50 indices)
+-- Tracking fields (total_records, dates, download status) are NULL initially
+-- Will be populated when users download historical data via UI
+-- ----------------------------------------------------------------------------
+INSERT INTO t_market_indices (
+    index_code, index_name, yahoo_symbol, category, 
+    description, is_active, priority
+) VALUES
+    -- BROAD MARKET INDICES (Priority 1-15)
+    ('NSEI', 'Nifty 50', '^NSEI', 'broad', 
+     'Top 50 companies by market cap on NSE', TRUE, 1),
+    
+    ('NSMIDCP', 'Nifty Next 50', '^NSMIDCP', 'broad',
+     'Next 50 companies after Nifty 50', TRUE, 2),
+    
+    ('CNX100', 'Nifty 100', '^CNX100', 'broad',
+     'Top 100 companies - Nifty 50 + Next 50', TRUE, 3),
+    
+    ('CNX200', 'Nifty 200', '^CNX200', 'broad',
+     'Top 200 companies by market cap', TRUE, 4),
+    
+    ('CNX500', 'Nifty 500', '^CNX500', 'broad',
+     'Top 500 companies - broad market index', TRUE, 5),
+    
+    ('NIFTYMID50', 'Nifty Midcap 50', '^NSEMDCP50', 'broad',
+     'Top 50 mid-cap companies', TRUE, 6),
+    
+    ('NIFTYMID100', 'Nifty Midcap 100', '^NSEMDCP100', 'broad',
+     'Top 100 mid-cap companies', TRUE, 7),
+    
+    ('NIFTYMID150', 'Nifty Midcap 150', '^NSEMDCP150', 'broad',
+     'Top 150 mid-cap companies', TRUE, 8),
+    
+    ('NIFTYSML50', 'Nifty Smallcap 50', '^NSMCP50', 'broad',
+     'Top 50 small-cap companies', TRUE, 9),
+    
+    ('NIFTYSML100', 'Nifty Smallcap 100', '^NSMCP100', 'broad',
+     'Top 100 small-cap companies', TRUE, 10),
+    
+    ('NIFTYSML250', 'Nifty Smallcap 250', '^NSMCP250', 'broad',
+     'Top 250 small-cap companies', TRUE, 11),
+    
+    ('NIFTYMICRO250', 'Nifty Microcap 250', '^CNXMICRO', 'broad',
+     'Top 250 micro-cap companies', TRUE, 12),
+    
+    ('NIFTYLRGMID250', 'Nifty LargeMidcap 250', '^CNXLRGMID', 'broad',
+     'Large and mid-cap companies combined', TRUE, 13),
+    
+    ('NIFTYTM', 'Nifty Total Market', '^NIFTYTM', 'broad',
+     'Represents entire NSE market', TRUE, 14),
+    
+    ('INDIAVIX', 'India VIX', '^INDIAVIX', 'broad',
+     'Volatility Index - market fear gauge', TRUE, 15),
+    
+    -- SECTORAL INDICES (Priority 20-39)
+    ('BANKNIFTY', 'Nifty Bank', '^NSEBANK', 'sectoral',
+     'Banking sector index', TRUE, 20),
+    
+    ('NIFTYIT', 'Nifty IT', '^CNXIT', 'sectoral',
+     'Information Technology sector', TRUE, 21),
+    
+    ('NIFTYAUTO', 'Nifty Auto', '^CNXAUTO', 'sectoral',
+     'Automobile sector index', TRUE, 22),
+    
+    ('NIFTYFMCG', 'Nifty FMCG', '^CNXFMCG', 'sectoral',
+     'Fast Moving Consumer Goods sector', TRUE, 23),
+    
+    ('NIFTYPHARMA', 'Nifty Pharma', '^CNXPHARMA', 'sectoral',
+     'Pharmaceutical sector index', TRUE, 24),
+    
+    ('NIFTYMETAL', 'Nifty Metal', '^CNXMETAL', 'sectoral',
+     'Metals and mining sector', TRUE, 25),
+    
+    ('NIFTYREALTY', 'Nifty Realty', '^CNXREALTY', 'sectoral',
+     'Real estate sector index', TRUE, 26),
+    
+    ('NIFTYENERGY', 'Nifty Energy', '^CNXENERGY', 'sectoral',
+     'Energy sector index', TRUE, 27),
+    
+    ('NIFTYFINSRV', 'Nifty Financial Services', '^CNXFIN', 'sectoral',
+     'Financial services sector', TRUE, 28),
+    
+    ('NIFTYMEDIA', 'Nifty Media', '^CNXMEDIA', 'sectoral',
+     'Media and entertainment sector', TRUE, 29),
+    
+    ('NIFTYPVTBANK', 'Nifty Private Bank', '^NIFTYPVTBANK', 'sectoral',
+     'Private sector banks', TRUE, 30),
+    
+    ('NIFTYPSUBANK', 'Nifty PSU Bank', '^NIFTYPSUBANK', 'sectoral',
+     'Public sector banks', TRUE, 31),
+    
+    ('NIFTYOILGAS', 'Nifty Oil & Gas', '^CNXOILGAS', 'sectoral',
+     'Oil and gas sector', TRUE, 32),
+    
+    ('NIFTYHEALTH', 'Nifty Healthcare', '^CNXHEALTH', 'sectoral',
+     'Healthcare sector index', TRUE, 33),
+    
+    ('NIFTYCONSDUR', 'Nifty Consumer Durables', '^CNXCONSDUR', 'sectoral',
+     'Consumer durables sector', TRUE, 34),
+    
+    ('NIFTYCOMMODITIES', 'Nifty Commodities', '^CNXCOMMODITIES', 'sectoral',
+     'Commodities sector index', TRUE, 35),
+    
+    ('NIFTYINFRA', 'Nifty Infrastructure', '^CNXINFRA', 'sectoral',
+     'Infrastructure sector', TRUE, 36),
+    
+    ('NIFTYSERV', 'Nifty Services', '^CNXSERVICE', 'sectoral',
+     'Services sector index', TRUE, 37),
+    
+    ('NIFTYMNC', 'Nifty MNC', '^NIFTYMNC', 'sectoral',
+     'Multinational corporations', TRUE, 38),
+    
+    ('NIFTYPSE', 'Nifty PSE', '^NIFTYPSE', 'sectoral',
+     'Public sector enterprises', TRUE, 39),
+    
+    -- THEMATIC INDICES (Priority 40-54)
+    ('NIFTYDIV50', 'Nifty Dividend Opportunities 50', '^NIFTYDIV50', 'thematic',
+     'High dividend yielding stocks', TRUE, 40),
+    
+    ('NIFTYGS15', 'Nifty Growth Sectors 15', '^NIFTYGS15', 'thematic',
+     'Growth-oriented sectors', TRUE, 41),
+    
+    ('NIFTYCONSUM', 'Nifty India Consumption', '^NIFTYCONSUM', 'thematic',
+     'Consumption theme index', TRUE, 42),
+    
+    ('NIFTYDIGITAL', 'Nifty India Digital', '^NIFTYDIGITAL', 'thematic',
+     'Digital economy theme', TRUE, 43),
+    
+    ('NIFTYMFG', 'Nifty India Manufacturing', '^NIFTYMFG', 'thematic',
+     'Manufacturing theme index', TRUE, 44),
+    
+    ('NIFTYHOUSING', 'Nifty Housing', '^NIFTYHOUSING', 'thematic',
+     'Housing and real estate theme', TRUE, 45),
+    
+    ('NIFTYTRANSPORT', 'Nifty Transport & Logistics', '^NIFTYTRANSPORT', 'thematic',
+     'Transportation sector', TRUE, 46),
+    
+    ('NIFTYMOBILITY', 'Nifty Mobility', '^NIFTYMOBILITY', 'thematic',
+     'Mobility and transportation theme', TRUE, 47),
+    
+    ('NIFTYMIDSML400', 'Nifty MidSmallcap 400', '^NIFTYMIDSML400', 'thematic',
+     'Mid and small-cap combination', TRUE, 48),
+    
+    ('NIFTYQLTY30', 'Nifty Quality 30', '^NIFTYQLTY30', 'thematic',
+     'Quality stocks based on ROE, financial leverage, and earnings stability', TRUE, 49),
+    
+    ('NIFTYALPHA50', 'Nifty Alpha 50', '^NIFTYALPHA50', 'thematic',
+     'High alpha generating stocks', TRUE, 50),
+    
+    ('NIFTYLOWVOL30', 'Nifty Low Volatility 30', '^NIFTYLOWVOL30', 'thematic',
+     'Low volatility stocks', TRUE, 51),
+    
+    ('NIFTYCPSE', 'Nifty CPSE', '^NIFTYCPSE', 'thematic',
+     'Central Public Sector Enterprises', TRUE, 52),
+    
+    ('NIFTYSME', 'Nifty SME Emerge', '^NIFTYSME', 'thematic',
+     'Small and Medium Enterprises', TRUE, 53),
+    
+    ('NIFTYRURAL', 'Nifty Rural', '^NIFTYRURAL', 'thematic',
+     'Rural economy theme index', TRUE, 54)
+ON CONFLICT (index_code) DO UPDATE 
+    SET index_name = EXCLUDED.index_name,
+        yahoo_symbol = EXCLUDED.yahoo_symbol,
+        category = EXCLUDED.category,
+        description = EXCLUDED.description,
+        is_active = EXCLUDED.is_active,
+        priority = EXCLUDED.priority,
+        updated_at = CURRENT_TIMESTAMP;
 
 DO $$
 BEGIN
-    RAISE NOTICE 'Job types seeded successfully';
+    RAISE NOTICE 'Market Indices seeded: % total (% active)',
+        (SELECT COUNT(*) FROM t_market_indices),
+        (SELECT COUNT(*) FROM t_market_indices WHERE is_active = true);
+    RAISE NOTICE 'Categories: % broad, % sectoral, % thematic',
+        (SELECT COUNT(*) FROM t_market_indices WHERE category = 'broad'),
+        (SELECT COUNT(*) FROM t_market_indices WHERE category = 'sectoral'),
+        (SELECT COUNT(*) FROM t_market_indices WHERE category = 'thematic');
 END $$;
 
 -- ============================================================================
--- SECTION 6: VERIFICATION & SUMMARY
+-- SECTION 7: VERIFICATION & SUMMARY
 -- ============================================================================
 DO $$
 DECLARE
     v_txn_count INTEGER;
+    v_job_types_count INTEGER;
     v_tenant_count INTEGER;
-    v_active_txn INTEGER;
-    v_active_tenant INTEGER;
+    v_admin_tenant_count INTEGER;
     v_bookmark_count INTEGER;
     v_active_bookmark INTEGER;
     v_unique_reasons INTEGER;
-    v_job_types_count INTEGER;
-    v_active_job_types INTEGER;
+    v_market_indices_count INTEGER;
+    v_active_indices INTEGER;
 BEGIN
-    SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
-    INTO v_txn_count, v_active_txn
-    FROM m_transaction_types;
-
-    SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
-    INTO v_tenant_count, v_active_tenant
-    FROM t_tenants;
-
+    SELECT COUNT(*) INTO v_txn_count FROM m_transaction_types WHERE is_active = true;
+    SELECT COUNT(*) INTO v_job_types_count FROM m_job_types WHERE is_active = true;
+    
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE is_admin = true)
+    INTO v_tenant_count, v_admin_tenant_count
+    FROM t_tenants WHERE id <= 3;
+    
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true), COUNT(DISTINCT reason_code)
     INTO v_bookmark_count, v_active_bookmark, v_unique_reasons
-    FROM m_bookmark_reasons;
-
+    FROM m_bookmark_reasons
+    WHERE tenant_id IN (1, 2, 3);
+    
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
-    INTO v_job_types_count, v_active_job_types
-    FROM m_job_types;
+    INTO v_market_indices_count, v_active_indices
+    FROM t_market_indices;
 
     RAISE NOTICE '========================================';
     RAISE NOTICE '     SEED DATA SUMMARY';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Transaction Types:';
-    RAISE NOTICE '  - Total: %', v_txn_count;
-    RAISE NOTICE '  - Active: %', v_active_txn;
-    RAISE NOTICE '';
-    RAISE NOTICE 'Tenants:';
-    RAISE NOTICE '  - Total: %', v_tenant_count;
-    RAISE NOTICE '  - Active: %', v_active_tenant;
-    RAISE NOTICE '';
-    RAISE NOTICE 'Bookmark Reasons:';
-    RAISE NOTICE '  - Total: % (% unique reasons × % tenants × 2 environments)', v_bookmark_count, v_unique_reasons, v_tenant_count;
-    RAISE NOTICE '  - Active: %', v_active_bookmark;
-    RAISE NOTICE '';
-    RAISE NOTICE 'Job Types:';
-    RAISE NOTICE '  - Total: %', v_job_types_count;
-    RAISE NOTICE '  - Active: %', v_active_job_types;
+    RAISE NOTICE 'Transaction Types: % active', v_txn_count;
+    RAISE NOTICE 'Job Types: % active', v_job_types_count;
+    RAISE NOTICE 'Admin Tenants: % total (% admin)', v_tenant_count, v_admin_tenant_count;
+    RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)', 
+        v_bookmark_count, v_unique_reasons, v_tenant_count;
+    RAISE NOTICE 'Market Indices: % total (% active)', v_market_indices_count, v_active_indices;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
+    RAISE NOTICE 'Client tenants (ID 4+) will auto-seed via /register';
     RAISE NOTICE '========================================';
 END $$;
 

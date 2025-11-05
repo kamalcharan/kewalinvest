@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext'; // ✅ ADD THIS
 import { useBookmarks, useBulkDownload, useDownloadProgress } from '../../hooks/useNavData';
 import { useBulkMetricsCalculation } from '../../hooks/useBulkMetricsCalculation';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
@@ -25,8 +26,11 @@ type FilterType = 'all' | 'success' | 'failed';
 
 const NavHistoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { theme, isDarkMode } = useTheme();
-  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  
+const { theme, isDarkMode } = useTheme(); // ✅ THIS MUST COME FIRST
+const { user } = useAuth(); // ✅ THEN THIS
+const isAdmin = user?.tenant?.is_admin === true; // ✅ THEN THIS
+const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors; // ✅ THEN THIS
 
   // Refs
   const hasInitializedRef = useRef(false);
@@ -35,13 +39,17 @@ const NavHistoryPage: React.FC = () => {
 
   // Hooks - NAV Downloads
   const {
-    bookmarks,
-    isLoading,
-    error,
-    fetchBookmarks,
-    refetch,
-    pagination
-  } = useBookmarks({ page: 1, page_size: 100 });
+  bookmarks,
+  isLoading,
+  error,
+  fetchBookmarks,
+  refetch,
+  pagination
+} = useBookmarks({ 
+  page: 1, 
+  page_size: 100,
+  show_all: isAdmin ? 'true' : undefined // ✅ ADD THIS LINE
+});
 
   const bulkDownload = useBulkDownload();
   const { startPolling, stopPolling } = useDownloadProgress();
@@ -712,14 +720,31 @@ const NavHistoryPage: React.FC = () => {
           gap: '16px'
         }}>
           <div>
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: colors.utility.primaryText,
-              margin: '0 0 4px 0'
-            }}>
-              📜 NAV History
-            </h1>
+           <h1 style={{
+  fontSize: '28px',
+  fontWeight: '700',
+  color: colors.utility.primaryText,
+  margin: '0 0 4px 0',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px'
+}}>
+  📜 NAV History
+  {isAdmin && ( // ✅ ADD THIS BADGE
+    <span style={{
+      fontSize: '12px',
+      fontWeight: '600',
+      padding: '4px 12px',
+      backgroundColor: colors.semantic.warning,
+      color: 'white',
+      borderRadius: '12px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }}>
+      Admin View - All Tenants
+    </span>
+  )}
+</h1>
             <p style={{
               fontSize: '14px',
               color: colors.utility.secondaryText,

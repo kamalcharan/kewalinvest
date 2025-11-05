@@ -238,13 +238,12 @@ BEGIN
             v_clean_prefix := 'Sri';
         END IF;
         
-        -- Create contact with cleaned prefix
+        -- ✅ FIXED: Removed normalized_name (it's GENERATED ALWAYS)
         INSERT INTO t_contacts (
             tenant_id,
             is_live,
             prefix,
             name,
-            normalized_name,
             is_customer,
             created_at
         ) VALUES (
@@ -252,7 +251,6 @@ BEGIN
             v_staging.is_live,
             v_clean_prefix,
             v_mapped_data->>'name',
-            normalize_customer_name(v_mapped_data->>'name'),
             true,
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_contact_id;

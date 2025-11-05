@@ -275,6 +275,7 @@ COMMENT ON COLUMN t_file_uploads.updated_at IS 'Timestamp of last update to this
 CREATE INDEX IF NOT EXISTS idx_file_uploads_hash ON t_file_uploads(file_hash, tenant_id, is_live) WHERE file_hash IS NOT NULL;
 
 -- TABLE: t_import_sessions
+-- TABLE: t_import_sessions
 CREATE TABLE t_import_sessions (
     id SERIAL PRIMARY KEY,
     session_name VARCHAR(255) NOT NULL,
@@ -285,11 +286,16 @@ CREATE TABLE t_import_sessions (
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
+    current_stage VARCHAR(50),
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
     successful_records INTEGER DEFAULT 0,
     failed_records INTEGER DEFAULT 0,
     duplicate_records INTEGER DEFAULT 0,
+    duplicate_check_result JSONB,
+    duplicate_classification VARCHAR(50),
+    duplicate_user_decision_at TIMESTAMP,
+    filename_duplicate_check JSONB,
     staging_completed_at TIMESTAMP,
     staging_total_rows INTEGER DEFAULT 0,
     batch_size INTEGER DEFAULT 100,
@@ -310,7 +316,12 @@ CREATE TABLE t_import_sessions (
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
+COMMENT ON COLUMN t_import_sessions.current_stage IS 'Current processing stage within the import workflow';
 COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
+COMMENT ON COLUMN t_import_sessions.duplicate_check_result IS 'JSON result of duplicate detection analysis';
+COMMENT ON COLUMN t_import_sessions.duplicate_classification IS 'Classification of duplicate status (exact, potential, none)';
+COMMENT ON COLUMN t_import_sessions.duplicate_user_decision_at IS 'Timestamp when user made decision about duplicates';
+COMMENT ON COLUMN t_import_sessions.filename_duplicate_check IS 'JSON result of filename-based duplicate detection';
 
 -- TABLE: t_import_staging_data
 CREATE TABLE t_import_staging_data (
@@ -479,7 +490,7 @@ CREATE TABLE t_scheme_bookmarks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     alias_name VARCHAR(255),
-    CONSTRAINT unique_tenant_bookmark UNIQUE(tenant_id, scheme_id, is_live)
+    CONSTRAINT unique_tenant_scheme UNIQUE(tenant_id, scheme_code, is_live)  -- ✅ Fixed
 );
 
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
@@ -492,7 +503,7 @@ CREATE TABLE t_scheme_aliases (
     scheme_code VARCHAR(100),
     alias_name VARCHAR(500) NOT NULL,
     alias_name_normalized VARCHAR(500) NOT NULL,
-    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('auto', 'manual', 'import')),
+    source VARCHAR(50) DEFAULT 'manual',  -- ✅ Removed CHECK constraint
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
