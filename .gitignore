@@ -79,3 +79,4 @@ venv/
 *.key
 *.crt
 !*.example.*
+backup*.sql

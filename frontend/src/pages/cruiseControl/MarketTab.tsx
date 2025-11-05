@@ -1,144 +1,13 @@
 // frontend/src/pages/cruiseControl/MarketTab.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Loader2 } from 'lucide-react';
+import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import toastService from '../../services/toast.service';
 import IndexCard from '../../components/market/IndexCard';
 import type { MarketIndex } from '../../types/market.types';
 
-// Dummy market index data
-const DUMMY_INDICES: MarketIndex[] = [
-  {
-    id: 1,
-    index_code: 'NIFTY50',
-    index_name: 'NIFTY 50',
-    yahoo_symbol: '^NSEI',
-    category: 'broad',
-    description: 'India\'s leading benchmark index representing the weighted average of 50 largest and most liquid stocks',
-    is_active: true,
-    priority: 1,
-    total_records: 5234,
-    earliest_date: '2005-01-01',
-    latest_date: '2025-01-23',
-    last_download_status: 'success',
-    last_download_at: '2025-01-23T10:00:00Z',
-    last_download_error: null,
-    historical_data_available: true,
-    next_eod_retry_at: null,
-    eod_retry_count: 0,
-    last_successful_eod_download_at: '2025-01-23T10:00:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2025-01-23T10:00:00Z'
-  },
-  {
-    id: 2,
-    index_code: 'BANKNIFTY',
-    index_name: 'NIFTY Bank',
-    yahoo_symbol: '^NSEBANK',
-    category: 'sectoral',
-    description: 'Represents the 12 most liquid and large capitalized Indian banking stocks',
-    is_active: true,
-    priority: 2,
-    total_records: 4521,
-    earliest_date: '2006-06-01',
-    latest_date: '2025-01-23',
-    last_download_status: 'success',
-    last_download_at: '2025-01-23T10:00:00Z',
-    last_download_error: null,
-    historical_data_available: true,
-    next_eod_retry_at: null,
-    eod_retry_count: 0,
-    last_successful_eod_download_at: '2025-01-23T10:00:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2025-01-23T10:00:00Z'
-  },
-  {
-    id: 3,
-    index_code: 'SENSEX',
-    index_name: 'BSE SENSEX',
-    yahoo_symbol: '^BSESN',
-    category: 'broad',
-    description: 'Bombay Stock Exchange Sensitive Index - oldest market index in India',
-    is_active: true,
-    priority: 3,
-    total_records: 3245,
-    earliest_date: '2008-01-01',
-    latest_date: '2025-01-21',
-    last_download_status: 'success',
-    last_download_at: '2025-01-21T18:30:00Z',
-    last_download_error: null,
-    historical_data_available: true,
-    next_eod_retry_at: null,
-    eod_retry_count: 0,
-    last_successful_eod_download_at: '2025-01-21T18:30:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2025-01-21T18:30:00Z'
-  },
-  {
-    id: 4,
-    index_code: 'NIFTYIT',
-    index_name: 'NIFTY IT',
-    yahoo_symbol: '^CNXIT',
-    category: 'sectoral',
-    description: 'Represents the IT sector stocks',
-    is_active: true,
-    priority: 4,
-    total_records: 2134,
-    earliest_date: '2010-01-01',
-    latest_date: '2025-01-20',
-    last_download_status: 'success',
-    last_download_at: '2025-01-20T18:30:00Z',
-    last_download_error: null,
-    historical_data_available: true,
-    next_eod_retry_at: null,
-    eod_retry_count: 0,
-    last_successful_eod_download_at: '2025-01-20T18:30:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2025-01-20T18:30:00Z'
-  },
-  {
-    id: 5,
-    index_code: 'NIFTYEV',
-    index_name: 'NIFTY EV & New Age Automotive',
-    yahoo_symbol: '^CNXAUTO',
-    category: 'thematic',
-    description: 'Electric Vehicles and New Age Automotive theme',
-    is_active: true,
-    priority: 5,
-    total_records: 0,
-    earliest_date: null,
-    latest_date: null,
-    last_download_status: null,
-    last_download_at: null,
-    last_download_error: null,
-    historical_data_available: false,
-    next_eod_retry_at: null,
-    eod_retry_count: 0,
-    last_successful_eod_download_at: null,
-    created_at: '2025-01-15T00:00:00Z',
-    updated_at: '2025-01-15T00:00:00Z'
-  },
-  {
-    id: 6,
-    index_code: 'NIFTYPHARMA',
-    index_name: 'NIFTY Pharma',
-    yahoo_symbol: '^CNXPHARMA',
-    category: 'sectoral',
-    description: 'Pharmaceutical sector index',
-    is_active: true,
-    priority: 6,
-    total_records: 1845,
-    earliest_date: '2011-01-01',
-    latest_date: '2025-01-18',
-    last_download_status: 'failed',
-    last_download_at: '2025-01-18T18:30:00Z',
-    last_download_error: 'API rate limit exceeded',
-    historical_data_available: true,
-    next_eod_retry_at: '2025-01-24T18:30:00Z',
-    eod_retry_count: 3,
-    last_successful_eod_download_at: '2025-01-17T18:30:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2025-01-18T18:30:00Z'
-  }
-];
 
 interface StatCardProps {
   title: string;
@@ -208,14 +77,75 @@ export const MarketTab: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'no-data' | null>(null);
-
-  // Dummy stats
-  const stats = {
-    totalIndices: 12,
-    downloadCompleted: 10,
+  const [stats, setStats] = useState({
+    totalIndices: 0,
+    downloadCompleted: 0,
     pendingBeyondOneDay: 0,
-    failedDownloads: 2,
-    metricsPending: 3
+    failedDownloads: 0,
+    metricsPending: 0
+  });
+  const [indices, setIndices] = useState<MarketIndex[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMarketStats();
+    fetchIndices();
+  }, []);
+
+  const fetchMarketStats = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.MARKET_STATISTICS) as any;
+
+      if (response.success && response.data) {
+        setStats({
+          totalIndices: response.data.total_active_indices || 0,
+          downloadCompleted: response.data.download_completed_today || 0,
+          pendingBeyondOneDay: response.data.pending_over_one_day || 0,
+          failedDownloads: response.data.failed_downloads || 0,
+          metricsPending: response.data.pending_over_one_day || 0
+        });
+      } else {
+        setError(response.error || 'Failed to load market statistics');
+      }
+    } catch (err: any) {
+      console.error('Error fetching market stats:', err);
+      setError('Failed to load market statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchIndices = async () => {
+    try {
+      const response = await apiService.get(API_ENDPOINTS.MARKET.INDICES) as any;
+
+      if (response.success && response.data) {
+        setIndices(response.data.indices || []);
+      }
+    } catch (err: any) {
+      console.error('Error fetching market indices:', err);
+    }
+  };
+
+  const handleDownloadNow = async (indexId: number) => {
+    try {
+      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.MARKET_DOWNLOAD(indexId)) as any;
+
+      if (response.success) {
+        toastService.success(response.message || 'Market download triggered successfully');
+        // Refresh stats after download
+        fetchMarketStats();
+      } else {
+        toastService.error(response.error || 'Failed to trigger market download');
+      }
+    } catch (err: any) {
+      console.error('Error triggering market download:', err);
+      toastService.error('Failed to trigger market download');
+    }
   };
 
   // Filter indices based on selected filter
@@ -224,23 +154,66 @@ export const MarketTab: React.FC = () => {
 
     switch (filter) {
       case 'all':
-        return DUMMY_INDICES;
+        return indices;
       case 'pending':
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        return DUMMY_INDICES.filter(idx =>
+        return indices.filter(idx =>
           idx.latest_date && new Date(idx.latest_date) < yesterday
         );
       case 'failed':
-        return DUMMY_INDICES.filter(idx => idx.last_download_status === 'failed');
+        return indices.filter(idx => idx.last_download_status === 'failed');
       case 'no-data':
-        return DUMMY_INDICES.filter(idx => !idx.historical_data_available);
+        return indices.filter(idx => !idx.historical_data_available);
       default:
         return [];
     }
   };
 
   const filteredIndices = getFilteredIndices();
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        color: colors.utility.secondaryText
+      }}>
+        <Loader2 size={24} className="animate-spin" style={{ marginRight: '8px' }} />
+        Loading market statistics...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: `${colors.semantic.error}10`,
+        border: `1px solid ${colors.semantic.error}40`,
+        borderRadius: '8px',
+        color: colors.semantic.error
+      }}>
+        <strong>Error:</strong> {error}
+        <button
+          onClick={fetchMarketStats}
+          style={{
+            marginLeft: '12px',
+            padding: '6px 12px',
+            backgroundColor: colors.semantic.error,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -381,12 +354,12 @@ export const MarketTab: React.FC = () => {
                 <IndexCard
                   key={index.id}
                   index={index}
-                  onDownloadHistorical={(idx) => alert(`Download historical for: ${idx.index_name}`)}
-                  onDownloadEOD={(idx) => alert(`Download EOD for: ${idx.index_name}`)}
+                  onDownloadHistorical={(idx) => handleDownloadNow(idx.id)}
+                  onDownloadEOD={(idx) => handleDownloadNow(idx.id)}
                   onDelete={(idx) => {
                     // eslint-disable-next-line no-restricted-globals
                     if (window.confirm(`Delete all data for ${idx.index_name}?`)) {
-                      alert(`Deleted ${idx.total_records} records`);
+                      toastService.info('Delete functionality coming soon');
                     }
                   }}
                 />

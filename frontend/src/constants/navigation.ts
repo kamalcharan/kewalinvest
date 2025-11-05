@@ -129,7 +129,7 @@ export const NAVIGATION_MENU: NavigationSection[] = [
       {
         id: 'jtbd_dashboard',
         name: 'JTBD Dashboard',
-        path: '/jtbd/dashboard',
+        path: 
         icon: Bell
       },
       {
