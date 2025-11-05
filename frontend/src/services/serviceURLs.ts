@@ -267,6 +267,18 @@ export const API_ENDPOINTS = {
     BATCH_CALCULATE: `${API_BASE}/scheme-analysis/batch-calculate`,
   },
 
+  // Cruise Control endpoints
+  CRUISE_CONTROL: {
+    NAV_STATISTICS: `${API_BASE}/nav/statistics`,
+    MARKET_STATISTICS: `${API_BASE}/market/statistics`,
+    ALERTS_UPCOMING: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,
+    ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
+    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/historical?scheme_code=${schemeCode}`,
+    MARKET_DOWNLOAD: (indexId: number) => `${API_BASE}/market/download/eod?index_id=${indexId}`,
+    MARKET_DOWNLOAD_HISTORICAL: `${API_BASE}/market/download/historical`,
+    MARKET_DOWNLOAD_EOD: `${API_BASE}/market/download/eod`,
+  },
+
   // Scheme Alias endpoints (for flexible transaction imports)
   SCHEME_ALIASES: {
     LIST: `${API_BASE}/scheme-aliases`,
