@@ -106,7 +106,7 @@ export class BookmarkImportService {
               scheme_name, amc_name, is_live, is_active, daily_download_enabled
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, true, false)
-            ON CONFLICT (tenant_id, scheme_id, is_live)
+            ON CONFLICT (tenant_id, scheme_code, is_live)
             DO UPDATE SET
               user_id = EXCLUDED.user_id,
               scheme_code = EXCLUDED.scheme_code,
