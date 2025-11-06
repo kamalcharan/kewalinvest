@@ -186,10 +186,9 @@ CREATE INDEX IF NOT EXISTS idx_jtbd_exec_date_range
 ON t_jtbd_executions(tenant_id, is_live, scheduled_date)
 WHERE execution_status IN ('planned', 'due');
 
--- Overdue items (for dashboard alerts)
-CREATE INDEX IF NOT EXISTS idx_jtbd_exec_overdue
-ON t_jtbd_executions(tenant_id, is_live, scheduled_date)
-WHERE execution_status IN ('planned', 'due') AND scheduled_date < CURRENT_DATE;
+-- Note: Overdue filtering is done at query time with scheduled_date < CURRENT_DATE
+-- We cannot use CURRENT_DATE in index predicates (volatile expression)
+-- The idx_jtbd_exec_date_range index above will be used for overdue queries
 
 -- ============================================================================
 -- STEP 5: Create trigger for updated_at timestamp
