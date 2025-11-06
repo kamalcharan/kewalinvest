@@ -369,8 +369,7 @@ export class JTBDUnifiedController {
 
       res.json({
         success: true,
-        data: result.executions,
-        pagination: result.pagination,
+        data: result, // Return full result object with {executions, pagination}
         timestamp: new Date().toISOString()
       });
     } catch (error: any) {
