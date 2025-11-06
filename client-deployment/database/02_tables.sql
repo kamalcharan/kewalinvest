@@ -314,7 +314,7 @@ CREATE TABLE t_import_sessions (
     is_live BOOLEAN DEFAULT true,
     import_type VARCHAR(50) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending' CHECK (
-        status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
+        status IN ('pending', 'staged', 'pending_processing', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
     current_stage VARCHAR(50),
     total_records INTEGER DEFAULT 0,
