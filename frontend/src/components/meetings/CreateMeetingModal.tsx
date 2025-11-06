@@ -3,21 +3,58 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCreateMeeting, useUpdateMeeting } from '../../hooks/useMeetings';
+import { useCreateExecution, useUpdateExecution } from '../../hooks/useJTBD';
 import type {
-  CustomerMeeting,
-  CreateMeetingRequest,
-  MeetingType,
-  MeetingMode
-} from '../../types/meeting.types';
-import { MEETING_TYPE_LABELS, MEETING_MODE_LABELS } from '../../types/meeting.types';
+  JTBDExecution,
+  CreateExecutionRequest,
+  MeetingExecutionData
+} from '../../types/jtbd.types';
+import { JTBD_TYPE, JTBD_PRIORITY } from '../../constants/jtbd.constants';
+
+// Meeting type mappings (old → new)
+const MEETING_TYPE_MAP = {
+  'review': JTBD_TYPE.PORTFOLIO_REVIEW,
+  'planning': JTBD_TYPE.GOAL_REVIEW,
+  'onboarding': JTBD_TYPE.CLIENT_MEETING,
+  'grievance': JTBD_TYPE.CLIENT_MEETING,
+  'other': JTBD_TYPE.CLIENT_MEETING,
+} as const;
+
+type OldMeetingType = keyof typeof MEETING_TYPE_MAP;
+type MeetingMode = 'in_person' | 'video_call' | 'phone_call';
+
+const MEETING_TYPE_LABELS: Record<OldMeetingType, string> = {
+  review: 'Portfolio Review',
+  planning: 'Goal Planning',
+  onboarding: 'Client Onboarding',
+  grievance: 'Grievance Resolution',
+  other: 'General Meeting',
+};
+
+const MEETING_MODE_LABELS: Record<MeetingMode, string> = {
+  in_person: 'In Person',
+  video_call: 'Video Call',
+  phone_call: 'Phone Call',
+};
 
 interface CreateMeetingModalProps {
   customerId: number;
-  meeting?: CustomerMeeting; // If provided, modal is in edit mode
+  meeting?: JTBDExecution; // If provided, modal is in edit mode
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+}
+
+// Internal form state (UI-friendly)
+interface MeetingFormData {
+  meeting_type: OldMeetingType;
+  meeting_mode: MeetingMode;
+  scheduled_date: string;
+  scheduled_time: string;
+  duration_minutes: number;
+  location?: string;
+  meeting_link?: string;
+  agenda?: string;
 }
 
 export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
@@ -31,12 +68,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const isEditMode = !!meeting;
-  const createMutation = useCreateMeeting();
-  const updateMutation = useUpdateMeeting();
+  const createMutation = useCreateExecution();
+  const updateMutation = useUpdateExecution();
 
   // Form state
-  const [formData, setFormData] = useState<CreateMeetingRequest>({
-    customer_id: customerId,
+  const [formData, setFormData] = useState<MeetingFormData>({
     meeting_type: 'review',
     meeting_mode: 'in_person',
     scheduled_date: '',
@@ -50,21 +86,30 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   // Populate form when editing
   useEffect(() => {
     if (meeting) {
+      const meetingData = meeting.execution_data as MeetingExecutionData;
+
+      // Map execution_type back to old meeting type
+      let oldType: OldMeetingType = 'other';
+      if (meeting.execution_type === JTBD_TYPE.PORTFOLIO_REVIEW) oldType = 'review';
+      else if (meeting.execution_type === JTBD_TYPE.GOAL_REVIEW) oldType = 'planning';
+      else if (meeting.execution_type === JTBD_TYPE.CLIENT_MEETING) {
+        // Default to 'other' for generic client meetings
+        oldType = 'other';
+      }
+
       setFormData({
-        customer_id: meeting.customer_id,
-        meeting_type: meeting.meeting_type,
-        meeting_mode: meeting.meeting_mode,
+        meeting_type: oldType,
+        meeting_mode: (meetingData.meeting_mode || 'in_person') as MeetingMode,
         scheduled_date: meeting.scheduled_date,
-        scheduled_time: meeting.scheduled_time,
-        duration_minutes: meeting.duration_minutes,
-        meeting_location: meeting.meeting_location,
-        meeting_link: meeting.meeting_link,
-        agenda: meeting.agenda
+        scheduled_time: meeting.scheduled_time || '',
+        duration_minutes: meetingData.duration_minutes || 60,
+        location: meetingData.location,
+        meeting_link: meetingData.meeting_link,
+        agenda: meetingData.agenda
       });
     } else {
       // Reset for create mode
       setFormData({
-        customer_id: customerId,
         meeting_type: 'review',
         meeting_mode: 'in_person',
         scheduled_date: '',
@@ -96,13 +141,41 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
     if (!validate()) return;
 
     try {
+      // Convert form data to JTBD execution format
+      const executionType = MEETING_TYPE_MAP[formData.meeting_type];
+
+      const executionData: MeetingExecutionData = {
+        meeting_mode: formData.meeting_mode,
+        duration_minutes: formData.duration_minutes,
+        location: formData.location,
+        meeting_link: formData.meeting_link,
+        agenda: formData.agenda,
+      };
+
+      // Generate title based on meeting type
+      const title = MEETING_TYPE_LABELS[formData.meeting_type];
+
       if (isEditMode) {
         await updateMutation.mutateAsync({
           id: meeting.id,
-          data: formData
+          data: {
+            title,
+            scheduled_date: formData.scheduled_date,
+            scheduled_time: formData.scheduled_time,
+            execution_data: executionData,
+          }
         });
       } else {
-        await createMutation.mutateAsync(formData);
+        const createRequest: CreateExecutionRequest = {
+          customer_id: customerId,
+          execution_type: executionType,
+          title,
+          priority: JTBD_PRIORITY.MEDIUM,
+          scheduled_date: formData.scheduled_date,
+          scheduled_time: formData.scheduled_time,
+          execution_data: executionData,
+        };
+        await createMutation.mutateAsync(createRequest);
       }
       onSuccess?.();
       handleClose();
@@ -114,7 +187,6 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   // Handle close
   const handleClose = () => {
     setFormData({
-      customer_id: customerId,
       meeting_type: 'review',
       meeting_mode: 'in_person',
       scheduled_date: '',
@@ -216,7 +288,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                 <select
                   value={formData.meeting_type}
                   onChange={(e) =>
-                    setFormData({ ...formData, meeting_type: e.target.value as MeetingType })
+                    setFormData({ ...formData, meeting_type: e.target.value as OldMeetingType })
                   }
                   style={{
                     width: '100%',
@@ -405,8 +477,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.meeting_location || ''}
-                    onChange={(e) => setFormData({ ...formData, meeting_location: e.target.value })}
+                    value={formData.location || ''}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="Enter meeting location"
                     style={{
                       width: '100%',

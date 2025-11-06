@@ -1,17 +1,22 @@
 // frontend/src/components/meetings/MeetingsList.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Calendar } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
-  useCustomerMeetings,
-  useCompleteMeeting,
-  useCancelMeeting,
-  useDeleteMeeting
-} from '../../hooks/useMeetings';
+  useJTBDExecutions,
+  useCompleteExecution,
+  useCancelExecution,
+  useDeleteExecution
+} from '../../hooks/useJTBD';
+import { JTBD_TYPE, JTBD_CATEGORY, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 import { MeetingCard } from './MeetingCard';
 import { CreateMeetingModal } from './CreateMeetingModal';
-import type { CustomerMeeting, CompleteMeetingRequest, CancelMeetingRequest } from '../../types/meeting.types';
+import type {
+  JTBDExecution,
+  CompleteExecutionRequest,
+  CancelExecutionRequest
+} from '../../types/jtbd.types';
 
 interface MeetingsListProps {
   customerId: number;
@@ -25,43 +30,48 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
 
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [editingMeeting, setEditingMeeting] = useState<CustomerMeeting | null>(null);
-  const [completingMeeting, setCompletingMeeting] = useState<CustomerMeeting | null>(null);
-  const [cancellingMeeting, setCancellingMeeting] = useState<CustomerMeeting | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<JTBDExecution | null>(null);
+  const [completingMeeting, setCompletingMeeting] = useState<JTBDExecution | null>(null);
+  const [cancellingMeeting, setCancellingMeeting] = useState<JTBDExecution | null>(null);
 
-  // Hooks
-  const { data: meetingsData, isLoading, refetch } = useCustomerMeetings(customerId);
-  const completeMutation = useCompleteMeeting();
-  const cancelMutation = useCancelMeeting();
-  const deleteMutation = useDeleteMeeting();
+  // Hooks - Query only meeting-type executions for this customer
+  const { data: executionsData, isLoading, refetch } = useJTBDExecutions({
+    customer_id: customerId,
+    execution_type: JTBD_TYPE.CLIENT_MEETING, // Can be expanded to include other meeting types
+  });
+  const completeMutation = useCompleteExecution();
+  const cancelMutation = useCancelExecution();
+  const deleteMutation = useDeleteExecution();
 
-  const meetings = meetingsData?.meetings || [];
+  const meetings = executionsData?.executions || [];
 
   // Filter meetings
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const upcomingMeetings = meetings.filter((m) => {
-    if (m.status !== 'scheduled') return false;
+    if (m.execution_status !== EXECUTION_STATUS.PLANNED && m.execution_status !== EXECUTION_STATUS.DUE) return false;
     const meetingDate = new Date(m.scheduled_date);
     return meetingDate >= today;
   });
 
   const pastMeetings = meetings.filter((m) => {
-    if (m.status === 'scheduled') {
+    if (m.execution_status === EXECUTION_STATUS.PLANNED || m.execution_status === EXECUTION_STATUS.DUE) {
       const meetingDate = new Date(m.scheduled_date);
       return meetingDate < today;
     }
-    return m.status === 'completed' || m.status === 'cancelled';
+    return m.execution_status === EXECUTION_STATUS.COMPLETED ||
+           m.execution_status === EXECUTION_STATUS.CANCELLED ||
+           m.execution_status === EXECUTION_STATUS.NOT_EXECUTED;
   });
 
   // Handlers
-  const handleEdit = (meeting: CustomerMeeting) => {
+  const handleEdit = (meeting: JTBDExecution) => {
     setEditingMeeting(meeting);
     setIsCreateModalOpen(true);
   };
 
-  const handleComplete = (meeting: CustomerMeeting) => {
+  const handleComplete = (meeting: JTBDExecution) => {
     setCompletingMeeting(meeting);
   };
 
@@ -71,9 +81,11 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
     const notes = prompt('Add notes about this meeting (optional):');
     const outcome = prompt('Meeting outcome (optional):');
 
-    const data: CompleteMeetingRequest = {
-      notes: notes || undefined,
-      outcome: outcome || undefined
+    const data: CompleteExecutionRequest = {
+      execution_data: {
+        meeting_notes: notes || undefined,
+        outcome: outcome || undefined
+      }
     };
 
     try {
@@ -85,7 +97,7 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
     }
   };
 
-  const handleCancel = (meeting: CustomerMeeting) => {
+  const handleCancel = (meeting: JTBDExecution) => {
     setCancellingMeeting(meeting);
   };
 
@@ -98,7 +110,7 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
       return;
     }
 
-    const data: CancelMeetingRequest = {
+    const data: CancelExecutionRequest = {
       cancellation_reason: reason
     };
 
@@ -111,9 +123,9 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
     }
   };
 
-  const handleDelete = async (meeting: CustomerMeeting) => {
+  const handleDelete = async (meeting: JTBDExecution) => {
     try {
-      await deleteMutation.mutateAsync({ id: meeting.id, customerId: meeting.customer_id });
+      await deleteMutation.mutateAsync(meeting.id);
       refetch();
     } catch (error) {
       console.error('Error deleting meeting:', error);
