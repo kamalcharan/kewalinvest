@@ -3,6 +3,7 @@
 import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/database';
 import { GoalCalculatorService } from './goal.calculator.service';
+import { JTBDExecutionService } from './jtbd.execution.service';
 import {
   GoalConfig,
   TimeBasedGoalConfig,
@@ -121,9 +122,54 @@ export class GoalService {
         'goal_creation'
       );
 
+      // Create SIP execution records for monthly investments (if applicable)
+      if (finalConfig.monthly_sip && finalConfig.monthly_sip > 0 && finalConfig.duration_months) {
+        console.log(`Creating ${finalConfig.duration_months} monthly SIP executions for goal ${goalId}`);
+
+        const executionService = new JTBDExecutionService(pool);
+        const startDate = new Date(finalConfig.start_date);
+
+        // Create execution records for each month
+        for (let month = 0; month < finalConfig.duration_months; month++) {
+          const scheduledDate = new Date(startDate);
+          scheduledDate.setMonth(scheduledDate.getMonth() + month);
+
+          // Format as YYYY-MM-DD
+          const dateStr = scheduledDate.toISOString().split('T')[0];
+
+          const sipExecutionData = {
+            month_number: month + 1,
+            total_months: finalConfig.duration_months,
+            sip_amount: finalConfig.monthly_sip,
+            goal_id: goalId,
+            goal_title: data.title,
+          };
+
+          await executionService.createExecution(
+            tenantId,
+            isLive,
+            {
+              config_id: goalId,
+              customer_id: data.customer_id,
+              execution_type: 'goal_sip_plan',
+              title: `SIP Payment ${month + 1}/${finalConfig.duration_months} - ${data.title}`,
+              description: `Monthly SIP of ₹${finalConfig.monthly_sip}`,
+              priority: 'medium',
+              scheduled_date: dateStr,
+              scheduled_time: null,
+              execution_status: 'planned',
+              execution_data: sipExecutionData,
+            },
+            createdBy
+          );
+        }
+
+        console.log(`Successfully created ${finalConfig.duration_months} SIP executions for goal ${goalId}`);
+      }
+
       // Update customer goal count
       await client.query(
-        `UPDATE t_customers 
+        `UPDATE t_customers
          SET jtbd_count = jtbd_count + 1,
              has_jtbd_setup = true,
              updated_at = CURRENT_TIMESTAMP
