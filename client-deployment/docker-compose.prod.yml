@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # ============================================================================
-  # PostgreSQL Database (Shared by kewalinvest and n8n)
+  # PostgreSQL Database
   # ============================================================================
   postgres:
     image: postgres:16-alpine
@@ -34,98 +34,6 @@ services:
         max-file: "3"
 
   # ============================================================================
-  # Redis for Caching and Session Management
-  # ============================================================================
-  redis:
-    image: redis:7-alpine
-    container_name: kewalinvest_redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - kewalinvest_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ============================================================================
-  # n8n Workflow Automation
-  # ============================================================================
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: n8n
-    environment:
-      # Database Configuration
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${DB_NAME:-kewalinvest}
-      DB_POSTGRESDB_USER: ${DB_USER:-kewal_admin}
-      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD}
-      DB_POSTGRESDB_SCHEMA: n8n
-
-      # n8n Configuration
-      N8N_HOST: ${N8N_HOST:-localhost}
-      N8N_PORT: 5678
-      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
-      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
-      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:5678/}
-      VUE_APP_URL_BASE_API: http://localhost:5678/
-
-      # Security
-      N8N_USER_MANAGEMENT_DISABLED: ${N8N_USER_MANAGEMENT_DISABLED:-false}
-      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
-      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-
-      # Timezone
-      GENERIC_TIMEZONE: ${TIMEZONE:-Asia/Kolkata}
-      TZ: ${TIMEZONE:-Asia/Kolkata}
-
-      # Execution settings
-      EXECUTIONS_PROCESS: main
-      EXECUTIONS_TIMEOUT: ${N8N_EXECUTIONS_TIMEOUT:--1}
-      EXECUTIONS_TIMEOUT_MAX: ${N8N_EXECUTIONS_TIMEOUT_MAX:-3600}
-
-      # Metrics (optional)
-      N8N_METRICS: ${N8N_METRICS:-false}
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - n8n_files:/files
-    ports:
-      - "${N8N_PORT:-5678}:5678"
-    networks:
-      - kewalinvest_network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ============================================================================
   # Backend API (Node.js/Express)
   # ============================================================================
   backend:
@@ -150,12 +58,6 @@ services:
       DB_USER: ${DB_USER:-kewal_admin}
       DB_PASSWORD: ${DB_PASSWORD}
 
-      # Redis Configuration
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-
       # JWT Configuration
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
@@ -164,10 +66,6 @@ services:
 
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-
-      # n8n Integration
-      N8N_WEBHOOK_URL: http://n8n:5678
-      N8N_API_KEY: ${N8N_API_KEY}
 
       # Application Settings
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -184,10 +82,6 @@ services:
       - kewalinvest_network
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      n8n:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -223,7 +117,6 @@ services:
       dockerfile: Dockerfile.prod
       args:
         REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
-        REACT_APP_N8N_URL: ${REACT_APP_N8N_URL:-http://localhost:5678}
     environment:
       # These are baked into the build, but can be overridden
       NGINX_HOST: ${FRONTEND_HOST:-localhost}
@@ -309,8 +202,5 @@ networks:
 # To backup: docker run --rm -v kewalinvest_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz /data
 volumes:
   postgres_data:
-  redis_data:
-  n8n_data:
-  n8n_files:
   userfiles_data:
   pgadmin_data:

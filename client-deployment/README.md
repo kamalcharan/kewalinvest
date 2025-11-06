@@ -114,7 +114,6 @@ After deployment completes, you'll see a screen like this:
 🌐 Access Points:
    Frontend:  http://localhost:3000
    Backend:   http://localhost:8080
-   n8n:       http://localhost:5678
    pgAdmin:   http://localhost:5050
 ```
 
@@ -321,8 +320,6 @@ kewalinvest/
 | Frontend | 3000 | Main application |
 | Backend | 8080 | API server |
 | PostgreSQL | 5432 | Database |
-| Redis | 6379 | Cache |
-| n8n | 5678 | Workflow automation |
 | pgAdmin | 5050 | Database management |
 
 **Note**: All ports can be customized in `.env` file

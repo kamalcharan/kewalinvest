@@ -118,7 +118,6 @@ TIMEZONE=$(prompt_with_default "Enter your timezone" "Asia/Kolkata")
 FRONTEND_PORT=$(prompt_with_default "Frontend port" "3000")
 BACKEND_PORT=$(prompt_with_default "Backend API port" "8080")
 PGADMIN_PORT=$(prompt_with_default "pgAdmin port" "5050")
-N8N_PORT=$(prompt_with_default "n8n port" "5678")
 
 echo ""
 
@@ -128,16 +127,13 @@ echo "-------------------------------------------"
 
 PGADMIN_EMAIL=$(prompt_with_default "pgAdmin admin email" "admin@kewalinvest.com")
 
-if prompt_yes_no "Would you like to set custom passwords?" "no"; then
+if prompt_yes_no "Would you like to set custom password for pgAdmin?" "no"; then
     echo ""
     read -sp "Enter pgAdmin password: " PGADMIN_PASSWORD
     echo ""
-    read -sp "Enter n8n admin password: " N8N_PASSWORD
-    echo ""
 else
-    echo -e "${GREEN}Auto-generating secure passwords...${NC}"
+    echo -e "${GREEN}Auto-generating secure password...${NC}"
     PGADMIN_PASSWORD=$(generate_password 16)
-    N8N_PASSWORD=$(generate_password 16)
 fi
 
 echo ""
@@ -177,21 +173,12 @@ echo -e "${BLUE}🔐 Generating secure passwords and encryption keys...${NC}"
 # Database credentials
 DB_PASSWORD=$(generate_password 32)
 
-# Redis password
-REDIS_PASSWORD=$(generate_password 32)
-
 # JWT secrets
 JWT_SECRET=$(generate_32char_key)
 JWT_REFRESH_SECRET=$(generate_32char_key)
 
 # Encryption key (exactly 32 characters)
 ENCRYPTION_KEY=$(generate_32char_key)
-
-# n8n encryption key
-N8N_ENCRYPTION_KEY=$(generate_32char_key)
-
-# n8n API key
-N8N_API_KEY=$(generate_password 40)
 
 echo -e "${GREEN}✅ All credentials generated successfully${NC}"
 echo ""
@@ -212,13 +199,9 @@ cat .env.example > .env
 
 # Replace CHANGE_ME placeholders with generated values
 sed -i.bak "s|CHANGE_ME_SECURE_PASSWORD_32_CHARS|$DB_PASSWORD|g" .env
-sed -i.bak "s|CHANGE_ME_REDIS_PASSWORD|$REDIS_PASSWORD|g" .env
 sed -i.bak "s|CHANGE_ME_JWT_SECRET_MIN_32_CHARACTERS_LONG|$JWT_SECRET|g" .env
 sed -i.bak "s|CHANGE_ME_REFRESH_SECRET_MIN_32_CHARS|$JWT_REFRESH_SECRET|g" .env
 sed -i.bak "s|CHANGE_ME_EXACTLY_32_CHARS_KEY!|$ENCRYPTION_KEY|g" .env
-sed -i.bak "s|CHANGE_ME_N8N_PASSWORD|$N8N_PASSWORD|g" .env
-sed -i.bak "s|CHANGE_ME_N8N_ENCRYPTION_KEY_32_CHARS|$N8N_ENCRYPTION_KEY|g" .env
-sed -i.bak "s|CHANGE_ME_N8N_API_KEY|$N8N_API_KEY|g" .env
 sed -i.bak "s|CHANGE_ME_PGADMIN_PASSWORD|$PGADMIN_PASSWORD|g" .env
 
 # Update configuration values
@@ -226,18 +209,13 @@ sed -i.bak "s|^TIMEZONE=.*|TIMEZONE=$TIMEZONE|g" .env
 sed -i.bak "s|^FRONTEND_PORT=.*|FRONTEND_PORT=$FRONTEND_PORT|g" .env
 sed -i.bak "s|^BACKEND_PORT=.*|BACKEND_PORT=$BACKEND_PORT|g" .env
 sed -i.bak "s|^PGADMIN_PORT=.*|PGADMIN_PORT=$PGADMIN_PORT|g" .env
-sed -i.bak "s|^N8N_PORT=.*|N8N_PORT=$N8N_PORT|g" .env
 sed -i.bak "s|^PGADMIN_EMAIL=.*|PGADMIN_EMAIL=$PGADMIN_EMAIL|g" .env
 sed -i.bak "s|^DB_PORT=.*|DB_PORT=$DB_PORT|g" .env
-sed -i.bak "s|^REDIS_PORT=.*|REDIS_PORT=$REDIS_PORT|g" .env
 sed -i.bak "s|^BACKEND_MEMORY_LIMIT=.*|BACKEND_MEMORY_LIMIT=$BACKEND_MEMORY|g" .env
 sed -i.bak "s|^BACKEND_CPU_LIMIT=.*|BACKEND_CPU_LIMIT=$BACKEND_CPU|g" .env
 
 # Update URLs with correct ports
 sed -i.bak "s|REACT_APP_API_URL=.*|REACT_APP_API_URL=http://localhost:$BACKEND_PORT|g" .env
-sed -i.bak "s|REACT_APP_N8N_URL=.*|REACT_APP_N8N_URL=http://localhost:$N8N_PORT|g" .env
-sed -i.bak "s|N8N_WEBHOOK_URL=.*|N8N_WEBHOOK_URL=http://localhost:$N8N_PORT/|g" .env
-sed -i.bak "s|N8N_EDITOR_BASE_URL=.*|N8N_EDITOR_BASE_URL=http://localhost:$N8N_PORT/|g" .env
 
 # Remove backup file
 rm -f .env.bak
@@ -251,7 +229,7 @@ echo ""
 
 echo -e "${BLUE}Creating data directories...${NC}"
 
-mkdir -p data/{postgres,redis,n8n,n8n_files,UserFiles,pgadmin}
+mkdir -p data/{postgres,UserFiles,pgadmin}
 
 echo -e "${GREEN}✅ Data directories created${NC}"
 echo ""
@@ -286,11 +264,6 @@ echo "  URL: http://localhost:$PGADMIN_PORT"
 echo "  Email: $PGADMIN_EMAIL"
 echo "  Password: $PGADMIN_PASSWORD"
 echo ""
-echo -e "${YELLOW}n8n (Workflow Automation):${NC}"
-echo "  URL: http://localhost:$N8N_PORT"
-echo "  Username: admin"
-echo "  Password: $N8N_PASSWORD"
-echo ""
 echo "-------------------------------------------"
 echo ""
 
@@ -317,11 +290,6 @@ pgAdmin:
   URL: http://localhost:$PGADMIN_PORT
   Email: $PGADMIN_EMAIL
   Password: $PGADMIN_PASSWORD
-
-n8n (Workflow Automation):
-  URL: http://localhost:$N8N_PORT
-  Username: admin
-  Password: $N8N_PASSWORD
 
 IMPORTANT:
 - Keep this file secure

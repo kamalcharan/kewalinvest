@@ -52,8 +52,6 @@ docker-compose -f docker-compose.prod.yml down
 echo ""
 echo "🗑️  Removing old volumes (if any)..."
 docker volume rm kewalinvest_postgres_data 2>/dev/null || true
-docker volume rm kewalinvest_redis_data 2>/dev/null || true
-docker volume rm kewalinvest_n8n_data 2>/dev/null || true
 docker volume rm kewalinvest_pgadmin_data 2>/dev/null || true
 
 echo ""
