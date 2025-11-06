@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goals Feature - Technical Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .section h3 {
+            color: #764ba2;
+            font-size: 1.3rem;
+            margin: 25px 0 15px 0;
+        }
+
+        .tree {
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tree-node {
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .tree-node:hover {
+            background: #e9ecef;
+            border-left-color: #764ba2;
+            transform: translateX(5px);
+        }
+
+        .tree-node.level-1 {
+            margin-left: 0px;
+            border-left-color: #667eea;
+            background: #e7f3ff;
+        }
+
+        .tree-node.level-2 {
+            margin-left: 30px;
+            border-left-color: #896ed0;
+            background: #f0ebf7;
+        }
+
+        .tree-node.level-3 {
+            margin-left: 60px;
+            border-left-color: #a88dd3;
+            background: #f7f4fa;
+        }
+
+        .tree-node.level-4 {
+            margin-left: 90px;
+            border-left-color: #c0acd6;
+            background: #faf8fc;
+        }
+
+        .tree-node.level-5 {
+            margin-left: 120px;
+            border-left-color: #d4c7e2;
+            background: #fcfbfd;
+        }
+
+        .tree-node strong {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge.page {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge.component {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.hook {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge.service {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.backend {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .badge.table {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .formula {
+            background: #f5f5f5;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .formula strong {
+            color: #764ba2;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .info-box h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+        }
+
+        .info-box li {
+            margin: 8px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .icon {
+            margin-right: 8px;
+        }
+
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #e83e8c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Goals Feature Documentation</h1>
+            <p>Complete technical overview of the Goal Tracking & Management system</p>
+        </header>
+
+        <div class="content">
+            <!-- ============= SECTION 1: FILE STRUCTURE ============= -->
+            <div class="section">
+                <h2>1️⃣ File Structure - Hierarchical Graph</h2>
+
+                <h3>📄 Main Pages</h3>
+                <div class="tree">
+                    <div class="tree-node level-1">
+                        <strong>📄 CustomerViewPage.tsx</strong> <span class="badge page">MAIN PAGE</span>
+                        <div class="description">Customer profile page with tabs: Overview, Portfolio, Goals, Meetings, Transactions. Goals displayed under "Goals & Actions" tab.</div>
+                    </div>
+
+                    <!-- SUB PAGES -->
+                    <div class="tree-node level-2">
+                        <strong>🧩 Goals Tab Section</strong> <span class="badge component">TAB VIEW</span>
+                        <div class="description">Displays all customer goals with progress tracking, watchlist panel, and asset allocation utilization.</div>
+                    </div>
+
+                    <!-- COMPONENTS -->
+                    <div class="tree-node level-3">
+                        <strong>🎴 GoalCard.tsx</strong> <span class="badge component">COMPONENT</span>
+                        <div class="description">Individual goal card showing goal name, type, target, progress bar, status badge, and action buttons (edit, delete, watchlist).</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🎴 GoalSetupModal.tsx</strong> <span class="badge component">MODAL</span>
+                        <div class="description">Modal for creating/editing goals. Dynamically renders form based on selected goal type (time-based, price-based, or time & price).</div>
+                    </div>
+
+                    <div class="tree-node level-4">
+                        <strong>📝 TimeBasedGoalForm.tsx</strong> <span class="badge component">FORM</span>
+                        <div class="description">Form for time-based goals: Enter target date, system calculates projected corpus based on current investments.</div>
+                    </div>
+
+                    <div class="tree-node level-4">
+                        <strong>📝 PriceBasedGoalForm.tsx</strong> <span class="badge component">FORM</span>
+                        <div class="description">Form for price-based goals: Enter target amount, system calculates achievement date based on current investment pace.</div>
+                    </div>
+
+                    <div class="tree-node level-4">
+                        <strong>📝 TimeAndPriceGoalForm.tsx</strong> <span class="badge component">FORM</span>
+                        <div class="description">Form for time & price goals: Enter both target date and amount, system performs gap analysis (SIP shortfall/surplus).</div>
+                    </div>
+
+                    <div class="tree-node level-4">
+                        <strong>🔍 GoalSchemeSelector.tsx</strong> <span class="badge component">SELECTOR</span>
+                        <div class="description">Multi-select component to link portfolio schemes to goals with allocation percentages (e.g., 40% of Scheme A is for Education goal).</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🎴 GoalDetailsModal.tsx</strong> <span class="badge component">MODAL</span>
+                        <div class="description">Detailed view showing goal progress history, milestones, projected vs actual values, and recommended corrective actions.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>📊 GoalProgressTracker.tsx</strong> <span class="badge component">DASHBOARD</span>
+                        <div class="description">Summary dashboard showing total goals, on-track count, requiring attention count, and upcoming milestones.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>📈 GoalProgressChart.tsx</strong> <span class="badge component">CHART</span>
+                        <div class="description">Line chart visualizing goal progress over time: actual corpus vs projected corpus vs target.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>⭐ GoalWatchlistPanel.tsx</strong> <span class="badge component">PANEL</span>
+                        <div class="description">Sidebar showing watchlisted goals for quick monitoring. Auto-adds goals that are behind schedule or require attention.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🔄 GoalRecalculationModal.tsx</strong> <span class="badge component">MODAL</span>
+                        <div class="description">Triggered when recalculating goals. Shows before/after comparison of projected values and timeline changes.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🚨 GoalAlertBanner.tsx</strong> <span class="badge component">BANNER</span>
+                        <div class="description">Alert banner showing critical goal notifications: corpus gap increasing, behind schedule, milestone approaching.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🎯 GoalActionCard.tsx</strong> <span class="badge component">CARD</span>
+                        <div class="description">Action card suggesting corrective measures: increase SIP, rebalance portfolio, extend timeline, reduce target.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>📊 GoalSummaryCard.tsx</strong> <span class="badge component">CARD</span>
+                        <div class="description">Summary card showing aggregated goal statistics for a customer: total corpus, monthly SIP, success rate.</div>
+                    </div>
+
+                    <div class="tree-node level-3">
+                        <strong>🥧 AssetAllocationUtilization.tsx</strong> <span class="badge component">WIDGET</span>
+                        <div class="description">Pie chart showing portfolio allocation: how much is allocated to goals vs available for new goals.</div>
+                    </div>
+
+                    <!-- HOOKS -->
+                    <div class="tree-node level-4">
+                        <strong>🪝 useGoals.ts</strong> <span class="badge hook">REACT HOOK</span>
+                        <div class="description">Custom hooks: useCustomerGoals(), useGoalSummary(), useRecalculateGoal(), useAddToWatchlist(). Manages goal state, fetching, mutations.</div>
+                    </div>
+
+                    <!-- SERVICES -->
+                    <div class="tree-node level-5">
+                        <strong>⚙️ goal.service.ts</strong> <span class="badge service">FRONTEND SERVICE</span>
+                        <div class="description">Frontend service layer: createGoal(), updateGoal(), deleteGoal(), recalculateGoal(), getCustomerGoals(), getGoalHistory(). Calls backend APIs.</div>
+                    </div>
+
+                    <!-- UTILS -->
+                    <div class="tree-node level-5">
+                        <strong>🛠️ goalUtils.ts</strong> <span class="badge service">UTILITY</span>
+                        <div class="description">Utility functions: formatCurrency(), calculateProgress(), getStatusColor(), getActionLabel(), isPastDue().</div>
+                    </div>
+
+                    <!-- BACKEND CONTROLLER -->
+                    <div class="tree-node level-5">
+                        <strong>🎮 goal.controller.ts</strong> <span class="badge backend">CONTROLLER</span>
+                        <div class="description">REST API endpoints: POST /api/goals (create), GET /api/goals/customer/:id (list), PUT /api/goals/:id (update), POST /api/goals/:id/recalculate.</div>
+                    </div>
+
+                    <!-- BACKEND SERVICE -->
+                    <div class="tree-node level-5">
+                        <strong>⚙️ goal.service.ts</strong> <span class="badge backend">BACKEND SERVICE</span>
+                        <div class="description">Business logic layer: createGoal(), updateGoal(), deleteGoal(), getCustomerGoals(), getGoalHistory(), calculateGoalProgress().</div>
+                    </div>
+
+                    <!-- CALCULATOR SERVICE -->
+                    <div class="tree-node level-5">
+                        <strong>🧮 goal.calculator.service.ts</strong> <span class="badge backend">CALCULATOR</span>
+                        <div class="description">Financial calculation engine: recalculateTimeBasedGoal(), recalculatePriceBasedGoal(), recalculateTimeAndPriceGoal(). Uses compound interest formulas.</div>
+                    </div>
+
+                    <!-- BACKGROUND JOB -->
+                    <div class="tree-node level-5">
+                        <strong>⏰ goal.recalculation.job.ts</strong> <span class="badge backend">CRON JOB</span>
+                        <div class="description">Scheduled job (runs monthly): Recalculates all active goals, updates progress snapshots, generates alerts for goals off-track.</div>
+                    </div>
+
+                    <!-- DATABASE TABLES -->
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_jtbd_configurations</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Main goal storage table. Stores goal metadata and config_data (JSONB) containing goal-specific calculations and targets.</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_goal_progress_snapshots</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Historical tracking table. Stores monthly snapshots of goal progress: current_value, projected_corpus, on_track status, deviation%.</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_goal_scheme_allocations</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Portfolio linking table. Maps which schemes contribute to which goals with allocation percentages (many-to-many relationship).</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_goal_alerts</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Alerts storage. Generated when goals are behind schedule, corpus gap increases, or milestones are approaching.</div>
+                    </div>
+
+                    <div class="tree-node level-1">
+                        <strong>📄 JTBDDashboardPage.tsx</strong> <span class="badge page">DASHBOARD PAGE</span>
+                        <div class="description">Aggregate view of all goals across all customers. Shows upcoming alerts, goals requiring attention, monthly milestone calendar.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 2: GOAL TYPES ============= -->
+            <div class="section">
+                <h2>2️⃣ Goal Types</h2>
+
+                <div class="info-box">
+                    <h4>1. Time-Based Goal 📅</h4>
+                    <p><strong>Concept:</strong> Fixed target date, flexible corpus amount.</p>
+                    <p><strong>Question:</strong> "If I invest ₹10,000/month for 15 years, how much will I have?"</p>
+                    <p><strong>Use Case:</strong> Retirement planning (retire in 2045), Child's 18th birthday fund.</p>
+                    <div class="formula">
+                        <strong>Calculation:</strong><br>
+                        Projected Corpus = FV(current_value, monthly_SIP, years_to_target, expected_return_rate)<br>
+                        <br>
+                        <strong>Formula:</strong> FV = PV × (1 + r)^n + PMT × [((1 + r)^n - 1) / r]<br>
+                        Where: PV = current value, PMT = monthly SIP, r = monthly return rate, n = months
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>2. Price-Based Goal 💰</h4>
+                    <p><strong>Concept:</strong> Fixed target amount, flexible achievement date.</p>
+                    <p><strong>Question:</strong> "When will I reach ₹50 lakhs at my current investment pace?"</p>
+                    <p><strong>Use Case:</strong> House down payment (₹20L), Wedding fund (₹15L).</p>
+                    <div class="formula">
+                        <strong>Calculation:</strong><br>
+                        Months to Achievement = NPER(target_amount, current_value, monthly_SIP, expected_return_rate)<br>
+                        Projected Date = Today + Months to Achievement<br>
+                        <br>
+                        <strong>Formula:</strong> n = log[(target / PV) × (r / PMT) + 1] / log(1 + r)<br>
+                        Where: target = target amount, PV = current value, PMT = monthly SIP, r = monthly return
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>3. Time & Price Goal 🎯</h4>
+                    <p><strong>Concept:</strong> Fixed target date AND fixed target amount. System performs gap analysis.</p>
+                    <p><strong>Question:</strong> "I need ₹1 Crore by 2035. Am I on track?"</p>
+                    <p><strong>Use Case:</strong> Child's education (₹50L by 2030), Retirement corpus (₹2Cr by 2045).</p>
+                    <div class="formula">
+                        <strong>Calculations:</strong><br>
+                        1. Projected Corpus = FV(current_value, current_monthly_SIP, years_to_target, expected_return)<br>
+                        2. Required Monthly SIP = PMT(target_amount, current_value, years_to_target, expected_return)<br>
+                        3. Monthly SIP Gap = Required SIP - Current SIP<br>
+                        4. Corpus Gap = Target Amount - Projected Corpus<br>
+                        5. Progress % = (Projected Corpus / Target Amount) × 100<br>
+                        6. On Track = (Corpus Gap <= 5% of Target)<br>
+                        7. Probability of Success = Monte Carlo simulation (considering market volatility)<br>
+                        <br>
+                        <strong>Action Logic:</strong><br>
+                        - If SIP Gap > 0: Recommend increasing SIP by gap amount<br>
+                        - If Corpus Gap > 20%: Recommend rebalancing to higher return schemes<br>
+                        - If both gaps exist: Suggest extending timeline or reducing target
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 3: BUSINESS LOGIC ============= -->
+            <div class="section">
+                <h2>3️⃣ Business Logic & Calculations</h2>
+
+                <h3>Goal Creation Flow</h3>
+                <ol>
+                    <li><strong>User selects goal type</strong> → Modal shows appropriate form</li>
+                    <li><strong>User enters goal details:</strong> Name, target date/amount, expected return (12% default), inflation rate (6% default)</li>
+                    <li><strong>User links portfolio schemes:</strong> Select schemes and allocation % (e.g., 40% of HDFC Equity = Education goal)</li>
+                    <li><strong>System calculates current value:</strong> Sums allocated portions from customer portfolio</li>
+                    <li><strong>System calculates monthly contribution:</strong> Sums SIP amounts from linked schemes</li>
+                    <li><strong>Backend runs calculations:</strong> Uses goal.calculator.service.ts formulas</li>
+                    <li><strong>System stores goal:</strong> In t_jtbd_configurations with config_data as JSONB</li>
+                    <li><strong>System creates snapshot:</strong> First entry in t_goal_progress_snapshots</li>
+                </ol>
+
+                <h3>Goal Tracking & Recalculation</h3>
+                <div class="info-box">
+                    <h4>When does recalculation happen?</h4>
+                    <ul>
+                        <li><strong>Manual Trigger:</strong> User clicks "Recalculate" button</li>
+                        <li><strong>Scheduled Job:</strong> Monthly cron job (goal.recalculation.job.ts) runs at 2 AM on 1st of month</li>
+                        <li><strong>Transaction Event:</strong> When new SIP/redemption happens in linked schemes</li>
+                        <li><strong>Portfolio Rebalance:</strong> When allocation percentages change</li>
+                    </ul>
+
+                    <h4>Recalculation Process</h4>
+                    <ol>
+                        <li>Fetch customer's portfolio holdings (from t_portfolio_holdings OR calculate from transactions + NAV)</li>
+                        <li>Calculate current value: Sum of (scheme units × latest NAV × allocation %)</li>
+                        <li>Calculate monthly contribution: Sum of SIP amounts for linked schemes</li>
+                        <li>Run goal-specific formulas based on goal type</li>
+                        <li>Compare with previous snapshot:
+                            <ul>
+                                <li>If deviation > 10%: Generate alert</li>
+                                <li>If behind schedule: Auto-add to watchlist</li>
+                                <li>If milestone approaching (within 3 months): Generate reminder</li>
+                            </ul>
+                        </li>
+                        <li>Save new snapshot to t_goal_progress_snapshots</li>
+                        <li>Update config_data in t_jtbd_configurations</li>
+                    </ol>
+
+                    <h4>Alert Generation Logic</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Condition</th>
+                                <th>Alert Type</th>
+                                <th>Severity</th>
+                                <th>Action Required</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Corpus gap > 20%</td>
+                                <td>CORPUS_SHORTFALL</td>
+                                <td>HIGH</td>
+                                <td>Increase SIP or rebalance</td>
+                            </tr>
+                            <tr>
+                                <td>Behind schedule by 6+ months</td>
+                                <td>TIMELINE_DELAY</td>
+                                <td>HIGH</td>
+                                <td>Increase contribution</td>
+                            </tr>
+                            <tr>
+                                <td>Deviation increased from last month</td>
+                                <td>DEVIATION_INCREASED</td>
+                                <td>MEDIUM</td>
+                                <td>Review and recalculate</td>
+                            </tr>
+                            <tr>
+                                <td>Milestone within 90 days</td>
+                                <td>MILESTONE_APPROACHING</td>
+                                <td>LOW</td>
+                                <td>Review progress</td>
+                            </tr>
+                            <tr>
+                                <td>Probability of success < 50%</td>
+                                <td>LOW_SUCCESS_PROBABILITY</td>
+                                <td>HIGH</td>
+                                <td>Revise goal or increase SIP</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Portfolio Allocation Tracking</h3>
+                <div class="info-box">
+                    <p><strong>Problem:</strong> Customer has ₹10L portfolio. They create goals totaling ₹15L in allocations. System must prevent over-allocation.</p>
+
+                    <h4>Allocation Validation:</h4>
+                    <ol>
+                        <li>Get customer's total portfolio value per scheme (e.g., HDFC Equity = ₹5L)</li>
+                        <li>Sum all existing goal allocations for that scheme (e.g., Education goal = 40%, Retirement goal = 30% = 70% used)</li>
+                        <li>Calculate available allocation: 100% - 70% = 30% available</li>
+                        <li>When creating new goal: Ensure allocation % ≤ available %</li>
+                        <li>Show UI: "₹1.5L available (30% of ₹5L HDFC Equity)"</li>
+                    </ol>
+
+                    <p><strong>Component:</strong> AssetAllocationUtilization.tsx shows this as a pie chart</p>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 4: DATABASE TABLES ============= -->
+            <div class="section">
+                <h2>4️⃣ Database Tables</h2>
+
+                <h3>📊 Table: t_jtbd_configurations</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Main storage for all goals (Goals are stored as JTBD type = 'goal_tracking')</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Unique goal ID</td>
+                            </tr>
+                            <tr>
+                                <td>customer_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>Which customer owns this goal</td>
+                            </tr>
+                            <tr>
+                                <td>jtbd_type</td>
+                                <td>VARCHAR(50)</td>
+                                <td>Always 'goal_tracking' for goals</td>
+                            </tr>
+                            <tr>
+                                <td>title</td>
+                                <td>VARCHAR(255)</td>
+                                <td>Goal name (e.g., "Child's Education Fund")</td>
+                            </tr>
+                            <tr>
+                                <td>config_data</td>
+                                <td>JSONB</td>
+                                <td>Stores entire goal configuration: goal_type, target_date, target_amount, projected_corpus, monthly_contribution, linked_schemes[], etc.</td>
+                            </tr>
+                            <tr>
+                                <td>is_watchlisted</td>
+                                <td>BOOLEAN</td>
+                                <td>Is this goal in watchlist for quick monitoring</td>
+                            </tr>
+                            <tr>
+                                <td>watchlist_auto_added</td>
+                                <td>BOOLEAN</td>
+                                <td>Was it auto-added (because it's behind schedule)?</td>
+                            </tr>
+                            <tr>
+                                <td>next_alert_date</td>
+                                <td>DATE</td>
+                                <td>Next date to generate alert (for recurring reminders)</td>
+                            </tr>
+                            <tr>
+                                <td>is_active</td>
+                                <td>BOOLEAN</td>
+                                <td>Soft delete flag (archived goals)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p><strong>Example config_data:</strong></p>
+                    <div class="formula">
+{
+  "goal_name": "Retirement Fund",
+  "goal_type": "time_and_price_goal",
+  "target_date": "2045-12-31",
+  "target_amount": 20000000,
+  "expected_return_rate": 12,
+  "inflation_rate": 6,
+  "current_value": 2500000,
+  "monthly_contribution": 25000,
+  "projected_corpus": 18500000,
+  "corpus_gap": 1500000,
+  "required_monthly_sip": 27500,
+  "monthly_sip_gap": 2500,
+  "probability_of_success": 82,
+  "on_track": false,
+  "deviation_percentage": -7.5,
+  "action_required": "increase_sip",
+  "linked_schemes": [
+    {"scheme_code": "INF200K01234", "scheme_name": "HDFC Equity", "allocation_percentage": 60},
+    {"scheme_code": "INF090I01234", "scheme_name": "ICICI Bluechip", "allocation_percentage": 40}
+  ]
+}
+                    </div>
+                </div>
+
+                <h3>📊 Table: t_goal_progress_snapshots</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Historical tracking of goal progress (one snapshot per month per goal)</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Snapshot ID</td>
+                            </tr>
+                            <tr>
+                                <td>goal_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>References t_jtbd_configurations(id)</td>
+                            </tr>
+                            <tr>
+                                <td>snapshot_date</td>
+                                <td>DATE</td>
+                                <td>Date of this snapshot (usually 1st of month)</td>
+                            </tr>
+                            <tr>
+                                <td>current_value</td>
+                                <td>NUMERIC(15,2)</td>
+                                <td>Portfolio value allocated to this goal on snapshot_date</td>
+                            </tr>
+                            <tr>
+                                <td>monthly_contribution</td>
+                                <td>NUMERIC(15,2)</td>
+                                <td>SIP amount at this snapshot</td>
+                            </tr>
+                            <tr>
+                                <td>projected_corpus</td>
+                                <td>NUMERIC(15,2)</td>
+                                <td>Projected final value at target date</td>
+                            </tr>
+                            <tr>
+                                <td>projected_achievement_date</td>
+                                <td>DATE</td>
+                                <td>For price-based goals: when will target be achieved</td>
+                            </tr>
+                            <tr>
+                                <td>probability_of_success</td>
+                                <td>NUMERIC(5,2)</td>
+                                <td>% probability of achieving goal (0-100)</td>
+                            </tr>
+                            <tr>
+                                <td>on_track</td>
+                                <td>BOOLEAN</td>
+                                <td>Is goal on track to achieve target?</td>
+                            </tr>
+                            <tr>
+                                <td>deviation_percentage</td>
+                                <td>NUMERIC(5,2)</td>
+                                <td>+ve = ahead of schedule, -ve = behind schedule</td>
+                            </tr>
+                            <tr>
+                                <td>recalculation_trigger</td>
+                                <td>VARCHAR(50)</td>
+                                <td>What triggered this snapshot: 'manual', 'scheduled_job', 'transaction_event'</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p><strong>Usage:</strong> GoalProgressChart.tsx queries this table to plot progress over time.</p>
+                </div>
+
+                <h3>📊 Table: t_goal_scheme_allocations</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Links goals to portfolio schemes (many-to-many relationship)</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Allocation ID</td>
+                            </tr>
+                            <tr>
+                                <td>goal_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>References t_jtbd_configurations(id)</td>
+                            </tr>
+                            <tr>
+                                <td>scheme_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>References t_schemes(id)</td>
+                            </tr>
+                            <tr>
+                                <td>allocation_percentage</td>
+                                <td>NUMERIC(5,2)</td>
+                                <td>What % of this scheme is for this goal (0-100)</td>
+                            </tr>
+                            <tr>
+                                <td>notes</td>
+                                <td>TEXT</td>
+                                <td>Optional notes about this allocation</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p><strong>Example:</strong></p>
+                    <ul>
+                        <li>Goal: "Education Fund" (goal_id=5)</li>
+                        <li>Linked to: HDFC Equity (scheme_id=101, allocation=60%), ICICI Bluechip (scheme_id=102, allocation=40%)</li>
+                        <li>Means: 60% of customer's HDFC Equity holdings + 40% of ICICI Bluechip holdings = Education Fund corpus</li>
+                    </ul>
+                </div>
+
+                <h3>📊 Table: t_goal_alerts</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Stores alerts generated for goals</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Alert ID</td>
+                            </tr>
+                            <tr>
+                                <td>goal_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>References t_jtbd_configurations(id)</td>
+                            </tr>
+                            <tr>
+                                <td>customer_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>For quick customer-level queries</td>
+                            </tr>
+                            <tr>
+                                <td>alert_type</td>
+                                <td>VARCHAR(50)</td>
+                                <td>'corpus_shortfall', 'timeline_delay', 'deviation_increased', 'milestone_approaching', 'low_success_probability'</td>
+                            </tr>
+                            <tr>
+                                <td>severity</td>
+                                <td>VARCHAR(20)</td>
+                                <td>'high', 'medium', 'low'</td>
+                            </tr>
+                            <tr>
+                                <td>message</td>
+                                <td>TEXT</td>
+                                <td>Human-readable alert message</td>
+                            </tr>
+                            <tr>
+                                <td>action_required</td>
+                                <td>VARCHAR(100)</td>
+                                <td>'increase_sip', 'rebalance_portfolio', 'extend_timeline', 'reduce_target'</td>
+                            </tr>
+                            <tr>
+                                <td>action_details</td>
+                                <td>JSONB</td>
+                                <td>Specific recommendations: {"recommended_sip_increase": 2500, "from": 25000, "to": 27500}</td>
+                            </tr>
+                            <tr>
+                                <td>is_acknowledged</td>
+                                <td>BOOLEAN</td>
+                                <td>Has user seen/acknowledged this alert?</td>
+                            </tr>
+                            <tr>
+                                <td>acknowledged_at</td>
+                                <td>TIMESTAMP</td>
+                                <td>When was it acknowledged</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p><strong>Display:</strong> GoalAlertBanner.tsx shows unacknowledged alerts.</p>
+                </div>
+
+                <h3>📊 Related Table: t_portfolio_holdings (MISSING - NEEDS IMPLEMENTATION)</h3>
+                <div class="info-box" style="background: #fff3cd; border-color: #ffc107;">
+                    <p><strong>⚠️ ISSUE:</strong> Goal calculations need <code>t_portfolio_holdings</code> table which doesn't exist yet.</p>
+                    <p><strong>Current workaround:</strong> goal.service.ts queries <code>t_customer_master_portfolio</code> but it doesn't have <code>current_value</code> column.</p>
+                    <p><strong>Solution needed:</strong> Create VIEW or add column to calculate portfolio values for goal tracking.</p>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 5: API ENDPOINTS ============= -->
+            <div class="section">
+                <h2>5️⃣ API Endpoints</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/goals</td>
+                            <td>Create new goal</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/customer/:customerId</td>
+                            <td>Get all goals for a customer</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/:goalId</td>
+                            <td>Get single goal by ID</td>
+                        </tr>
+                        <tr>
+                            <td>PUT</td>
+                            <td>/api/goals/:goalId</td>
+                            <td>Update goal configuration</td>
+                        </tr>
+                        <tr>
+                            <td>DELETE</td>
+                            <td>/api/goals/:goalId</td>
+                            <td>Delete goal (soft delete: sets is_active=false)</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/goals/:goalId/recalculate</td>
+                            <td>Manual recalculation trigger</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/goals/customer/:customerId/recalculate</td>
+                            <td>Recalculate all goals for a customer</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/customer/:customerId/summary</td>
+                            <td>Get aggregated goal summary for customer</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/:goalId/history</td>
+                            <td>Get progress snapshots for a goal</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/customer/:customerId/tracking-status</td>
+                            <td>Get tracking status: on-track count, behind count, etc.</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/customer/:customerId/allocation-utilization</td>
+                            <td>Get portfolio allocation: allocated vs available</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/goals/:goalId/watchlist</td>
+                            <td>Add goal to watchlist</td>
+                        </tr>
+                        <tr>
+                            <td>DELETE</td>
+                            <td>/api/goals/:goalId/watchlist</td>
+                            <td>Remove goal from watchlist</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/goals/customer/:customerId/watchlist</td>
+                            <td>Get all watchlisted goals</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ============= SECTION 6: KEY FORMULAS ============= -->
+            <div class="section">
+                <h2>6️⃣ Financial Formulas Used</h2>
+
+                <div class="info-box">
+                    <h4>Future Value (FV) - For Time-Based Goals</h4>
+                    <div class="formula">
+FV = PV × (1 + r)^n + PMT × [((1 + r)^n - 1) / r]
+
+Where:
+- FV = Future Value (projected corpus)
+- PV = Present Value (current portfolio value)
+- PMT = Periodic Payment (monthly SIP)
+- r = Periodic Interest Rate (annual_return_rate / 12 / 100)
+- n = Number of Periods (years × 12)
+
+Example:
+PV = ₹5,00,000
+PMT = ₹10,000/month
+r = 12% p.a. = 1% per month = 0.01
+n = 15 years = 180 months
+
+FV = 500000 × (1.01)^180 + 10000 × [((1.01)^180 - 1) / 0.01]
+FV ≈ 29,59,918 + 49,95,802 = ₹79,55,720
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>Number of Periods (NPER) - For Price-Based Goals</h4>
+                    <div class="formula">
+n = log[(FV / PV) × (r / PMT) + 1] / log(1 + r)
+
+Where:
+- n = Number of months to achieve target
+- FV = Future Value (target amount)
+- PV = Present Value (current value)
+- PMT = Monthly SIP
+- r = Monthly interest rate
+
+Example:
+FV = ₹50,00,000
+PV = ₹5,00,000
+PMT = ₹10,000
+r = 1% per month
+
+n = log[(5000000/500000) × (0.01/10000) + 1] / log(1.01)
+n ≈ 183 months ≈ 15.25 years
+Achievement Date = Today + 15.25 years
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>Payment (PMT) - For Time & Price Goals</h4>
+                    <div class="formula">
+PMT = (FV - PV × (1 + r)^n) × [r / ((1 + r)^n - 1)]
+
+Where:
+- PMT = Required monthly SIP
+- FV = Target amount
+- PV = Current value
+- r = Monthly interest rate
+- n = Months to target date
+
+Example:
+FV = ₹1,00,00,000 (target)
+PV = ₹10,00,000 (current)
+r = 1% per month
+n = 20 years = 240 months
+
+PMT = (10000000 - 1000000 × (1.01)^240) × [0.01 / ((1.01)^240 - 1)]
+PMT ≈ ₹21,850/month (required SIP)
+
+If current SIP = ₹15,000/month
+Monthly Gap = 21850 - 15000 = ₹6,850/month shortfall
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>Inflation Adjustment</h4>
+                    <div class="formula">
+Real Value = Nominal Value / (1 + inflation_rate)^years
+
+Example:
+Projected Corpus = ₹1 Crore (after 20 years)
+Inflation Rate = 6% p.a.
+years = 20
+
+Real Value = 10000000 / (1.06)^20
+Real Value ≈ ₹31,18,047 (in today's money)
+
+Purchasing Power Lost = 10000000 - 3118047 = ₹68,81,953 (68.82%)
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 7: USER WORKFLOWS ============= -->
+            <div class="section">
+                <h2>7️⃣ User Workflows</h2>
+
+                <h3>Workflow 1: Creating a New Goal</h3>
+                <ol>
+                    <li>Navigate to Customer → Goals tab → Click "Add Goal"</li>
+                    <li>Modal opens (GoalSetupModal.tsx)</li>
+                    <li>Enter goal name: "Child's Education"</li>
+                    <li>Select goal type: "Time & Price Goal"</li>
+                    <li>Enter target date: "2030-06-01"</li>
+                    <li>Enter target amount: "₹50,00,000"</li>
+                    <li>Set expected return: 12% (default)</li>
+                    <li>Link schemes:
+                        <ul>
+                            <li>HDFC Equity: 60% allocation</li>
+                            <li>ICICI Bluechip: 40% allocation</li>
+                        </ul>
+                    </li>
+                    <li>System calculates:
+                        <ul>
+                            <li>Current value = ₹2,50,000 (from portfolio)</li>
+                            <li>Monthly contribution = ₹8,000 (SIPs)</li>
+                            <li>Projected corpus = ₹48,50,000 (calculation)</li>
+                            <li>Corpus gap = -₹1,50,000 (shortfall)</li>
+                            <li>Required SIP = ₹9,200/month</li>
+                            <li>SIP gap = +₹1,200/month needed</li>
+                        </ul>
+                    </li>
+                    <li>Click "Create Goal"</li>
+                    <li>Goal saved → Alert shown: "Increase SIP by ₹1,200/month to stay on track"</li>
+                </ol>
+
+                <h3>Workflow 2: Monitoring Goals</h3>
+                <ol>
+                    <li>GoalProgressTracker shows:
+                        <ul>
+                            <li>Total Goals: 5</li>
+                            <li>On Track: 3 (green)</li>
+                            <li>Needs Attention: 2 (yellow/red)</li>
+                        </ul>
+                    </li>
+                    <li>Click on goal card → Opens GoalDetailsModal</li>
+                    <li>View progress chart showing actual vs projected growth</li>
+                    <li>See alerts: "Corpus gap increased by 2% this month"</li>
+                    <li>Review recommended actions: "Increase SIP by ₹1,500 OR extend timeline by 6 months"</li>
+                </ol>
+
+                <h3>Workflow 3: Recalculation</h3>
+                <ol>
+                    <li>Customer makes new SIP transaction in linked scheme</li>
+                    <li>System detects transaction event</li>
+                    <li>Triggers recalculation:
+                        <ul>
+                            <li>Fetches updated portfolio value</li>
+                            <li>Recalculates monthly contribution</li>
+                            <li>Runs formulas again</li>
+                            <li>Compares with previous snapshot</li>
+                            <li>Generates alert if deviation increased</li>
+                        </ul>
+                    </li>
+                    <li>GoalRecalculationModal shows before/after comparison</li>
+                    <li>New snapshot saved to database</li>
+                </ol>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
