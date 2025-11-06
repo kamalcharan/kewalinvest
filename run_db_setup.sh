@@ -8,7 +8,7 @@ echo "============================================"
 # Step 1: Create database if it doesn't exist
 echo ""
 echo "Step 1: Creating kewalinvest database..."
-docker compose exec -T postgres psql -U kewal_admin -c "CREATE DATABASE kewalinvest;" 2>/dev/null || echo "Database already exists, continuing..."
+docker compose exec -T postgres psql -U kewal_admin -d postgres -c "CREATE DATABASE kewalinvest;" 2>/dev/null || echo "Database already exists, continuing..."
 
 # Step 2: Run distribution scripts in order
 echo ""
