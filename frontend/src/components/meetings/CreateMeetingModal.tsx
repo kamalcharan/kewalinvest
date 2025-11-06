@@ -175,7 +175,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
           scheduled_time: formData.scheduled_time,
           execution_data: executionData,
         };
-        await createMutation.mutateAsync(createRequest);
+        console.log('[CreateMeetingModal] Creating execution:', createRequest);
+        const result = await createMutation.mutateAsync(createRequest);
+        console.log('[CreateMeetingModal] Creation successful:', result);
       }
       onSuccess?.();
       handleClose();

@@ -32,6 +32,11 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
 
   const executions = executionsData?.executions || [];
 
+  // DEBUG: Log fetched executions
+  console.log('[JTBDExecutionTimeline] Fetched executions:', executions);
+  console.log('[JTBDExecutionTimeline] Active tab:', activeTab);
+  console.log('[JTBDExecutionTimeline] Type filter:', typeFilter);
+
   // Filter and group executions
   const { filteredExecutions, groupedByDate } = useMemo(() => {
     let filtered = [...executions];
@@ -117,6 +122,10 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
       }
       grouped[dateKey].push(ex);
     });
+
+    // DEBUG: Log filtering results
+    console.log('[JTBDExecutionTimeline] After filtering:', filtered.length, 'executions');
+    console.log('[JTBDExecutionTimeline] Filtered executions:', filtered);
 
     return { filteredExecutions: filtered, groupedByDate: grouped };
   }, [executions, activeTab, typeFilter]);

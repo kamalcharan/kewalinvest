@@ -90,9 +90,9 @@ export class GoalService {
       // Insert into t_jtbd_configurations with jtbd_type = 'goal_tracking'
       const insertQuery = `
         INSERT INTO t_jtbd_configurations (
-          tenant_id, is_live, customer_id, jtbd_type, title, description,
+          tenant_id, is_live, customer_id, jtbd_type, jtbd_category, title, description,
           priority, config_data, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
       `;
 
@@ -101,6 +101,7 @@ export class GoalService {
         isLive,
         data.customer_id,
         'goal_tracking', // New jtbd_type
+        'transactional', // jtbd_category - goals are transactional
         data.title,
         data.description || null,
         data.priority || 'medium',
