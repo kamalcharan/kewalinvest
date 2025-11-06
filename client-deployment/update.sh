@@ -46,7 +46,8 @@ echo ""
 
 # Confirmation prompt
 read -p "Continue with update? (yes/no): " CONFIRM
-if [ "$CONFIRM" != "yes" ]; then
+CONFIRM_LOWER=$(echo "$CONFIRM" | tr '[:upper:]' '[:lower:]')
+if [ "$CONFIRM_LOWER" != "yes" ] && [ "$CONFIRM_LOWER" != "y" ]; then
     echo "Update cancelled."
     exit 0
 fi
@@ -176,8 +177,9 @@ echo "  • Only needed if database schema has changed"
 echo "  • Safe to skip if only frontend/backend code updated"
 echo ""
 read -p "Apply database migrations? (yes/no): " APPLY_MIGRATIONS
+APPLY_MIGRATIONS_LOWER=$(echo "$APPLY_MIGRATIONS" | tr '[:upper:]' '[:lower:]')
 
-if [ "$APPLY_MIGRATIONS" = "yes" ]; then
+if [ "$APPLY_MIGRATIONS_LOWER" = "yes" ] || [ "$APPLY_MIGRATIONS_LOWER" = "y" ]; then
     echo ""
     echo -e "${BLUE}Applying database migrations...${NC}"
 
