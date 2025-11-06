@@ -260,7 +260,24 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## Updating
 
-### To Latest Version
+### Easy Update (Recommended)
+
+Use the automated update script to safely update your installation:
+
+```bash
+./update.sh
+```
+
+This will:
+- ✅ Automatically create database backup
+- ✅ Pull latest images from Docker Hub
+- ✅ Restart services without data loss
+- ✅ Verify health after update
+- ✅ Optional database migration support
+
+**📖 For detailed update instructions, see [UPDATE.md](UPDATE.md)**
+
+### Manual Update to Latest Version
 
 ```bash
 # 1. Backup first (see above)
@@ -272,7 +289,7 @@ docker-compose -f docker-compose.prod.yml pull
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### To Specific Version
+### Manual Update to Specific Version
 
 ```bash
 # 1. Edit .env file
@@ -314,11 +331,17 @@ docker-compose -f docker-compose.prod.yml down
 ```
 kewalinvest/
 ├── configure.sh              # Configuration wizard
-├── deploy.sh                 # Deployment script
+├── deploy.sh                 # Deployment script (fresh install)
+├── update.sh                 # Update script (preserve data)
+├── build-and-push.sh         # Build & push images (developers only)
 ├── docker-compose.prod.yml   # Production configuration
 ├── .env                      # Your configuration (created by configure.sh)
 ├── .env.example              # Configuration template
 ├── .credentials.txt          # Your credentials (created by configure.sh)
+├── README.md                 # This file
+├── UPDATE.md                 # Detailed update guide
+├── BUILD_AND_PUSH.md         # Image build guide (developers)
+├── DEPLOYMENT_STRATEGY.md    # Deployment architecture
 ├── database/                 # Database initialization scripts
 │   ├── 01_init.sql
 │   ├── 02_tables.sql
@@ -326,7 +349,7 @@ kewalinvest/
 │   ├── 04_functions_views_policies.sql
 │   ├── 05_seed_data.sql
 │   └── 06_fix_meetings_table.sql
-└── README.md                 # This file
+└── backups/                  # Automatic backups (created by update.sh)
 ```
 
 ---
