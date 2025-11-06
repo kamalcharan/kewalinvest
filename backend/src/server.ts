@@ -21,6 +21,7 @@ import navRoutes from './routes/nav.routes';
 import transactionRoutes from './routes/transaction.routes';
 import portfolioRoutes from './routes/portfolio.routes';
 import jtbdRoutes from './routes/jtbd.routes';
+import jtbdUnifiedRoutes from './routes/jtbd.unified.routes'; // NEW: Unified JTBD (configs + executions)
 import marketRoutes from './routes/market.routes';
 import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
@@ -136,6 +137,9 @@ app.get('/health', (_req: Request, res: Response) => {
       scheme_analysis_batch: true,
       jtbd: true,
       jtbd_dashboard: true,
+      jtbd_unified: true, // NEW: Unified JTBD with configs + executions + meetings
+      jtbd_executions: true, // NEW: Meeting and SIP plan execution tracking
+      jtbd_timeline: true, // NEW: Timeline view for customer jobs
       goals: true,
       goal_recalculation: true,
       goal_history: true,
@@ -212,7 +216,8 @@ app.use('/api/market', marketRoutes);
 app.use('/api/market-analysis', marketAnalysisRoutes);
 app.use('/api/scheme-analysis', schemeAnalysisRoutes);
 app.use('/api/scheme-aliases', schemeAliasRoutes);
-app.use('/api/jtbd', jtbdRoutes);
+app.use('/api/jtbd', jtbdRoutes); // OLD: Will be deprecated - use jtbd-v2 for new features
+app.use('/api/jtbd-v2', jtbdUnifiedRoutes); // NEW: Unified JTBD (configs + executions, meetings consolidated)
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/meetings', meetingRoutes);
