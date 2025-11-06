@@ -1,0 +1,105 @@
+# ============================================================================
+# Backend Production Dockerfile - Multi-Stage Build
+# Optimized for size, security, and performance
+# ============================================================================
+
+# ============================================================================
+# Stage 1: Dependencies
+# ============================================================================
+FROM node:18-alpine AS dependencies
+
+WORKDIR /app
+
+# Install build dependencies for native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production --no-audit --no-fund \
+    && npm cache clean --force
+
+# ============================================================================
+# Stage 2: Builder
+# ============================================================================
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install ALL dependencies (including dev dependencies for build)
+RUN npm ci --no-audit --no-fund
+
+# Copy source code
+COPY src ./src
+
+# Build TypeScript to JavaScript
+RUN npm run build
+
+# ============================================================================
+# Stage 3: Production Runtime
+# ============================================================================
+FROM node:18-alpine AS production
+
+# Set working directory
+WORKDIR /app
+
+# Add non-root user for security
+RUN addgroup -g 1001 -S nodejs \
+    && adduser -S nodejs -u 1001
+
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    tini \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# Copy production dependencies from dependencies stage
+COPY --from=dependencies --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+
+# Copy package.json for metadata
+COPY --chown=nodejs:nodejs package*.json ./
+
+# Create necessary directories
+RUN mkdir -p /app/UserFiles \
+    && mkdir -p /app/logs \
+    && chown -R nodejs:nodejs /app
+
+# Set environment variables
+ENV NODE_ENV=production \
+    PORT=8080 \
+    NODE_OPTIONS="--max-old-space-size=2048"
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8080/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Use tini to handle signals properly
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start application
+CMD ["node", "dist/server.js"]
