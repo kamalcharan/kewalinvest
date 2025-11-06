@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cruise Control - Technical Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 48px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header .subtitle {
+            font-size: 20px;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .content {
+            padding: 48px;
+        }
+
+        .section {
+            margin-bottom: 56px;
+        }
+
+        .section-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .subsection-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #764ba2;
+            margin: 32px 0 16px 0;
+        }
+
+        /* File Hierarchy Styles */
+        .file-tree {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 32px;
+            font-family: 'Courier New', monospace;
+            font-size: 15px;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .level-0 {
+            color: #c7254e;
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .level-1 {
+            padding-left: 24px;
+            color: #0066cc;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .level-2 {
+            padding-left: 48px;
+            color: #106ba3;
+            font-weight: 500;
+        }
+
+        .level-3 {
+            padding-left: 72px;
+            color: #117a8b;
+        }
+
+        .level-4 {
+            padding-left: 96px;
+            color: #1e7e34;
+        }
+
+        .level-5 {
+            padding-left: 120px;
+            color: #856404;
+        }
+
+        .level-6 {
+            padding-left: 144px;
+            color: #721c24;
+        }
+
+        /* Badge Styles */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-page { background: #667eea; color: white; }
+        .badge-component { background: #f093fb; color: white; }
+        .badge-hook { background: #4facfe; color: white; }
+        .badge-service { background: #43e97b; color: white; }
+        .badge-backend { background: #fa709a; color: white; }
+        .badge-table { background: #feca57; color: #1a1a1a; }
+        .badge-live { background: #00d2ff; color: white; }
+        .badge-dummy { background: #ee5a6f; color: white; }
+        .badge-pending { background: #ffa502; color: white; }
+
+        /* Info Box Styles */
+        .info-box {
+            background: #e8f4fd;
+            border-left: 5px solid #2196F3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .info-box.success {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .info-box.warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+
+        .info-box.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .info-box-title {
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin: 24px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea30;
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+        }
+
+        .feature-card h3 {
+            color: #667eea;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+            font-size: 14px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        code {
+            background: #f8f9fa;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #c7254e;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 16px 0;
+            line-height: 1.6;
+        }
+
+        /* Status Indicators */
+        .status-section {
+            margin: 32px 0;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin: 16px 0;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+
+        .status-icon {
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 32px;
+        }
+
+        li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎛️ Cruise Control</h1>
+            <div class="subtitle">Centralized Monitoring & Management Hub for Daily Operations</div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+
+            <!-- ==================== SECTION 1: OVERVIEW ==================== -->
+            <div class="section">
+                <h2 class="section-title">📋 Overview</h2>
+
+                <p style="font-size: 16px; margin-bottom: 24px;">
+                    <strong>Cruise Control</strong> is a centralized dashboard for monitoring and managing all automated background operations in the KewalInvest platform.
+                    It provides real-time visibility into NAV downloads, market data synchronization, portfolio snapshots, and alert systems.
+                </p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>📊 NAV Downloads</h3>
+                        <p>Monitor daily NAV downloads for all bookmarked mutual fund schemes. Track pending downloads, failures, and data gaps with actionable insights.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📈 Market Downloads</h3>
+                        <p>Track End-of-Day (EOD) market index downloads (NSE, BSE). Monitor download status and identify missing data for performance analysis.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔔 Alerts</h3>
+                        <p>Centralized view of all customer alerts from JTBD system (goal alerts, transaction alerts, profile triggers) for quick acknowledgment and action.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📸 Portfolio Snapshots</h3>
+                        <p>Automated monthly/weekly snapshots of customer portfolios for performance tracking and historical analysis. Supports backfill and regeneration.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>⚙️ Settings</h3>
+                        <p>Configure default market index for performance benchmarking and other system-wide preferences.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== SECTION 2: FILE HIERARCHY ==================== -->
+            <div class="section">
+                <h2 class="section-title">📂 File Hierarchy & Architecture</h2>
+
+                <p style="margin-bottom: 16px;">
+                    The Cruise Control feature follows a hierarchical component structure from the main page down to database tables:
+                </p>
+
+                <div class="file-tree">
+<span class="level-0">Main Page</span>
+<span class="level-1">└─ CruiseControlPage.tsx <span class="badge badge-page">page</span></span>
+<span class="level-2">    ├─ Header Section</span>
+<span class="level-2">    │   ├─ Admin/Tenant Badge (isSuperAdmin check)</span>
+<span class="level-2">    │   └─ Read-only Banner (for non-admins)</span>
+<span class="level-2">    │</span>
+<span class="level-2">    ├─ DashboardOverview.tsx <span class="badge badge-component">component</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-3">    │   ├─ JobsService.getStatistics() <span class="badge badge-service">service</span></span>
+<span class="level-4">    │   │   └─ /api/jobs/statistics/:jobType <span class="badge badge-backend">API</span></span>
+<span class="level-5">    │   │       └─ jobScheduler.controller.ts</span>
+<span class="level-6">    │   │           └─ t_job_executions <span class="badge badge-table">table</span></span>
+<span class="level-3">    │   └─ Shows: Total Jobs, Successful, Failed, Pending</span>
+<span class="level-2">    │</span>
+<span class="level-2">    ├─ Tab Navigation</span>
+<span class="level-2">    │   ├─ NavTab <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-2">    │   ├─ MarketTab <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-2">    │   ├─ AlertsTab <span class="badge badge-page">tab</span> <span class="badge badge-dummy">DUMMY</span></span>
+<span class="level-2">    │   ├─ PortfolioSnapshotsTab <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-2">    │   └─ SettingsTab <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-2">    │</span>
+<span class="level-2">    └─ Tab Components (Detailed Below)</span>
+
+<span class="level-0">─────────────────────────────────────────</span>
+<span class="level-0">TAB 1: NAV Downloads</span>
+<span class="level-0">─────────────────────────────────────────</span>
+
+<span class="level-1">NavTab.tsx <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE API</span></span>
+<span class="level-2">├─ Statistics Section</span>
+<span class="level-3">│   ├─ API: /api/nav/statistics <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ nav.controller.ts → nav.service.ts</span>
+<span class="level-5">│   │       └─ Queries: t_nav_bookmarks, t_nav_data, t_nav_metrics</span>
+<span class="level-3">│   └─ Shows: Total Active, Pending Downloads, Failed Downloads, Metrics Pending</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Bookmarked Schemes List</span>
+<span class="level-3">│   ├─ API: /api/nav/bookmarks <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ Fetches bookmarked schemes with download status</span>
+<span class="level-3">│   └─ EnhancedBookmarkCard.tsx <span class="badge badge-component">component</span></span>
+<span class="level-4">│       ├─ Shows: Scheme name, AMC, category, download status</span>
+<span class="level-4">│       ├─ Actions: Download NAV, View Details</span>
+<span class="level-4">│       └─ Status indicators: Latest NAV date, gaps, failures</span>
+<span class="level-2">│</span>
+<span class="level-2">└─ Filter Buttons (All, Pending, Failed, No-Data)</span>
+
+<span class="level-0">─────────────────────────────────────────</span>
+<span class="level-0">TAB 2: Market Downloads</span>
+<span class="level-0">─────────────────────────────────────────</span>
+
+<span class="level-1">MarketTab.tsx <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE API</span></span>
+<span class="level-2">├─ Statistics Section</span>
+<span class="level-3">│   ├─ API: /api/market/statistics <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ market.controller.ts → market.service.ts</span>
+<span class="level-5">│   │       └─ Queries: t_market_indices, t_market_eod_data</span>
+<span class="level-3">│   └─ Shows: Total Indices, Download Completed, Pending Beyond 1 Day, Failed, Metrics Pending</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Market Indices List</span>
+<span class="level-3">│   ├─ API: /api/market/indices <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ Fetches all market indices with download status</span>
+<span class="level-3">│   └─ IndexCard.tsx <span class="badge badge-component">component</span></span>
+<span class="level-4">│       ├─ Shows: Index name, symbol, exchange, last download date</span>
+<span class="level-4">│       ├─ Actions: Download EOD, View Chart</span>
+<span class="level-4">│       └─ Status indicators: Latest EOD date, gaps, failures</span>
+<span class="level-2">│</span>
+<span class="level-2">└─ Filter Buttons (All, Pending, Failed, No-Data)</span>
+
+<span class="level-0">─────────────────────────────────────────</span>
+<span class="level-0">TAB 3: Alerts</span>
+<span class="level-0">─────────────────────────────────────────</span>
+
+<span class="level-1">AlertsTab.tsx <span class="badge badge-page">tab</span> <span class="badge badge-dummy">DUMMY DATA</span></span>
+<span class="level-2">├─ ❌ Currently Using: DUMMY_ALERTS (line 16)</span>
+<span class="level-3">│   └─ Hardcoded array of 7 sample alerts</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ ✅ Should Use: /api/jtbd/dashboard/upcoming-alerts <span class="badge badge-pending">PENDING</span></span>
+<span class="level-3">│   ├─ Backend: jtbd.controller.ts → jtbd.service.ts</span>
+<span class="level-4">│   │   └─ Queries: t_goal_alerts (from Goals + JTBD)</span>
+<span class="level-3">│   └─ Returns: Customer alerts with type, status, message</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Alert Types Displayed:</span>
+<span class="level-3">│   ├─ jtbd_trigger (JTBD Profile/Transaction Alerts)</span>
+<span class="level-3">│   ├─ goal_progress (Goal Progress Alerts)</span>
+<span class="level-3">│   └─ goal_due (Goal Due Date Alerts)</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Alert Actions:</span>
+<span class="level-3">│   ├─ Acknowledge Button (changes status to acknowledged)</span>
+<span class="level-3">│   └─ Dismiss Button (changes status to dismissed)</span>
+<span class="level-2">│</span>
+<span class="level-2">└─ Filter Buttons (All, Active, Acknowledged, Dismissed)</span>
+
+<span class="level-0">─────────────────────────────────────────</span>
+<span class="level-0">TAB 4: Portfolio Snapshots</span>
+<span class="level-0">─────────────────────────────────────────</span>
+
+<span class="level-1">PortfolioSnapshotsTab.tsx <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE API</span></span>
+<span class="level-2">├─ Scheduler Configuration Section</span>
+<span class="level-3">│   ├─ API: /api/cruise-control/snapshots/config <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   ├─ GET: Fetch current config</span>
+<span class="level-4">│   │   ├─ POST: Create new config</span>
+<span class="level-4">│   │   └─ PUT: Update existing config</span>
+<span class="level-3">│   ├─ Backend: portfolioSnapshot.controller.ts → portfolioSnapshotScheduler.service.ts</span>
+<span class="level-4">│   │   └─ Queries: t_portfolio_snapshot_configs <span class="badge badge-table">table</span></span>
+<span class="level-3">│   └─ Settings: Schedule Type (weekly/monthly), Cron Expression, Enable/Disable</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Manual Execution Section</span>
+<span class="level-3">│   ├─ API: /api/cruise-control/snapshots/execute <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ Triggers immediate snapshot generation</span>
+<span class="level-3">│   └─ Backend: portfolioSnapshot.service.ts → generateSnapshots()</span>
+<span class="level-4">│       ├─ Calculates portfolio value for all customers</span>
+<span class="level-4">│       ├─ Stores in: t_customer_portfolio_snapshots <span class="badge badge-table">table</span></span>
+<span class="level-4">│       └─ Logs execution: t_portfolio_snapshot_executions <span class="badge badge-table">table</span></span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Execution History</span>
+<span class="level-3">│   ├─ API: /api/cruise-control/snapshots/executions <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   └─ Fetches last 20 executions with status</span>
+<span class="level-3">│   └─ Shows: Execution time, status, customers processed, snapshots created/updated</span>
+<span class="level-2">│</span>
+<span class="level-2">├─ Bulk Operations <span class="badge badge-component">SnapshotOperationsButtonGroup</span></span>
+<span class="level-3">│   ├─ Drop All Snapshots (DELETE all snapshots)</span>
+<span class="level-3">│   ├─ Generate Missing (fill gaps)</span>
+<span class="level-3">│   ├─ Update All (refresh existing snapshots)</span>
+<span class="level-3">│   └─ Regenerate All (drop + recreate)</span>
+<span class="level-2">│</span>
+<span class="level-2">└─ Backfill Section</span>
+<span class="level-3">    ├─ API: /api/cruise-control/snapshots/backfill-smart <span class="badge badge-backend">backend</span></span>
+<span class="level-3">    ├─ Smart Backfill: Generates snapshots for historical months</span>
+<span class="level-3">    └─ Parameters: Start Date, End Date, Customer IDs (optional)</span>
+
+<span class="level-0">─────────────────────────────────────────</span>
+<span class="level-0">TAB 5: Settings</span>
+<span class="level-0">─────────────────────────────────────────</span>
+
+<span class="level-1">SettingsTab.tsx <span class="badge badge-page">tab</span> <span class="badge badge-live">LIVE</span></span>
+<span class="level-2">├─ DefaultIndexSettings.tsx <span class="badge badge-component">component</span></span>
+<span class="level-3">│   ├─ API: /api/performance/default-index <span class="badge badge-backend">backend</span></span>
+<span class="level-4">│   │   ├─ GET: Fetch current default index</span>
+<span class="level-4">│   │   └─ PUT: Update default index</span>
+<span class="level-3">│   ├─ Backend: performance.controller.ts → performance.service.ts</span>
+<span class="level-4">│   │   └─ Stores in: t_user_preferences or t_default_settings</span>
+<span class="level-3">│   └─ IndexSelector Dropdown (all market indices)</span>
+<span class="level-2">│</span>
+<span class="level-2">└─ Future Settings Placeholder</span>
+                </div>
+            </div>
+
+            <!-- ==================== SECTION 3: COMPONENT DETAILS ==================== -->
+            <div class="section">
+                <h2 class="section-title">⚙️ Component Details</h2>
+
+                <h3 class="subsection-title">CruiseControlPage.tsx</h3>
+                <p><strong>Purpose:</strong> Main container page for Cruise Control dashboard with tab navigation.</p>
+                <p><strong>Key Features:</strong></p>
+                <ul>
+                    <li>Admin/Tenant role detection using <code>useAuth().isSuperAdmin</code></li>
+                    <li>Read-only banner for non-admin users (cannot modify scheduler configs)</li>
+                    <li>Tab-based navigation (5 tabs: NAV, Market, Alerts, Snapshots, Settings)</li>
+                    <li>Integrates <code>DashboardOverview</code> component at top for quick stats</li>
+                </ul>
+
+                <h3 class="subsection-title">DashboardOverview.tsx</h3>
+                <p><strong>Purpose:</strong> Shows aggregated statistics for portfolio snapshot job executions.</p>
+                <p><strong>Data Source:</strong> <code>JobsService.getStatistics(JobType.PORTFOLIO_SNAPSHOT)</code></p>
+                <p><strong>Metrics Displayed:</strong></p>
+                <ul>
+                    <li><strong>Total Jobs:</strong> Total number of snapshot executions</li>
+                    <li><strong>Successful:</strong> Count of successful executions</li>
+                    <li><strong>Failed:</strong> Count of failed executions</li>
+                    <li><strong>Pending:</strong> Currently running executions</li>
+                </ul>
+                <p><strong>Status:</strong> <span class="badge badge-live">LIVE</span> - Uses real API data from <code>t_job_executions</code> table</p>
+
+                <h3 class="subsection-title">NavTab.tsx</h3>
+                <p><strong>Purpose:</strong> Monitor NAV downloads for all bookmarked mutual fund schemes.</p>
+                <p><strong>Data Sources:</strong></p>
+                <ul>
+                    <li><code>GET /api/nav/statistics</code> - Aggregated NAV download stats</li>
+                    <li><code>GET /api/nav/bookmarks</code> - List of bookmarked schemes</li>
+                </ul>
+                <p><strong>Key Components:</strong></p>
+                <ul>
+                    <li><strong>EnhancedBookmarkCard:</strong> Displays scheme details with download status badges</li>
+                    <li><strong>Filter Buttons:</strong> All, Pending, Failed, No-Data</li>
+                    <li><strong>Manual Download:</strong> Trigger individual NAV downloads per scheme</li>
+                </ul>
+                <p><strong>Status:</strong> <span class="badge badge-live">LIVE</span> - Fully integrated with NAV API</p>
+
+                <h3 class="subsection-title">MarketTab.tsx</h3>
+                <p><strong>Purpose:</strong> Monitor End-of-Day (EOD) market index downloads for NSE/BSE indices.</p>
+                <p><strong>Data Sources:</strong></p>
+                <ul>
+                    <li><code>GET /api/market/statistics</code> - Aggregated market download stats</li>
+                    <li><code>GET /api/market/indices</code> - List of all market indices</li>
+                </ul>
+                <p><strong>Key Components:</strong></p>
+                <ul>
+                    <li><strong>IndexCard:</strong> Displays index details with download status</li>
+                    <li><strong>Filter Buttons:</strong> All, Pending, Failed, No-Data</li>
+                    <li><strong>Manual Download:</strong> Trigger individual EOD downloads per index</li>
+                </ul>
+                <p><strong>Status:</strong> <span class="badge badge-live">LIVE</span> - Fully integrated with Market API</p>
+
+                <h3 class="subsection-title">AlertsTab.tsx ⚠️</h3>
+                <p><strong>Purpose:</strong> Centralized view of all customer alerts (JTBD + Goals).</p>
+                <p><strong>Current Implementation:</strong> <span class="badge badge-dummy">DUMMY DATA</span></p>
+                <ul>
+                    <li>Using hardcoded <code>DUMMY_ALERTS</code> array (7 sample alerts)</li>
+                    <li>Alerts include: Goal Due, JTBD Trigger, Goal Progress</li>
+                    <li>Local state management for acknowledge/dismiss actions (not persisted)</li>
+                </ul>
+                <p><strong>Expected API Integration:</strong> <span class="badge badge-pending">PENDING</span></p>
+                <ul>
+                    <li><code>GET /api/jtbd/dashboard/upcoming-alerts</code> - Fetch real alerts from database</li>
+                    <li><code>PUT /api/jtbd/alerts/:id/acknowledge</code> - Mark alert as acknowledged</li>
+                    <li><code>PUT /api/jtbd/alerts/:id/dismiss</code> - Dismiss alert</li>
+                </ul>
+                <p><strong>Alert Types:</strong></p>
+                <ul>
+                    <li><strong>jtbd_trigger:</strong> Profile-based triggers (birthday, anniversary, review date)</li>
+                    <li><strong>goal_progress:</strong> Goal progress behind/ahead alerts</li>
+                    <li><strong>goal_due:</strong> Goal approaching target date</li>
+                </ul>
+
+                <h3 class="subsection-title">PortfolioSnapshotsTab.tsx</h3>
+                <p><strong>Purpose:</strong> Manage automated portfolio snapshot generation scheduler and manual operations.</p>
+                <p><strong>Data Sources:</strong></p>
+                <ul>
+                    <li><code>GET /api/cruise-control/snapshots/config</code> - Scheduler configuration</li>
+                    <li><code>POST /api/cruise-control/snapshots/execute</code> - Manual snapshot generation</li>
+                    <li><code>GET /api/cruise-control/snapshots/executions</code> - Execution history</li>
+                    <li><code>POST /api/cruise-control/snapshots/backfill-smart</code> - Backfill historical snapshots</li>
+                </ul>
+                <p><strong>Key Features:</strong></p>
+                <ul>
+                    <li><strong>Scheduler Config:</strong> Set weekly/monthly cron schedule for auto-snapshots</li>
+                    <li><strong>Manual Trigger:</strong> Generate snapshots immediately for current month</li>
+                    <li><strong>Backfill:</strong> Generate snapshots for historical date ranges</li>
+                    <li><strong>Bulk Operations:</strong> Drop all, Generate missing, Update all, Regenerate all</li>
+                    <li><strong>Execution History:</strong> View last 20 executions with success/failure details</li>
+                </ul>
+                <p><strong>Status:</strong> <span class="badge badge-live">LIVE</span> - Fully functional with Generic Job Scheduler</p>
+
+                <h3 class="subsection-title">SettingsTab.tsx</h3>
+                <p><strong>Purpose:</strong> Configure system-wide settings and preferences.</p>
+                <p><strong>Current Features:</strong></p>
+                <ul>
+                    <li><strong>Default Index Settings:</strong> Select default benchmark index for performance comparisons</li>
+                    <li>Uses <code>DefaultIndexSettings</code> component from performance module</li>
+                    <li>Dropdown shows all market indices (NSE/BSE)</li>
+                </ul>
+                <p><strong>Status:</strong> <span class="badge badge-live">LIVE</span> - Default index selection working</p>
+                <p><strong>Future Enhancements:</strong> More settings can be added (notifications, email preferences, etc.)</p>
+            </div>
+
+            <!-- ==================== SECTION 4: BACKEND ARCHITECTURE ==================== -->
+            <div class="section">
+                <h2 class="section-title">🔧 Backend Architecture</h2>
+
+                <h3 class="subsection-title">1. Cruise Control Routes</h3>
+                <p><strong>File:</strong> <code>backend/src/routes/cruiseControl.routes.ts</code></p>
+                <p><strong>Base Path:</strong> <code>/api/cruise-control</code></p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>HTTP Method</th>
+                            <th>Endpoint</th>
+                            <th>Controller Method</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td>/snapshots/config</td>
+                            <td>getConfig</td>
+                            <td>Get current snapshot scheduler configuration</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/config</td>
+                            <td>createConfig</td>
+                            <td>Create new snapshot scheduler config</td>
+                        </tr>
+                        <tr>
+                            <td>PUT</td>
+                            <td>/snapshots/config</td>
+                            <td>updateConfig</td>
+                            <td>Update existing scheduler config</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/execute</td>
+                            <td>triggerManual</td>
+                            <td>Trigger manual snapshot generation</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/snapshots/executions</td>
+                            <td>getExecutions</td>
+                            <td>Get execution history</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/snapshots/statistics</td>
+                            <td>getStatistics</td>
+                            <td>Get aggregated snapshot statistics</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/backfill-smart</td>
+                            <td>smartBackfill</td>
+                            <td>Intelligent backfill for historical snapshots</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/backfill</td>
+                            <td>backfillSnapshots</td>
+                            <td>Manual backfill with date range</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/operations/drop-all</td>
+                            <td>dropAllSnapshots</td>
+                            <td>Delete all snapshots for tenant</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/operations/generate-missing</td>
+                            <td>generateMissingSnapshots</td>
+                            <td>Generate snapshots for missing months</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/operations/update-all</td>
+                            <td>updateAllSnapshots</td>
+                            <td>Refresh all existing snapshots</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/snapshots/operations/regenerate-all</td>
+                            <td>regenerateAllSnapshots</td>
+                            <td>Drop and recreate all snapshots</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/snapshots/health</td>
+                            <td>healthCheck</td>
+                            <td>Health check for snapshot service</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="subsection-title">2. Portfolio Snapshot Service</h3>
+                <p><strong>File:</strong> <code>backend/src/services/portfolioSnapshot.service.ts</code></p>
+                <p><strong>Key Methods:</strong></p>
+                <ul>
+                    <li><strong>generateSnapshots():</strong> Main method called by scheduler - generates snapshots for all customers</li>
+                    <li><strong>calculateSnapshotData():</strong> Calculates portfolio value, invested amount, gains, XIRR for a customer</li>
+                    <li><strong>smartBackfill():</strong> Intelligently fills gaps in historical snapshots</li>
+                    <li><strong>dropAllSnapshots():</strong> Deletes all snapshots for a tenant</li>
+                    <li><strong>regenerateAllSnapshots():</strong> Drop + recreate all snapshots</li>
+                </ul>
+
+                <p><strong>Business Logic:</strong></p>
+                <ul>
+                    <li>Queries all active customers for tenant</li>
+                    <li>For each customer, calculates total portfolio value using latest NAV data</li>
+                    <li>Aggregates all holdings, transactions, and fund manager allocations</li>
+                    <li>Stores monthly snapshot in <code>t_customer_portfolio_snapshots</code></li>
+                    <li>Logs execution details in <code>t_portfolio_snapshot_executions</code></li>
+                </ul>
+
+                <h3 class="subsection-title">3. Portfolio Snapshot Scheduler</h3>
+                <p><strong>File:</strong> <code>backend/src/services/portfolioSnapshotScheduler.service.ts</code></p>
+                <p><strong>Purpose:</strong> Manages cron-based scheduling for automated snapshot generation.</p>
+                <p><strong>Features:</strong></p>
+                <ul>
+                    <li>Registers with Generic Job Scheduler system</li>
+                    <li>Default schedule: Weekly (Friday 9 PM) or Monthly (1st of month)</li>
+                    <li>Supports custom cron expressions</li>
+                    <li>Automatic retry on failure (max 3 retries)</li>
+                    <li>Execution logging with success/failure tracking</li>
+                </ul>
+
+                <h3 class="subsection-title">4. Generic Job Scheduler Service</h3>
+                <p><strong>File:</strong> <code>backend/src/services/jobScheduler.service.ts</code></p>
+                <p><strong>Purpose:</strong> Unified job scheduling system for all background jobs.</p>
+                <p><strong>Supported Job Types:</strong></p>
+                <ul>
+                    <li><strong>PORTFOLIO_SNAPSHOT:</strong> Monthly/weekly portfolio snapshots</li>
+                    <li><strong>NAV_DOWNLOAD:</strong> Daily NAV downloads (managed separately by navScheduler.service.ts)</li>
+                    <li><strong>MARKET_EOD_DOWNLOAD:</strong> Daily market EOD downloads (pending implementation)</li>
+                    <li><strong>ALERT_GENERATION:</strong> Daily alert generation for JTBD (pending implementation)</li>
+                </ul>
+                <p><strong>Key Features:</strong></p>
+                <ul>
+                    <li>Cron-based scheduling using Node.js <code>setTimeout</code></li>
+                    <li>Tenant-isolated job execution</li>
+                    <li>Retry mechanism with exponential backoff</li>
+                    <li>Execution history tracking</li>
+                    <li>Statistics aggregation (total, successful, failed, running)</li>
+                </ul>
+            </div>
+
+            <!-- ==================== SECTION 5: DATABASE TABLES ==================== -->
+            <div class="section">
+                <h2 class="section-title">💾 Database Tables</h2>
+
+                <h3 class="subsection-title">1. t_portfolio_snapshot_configs</h3>
+                <p><strong>Purpose:</strong> Stores scheduler configuration for portfolio snapshot jobs.</p>
+                <div class="code-block">CREATE TABLE t_portfolio_snapshot_configs (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    user_id INTEGER NOT NULL REFERENCES t_users(id),
+    is_live BOOLEAN NOT NULL,
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    cron_expression VARCHAR(100) NOT NULL DEFAULT '0 21 * * 5',  -- Friday 9 PM
+    is_enabled BOOLEAN NOT NULL DEFAULT true,
+    last_executed_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_snapshot_scheduler UNIQUE(tenant_id, is_live),
+    CONSTRAINT valid_schedule_type CHECK (schedule_type IN ('weekly', 'monthly', 'custom'))
+);</div>
+                <p><strong>Key Columns:</strong></p>
+                <ul>
+                    <li><strong>schedule_type:</strong> 'weekly', 'monthly', or 'custom'</li>
+                    <li><strong>cron_expression:</strong> Cron format for scheduling (e.g., '0 21 * * 5' = Friday 9 PM)</li>
+                    <li><strong>is_enabled:</strong> Whether scheduler is active</li>
+                    <li><strong>last_executed_at:</strong> Timestamp of last successful execution</li>
+                    <li><strong>next_execution_at:</strong> Calculated next execution time</li>
+                </ul>
+
+                <h3 class="subsection-title">2. t_portfolio_snapshot_executions</h3>
+                <p><strong>Purpose:</strong> Logs every snapshot job execution with detailed results.</p>
+                <div class="code-block">CREATE TABLE t_portfolio_snapshot_executions (
+    id SERIAL PRIMARY KEY,
+    scheduler_config_id INTEGER NOT NULL REFERENCES t_portfolio_snapshot_configs(id) ON DELETE CASCADE,
+    tenant_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    execution_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL,  -- 'success', 'failed', 'running', 'retrying', 'skipped'
+    trigger_source VARCHAR(20) NOT NULL,  -- 'scheduled', 'manual'
+    snapshot_month_end DATE,
+    customers_processed INTEGER DEFAULT 0,
+    customers_failed INTEGER DEFAULT 0,
+    snapshots_created INTEGER DEFAULT 0,
+    snapshots_updated INTEGER DEFAULT 0,
+    retry_attempt INTEGER DEFAULT 0,
+    error_message TEXT,
+    error_details JSONB,
+    execution_duration_ms INTEGER,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);</div>
+                <p><strong>Key Columns:</strong></p>
+                <ul>
+                    <li><strong>status:</strong> Execution outcome (success/failed/running/retrying/skipped)</li>
+                    <li><strong>trigger_source:</strong> 'scheduled' (auto) or 'manual' (user-triggered)</li>
+                    <li><strong>snapshot_month_end:</strong> Month-end date for which snapshots were generated</li>
+                    <li><strong>customers_processed:</strong> Number of customers successfully processed</li>
+                    <li><strong>snapshots_created/updated:</strong> New vs existing snapshots</li>
+                    <li><strong>execution_duration_ms:</strong> Time taken for execution</li>
+                </ul>
+
+                <h3 class="subsection-title">3. t_customer_portfolio_snapshots</h3>
+                <p><strong>Purpose:</strong> Stores monthly/weekly portfolio snapshot data for each customer.</p>
+                <div class="code-block">CREATE TABLE t_customer_portfolio_snapshots (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    snapshot_month_end DATE NOT NULL,
+
+    -- Portfolio Metrics
+    total_invested_amount NUMERIC(15,2) NOT NULL,
+    total_current_value NUMERIC(15,2) NOT NULL,
+    total_unrealized_gain NUMERIC(15,2) NOT NULL,
+    gain_percentage NUMERIC(10,4) NOT NULL,
+    xirr NUMERIC(10,4),
+
+    -- Holdings Breakdown
+    total_holdings INTEGER NOT NULL DEFAULT 0,
+    active_schemes INTEGER NOT NULL DEFAULT 0,
+
+    -- Fund Manager Allocation (Top 5)
+    fund_manager_allocation JSONB,
+
+    -- Audit
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT unique_customer_snapshot UNIQUE(tenant_id, is_live, customer_id, snapshot_month_end)
+);</div>
+                <p><strong>Key Columns:</strong></p>
+                <ul>
+                    <li><strong>snapshot_month_end:</strong> Date of snapshot (typically last day of month)</li>
+                    <li><strong>total_invested_amount:</strong> Sum of all purchase amounts</li>
+                    <li><strong>total_current_value:</strong> Current market value of all holdings</li>
+                    <li><strong>total_unrealized_gain:</strong> Current value - Invested amount</li>
+                    <li><strong>xirr:</strong> Extended Internal Rate of Return (annualized return %)</li>
+                    <li><strong>fund_manager_allocation:</strong> JSONB storing top 5 fund managers with allocation %</li>
+                </ul>
+
+                <h3 class="subsection-title">4. t_job_scheduler_configs (Generic)</h3>
+                <p><strong>Purpose:</strong> Generic scheduler configuration for all job types.</p>
+                <div class="code-block">CREATE TABLE t_job_scheduler_configs (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
+    user_id INTEGER NOT NULL REFERENCES t_users(id),
+    is_live BOOLEAN NOT NULL,
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    cron_expression VARCHAR(100) NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT true,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    job_config JSONB,  -- Job-specific flexible configuration
+    last_executed_at TIMESTAMP,
+    next_execution_at TIMESTAMP,
+    execution_count INTEGER DEFAULT 0,
+    failure_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_job_scheduler_config UNIQUE(tenant_id, job_type, is_live)
+);</div>
+
+                <h3 class="subsection-title">5. t_job_executions (Generic)</h3>
+                <p><strong>Purpose:</strong> Logs all job executions across different job types.</p>
+                <div class="code-block">CREATE TABLE t_job_executions (
+    id SERIAL PRIMARY KEY,
+    scheduler_config_id INTEGER NOT NULL REFERENCES t_job_scheduler_configs(id) ON DELETE CASCADE,
+    job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
+    tenant_id INTEGER NOT NULL,
+    is_live BOOLEAN NOT NULL,
+    execution_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL,
+    trigger_source VARCHAR(20) NOT NULL,
+    retry_attempt INTEGER DEFAULT 0,
+    execution_data JSONB,  -- Job-specific execution results
+    error_message TEXT,
+    error_details JSONB,
+    execution_duration_ms INTEGER,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);</div>
+                <p><strong>Used By:</strong></p>
+                <ul>
+                    <li>Portfolio Snapshot Jobs</li>
+                    <li>NAV Download Jobs (future)</li>
+                    <li>Market EOD Download Jobs (future)</li>
+                    <li>Alert Generation Jobs (future)</li>
+                </ul>
+
+                <h3 class="subsection-title">6. Related Tables (Used by Cruise Control)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Table Name</th>
+                            <th>Purpose</th>
+                            <th>Used By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>t_nav_bookmarks</td>
+                            <td>Stores bookmarked schemes for NAV downloads</td>
+                            <td>NavTab</td>
+                        </tr>
+                        <tr>
+                            <td>t_nav_data</td>
+                            <td>NAV historical data for schemes</td>
+                            <td>NavTab</td>
+                        </tr>
+                        <tr>
+                            <td>t_nav_metrics</td>
+                            <td>Calculated metrics (rolling returns, volatility)</td>
+                            <td>NavTab</td>
+                        </tr>
+                        <tr>
+                            <td>t_market_indices</td>
+                            <td>Master list of market indices (NSE, BSE)</td>
+                            <td>MarketTab</td>
+                        </tr>
+                        <tr>
+                            <td>t_market_eod_data</td>
+                            <td>End-of-day market index data</td>
+                            <td>MarketTab</td>
+                        </tr>
+                        <tr>
+                            <td>t_goal_alerts</td>
+                            <td>Alerts from Goals + JTBD system</td>
+                            <td>AlertsTab (pending)</td>
+                        </tr>
+                        <tr>
+                            <td>t_jtbd_configurations</td>
+                            <td>JTBD alert configurations</td>
+                            <td>AlertsTab (pending)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ==================== SECTION 6: DATA STATUS ==================== -->
+            <div class="section">
+                <h2 class="section-title">📊 Data Status: Live vs Dummy vs Pending</h2>
+
+                <div class="status-section">
+                    <div class="info-box success">
+                        <div class="info-box-title">✅ LIVE DATA - Fully Implemented</div>
+                        <p>These features are using real API integration with backend services and database tables:</p>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📊</div>
+                        <div>
+                            <h4 style="color: #4caf50; font-size: 18px; margin-bottom: 8px;">NavTab - NAV Downloads</h4>
+                            <ul>
+                                <li><strong>API:</strong> <code>GET /api/nav/statistics</code>, <code>GET /api/nav/bookmarks</code></li>
+                                <li><strong>Backend:</strong> nav.controller.ts → nav.service.ts</li>
+                                <li><strong>Tables:</strong> t_nav_bookmarks, t_nav_data, t_nav_metrics</li>
+                                <li><strong>Features:</strong> Real-time bookmark management, manual NAV downloads, status tracking</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📈</div>
+                        <div>
+                            <h4 style="color: #4caf50; font-size: 18px; margin-bottom: 8px;">MarketTab - Market Downloads</h4>
+                            <ul>
+                                <li><strong>API:</strong> <code>GET /api/market/statistics</code>, <code>GET /api/market/indices</code></li>
+                                <li><strong>Backend:</strong> market.controller.ts → market.service.ts</li>
+                                <li><strong>Tables:</strong> t_market_indices, t_market_eod_data</li>
+                                <li><strong>Features:</strong> Real-time index monitoring, manual EOD downloads, gap detection</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📸</div>
+                        <div>
+                            <h4 style="color: #4caf50; font-size: 18px; margin-bottom: 8px;">PortfolioSnapshotsTab - Portfolio Snapshots</h4>
+                            <ul>
+                                <li><strong>API:</strong> <code>GET /api/cruise-control/snapshots/*</code></li>
+                                <li><strong>Backend:</strong> portfolioSnapshot.controller.ts → portfolioSnapshot.service.ts</li>
+                                <li><strong>Tables:</strong> t_portfolio_snapshot_configs, t_portfolio_snapshot_executions, t_customer_portfolio_snapshots</li>
+                                <li><strong>Features:</strong> Scheduler config, manual execution, backfill, bulk operations, execution history</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">⚙️</div>
+                        <div>
+                            <h4 style="color: #4caf50; font-size: 18px; margin-bottom: 8px;">SettingsTab - Default Index Settings</h4>
+                            <ul>
+                                <li><strong>API:</strong> <code>GET /api/performance/default-index</code>, <code>PUT /api/performance/default-index</code></li>
+                                <li><strong>Backend:</strong> performance.controller.ts → performance.service.ts</li>
+                                <li><strong>Component:</strong> DefaultIndexSettings with IndexSelector dropdown</li>
+                                <li><strong>Features:</strong> Set benchmark index for performance comparisons</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📊</div>
+                        <div>
+                            <h4 style="color: #4caf50; font-size: 18px; margin-bottom: 8px;">DashboardOverview - Job Statistics</h4>
+                            <ul>
+                                <li><strong>API:</strong> <code>GET /api/jobs/statistics/:jobType</code></li>
+                                <li><strong>Backend:</strong> jobScheduler.controller.ts → jobScheduler.service.ts</li>
+                                <li><strong>Tables:</strong> t_job_executions</li>
+                                <li><strong>Features:</strong> Aggregated stats for Total Jobs, Successful, Failed, Pending</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-section">
+                    <div class="info-box error">
+                        <div class="info-box-title">🔴 DUMMY DATA - Needs Integration</div>
+                        <p>These features are currently using hardcoded dummy data and need API integration:</p>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">🔔</div>
+                        <div>
+                            <h4 style="color: #f44336; font-size: 18px; margin-bottom: 8px;">AlertsTab - Customer Alerts</h4>
+                            <ul>
+                                <li><strong>Current:</strong> Using <code>DUMMY_ALERTS</code> array (7 hardcoded alerts) in AlertsTab.tsx:16</li>
+                                <li><strong>Issue:</strong> Acknowledge/Dismiss actions only update local state (not persisted)</li>
+                                <li><strong>Expected API:</strong> <code>GET /api/jtbd/dashboard/upcoming-alerts</code></li>
+                                <li><strong>Backend Ready:</strong> jtbd.controller.ts has getDashboardUpcomingAlerts() method</li>
+                                <li><strong>Tables Ready:</strong> t_goal_alerts stores alerts from Goals + JTBD</li>
+                                <li><strong>Action Required:</strong>
+                                    <ol style="margin-top: 8px;">
+                                        <li>Replace DUMMY_ALERTS with API fetch in AlertsTab.tsx</li>
+                                        <li>Implement acknowledge/dismiss API endpoints</li>
+                                        <li>Add status update in t_goal_alerts (acknowledged_at, dismissed_at columns)</li>
+                                    </ol>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-section">
+                    <div class="info-box warning">
+                        <div class="info-box-title">⚠️ PENDING - Partial Implementation</div>
+                        <p>These features have backend support but need additional work:</p>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">🤖</div>
+                        <div>
+                            <h4 style="color: #ff9800; font-size: 18px; margin-bottom: 8px;">Market EOD Scheduler Service</h4>
+                            <ul>
+                                <li><strong>Status:</strong> Tables exist (t_market_indices, t_market_eod_data), but no scheduler service</li>
+                                <li><strong>Current:</strong> Manual downloads only via MarketTab</li>
+                                <li><strong>Needed:</strong> Create <code>marketEodScheduler.service.ts</code> similar to NAV Scheduler</li>
+                                <li><strong>Integration:</strong> Register with Generic Job Scheduler (job_type: 'MARKET_EOD_DOWNLOAD')</li>
+                                <li><strong>Schedule:</strong> Daily after market close (e.g., 6 PM)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">🔔</div>
+                        <div>
+                            <h4 style="color: #ff9800; font-size: 18px; margin-bottom: 8px;">Automated Alert Generation Cron</h4>
+                            <ul>
+                                <li><strong>Status:</strong> JTBD/Goals alert data exists, but no automated generation cron</li>
+                                <li><strong>Current:</strong> Alerts must be manually created via JTBD/Goals UI</li>
+                                <li><strong>Needed:</strong> Daily cron job to generate alerts from JTBD configurations</li>
+                                <li><strong>Logic:</strong>
+                                    <ul style="margin-top: 8px;">
+                                        <li>Check portfolio_alert configs → validate transactions → create alerts if deviation detected</li>
+                                        <li>Check time_based configs → create alerts for due dates</li>
+                                        <li>Check profile_trigger configs → create alerts for birthdays, anniversaries</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Integration:</strong> Register with Generic Job Scheduler (job_type: 'ALERT_GENERATION')</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📧</div>
+                        <div>
+                            <h4 style="color: #ff9800; font-size: 18px; margin-bottom: 8px;">Email/SMS Notifications for Alerts</h4>
+                            <ul>
+                                <li><strong>Status:</strong> Alerts generated but not sent via email/SMS</li>
+                                <li><strong>Needed:</strong> Notification service integration</li>
+                                <li><strong>Triggers:</strong> When alert is created, send notification to customer/advisor</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">🔍</div>
+                        <div>
+                            <h4 style="color: #ff9800; font-size: 18px; margin-bottom: 8px;">Searchable Dropdown for IndexSelector (Settings)</h4>
+                            <ul>
+                                <li><strong>Status:</strong> IndexSelector has plain dropdown (max-height: 300px scrolling)</li>
+                                <li><strong>User Request:</strong> "it is so difficult to scroll down, can we have a searchable scroll"</li>
+                                <li><strong>Needed:</strong> Add search input above dropdown to filter indices by name/symbol</li>
+                                <li><strong>Implementation:</strong> Add text input → filter indices array → display matching results</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== SECTION 7: JOB SCHEDULER SYSTEM ==================== -->
+            <div class="section">
+                <h2 class="section-title">⏰ Job Scheduler System</h2>
+
+                <h3 class="subsection-title">Overview</h3>
+                <p>
+                    Cruise Control integrates with the <strong>Generic Job Scheduler</strong> system for managing all background jobs.
+                    The scheduler supports multiple job types with cron-based scheduling, retry logic, and execution tracking.
+                </p>
+
+                <h3 class="subsection-title">Job Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Job Type</th>
+                            <th>Description</th>
+                            <th>Default Schedule</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>PORTFOLIO_SNAPSHOT</td>
+                            <td>Generate monthly/weekly portfolio snapshots</td>
+                            <td>Weekly (Friday 9 PM)</td>
+                            <td><span class="badge badge-live">LIVE</span></td>
+                        </tr>
+                        <tr>
+                            <td>NAV_DOWNLOAD</td>
+                            <td>Daily NAV downloads for bookmarked schemes</td>
+                            <td>Daily (6 AM)</td>
+                            <td><span class="badge badge-live">LIVE</span></td>
+                        </tr>
+                        <tr>
+                            <td>MARKET_EOD_DOWNLOAD</td>
+                            <td>Daily market EOD downloads for indices</td>
+                            <td>Daily (6 PM)</td>
+                            <td><span class="badge badge-pending">PENDING</span></td>
+                        </tr>
+                        <tr>
+                            <td>ALERT_GENERATION</td>
+                            <td>Generate alerts from JTBD configurations</td>
+                            <td>Daily (12 AM)</td>
+                            <td><span class="badge badge-pending">PENDING</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="subsection-title">Scheduler Architecture</h3>
+                <div class="code-block">┌─────────────────────────────────────────────────┐
+│   Generic Job Scheduler Service                │
+│   (jobScheduler.service.ts)                     │
+├─────────────────────────────────────────────────┤
+│  - Job Registration                             │
+│  - Cron Management (Node.js setTimeout)         │
+│  - Retry Logic (max 3 retries)                  │
+│  - Execution Logging                            │
+│  - Statistics Aggregation                       │
+└─────────────────────────────────────────────────┘
+                    ↓
+    ┌───────────────┬───────────────┬───────────────┐
+    ↓               ↓               ↓               ↓
+Portfolio      NAV            Market         Alert
+Snapshot    Scheduler      EOD Scheduler   Generator
+Scheduler      ✅              ⚠️              ⚠️
+   ✅</div>
+
+                <h3 class="subsection-title">Execution Flow</h3>
+                <ol>
+                    <li><strong>Config Creation:</strong> Admin creates scheduler config via Cruise Control UI</li>
+                    <li><strong>Registration:</strong> Job registered with Generic Scheduler (cron expression, job_type)</li>
+                    <li><strong>Scheduling:</strong> Scheduler calculates next_execution_at and sets Node.js timer</li>
+                    <li><strong>Execution:</strong> At scheduled time, job handler invoked</li>
+                    <li><strong>Logging:</strong> Execution details logged to t_job_executions</li>
+                    <li><strong>Retry (if failed):</strong> Automatic retry up to max_retries (3)</li>
+                    <li><strong>Statistics:</strong> Aggregated stats available via /api/jobs/statistics/:jobType</li>
+                </ol>
+
+                <h3 class="subsection-title">Cron Expression Examples</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Expression</th>
+                            <th>Description</th>
+                            <th>Use Case</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>0 21 * * 5</td>
+                            <td>Every Friday at 9:00 PM</td>
+                            <td>Weekly portfolio snapshots</td>
+                        </tr>
+                        <tr>
+                            <td>0 0 1 * *</td>
+                            <td>1st day of every month at 12:00 AM</td>
+                            <td>Monthly snapshots</td>
+                        </tr>
+                        <tr>
+                            <td>0 6 * * *</td>
+                            <td>Every day at 6:00 AM</td>
+                            <td>Daily NAV downloads</td>
+                        </tr>
+                        <tr>
+                            <td>0 18 * * *</td>
+                            <td>Every day at 6:00 PM</td>
+                            <td>Daily market EOD downloads</td>
+                        </tr>
+                        <tr>
+                            <td>0 0 * * *</td>
+                            <td>Every day at 12:00 AM</td>
+                            <td>Daily alert generation</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ==================== SECTION 8: USER WORKFLOWS ==================== -->
+            <div class="section">
+                <h2 class="section-title">👥 User Workflows</h2>
+
+                <h3 class="subsection-title">Workflow 1: Setting Up Portfolio Snapshot Scheduler (Admin)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Portfolio Snapshots Tab</strong></li>
+                    <li>Click <strong>"Create Configuration"</strong> button</li>
+                    <li>Select schedule type:
+                        <ul>
+                            <li><strong>Weekly:</strong> Default Friday 9 PM</li>
+                            <li><strong>Monthly:</strong> Default 1st of month 12 AM</li>
+                            <li><strong>Custom:</strong> Enter custom cron expression</li>
+                        </ul>
+                    </li>
+                    <li>Click <strong>"Enable Scheduler"</strong> toggle</li>
+                    <li>Save configuration</li>
+                    <li>Scheduler auto-calculates next_execution_at and displays it</li>
+                    <li>Snapshots will be generated automatically at scheduled time</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 2: Manual Portfolio Snapshot Generation (Admin)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Portfolio Snapshots Tab</strong></li>
+                    <li>Click <strong>"Execute Snapshot"</strong> button</li>
+                    <li>Confirm execution (generates snapshots for last month-end)</li>
+                    <li>View real-time progress in execution history table</li>
+                    <li>Check results: Customers processed, Snapshots created/updated, Duration</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 3: Backfilling Historical Snapshots (Admin)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Portfolio Snapshots Tab</strong></li>
+                    <li>Scroll to <strong>"Backfill Snapshots"</strong> section</li>
+                    <li>Select <strong>Start Date</strong> and <strong>End Date</strong> (month-end dates)</li>
+                    <li>(Optional) Specify customer IDs to backfill only certain customers</li>
+                    <li>Click <strong>"Smart Backfill"</strong></li>
+                    <li>System generates snapshots for all months in range</li>
+                    <li>View execution details in history table</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 4: Monitoring NAV Downloads (All Users)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → NAV Tab</strong></li>
+                    <li>View statistics: Total Active, Pending, Failed, Metrics Pending</li>
+                    <li>Use filter buttons to view specific categories (e.g., Failed Downloads)</li>
+                    <li>Click on a scheme card to view details</li>
+                    <li>Click <strong>"Download NAV"</strong> to manually trigger download for that scheme</li>
+                    <li>View updated status after download completes</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 5: Monitoring Market Downloads (All Users)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Market Tab</strong></li>
+                    <li>View statistics: Total Indices, Download Completed, Pending, Failed</li>
+                    <li>Filter indices by download status</li>
+                    <li>Click <strong>"Download EOD"</strong> to manually trigger download for an index</li>
+                    <li>View latest download date and data gaps</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 6: Managing Alerts (All Users)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Alerts Tab</strong></li>
+                    <li>View all active alerts (Goal Due, JTBD Trigger, Goal Progress)</li>
+                    <li>Filter by status: All, Active, Acknowledged, Dismissed</li>
+                    <li>Click <strong>"Acknowledge"</strong> to mark alert as seen</li>
+                    <li>Click <strong>"Dismiss"</strong> to hide alert</li>
+                    <li>View customer details and alert message</li>
+                </ol>
+
+                <h3 class="subsection-title">Workflow 7: Setting Default Index (Admin)</h3>
+                <ol>
+                    <li>Navigate to <strong>Cruise Control → Settings Tab</strong></li>
+                    <li>Locate <strong>"Default Index Settings"</strong> section</li>
+                    <li>Open dropdown showing all market indices (NSE/BSE)</li>
+                    <li>Select desired benchmark index (e.g., NIFTY 50, SENSEX)</li>
+                    <li>Click <strong>"Save"</strong></li>
+                    <li>Default index used for performance comparisons across platform</li>
+                </ol>
+            </div>
+
+            <!-- ==================== SECTION 9: INTEGRATION SUMMARY ==================== -->
+            <div class="section">
+                <h2 class="section-title">🔗 Integration Summary</h2>
+
+                <div class="info-box">
+                    <div class="info-box-title">What's Working (LIVE)</div>
+                    <ul>
+                        <li>✅ DashboardOverview shows real job statistics from t_job_executions</li>
+                        <li>✅ NavTab displays real NAV download status from NAV service</li>
+                        <li>✅ MarketTab displays real market EOD status from Market service</li>
+                        <li>✅ PortfolioSnapshotsTab fully functional with scheduler, manual execution, backfill</li>
+                        <li>✅ SettingsTab allows setting default benchmark index</li>
+                        <li>✅ Generic Job Scheduler system manages Portfolio Snapshot jobs</li>
+                        <li>✅ NAV Scheduler service running daily downloads</li>
+                        <li>✅ Admin/Tenant role-based access control</li>
+                    </ul>
+                </div>
+
+                <div class="info-box error">
+                    <div class="info-box-title">What Needs Integration (PENDING)</div>
+                    <ul>
+                        <li>🔴 AlertsTab using DUMMY_ALERTS - needs /api/jtbd/dashboard/upcoming-alerts integration</li>
+                        <li>⚠️ Alert acknowledge/dismiss needs backend API endpoints</li>
+                        <li>⚠️ Market EOD Scheduler service needs to be created (tables exist)</li>
+                        <li>⚠️ Automated alert generation cron needs implementation</li>
+                        <li>⚠️ Email/SMS notifications for alerts</li>
+                        <li>⚠️ Searchable dropdown for IndexSelector (user request)</li>
+                    </ul>
+                </div>
+
+                <div class="info-box success">
+                    <div class="info-box-title">Backend Readiness</div>
+                    <ul>
+                        <li>✅ All database tables created (t_portfolio_snapshot_*, t_job_*, t_goal_alerts)</li>
+                        <li>✅ JTBD backend has getDashboardUpcomingAlerts() ready for AlertsTab</li>
+                        <li>✅ Generic Job Scheduler supports multiple job types</li>
+                        <li>✅ Portfolio Snapshot service fully operational with backfill support</li>
+                        <li>✅ NAV and Market services have statistics endpoints</li>
+                        <li>✅ All routes registered with proper authentication/authorization middleware</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- ==================== FOOTER ==================== -->
+            <div style="margin-top: 64px; padding-top: 32px; border-top: 2px solid #e9ecef; text-align: center; color: #6c757d;">
+                <p style="font-size: 14px;">
+                    <strong>Cruise Control - Technical Documentation</strong><br>
+                    Generated for KewalInvest Platform<br>
+                    Last Updated: 2025-11-06
+                </p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
