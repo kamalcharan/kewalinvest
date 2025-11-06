@@ -58,7 +58,7 @@ echo ""
 echo -e "${BLUE}1/2: Building Backend...${NC}"
 cd ../backend
 
-if docker build -f Dockerfile.prod -t ${REGISTRY}/kewalinvest-backend:${TAG} .; then
+if docker build -f Dockerfile -t ${REGISTRY}/kewalinvest-backend:${TAG} .; then
     echo -e "${GREEN}✅ Backend build successful${NC}"
 else
     echo -e "${RED}❌ Backend build failed${NC}"
@@ -72,13 +72,7 @@ echo ""
 echo -e "${BLUE}2/2: Building Frontend...${NC}"
 cd ../frontend
 
-# Use the API URL from .env for the build
-REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080}
-
-if docker build \
-    -f Dockerfile.prod \
-    --build-arg REACT_APP_API_URL=${REACT_APP_API_URL} \
-    -t ${REGISTRY}/kewalinvest-frontend:${TAG} .; then
+if docker build -f Dockerfile -t ${REGISTRY}/kewalinvest-frontend:${TAG} .; then
     echo -e "${GREEN}✅ Frontend build successful${NC}"
 else
     echo -e "${RED}❌ Frontend build failed${NC}"
