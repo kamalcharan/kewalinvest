@@ -138,7 +138,18 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate()) return;
+    console.log('[CreateMeetingModal] ===== FORM SUBMITTED =====');
+    console.log('[CreateMeetingModal] Form data:', formData);
+
+    const validationResult = validate();
+    console.log('[CreateMeetingModal] Validation result:', validationResult);
+
+    if (!validationResult) {
+      console.log('[CreateMeetingModal] Validation FAILED, stopping');
+      return;
+    }
+
+    console.log('[CreateMeetingModal] Validation PASSED, proceeding');
 
     try {
       // Convert form data to JTBD execution format
@@ -156,6 +167,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       const title = MEETING_TYPE_LABELS[formData.meeting_type];
 
       if (isEditMode) {
+        console.log('[CreateMeetingModal] Edit mode - updating');
         await updateMutation.mutateAsync({
           id: meeting.id,
           data: {
@@ -175,14 +187,24 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
           scheduled_time: formData.scheduled_time,
           execution_data: executionData,
         };
-        console.log('[CreateMeetingModal] Creating execution:', createRequest);
+        console.log('[CreateMeetingModal] ===== CALLING MUTATION =====');
+        console.log('[CreateMeetingModal] Request:', JSON.stringify(createRequest, null, 2));
+
         const result = await createMutation.mutateAsync(createRequest);
-        console.log('[CreateMeetingModal] Creation successful:', result);
+
+        console.log('[CreateMeetingModal] ===== MUTATION SUCCESS =====');
+        console.log('[CreateMeetingModal] Result:', result);
       }
+
+      console.log('[CreateMeetingModal] Calling onSuccess callback');
       onSuccess?.();
+
+      console.log('[CreateMeetingModal] Closing modal');
       handleClose();
     } catch (error) {
-      console.error('Error saving meeting:', error);
+      console.error('[CreateMeetingModal] ===== ERROR =====');
+      console.error('[CreateMeetingModal] Error:', error);
+      alert('Failed to save meeting: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
