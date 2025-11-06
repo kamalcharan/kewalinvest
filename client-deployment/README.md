@@ -280,7 +280,7 @@ docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml down -v
 
 # Remove images
-docker rmi $(docker images -q 'kamalcharan/kewalinvest-*')
+docker rmi $(docker images -q 'vikuna/kewalinvest-*')
 ```
 
 ### Keep Data (for reinstallation)

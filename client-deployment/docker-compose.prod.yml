@@ -130,7 +130,7 @@ services:
   # ============================================================================
   backend:
     # Use pre-built image from Docker Hub or build locally
-    image: ${DOCKER_REGISTRY:-kamalcharan}/kewalinvest-backend:${IMAGE_TAG:-latest}
+    image: ${DOCKER_REGISTRY:-vikuna}/kewalinvest-backend:${IMAGE_TAG:-latest}
     container_name: kewalinvest_backend
     build:
       context: ../backend
@@ -216,7 +216,7 @@ services:
   # ============================================================================
   frontend:
     # Use pre-built image from Docker Hub or build locally
-    image: ${DOCKER_REGISTRY:-kamalcharan}/kewalinvest-frontend:${IMAGE_TAG:-latest}
+    image: ${DOCKER_REGISTRY:-vikuna}/kewalinvest-frontend:${IMAGE_TAG:-latest}
     container_name: kewalinvest_frontend
     build:
       context: ../frontend
