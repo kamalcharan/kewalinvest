@@ -115,7 +115,7 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this job? This cannot be undone.')) return;
+    if (!window.confirm('Delete this job? This cannot be undone.')) return;
 
     try {
       await deleteMutation.mutateAsync({ id: execution.id, customerId: execution.customer_id });
