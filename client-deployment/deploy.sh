@@ -86,11 +86,11 @@ fi
 
 echo ""
 echo "========================================="
-echo "  📊 Database Setup (4 Steps)"
+echo "  📊 Database Setup (5 Steps)"
 echo "========================================="
 
 # Check if all required SQL files exist
-REQUIRED_FILES=("database/01_init.sql" "database/02_tables.sql" "database/03_indexes_triggers.sql" "database/04_functions_views_policies.sql")
+REQUIRED_FILES=("database/01_init.sql" "database/02_tables.sql" "database/03_indexes_triggers.sql" "database/04_functions_views_policies.sql" "database/05_seed_data.sql")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         echo -e "${RED}❌ ERROR: Required file not found: $file${NC}"
@@ -102,7 +102,7 @@ echo -e "${GREEN}✅ All SQL files found${NC}"
 echo ""
 
 # Step 1: Initialize and Clean Database
-echo -e "${BLUE}Step 1/4: Initializing database (dropping old objects)...${NC}"
+echo -e "${BLUE}Step 1/5: Initializing database (dropping old objects)...${NC}"
 if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/01_init.sql > /tmp/01_init.log 2>&1; then
     echo -e "${GREEN}   ✅ Database initialized successfully!${NC}"
 else
@@ -114,7 +114,7 @@ fi
 
 # Step 2: Create Tables
 echo ""
-echo -e "${BLUE}Step 2/4: Creating tables...${NC}"
+echo -e "${BLUE}Step 2/5: Creating tables...${NC}"
 if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/02_tables.sql > /tmp/02_tables.log 2>&1; then
     TABLE_COUNT=$(docker exec kewalinvest_db psql -U kewal_admin -d kewalinvest -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | xargs)
     echo -e "${GREEN}   ✅ Tables created successfully! (Total: $TABLE_COUNT)${NC}"
@@ -127,7 +127,7 @@ fi
 
 # Step 3: Create Indexes and Triggers
 echo ""
-echo -e "${BLUE}Step 3/4: Creating indexes and triggers...${NC}"
+echo -e "${BLUE}Step 3/5: Creating indexes and triggers...${NC}"
 if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/03_indexes_triggers.sql > /tmp/03_indexes_triggers.log 2>&1; then
     INDEX_COUNT=$(docker exec kewalinvest_db psql -U kewal_admin -d kewalinvest -t -c "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public';" 2>/dev/null | xargs)
     TRIGGER_COUNT=$(docker exec kewalinvest_db psql -U kewal_admin -d kewalinvest -t -c "SELECT COUNT(*) FROM pg_trigger WHERE tgisinternal = false;" 2>/dev/null | xargs)
@@ -141,7 +141,7 @@ fi
 
 # Step 4: Create Functions, Views, and Policies
 echo ""
-echo -e "${BLUE}Step 4/4: Creating functions, views, and RLS policies...${NC}"
+echo -e "${BLUE}Step 4/5: Creating functions, views, and RLS policies...${NC}"
 if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/04_functions_views_policies.sql > /tmp/04_functions_views_policies.log 2>&1; then
     FUNCTION_COUNT=$(docker exec kewalinvest_db psql -U kewal_admin -d kewalinvest -t -c "SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public';" 2>/dev/null | xargs)
     VIEW_COUNT=$(docker exec kewalinvest_db psql -U kewal_admin -d kewalinvest -t -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = 'public';" 2>/dev/null | xargs)
@@ -151,6 +151,18 @@ else
     echo -e "${RED}   ❌ Function/View/Policy creation failed!${NC}"
     echo "   Check /tmp/04_functions_views_policies.log for details"
     cat /tmp/04_functions_views_policies.log
+    exit 1
+fi
+
+# Step 5: Load Seed Data
+echo ""
+echo -e "${BLUE}Step 5/5: Loading seed data...${NC}"
+if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/05_seed_data.sql > /tmp/05_seed_data.log 2>&1; then
+    echo -e "${GREEN}   ✅ Seed data loaded successfully!${NC}"
+else
+    echo -e "${RED}   ❌ Seed data loading failed!${NC}"
+    echo "   Check /tmp/05_seed_data.log for details"
+    cat /tmp/05_seed_data.log
     exit 1
 fi
 
@@ -216,4 +228,5 @@ echo "   ✓ 01_init.sql"
 echo "   ✓ 02_tables.sql"
 echo "   ✓ 03_indexes_triggers.sql"
 echo "   ✓ 04_functions_views_policies.sql"
+echo "   ✓ 05_seed_data.sql"
 echo ""
