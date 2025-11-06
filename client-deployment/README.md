@@ -22,8 +22,8 @@ cd client-deployment
 ```
 
 This will build and push:
-- `vikuna/kewalinvest-backend:latest` (Node.js backend)
-- `vikuna/kewalinvest-frontend:latest` (React development server)
+- `vikuna/kewalinvest-backend:latest` (Node.js with production build)
+- `vikuna/kewalinvest-frontend:latest` (React production build + serve)
 
 Only AFTER pushing images should you package and distribute the `client-deployment` folder.
 

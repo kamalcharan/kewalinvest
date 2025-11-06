@@ -1,8 +1,11 @@
-# Backend Development Dockerfile
+# Backend Dockerfile
 FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
 
 # Install dependencies for building native modules
 RUN apk add --no-cache python3 make g++
@@ -11,23 +14,20 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies including dev dependencies
+# Install dependencies (production + dev for building)
 RUN npm ci
-
-# Install global development tools
-RUN npm install -g typescript nodemon
 
 # Copy source code
 COPY . .
 
+# Build TypeScript code
+RUN npm run build
+
 # Create UserFiles directory
 RUN mkdir -p /app/UserFiles
-
-# Build TypeScript code (if build script exists)
-RUN npm run build || echo "Build script not found, skipping..."
 
 # Expose port
 EXPOSE 8080
 
-# Start the application in development mode
-CMD ["npm", "run", "dev"]
+# Start the application in production mode
+CMD ["npm", "start"]

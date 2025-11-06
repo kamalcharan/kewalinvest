@@ -106,7 +106,7 @@ services:
           cpus: ${BACKEND_CPU_RESERVATION:-0.5}
 
   # ============================================================================
-  # Frontend (React Development Server)
+  # Frontend (React Production Build with Serve)
   # ============================================================================
   frontend:
     # Use pre-built image from Docker Hub or build locally
