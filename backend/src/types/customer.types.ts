@@ -1,6 +1,6 @@
 // backend/src/types/customer.types.ts
 
-import { Contact, ContactChannel } from './contact.types';
+import { Contact, ContactChannel } from './contacts.types';
 
 export interface Customer {
   id: number;
