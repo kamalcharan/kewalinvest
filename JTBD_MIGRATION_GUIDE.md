@@ -93,8 +93,9 @@ psql -U kewal_admin -d kewalinvest -f backend/db/migrations/008_jtbd_consolidati
 
 3. **Adds indexes** for performance:
    - Customer + type filtering
-   - Date range queries
-   - Status filtering
+   - Date range queries (scheduled_date)
+   - Status filtering (execution_status IN 'planned', 'due')
+   - **Note**: Overdue filtering (`scheduled_date < CURRENT_DATE`) is done at query time, not in indexes (volatile expressions not allowed)
 
 ### Verify Migration
 
@@ -364,6 +365,13 @@ SELECT COUNT(*) as migrated_executions FROM t_jtbd_executions WHERE execution_ty
 ---
 
 ## Troubleshooting
+
+### Issue: Migration fails with "functions in index predicate must be marked IMMUTABLE"
+
+**Solution:** This was fixed in commit `0ac0d9e`. Make sure you're using the latest migration file.
+- The error occurred because `CURRENT_DATE` is volatile (changes daily)
+- PostgreSQL doesn't allow volatile expressions in index predicates
+- The fix removes the problematic index; overdue filtering is done at query time
 
 ### Issue: Migration fails with "column already exists"
 
