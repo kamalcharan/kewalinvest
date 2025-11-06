@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JTBD (Jobs To Be Done) - Technical Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .section h3 {
+            color: #764ba2;
+            font-size: 1.3rem;
+            margin: 25px 0 15px 0;
+        }
+
+        .tree {
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tree-node {
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .tree-node:hover {
+            background: #e9ecef;
+            border-left-color: #764ba2;
+            transform: translateX(5px);
+        }
+
+        .tree-node.level-1 {
+            margin-left: 0px;
+            border-left-color: #667eea;
+            background: #e7f3ff;
+        }
+
+        .tree-node.level-2 {
+            margin-left: 30px;
+            border-left-color: #896ed0;
+            background: #f0ebf7;
+        }
+
+        .tree-node.level-3 {
+            margin-left: 60px;
+            border-left-color: #a88dd3;
+            background: #f7f4fa;
+        }
+
+        .tree-node.level-4 {
+            margin-left: 90px;
+            border-left-color: #c0acd6;
+            background: #faf8fc;
+        }
+
+        .tree-node.level-5 {
+            margin-left: 120px;
+            border-left-color: #d4c7e2;
+            background: #fcfbfd;
+        }
+
+        .tree-node strong {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge.page {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge.component {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.hook {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge.service {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.backend {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .badge.table {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .badge.live {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.dummy {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .info-box h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+        }
+
+        .info-box li {
+            margin: 8px 0;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .warning-box h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #e83e8c;
+        }
+
+        .formula {
+            background: #f5f5f5;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 JTBD (Jobs To Be Done) Documentation</h1>
+            <p>Alert & Reminder Configuration System for Customer Actions</p>
+        </header>
+
+        <div class="content">
+            <!-- ============= SECTION 1: FILE STRUCTURE ============= -->
+            <div class="section">
+                <h2>1️⃣ File Structure - Hierarchical Graph</h2>
+
+                <h3>📄 Main Pages</h3>
+                <div class="tree">
+                    <div class="tree-node level-1">
+                        <strong>📄 JTBDDashboardPage.tsx</strong> <span class="badge page">MAIN PAGE</span> <span class="badge live">LIVE DATA ✅</span>
+                        <div class="description">Aggregate dashboard showing all JTBD alerts across all customers. Displays upcoming alerts, customers without JTBD setup, and statistics by type/priority.</div>
+                    </div>
+
+                    <!-- COMPONENTS -->
+                    <div class="tree-node level-2">
+                        <strong>🎴 JTBDList.tsx</strong> <span class="badge component">COMPONENT</span>
+                        <div class="description">List view of all JTBD configurations with filters (type, priority, status). Shows customer name, JTBD title, next alert date, priority badge.</div>
+                    </div>
+
+                    <div class="tree-node level-2">
+                        <strong>🎴 JTBDCard.tsx</strong> <span class="badge component">CARD</span>
+                        <div class="description">Individual JTBD card displaying: title, type icon, priority, next alert date, customer info, and action buttons (edit, delete, toggle active).</div>
+                    </div>
+
+                    <div class="tree-node level-2">
+                        <strong>🎴 JTBDSetupModal.tsx</strong> <span class="badge component">MODAL</span>
+                        <div class="description">Modal for creating/editing JTBD configurations. Dynamic form based on selected type: Portfolio Alert, Time-Based Alert, or Profile Trigger.</div>
+                    </div>
+
+                    <div class="tree-node level-2">
+                        <strong>🎴 JTBDActionCard.tsx</strong> <span class="badge component">CARD</span>
+                        <div class="description">Action card showing recommended actions when alert triggers: "Review portfolio", "Contact customer", "Prepare report".</div>
+                    </div>
+
+                    <div class="tree-node level-2">
+                        <strong>🏷️ JTBDStatusBadge.tsx</strong> <span class="badge component">BADGE</span>
+                        <div class="description">Status badge component showing: Active (green), Inactive (gray), Critical (red), High (orange), Medium (yellow), Low (blue).</div>
+                    </div>
+
+                    <!-- HOOKS -->
+                    <div class="tree-node level-3">
+                        <strong>🪝 useJTBD.ts</strong> <span class="badge hook">REACT HOOK</span>
+                        <div class="description">Custom hooks: useCustomerJTBDs(), useJTBDSummary(), useCreateJTBD(), useUpdateJTBD(), useDeleteJTBD(), useToggleJTBD(). React Query integration for caching.</div>
+                    </div>
+
+                    <!-- SERVICES -->
+                    <div class="tree-node level-4">
+                        <strong>⚙️ jtbd.service.ts</strong> <span class="badge service">FRONTEND SERVICE</span>
+                        <div class="description">Frontend API service: createJTBD(), updateJTBD(), deleteJTBD(), getCustomerJTBDs(), toggleActive(), getDashboardOverview(), getUpcomingAlerts().</div>
+                    </div>
+
+                    <!-- BACKEND CONTROLLER -->
+                    <div class="tree-node level-5">
+                        <strong>🎮 jtbd.controller.ts</strong> <span class="badge backend">CONTROLLER</span>
+                        <div class="description">REST API endpoints: POST /api/jtbd (create), GET /api/jtbd/customer/:id (list), PUT /api/jtbd/:id (update), DELETE /api/jtbd/:id, POST /api/jtbd/:id/toggle.</div>
+                    </div>
+
+                    <!-- BACKEND SERVICES -->
+                    <div class="tree-node level-5">
+                        <strong>⚙️ jtbd.service.ts</strong> <span class="badge backend">BACKEND SERVICE</span>
+                        <div class="description">Core business logic: createJTBD(), getCustomerJTBDs(), updateJTBD(), deleteJTBD(), calculateNextAlertDate(), validatePortfolioScheme().</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>📊 jtbd.dashboard.service.ts</strong> <span class="badge backend">DASHBOARD SERVICE</span>
+                        <div class="description">Dashboard aggregation: getDashboardStats(), getUpcomingAlerts(), getCustomersWithoutJTBD(), getAlertsByDate(), getAlertOccurrences().</div>
+                    </div>
+
+                    <!-- UTILITIES -->
+                    <div class="tree-node level-5">
+                        <strong>🛠️ jtbd.util.ts</strong> <span class="badge service">UTILITY</span>
+                        <div class="description">Helper functions: generateTitle(), formatNextAlertDate(), calculateOccurrences(), isWithinDeviationRange().</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>🛠️ jtbd.helpers.ts</strong> <span class="badge service">UTILITY</span>
+                        <div class="description">Frontend helpers: getTypeIcon(), getPriorityColor(), formatAlertMessage(), getFrequencyLabel().</div>
+                    </div>
+
+                    <!-- DATABASE TABLES -->
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_jtbd_configurations</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Main JTBD storage. Stores all alert configurations with JSONB config_data for type-specific settings (portfolio_alert, time_based, profile_trigger).</div>
+                    </div>
+
+                    <div class="tree-node level-5">
+                        <strong>🗄️ t_goal_alerts</strong> <span class="badge table">TABLE</span>
+                        <div class="description">Generated alerts for both Goals and JTBD. Stores triggered alerts with severity, message, action_required, acknowledgment status.</div>
+                    </div>
+
+                    <div class="tree-node level-1">
+                        <strong>📄 CustomerViewPage.tsx → JTBD Section</strong> <span class="badge component">SUB-VIEW</span> <span class="badge live">LIVE DATA ✅</span>
+                        <div class="description">Customer profile page displays customer-specific JTBDs in Overview tab summary and detailed list in Goals & Actions tab.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 2: JTBD TYPES ============= -->
+            <div class="section">
+                <h2>2️⃣ JTBD Types</h2>
+
+                <div class="info-box">
+                    <h4>1. Portfolio Alert 📊</h4>
+                    <p><strong>Purpose:</strong> Track expected transactions in customer portfolio and alert when they deviate from pattern.</p>
+                    <p><strong>Use Case:</strong> Monthly SIP tracking, quarterly redemptions, annual rebalancing.</p>
+
+                    <h4 style="margin-top: 15px;">Configuration Fields:</h4>
+                    <ul>
+                        <li><strong>scheme_code:</strong> Which scheme to monitor (e.g., HDFC Equity INF200K01234)</li>
+                        <li><strong>txn_type:</strong> Transaction type (Purchase, Redemption, Switch-In, Switch-Out, Dividend Reinvestment)</li>
+                        <li><strong>frequency:</strong> Expected frequency (Daily, Fortnightly, Monthly, Quarterly, Yearly, NA)</li>
+                        <li><strong>day_of_month:</strong> Expected day (e.g., 5 for 5th of month)</li>
+                        <li><strong>deviation_days:</strong> Alert if transaction doesn't occur within X days (e.g., ±3 days)</li>
+                        <li><strong>amount:</strong> Expected transaction amount</li>
+                        <li><strong>track_till_months:</strong> How long to monitor (e.g., 60 months for 5 years of SIP)</li>
+                    </ul>
+
+                    <h4 style="margin-top: 15px;">Business Logic:</h4>
+                    <div class="formula">
+Example: Monthly SIP Alert
+- Scheme: HDFC Equity
+- Txn Type: Purchase (SIP)
+- Frequency: Monthly
+- Day of Month: 5
+- Deviation: ±3 days (alert if no transaction between 2nd-8th)
+- Amount: ₹10,000
+- Track Till: 60 months (5 years)
+
+System checks:
+1. Every month on 9th: Query transactions for scheme between 2nd-8th
+2. If NO transaction found: Generate alert "SIP not executed"
+3. If transaction found with amount ≠ ₹10,000: Generate alert "SIP amount mismatch"
+4. Next alert date = 5th of next month
+5. Continue for 60 months, then auto-deactivate
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>2. Time-Based Alert 📅</h4>
+                    <p><strong>Purpose:</strong> Fixed date reminders for one-time or recurring tasks.</p>
+                    <p><strong>Use Case:</strong> Annual portfolio review, quarterly rebalancing, tax filing reminders.</p>
+
+                    <h4 style="margin-top: 15px;">Configuration Fields:</h4>
+                    <ul>
+                        <li><strong>alert_date:</strong> Day of month (1-31)</li>
+                        <li><strong>alert_month:</strong> Month (1-12, or ALL for recurring)</li>
+                        <li><strong>is_recurring:</strong> One-time or repeating annually</li>
+                    </ul>
+
+                    <h4 style="margin-top: 15px;">Business Logic:</h4>
+                    <div class="formula">
+Example 1: Annual Review (Recurring)
+- Alert Date: 15
+- Alert Month: 3 (March)
+- Is Recurring: true
+
+System generates alert every March 15th for annual portfolio review.
+
+Example 2: One-Time Reminder (Non-recurring)
+- Alert Date: 25
+- Alert Month: 12
+- Is Recurring: false
+
+System generates alert on December 25th, then auto-deactivates.
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>3. Profile Trigger 🎂</h4>
+                    <p><strong>Purpose:</strong> Alerts based on customer profile milestones.</p>
+                    <p><strong>Use Case:</strong> Birthday reminders, anniversary wishes, relationship milestones.</p>
+
+                    <h4 style="margin-top: 15px;">Configuration Fields:</h4>
+                    <ul>
+                        <li><strong>trigger_type:</strong> "birthday" or "anniversary"</li>
+                        <li><strong>days_before:</strong> Alert X days before the event (e.g., 7 days before birthday)</li>
+                    </ul>
+
+                    <h4 style="margin-top: 15px;">Business Logic:</h4>
+                    <div class="formula">
+Example: Birthday Alert
+- Trigger Type: birthday
+- Days Before: 7
+
+System logic:
+1. Fetch customer DOB from t_customers.date_of_birth
+2. Calculate next birthday:
+   - If DOB = 1990-05-15 and today = 2025-11-05
+   - Next birthday = 2026-05-15
+3. Calculate alert date = Next birthday - 7 days = 2026-05-08
+4. Generate alert on 2026-05-08: "Rajesh Kumar's birthday in 7 days"
+5. After birthday passes, calculate next year's alert
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 3: BUSINESS LOGIC ============= -->
+            <div class="section">
+                <h2>3️⃣ Business Logic & Workflows</h2>
+
+                <h3>Creating a JTBD</h3>
+                <ol>
+                    <li><strong>User selects customer</strong> from CustomerViewPage</li>
+                    <li><strong>Clicks "Add JTBD"</strong> → JTBDSetupModal opens</li>
+                    <li><strong>Selects JTBD type:</strong> Portfolio Alert, Time-Based, or Profile Trigger</li>
+                    <li><strong>Fills type-specific form:</strong>
+                        <ul>
+                            <li>Portfolio Alert: Select scheme, txn type, frequency, amount</li>
+                            <li>Time-Based: Select date, month, recurring</li>
+                            <li>Profile Trigger: Select trigger type (birthday/anniversary), days before</li>
+                        </ul>
+                    </li>
+                    <li><strong>Sets priority:</strong> Critical, High, Medium, Low</li>
+                    <li><strong>Backend validates:</strong>
+                        <ul>
+                            <li>For Portfolio Alerts: Checks if scheme exists in customer's portfolio</li>
+                            <li>For Profile Triggers: Checks if customer has DOB/anniversary date</li>
+                        </ul>
+                    </li>
+                    <li><strong>System calculates next_alert_date:</strong>
+                        <ul>
+                            <li>Portfolio Alert: Next expected transaction date ± deviation</li>
+                            <li>Time-Based: Next occurrence of alert_date/alert_month</li>
+                            <li>Profile Trigger: Event date - days_before</li>
+                        </ul>
+                    </li>
+                    <li><strong>Saves to t_jtbd_configurations</strong> with config_data as JSONB</li>
+                    <li><strong>Updates customer record:</strong> jtbd_count++, has_jtbd_setup=true</li>
+                </ol>
+
+                <h3>Alert Generation & Display</h3>
+                <div class="info-box">
+                    <h4>How Alerts Are Generated:</h4>
+                    <ol>
+                        <li><strong>Daily cron job</strong> (or real-time trigger) checks t_jtbd_configurations</li>
+                        <li><strong>Finds JTBDs with next_alert_date = Today or past due</strong></li>
+                        <li><strong>For each JTBD:</strong>
+                            <ul>
+                                <li>Portfolio Alert: Check if transaction occurred within deviation range</li>
+                                <li>Time-Based: Generate reminder alert</li>
+                                <li>Profile Trigger: Generate milestone reminder</li>
+                            </ul>
+                        </li>
+                        <li><strong>Creates alert entry</strong> in t_goal_alerts table</li>
+                        <li><strong>Calculates next alert date</strong> and updates t_jtbd_configurations</li>
+                        <li><strong>Frontend displays</strong> via:
+                            <ul>
+                                <li>JTBDDashboardPage → Upcoming Alerts section</li>
+                                <li>CustomerViewPage → JTBD summary badge</li>
+                                <li>Cruise Control → AlertsTab (future implementation)</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+
+                <h3>Alert Lifecycle</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Description</th>
+                            <th>Actions Available</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Scheduled</td>
+                            <td>JTBD is active, waiting for next_alert_date</td>
+                            <td>Edit, Delete, Deactivate</td>
+                        </tr>
+                        <tr>
+                            <td>Triggered</td>
+                            <td>Alert generated, waiting for acknowledgment</td>
+                            <td>Acknowledge, Dismiss, View Details</td>
+                        </tr>
+                        <tr>
+                            <td>Acknowledged</td>
+                            <td>User has seen alert, action taken</td>
+                            <td>View History</td>
+                        </tr>
+                        <tr>
+                            <td>Expired</td>
+                            <td>Portfolio Alert tracked for track_till_months, auto-deactivated</td>
+                            <td>Reactivate, Delete</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Integration with Goals</h3>
+                <div class="info-box">
+                    <p><strong>Important Note:</strong> JTBD and Goals share the same <code>t_jtbd_configurations</code> table!</p>
+                    <p>Goals are stored with <code>jtbd_type = 'goal_tracking'</code></p>
+                    <p>Alerts (JTBD) are stored with <code>jtbd_type = 'portfolio_alert' | 'time_based' | 'profile_trigger'</code></p>
+                    <p>Both use <code>t_goal_alerts</code> table for generated alerts.</p>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 4: DATABASE TABLES ============= -->
+            <div class="section">
+                <h2>4️⃣ Database Tables</h2>
+
+                <h3>📊 Table: t_jtbd_configurations</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Stores all JTBD alert configurations (also used for Goals)</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Unique JTBD ID</td>
+                            </tr>
+                            <tr>
+                                <td>customer_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>Which customer this JTBD belongs to</td>
+                            </tr>
+                            <tr>
+                                <td>jtbd_type</td>
+                                <td>VARCHAR(50)</td>
+                                <td>'portfolio_alert', 'time_based', 'profile_trigger', 'goal_tracking'</td>
+                            </tr>
+                            <tr>
+                                <td>title</td>
+                                <td>VARCHAR(255)</td>
+                                <td>JTBD title (e.g., "Monthly SIP Tracking - HDFC Equity")</td>
+                            </tr>
+                            <tr>
+                                <td>priority</td>
+                                <td>VARCHAR(20)</td>
+                                <td>'critical', 'high', 'medium', 'low'</td>
+                            </tr>
+                            <tr>
+                                <td>is_active</td>
+                                <td>BOOLEAN</td>
+                                <td>Is this JTBD currently active?</td>
+                            </tr>
+                            <tr>
+                                <td>config_data</td>
+                                <td>JSONB</td>
+                                <td>Type-specific configuration (see examples below)</td>
+                            </tr>
+                            <tr>
+                                <td>next_alert_date</td>
+                                <td>DATE</td>
+                                <td>When should next alert be triggered</td>
+                            </tr>
+                            <tr>
+                                <td>is_watchlisted</td>
+                                <td>BOOLEAN</td>
+                                <td>Pinned to watchlist for quick access</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Example config_data (Portfolio Alert):</h4>
+                    <div class="formula">
+{
+  "scheme_code": "INF200K01234",
+  "scheme_name": "HDFC Equity Fund - Direct - Growth",
+  "folio_no": "12345678",
+  "txn_type_id": 1,
+  "txn_type": "Purchase",
+  "frequency": "monthly",
+  "day_of_month": 5,
+  "deviation_days": 3,
+  "amount": 10000,
+  "track_till_months": 60
+}
+                    </div>
+
+                    <h4>Example config_data (Time-Based):</h4>
+                    <div class="formula">
+{
+  "alert_date": 15,
+  "alert_month": 3,
+  "is_recurring": true
+}
+                    </div>
+
+                    <h4>Example config_data (Profile Trigger):</h4>
+                    <div class="formula">
+{
+  "trigger_type": "birthday",
+  "days_before": 7
+}
+                    </div>
+                </div>
+
+                <h3>📊 Table: t_goal_alerts</h3>
+                <div class="info-box">
+                    <p><strong>Purpose:</strong> Stores generated alerts for both JTBD and Goals</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>id</td>
+                                <td>SERIAL PRIMARY KEY</td>
+                                <td>Alert ID</td>
+                            </tr>
+                            <tr>
+                                <td>goal_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>References t_jtbd_configurations(id)</td>
+                            </tr>
+                            <tr>
+                                <td>customer_id</td>
+                                <td>INTEGER (FK)</td>
+                                <td>For quick customer queries</td>
+                            </tr>
+                            <tr>
+                                <td>alert_type</td>
+                                <td>VARCHAR(50)</td>
+                                <td>'transaction_missed', 'amount_mismatch', 'time_based_reminder', 'birthday_reminder', 'anniversary_reminder'</td>
+                            </tr>
+                            <tr>
+                                <td>severity</td>
+                                <td>VARCHAR(20)</td>
+                                <td>'high', 'medium', 'low'</td>
+                            </tr>
+                            <tr>
+                                <td>message</td>
+                                <td>TEXT</td>
+                                <td>Human-readable alert message</td>
+                            </tr>
+                            <tr>
+                                <td>action_required</td>
+                                <td>VARCHAR(100)</td>
+                                <td>'contact_customer', 'verify_transaction', 'send_reminder'</td>
+                            </tr>
+                            <tr>
+                                <td>is_acknowledged</td>
+                                <td>BOOLEAN</td>
+                                <td>Has alert been seen/acknowledged?</td>
+                            </tr>
+                            <tr>
+                                <td>acknowledged_at</td>
+                                <td>TIMESTAMP</td>
+                                <td>When was it acknowledged</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>📊 Related Table: t_customers (JTBD Tracking Fields)</h3>
+                <div class="info-box">
+                    <p>Customer table has JTBD-related fields:</p>
+                    <ul>
+                        <li><strong>jtbd_count:</strong> How many JTBDs configured for this customer</li>
+                        <li><strong>has_jtbd_setup:</strong> Quick flag for filtering customers without JTBD</li>
+                        <li><strong>date_of_birth:</strong> Used for birthday profile triggers</li>
+                        <li><strong>anniversary_date:</strong> Used for anniversary profile triggers</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 5: API ENDPOINTS ============= -->
+            <div class="section">
+                <h2>5️⃣ API Endpoints</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/jtbd</td>
+                            <td>Create new JTBD configuration</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/customer/:customerId</td>
+                            <td>Get all JTBDs for a customer</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/:jtbdId</td>
+                            <td>Get single JTBD by ID</td>
+                        </tr>
+                        <tr>
+                            <td>PUT</td>
+                            <td>/api/jtbd/:jtbdId</td>
+                            <td>Update JTBD configuration</td>
+                        </tr>
+                        <tr>
+                            <td>DELETE</td>
+                            <td>/api/jtbd/:jtbdId</td>
+                            <td>Delete JTBD (soft delete: sets is_active=false)</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/jtbd/:jtbdId/toggle</td>
+                            <td>Toggle JTBD active/inactive status</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/dashboard/overview</td>
+                            <td>Get dashboard statistics (total, by type, by priority)</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/dashboard/upcoming-alerts</td>
+                            <td>Get alerts for next X days</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/dashboard/alerts-by-date</td>
+                            <td>Get alerts for specific date range</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/dashboard/customers-without-jtbd</td>
+                            <td>Get customers who haven't configured any JTBD</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/customer/:customerId/summary</td>
+                            <td>Get JTBD summary for customer</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/:jtbdId/occurrences</td>
+                            <td>Get calculated alert occurrences (for portfolio alerts)</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/jtbd/transaction-types</td>
+                            <td>Get available transaction types for portfolio alerts</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ============= SECTION 6: DATA STATUS ============= -->
+            <div class="section">
+                <h2>6️⃣ Data Status: Live vs Dummy vs Pending</h2>
+
+                <div class="info-box">
+                    <h4>✅ LIVE DATA (Fully Implemented)</h4>
+                    <ul>
+                        <li><strong>JTBDDashboardPage:</strong> Shows real JTBD configurations from database</li>
+                        <li><strong>Customer JTBD List:</strong> CustomerViewPage displays actual JTBDs</li>
+                        <li><strong>JTBD CRUD Operations:</strong> Create, update, delete working with database</li>
+                        <li><strong>Dashboard Statistics:</strong> Real counts by type, priority, active status</li>
+                        <li><strong>Upcoming Alerts API:</strong> Calculates real alert dates from JTBD configs</li>
+                        <li><strong>Portfolio Validation:</strong> Checks if scheme exists in customer portfolio</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    <h4>⚠️ PENDING IMPLEMENTATIONS</h4>
+                    <ul>
+                        <li><strong>Automated Alert Generation:</strong> Daily cron job to check next_alert_date and generate alerts in t_goal_alerts table</li>
+                        <li><strong>Transaction Validation:</strong> For Portfolio Alerts - check if transaction actually occurred within deviation range</li>
+                        <li><strong>Amount Mismatch Detection:</strong> Compare actual transaction amount vs expected amount</li>
+                        <li><strong>Alert Acknowledgment:</strong> Mark alerts as acknowledged when user views them</li>
+                        <li><strong>Alert History:</strong> View past alerts for a JTBD</li>
+                        <li><strong>Email/SMS Notifications:</strong> Send alerts via email/SMS when triggered</li>
+                        <li><strong>Cruise Control AlertsTab Integration:</strong> Currently using DUMMY_ALERTS data - needs JTBD alert integration</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    <h4>🔴 DUMMY DATA (Needs Replacement)</h4>
+                    <ul>
+                        <li><strong>Cruise Control → AlertsTab.tsx:</strong> Using <code>DUMMY_ALERTS</code> array instead of real alerts from t_goal_alerts table</li>
+                        <li><strong>Mock Data Files:</strong>
+                            <ul>
+                                <li>frontend/src/data/mock/mockJTBDData.ts (used for testing only)</li>
+                                <li>backend/src/data/mock/mockJTBDData.ts (not used in production)</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- ============= SECTION 7: USER WORKFLOWS ============= -->
+            <div class="section">
+                <h2>7️⃣ User Workflows</h2>
+
+                <h3>Workflow 1: Setting Up SIP Tracking</h3>
+                <ol>
+                    <li>Navigate to Customer → Rajesh Kumar</li>
+                    <li>Click "Add JTBD" button</li>
+                    <li>Select type: "Portfolio Alert"</li>
+                    <li>Fill form:
+                        <ul>
+                            <li>Title: "Monthly SIP Tracking - HDFC Equity"</li>
+                            <li>Select Scheme: HDFC Equity Fund (from customer's portfolio)</li>
+                            <li>Transaction Type: Purchase (SIP)</li>
+                            <li>Frequency: Monthly</li>
+                            <li>Day of Month: 5</li>
+                            <li>Deviation Days: ±3</li>
+                            <li>Expected Amount: ₹10,000</li>
+                            <li>Track Till: 60 months</li>
+                            <li>Priority: High</li>
+                        </ul>
+                    </li>
+                    <li>Click "Save"</li>
+                    <li>System calculates next_alert_date = 2025-12-08 (5th + 3 days deviation)</li>
+                    <li>JTBD saved to database</li>
+                    <li>On Dec 8th, system checks transactions between Dec 2-8:
+                        <ul>
+                            <li>If found: No alert, next_alert_date = 2026-01-08</li>
+                            <li>If NOT found: Generate alert "SIP not executed for Rajesh Kumar"</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <h3>Workflow 2: Birthday Reminder</h3>
+                <ol>
+                    <li>Customer: Priya Sharma (DOB: 1985-05-20)</li>
+                    <li>Create JTBD:
+                        <ul>
+                            <li>Type: Profile Trigger</li>
+                            <li>Trigger: Birthday</li>
+                            <li>Days Before: 7</li>
+                            <li>Priority: Medium</li>
+                        </ul>
+                    </li>
+                    <li>System calculates next_alert_date = 2026-05-13 (7 days before May 20)</li>
+                    <li>On May 13, 2026: Generate alert "Priya Sharma's birthday in 7 days"</li>
+                    <li>After birthday passes: Auto-calculate next year → 2027-05-13</li>
+                </ol>
+
+                <h3>Workflow 3: Viewing Dashboard Alerts</h3>
+                <ol>
+                    <li>Navigate to JTBD Dashboard</li>
+                    <li>View Statistics:
+                        <ul>
+                            <li>Total JTBDs: 45</li>
+                            <li>Portfolio Alerts: 30</li>
+                            <li>Time-Based: 10</li>
+                            <li>Profile Triggers: 5</li>
+                            <li>Critical: 2, High: 15, Medium: 20, Low: 8</li>
+                        </ul>
+                    </li>
+                    <li>View "Upcoming Alerts" (next 30 days):
+                        <ul>
+                            <li>Dec 8: Rajesh Kumar - SIP Tracking - HDFC Equity</li>
+                            <li>Dec 10: Amit Patel - SIP Tracking - ICICI Bluechip</li>
+                            <li>Dec 15: [ALL] - Quarterly Portfolio Review</li>
+                        </ul>
+                    </li>
+                    <li>View "Customers Without JTBD": 12 customers listed</li>
+                    <li>Click on customer → Opens CustomerViewPage → Set up JTBD</li>
+                </ol>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

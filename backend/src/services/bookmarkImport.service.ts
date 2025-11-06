@@ -63,13 +63,7 @@ export class BookmarkImportService {
         const row = rows[i];
         const rowNumber = i + 1;
 
-        // Create a savepoint for this row
-        const savepointName = `row_${rowNumber}`;
-        
         try {
-          // Start savepoint for this row
-          await client.query(`SAVEPOINT ${savepointName}`);
-
           // Validate row data
           if (!row.scheme_code || !row.scheme_name) {
             errors.push({
@@ -77,7 +71,6 @@ export class BookmarkImportService {
               scheme_code: row.scheme_code || 'MISSING',
               error: 'Missing required fields: scheme_code or scheme_name'
             });
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -101,7 +94,6 @@ export class BookmarkImportService {
               scheme_code: cleanSchemeCode,
               error: `Scheme code not found in master data (t_scheme_details)`
             });
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -144,34 +136,29 @@ export class BookmarkImportService {
 
           // Step 3: Auto-generate aliases for this bookmark
           // IMPORTANT: Alias failures should NOT block bookmark creation
-          const aliasVariations = this.generateAliasVariations(
-            cleanSchemeName,        // Customer's name
-            masterScheme.scheme_name,    // Master scheme_name
-            masterScheme.scheme_nav_name // Master scheme_nav_name
+          // Generate exactly 2 aliases: customer name + master nav name
+          const aliasesToCreate = this.generateAliasVariations(
+            cleanSchemeName,              // Customer's name from CSV
+            masterScheme.scheme_nav_name  // Master scheme_nav_name
           );
 
-          for (const aliasName of aliasVariations) {
-            // Create a nested savepoint for alias to prevent bookmark rollback
-            const aliasSavepoint = `alias_${rowNumber}_${aliasVariations.indexOf(aliasName)}`;
-            
+          // Create aliases (global, shared across all tenants)
+          for (const alias of aliasesToCreate) {
             try {
-              await client.query(`SAVEPOINT ${aliasSavepoint}`);
-              
               // NOTE: Aliases are universal/global across all tenants
               // ON CONFLICT DO NOTHING handles duplicates from other tenants
               const aliasQuery = `
-                INSERT INTO t_scheme_aliases (
-                  scheme_id, scheme_code, alias_name, source, created_by
-                )
-                VALUES ($1, $2, $3, 'import', $4)
-                ON CONFLICT ON CONSTRAINT unique_scheme_alias DO NOTHING
+                INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (alias_name_normalized) DO NOTHING
                 RETURNING id
               `;
 
               const aliasResult = await client.query(aliasQuery, [
                 masterScheme.id,
                 cleanSchemeCode,
-                aliasName,
+                alias.aliasName,
+                alias.source,  // 'csv_upload' or 'master_nav'
                 userId
               ]);
 
@@ -179,36 +166,16 @@ export class BookmarkImportService {
                 aliasesCreated++;
               } else {
                 // Alias already exists (from this or another tenant) - this is OK
-                console.log(`[BookmarkImport] Alias "${aliasName}" already exists (universal) - skipping`);
+                console.log(`[BookmarkImport] Alias "${alias.aliasName}" already exists (universal) - skipping`);
               }
-              
-              // Release alias savepoint on success
-              await client.query(`RELEASE SAVEPOINT ${aliasSavepoint}`);
-              
+
             } catch (aliasError: any) {
-              // Rollback only the alias savepoint, NOT the bookmark
-              try {
-                await client.query(`ROLLBACK TO SAVEPOINT ${aliasSavepoint}`);
-              } catch (rollbackErr) {
-                // Ignore rollback errors
-              }
-              
               // Log but don't fail bookmark import if alias creation fails
-              console.warn(`[BookmarkImport] Alias creation failed for "${aliasName}":`, aliasError.message);
+              console.warn(`[BookmarkImport] Alias creation failed for "${alias.aliasName}":`, aliasError.message);
             }
           }
 
-          // Release savepoint if row processed successfully
-          await client.query(`RELEASE SAVEPOINT ${savepointName}`);
-
         } catch (error: any) {
-          // Rollback to savepoint to continue with next row
-          try {
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-          } catch (rollbackError) {
-            console.error(`[BookmarkImport] Failed to rollback savepoint for row ${rowNumber}:`, rollbackError);
-          }
-          
           errors.push({
             row: rowNumber,
             scheme_code: row.scheme_code || 'UNKNOWN',
@@ -260,45 +227,39 @@ export class BookmarkImportService {
 
   /**
    * Generate alias variations for a scheme
-   * Creates multiple name variations to handle different software naming conventions
+   * Creates exactly 2 aliases per scheme:
+   * 1. Customer's fund name from CSV (source: 'csv_upload')
+   * 2. Master scheme_nav_name (source: 'master_nav')
    */
   private generateAliasVariations(
-    customerName: string,
-    masterSchemeName: string,
+    customerFundName: string,
     masterNavName: string | null
-  ): string[] {
-    const variations = new Set<string>();
+  ): Array<{ aliasName: string; source: string }> {
+    const aliases: Array<{ aliasName: string; source: string }> = [];
 
-    // 1. Customer's exact name from CSV (most important - what their software uses)
-    variations.add(customerName);
-
-    // 2. Master scheme_name
-    if (masterSchemeName && masterSchemeName !== customerName) {
-      variations.add(masterSchemeName);
+    // Alias 1: Customer's custom fund name from CSV
+    if (customerFundName && customerFundName.trim()) {
+      aliases.push({
+        aliasName: customerFundName.trim(),
+        source: 'csv_upload'
+      });
     }
 
-    // 3. Master scheme_nav_name (if different)
-    if (masterNavName && masterNavName !== masterSchemeName && masterNavName !== customerName) {
-      variations.add(masterNavName);
+    // Alias 2: Master scheme_nav_name (if different from customer name)
+    if (masterNavName && masterNavName.trim()) {
+      const normalizedCustomer = customerFundName.trim().toUpperCase().replace(/\s+/g, ' ');
+      const normalizedMaster = masterNavName.trim().toUpperCase().replace(/\s+/g, ' ');
+      
+      // Only add if different (avoid duplicate)
+      if (normalizedCustomer !== normalizedMaster) {
+        aliases.push({
+          aliasName: masterNavName.trim(),
+          source: 'master_nav'
+        });
+      }
     }
 
-    // 4. Generate common suffix variations for customer name
-    const baseName = customerName.replace(/ ?(Reg|Regular|Dir|Direct)\.? ?\(G\)$/i, '').trim();
-    
-    if (baseName !== customerName) {
-      // Only add variations if we actually stripped something
-      variations.add(baseName);
-      variations.add(`${baseName} (G)`);
-      variations.add(`${baseName} Reg (G)`);
-      variations.add(`${baseName} Direct (G)`);
-      variations.add(`${baseName} Regular (G)`);
-      variations.add(`${baseName} Reg`);
-      variations.add(`${baseName} Direct`);
-      variations.add(`${baseName} Reg.plan (G)`);
-    }
-
-    // Remove empty strings and return unique list
-    return Array.from(variations).filter(v => v && v.trim().length > 0);
+    return aliases;
   }
 
   /**

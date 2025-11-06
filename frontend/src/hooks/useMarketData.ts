@@ -2,7 +2,7 @@
 // CORRECTED VERSION - Replace entire file
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import MarketService from '../services/market.service';  // ✅ FIXED: Changed from { marketService }
+import MarketService from '../services/market.service';
 import { toastService } from '../services/toast.service';
 import { FrontendErrorLogger } from '../services/errorLogger.service';
 import type {
@@ -55,7 +55,7 @@ export const useMarketIndices = (initialParams?: GetIndicesParams): UseMarketInd
     lastParamsRef.current = params;
 
     try {
-      const response = await MarketService.getAllIndices(params);  // ✅ FIXED
+      const response = await MarketService.getAllIndices(params);
       
       if (response.success && response.data) {
         setIndices(response.data.indices || []);
@@ -162,7 +162,7 @@ export const useMarketStatistics = (): UseMarketStatisticsReturn => {
     setError(null);
 
     try {
-      const response = await MarketService.getStatistics();  // ✅ FIXED
+      const response = await MarketService.getStatistics();
       
       if (response.success && response.data) {
         setStatistics(response.data);
@@ -284,7 +284,7 @@ export const useMarketDownload = (
         skip_existing: true
       };
 
-      const response = await MarketService.downloadHistorical(request);  // ✅ FIXED
+      const response = await MarketService.downloadHistorical(request);
       
       if (response.success && response.data) {
         toastService.success(
@@ -303,7 +303,7 @@ export const useMarketDownload = (
         // Trigger success callback (to refetch data)
         onSuccess?.();
       } else {
-        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
+        const errorMsg = MarketService.parseError(response.error);
         setError(errorMsg);
         toastService.error(`Download failed: ${errorMsg}`);
 
@@ -318,7 +318,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Download historical error:', err);
-      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
+      const errorMsg = MarketService.parseError(err.message);
       setError(errorMsg);
       toastService.error(`Download failed: ${errorMsg}`);
 
@@ -356,7 +356,7 @@ export const useMarketDownload = (
         index_id: indexId
       };
 
-      const response = await MarketService.downloadEOD(request);  // ✅ FIXED
+      const response = await MarketService.downloadEOD(request);
       
       if (response.success && response.data) {
         toastService.success(
@@ -375,7 +375,7 @@ export const useMarketDownload = (
         // Trigger success callback
         onSuccess?.();
       } else {
-        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
+        const errorMsg = MarketService.parseError(response.error);
         setError(errorMsg);
         toastService.error(`EOD download failed: ${errorMsg}`);
 
@@ -390,7 +390,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Download EOD error:', err);
-      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
+      const errorMsg = MarketService.parseError(err.message);
       setError(errorMsg);
       toastService.error(`EOD download failed: ${errorMsg}`);
 
@@ -424,7 +424,7 @@ export const useMarketDownload = (
         { indexId }
       );
 
-      const response = await MarketService.deleteAllData(indexId);  // ✅ FIXED
+      const response = await MarketService.deleteAllData(indexId);
       
       if (response.success && response.data) {
         const deletedCount = response.data.deleted_count || 0;
@@ -444,7 +444,7 @@ export const useMarketDownload = (
         // Trigger success callback
         onSuccess?.();
       } else {
-        const errorMsg = MarketService.parseError(response.error);  // ✅ FIXED
+        const errorMsg = MarketService.parseError(response.error);
         setError(errorMsg);
         toastService.error(`Delete failed: ${errorMsg}`);
 
@@ -459,7 +459,7 @@ export const useMarketDownload = (
       }
     } catch (err: any) {
       console.error('Delete data error:', err);
-      const errorMsg = MarketService.parseError(err.message);  // ✅ FIXED
+      const errorMsg = MarketService.parseError(err.message);
       setError(errorMsg);
       toastService.error(`Delete failed: ${errorMsg}`);
 
@@ -483,6 +483,161 @@ export const useMarketDownload = (
     deleteData,
     isProcessing,
     error,
+  };
+};
+
+// ==================== BULK DOWNLOAD HOOK ====================
+
+export interface UseBulkDownloadReturn {
+  bulkDownload: (
+    indexIds: number[],
+    startDate: string,
+    endDate: string
+  ) => Promise<void>;
+  isProcessing: boolean;
+  progress: {
+    current: number;
+    total: number;
+    percentage: number;
+  };
+  results: {
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  error: string | null;
+  isComplete: boolean;
+}
+
+export const useBulkDownload = (
+  onSuccess?: () => void
+): UseBulkDownloadReturn => {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({
+    current: 0,
+    total: 0,
+    percentage: 0
+  });
+  const [results, setResults] = useState({
+    successful: 0,
+    failed: 0,
+    skipped: 0
+  });
+  const [isComplete, setIsComplete] = useState(false);
+
+  const bulkDownload = useCallback(async (
+    indexIds: number[],
+    startDate: string,
+    endDate: string
+  ) => {
+    if (isProcessing) {
+      toastService.warning('A bulk download is already in progress. Please wait.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+    setIsComplete(false);
+    setProgress({ current: 0, total: indexIds.length, percentage: 0 });
+    setResults({ successful: 0, failed: 0, skipped: 0 });
+
+    try {
+      FrontendErrorLogger.info(
+        'Starting bulk historical download',
+        'useBulkDownload',
+        {
+          totalIndices: indexIds.length,
+          dateRange: `${startDate} to ${endDate}`
+        }
+      );
+
+      const response = await MarketService.bulkDownloadHistorical(
+        indexIds,
+        startDate,
+        endDate
+      );
+
+      if (response.success && response.data) {
+        const { successful, failed, skipped, total } = response.data;
+
+        setResults({
+          successful,
+          failed,
+          skipped
+        });
+        
+        setProgress({
+          current: total,
+          total: total,
+          percentage: 100
+        });
+
+        setIsComplete(true);
+
+        // Show summary toast
+        if (failed === 0) {
+          toastService.success(
+            `Bulk download completed! ${successful} indices downloaded successfully.`
+          );
+        } else {
+          toastService.warning(
+            `Bulk download completed with issues. ${successful} successful, ${failed} failed.`
+          );
+        }
+
+        FrontendErrorLogger.info(
+          'Bulk download completed',
+          'useBulkDownload',
+          {
+            successful,
+            failed,
+            skipped,
+            total
+          }
+        );
+
+        // Trigger success callback
+        onSuccess?.();
+      } else {
+        const errorMsg = MarketService.parseError(response.error);
+        setError(errorMsg);
+        toastService.error(`Bulk download failed: ${errorMsg}`);
+
+        FrontendErrorLogger.error(
+          'Bulk download failed',
+          'useBulkDownload',
+          {
+            error: response.error
+          }
+        );
+      }
+    } catch (err: any) {
+      console.error('Bulk download error:', err);
+      const errorMsg = MarketService.parseError(err.message);
+      setError(errorMsg);
+      toastService.error(`Bulk download failed: ${errorMsg}`);
+
+      FrontendErrorLogger.error(
+        'Bulk download exception',
+        'useBulkDownload',
+        {
+          error: err.message
+        },
+        err.stack
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, onSuccess]);
+
+  return {
+    bulkDownload,
+    isProcessing,
+    progress,
+    results,
+    error,
+    isComplete
   };
 };
 
@@ -568,5 +723,6 @@ export default {
   useMarketIndices,
   useMarketStatistics,
   useMarketDownload,
+  useBulkDownload,
   useMarketDashboard
 };

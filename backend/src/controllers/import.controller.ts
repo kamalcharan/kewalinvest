@@ -412,7 +412,7 @@ export class ImportController {
         
         // Use the same database processing for all import types
         let processingResult: { success: boolean; error?: string };
-        const targetDuration = importType === 'CustomerData' ? 35000 : 30000;
+        const targetDuration = 900000;
         
         try {
           processingResult = await this.importService.triggerDatabaseProcessing(

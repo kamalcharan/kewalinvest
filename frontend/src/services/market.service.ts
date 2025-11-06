@@ -10,6 +10,7 @@ import {
   GetMarketDataParams,
   DownloadHistoricalRequest,
   DownloadEODRequest,
+  UpdateProviderRequest,
   ApiResponse,
   GetIndicesResponse,
   GetMarketDataResponse,
@@ -70,6 +71,27 @@ export class MarketService {
       return {
         success: false,
         error: error.message || 'Failed to fetch index',
+        data: undefined
+      };
+    }
+  }
+
+  /**
+   * Update provider configuration for an index
+   * PUT /api/market/indices/:id/provider
+   */
+  static async updateProvider(
+    indexId: number,
+    request: UpdateProviderRequest
+  ): Promise<ApiResponse<MarketIndex>> {
+    try {
+      const endpoint = `/market/indices/${indexId}/provider`;
+      return await apiService.put<ApiResponse<MarketIndex>>(endpoint, request);
+    } catch (error: any) {
+      console.error('Error updating provider:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update provider configuration',
         data: undefined
       };
     }
@@ -267,6 +289,74 @@ export class MarketService {
       return {
         success: false,
         error: error.message || 'Failed to download EOD for all indices',
+        data: undefined
+      };
+    }
+  }
+
+  /**
+   * Trigger bulk historical data download for multiple indices
+   * POST /api/market/bulk-download-historical
+   */
+  static async bulkDownloadHistorical(
+    indexIds: number[],
+    startDate: string,
+    endDate: string,
+    onProgress?: (current: number, total: number, result: any) => void
+  ): Promise<ApiResponse<{
+    total: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+    results: Array<{
+      indexId: number;
+      success: boolean;
+      error?: string;
+    }>;
+  }>> {
+    try {
+      if (!indexIds || indexIds.length === 0) {
+        return {
+          success: false,
+          error: 'No index IDs provided',
+          data: undefined
+        };
+      }
+
+      if (indexIds.length > 50) {
+        return {
+          success: false,
+          error: 'Maximum 50 indices can be downloaded at once',
+          data: undefined
+        };
+      }
+
+      const endpoint = '/market/bulk-download-historical';
+      
+      const requestBody = {
+        index_ids: indexIds,
+        start_date: startDate,
+        end_date: endDate,
+        skip_existing: true
+      };
+
+      return await apiService.post<ApiResponse<{
+        total: number;
+        successful: number;
+        failed: number;
+        skipped: number;
+        results: Array<{
+          indexId: number;
+          success: boolean;
+          error?: string;
+        }>;
+      }>>(endpoint, requestBody);
+      
+    } catch (error: any) {
+      console.error('Error in bulk download historical:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to trigger bulk historical download',
         data: undefined
       };
     }

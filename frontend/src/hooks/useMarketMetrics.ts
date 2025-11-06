@@ -355,6 +355,100 @@ export function useCalculateMetrics() {
 }
 
 /**
+ * Mutation to calculate metrics for multiple indices in bulk
+ */
+export function useBulkCalculateMetrics() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<
+    {
+      success: boolean;
+      summary: {
+        total_indices: number;
+        successful: number;
+        failed: number;
+        total_records_processed: number;
+        total_time_ms: number;
+        average_time_per_index_ms: number;
+      };
+      results: Array<{
+        index_id: number;
+        index_name: string;
+        success: boolean;
+        records_processed: number;
+        error?: string;
+        calculation_time_ms: number;
+      }>;
+      message: string;
+    },
+    Error,
+    {
+      indexIds: number[];
+      recalculate?: boolean;
+    }
+  >({
+    mutationFn: async (params) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+
+      if (!params.indexIds || params.indexIds.length === 0) {
+        throw new Error('No index IDs provided');
+      }
+
+      if (params.indexIds.length > 50) {
+        throw new Error('Maximum 50 indices can be calculated at once');
+      }
+
+      try {
+        const response = await marketAnalysisService.bulkCalculateMetrics(
+          params.indexIds,
+          params.recalculate || false
+        );
+
+        if (!response.success) {
+          throw new Error('Bulk calculation failed');
+        }
+
+        return response;
+      } catch (error) {
+        throw handleAPIError(error, 'Failed to perform bulk metrics calculation');
+      }
+    },
+    onSuccess: (data, params) => {
+      // Invalidate metrics for all successfully calculated indices
+      params.indexIds.forEach(indexId => {
+        queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.metric(indexId) });
+        queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexReturns(indexId) });
+        queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.indexVolatility(indexId) });
+      });
+
+      // Invalidate dashboard stats
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('1m') });
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('3m') });
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('6m') });
+      queryClient.invalidateQueries({ queryKey: MARKET_ANALYSIS_QUERY_KEYS.dashboardStats('1y') });
+
+      // Show success toast with summary
+      const { summary } = data;
+      if (summary.failed === 0) {
+        toastService.success(
+          `Bulk calculation completed! ${summary.successful} indices processed successfully. ${summary.total_records_processed.toLocaleString()} records calculated.`
+        );
+      } else {
+        toastService.warning(
+          `Bulk calculation completed with issues. ${summary.successful} successful, ${summary.failed} failed.`
+        );
+      }
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to calculate metrics in bulk');
+    }
+  });
+}
+
+/**
  * Mutation to export chart data as CSV
  */
 export function useExportChartData() {

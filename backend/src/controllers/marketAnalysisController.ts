@@ -137,6 +137,181 @@ export class MarketAnalysisController {
   };
 
   /**
+   * POST /api/market-analysis/bulk-calculate-metrics
+   * Calculate metrics for multiple indices sequentially
+   * 
+   * Body: { index_ids: number[], recalculate?: boolean }
+   */
+  bulkCalculateMetrics = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      const { index_ids, recalculate } = req.body as {
+        index_ids: number[];
+        recalculate?: boolean;
+      };
+
+      // Validate input
+      if (!index_ids || !Array.isArray(index_ids) || index_ids.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'index_ids array is required and must not be empty'
+        });
+        return;
+      }
+
+      if (index_ids.length > 50) {
+        res.status(400).json({
+          success: false,
+          error: 'Maximum 50 indices can be processed at once'
+        });
+        return;
+      }
+
+      // Validate all IDs are valid numbers
+      const invalidIds = index_ids.filter(id => isNaN(id) || id <= 0);
+      if (invalidIds.length > 0) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid index IDs: ${invalidIds.join(', ')}`
+        });
+        return;
+      }
+
+      SimpleLogger.info('MarketAnalysisController', 'Bulk metrics calculation requested', 'bulkCalculateMetrics', {
+        totalIndices: index_ids.length,
+        recalculate: recalculate || false
+      });
+
+      const results: Array<{
+        index_id: number;
+        index_name: string;
+        success: boolean;
+        records_processed: number;
+        error?: string;
+        calculation_time_ms: number;
+      }> = [];
+
+      let successCount = 0;
+      let failedCount = 0;
+      let totalRecordsProcessed = 0;
+
+      // Process each index sequentially
+      for (let i = 0; i < index_ids.length; i++) {
+        const indexId = index_ids[i];
+        const indexStartTime = Date.now();
+
+        try {
+          // Get index details
+          const index = await this.marketService.getIndexById(indexId);
+          
+          if (!index) {
+            failedCount++;
+            results.push({
+              index_id: indexId,
+              index_name: 'Unknown',
+              success: false,
+              records_processed: 0,
+              error: 'Index not found',
+              calculation_time_ms: Date.now() - indexStartTime
+            });
+            continue;
+          }
+
+          SimpleLogger.info('MarketAnalysisController', `Processing bulk calculation ${i + 1}/${index_ids.length}`, 'bulkCalculateMetrics', {
+            indexId,
+            indexName: index.index_name,
+            progress: `${i + 1}/${index_ids.length}`
+          });
+
+          // Calculate metrics for this index
+          const result = await this.calculateBatchMetrics(indexId, recalculate || false, indexStartTime);
+
+          successCount++;
+          totalRecordsProcessed += result.records_processed;
+
+          results.push({
+            index_id: indexId,
+            index_name: index.index_name,
+            success: true,
+            records_processed: result.records_processed,
+            calculation_time_ms: Date.now() - indexStartTime
+          });
+
+        } catch (error: any) {
+          failedCount++;
+          
+          SimpleLogger.error('MarketAnalysisController', 'Failed to calculate metrics for index in bulk', 'bulkCalculateMetrics', {
+            indexId,
+            error: error.message
+          });
+
+          // Get index name for error report
+          let indexName = 'Unknown';
+          try {
+            const index = await this.marketService.getIndexById(indexId);
+            indexName = index?.index_name || 'Unknown';
+          } catch {}
+
+          results.push({
+            index_id: indexId,
+            index_name: indexName,
+            success: false,
+            records_processed: 0,
+            error: error.message,
+            calculation_time_ms: Date.now() - indexStartTime
+          });
+        }
+
+        // Rate limiting: 500ms delay between indices (except last one)
+        if (i < index_ids.length - 1) {
+          await this.sleep(500);
+        }
+      }
+
+      const totalTime = Date.now() - startTime;
+
+      SimpleLogger.info('MarketAnalysisController', 'Bulk metrics calculation completed', 'bulkCalculateMetrics', {
+        total: index_ids.length,
+        successful: successCount,
+        failed: failedCount,
+        totalRecordsProcessed,
+        executionTimeMs: totalTime
+      });
+
+      res.json({
+        success: true,
+        summary: {
+          total_indices: index_ids.length,
+          successful: successCount,
+          failed: failedCount,
+          total_records_processed: totalRecordsProcessed,
+          total_time_ms: totalTime,
+          average_time_per_index_ms: Math.round(totalTime / index_ids.length)
+        },
+        results,
+        message: `Bulk calculation completed. ${successCount} successful, ${failedCount} failed.`
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error(
+        'MarketAnalysisController',
+        'Bulk metrics calculation failed',
+        'bulkCalculateMetrics',
+        { error: error.message },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to perform bulk metrics calculation'
+      });
+    }
+  };
+
+  /**
    * Calculate metrics for a single specific date
    */
   private async calculateForSingleDate(
@@ -939,6 +1114,13 @@ export class MarketAnalysisController {
       );
       throw error;
     }
+  }
+
+  /**
+   * Private helper: Sleep for specified milliseconds
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

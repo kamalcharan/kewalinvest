@@ -236,7 +236,7 @@ export class NavDownloadService {
       this.downloadLocks.set(lockKey, lockInfo);
 
       // Initialize progress tracking (2 seconds per scheme estimate)
-      const estimatedTimeMs = request.scheme_ids.length * 2000;
+      const estimatedTimeMs = request.scheme_ids.length * 180000;
       this.initializeProgressTracking(
         downloadJob.id, 
         'historical', 
@@ -413,7 +413,7 @@ export class NavDownloadService {
             {
               requestId: `hist_${jobId}_${schemeCode}`,
               retryAttempts: 3,
-              timeout: 30000
+              timeout: 180000
             }
           );
           
@@ -646,7 +646,7 @@ export class NavDownloadService {
         throw new Error(`Weekly download already in progress (Job ID: ${existingLock.jobId})`);
       }
 
-      const untrackedSchemes = await this.getUntrackedSchemesForWeeklyDownload(tenantId, isLive, 100);
+      const untrackedSchemes = await this.getUntrackedSchemesForWeeklyDownload(tenantId, isLive, 2500);
 
       if (untrackedSchemes.length === 0) {
         return {

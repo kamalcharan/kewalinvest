@@ -27,6 +27,11 @@ export interface MarketIndex {
   eod_retry_count: number;
   last_successful_eod_download_at: Date | null;
   
+  // Data Provider Configuration
+  data_provider: 'yahoo_finance' | 'nse_official' | 'google_sheets' | 'not_configured';
+  provider_symbol: string | null;
+  provider_enabled: boolean;
+  
   created_at: Date;
   updated_at: Date;
 }

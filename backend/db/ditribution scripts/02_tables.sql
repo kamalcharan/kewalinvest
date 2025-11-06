@@ -5,7 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-23 (COMPLETE regeneration from current_schema_utf8.sql - 100% exact schema)
+-- Updated: 2025-11-05 (Updated t_customer_meetings table with complete meeting management)
 -- ============================================================================
 
 -- ============================================================================
@@ -207,27 +207,58 @@ CREATE TABLE t_customer_addresses (
 COMMENT ON TABLE t_customer_addresses IS 'Multiple addresses per customer with type classification';
 COMMENT ON COLUMN t_customer_addresses.is_primary IS 'Primary address for the customer';
 
--- TABLE: t_customer_meetings
+-- TABLE: t_customer_meetings (UPDATED 2025-11-05)
 CREATE TABLE t_customer_meetings (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
-    meeting_date TIMESTAMP NOT NULL,
-    meeting_type VARCHAR(50) NOT NULL,
-    meeting_mode VARCHAR(20) NOT NULL CHECK (meeting_mode IN ('in-person', 'video-call', 'phone-call', 'email')),
+
+    -- Meeting details
+    meeting_type VARCHAR(50) NOT NULL CHECK (meeting_type IN ('review', 'planning', 'onboarding', 'grievance', 'other')),
+    meeting_mode VARCHAR(20) NOT NULL CHECK (meeting_mode IN ('in_person', 'video_call', 'phone_call')),
+
+    -- Scheduling
+    scheduled_date DATE NOT NULL,
+    scheduled_time TIME NOT NULL,
+    duration_minutes INTEGER DEFAULT 60,
+
+    -- Status tracking
+    status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')),
+
+    -- Location/Link (based on meeting_mode)
+    meeting_location TEXT,  -- For in_person meetings
+    meeting_link TEXT,      -- For video_call meetings
+
+    -- Meeting content
     agenda TEXT,
     notes TEXT,
-    follow_up_required BOOLEAN DEFAULT FALSE,
-    follow_up_date DATE,
+    outcome TEXT,
+
+    -- Completion/Cancellation tracking
+    completed_at TIMESTAMP,
+    cancelled_at TIMESTAMP,
+    cancellation_reason TEXT,
+
+    -- Audit fields
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_customer_meetings IS 'Customer meeting tracking and follow-up management';
-COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: in-person, video-call, phone-call, email';
-COMMENT ON COLUMN t_customer_meetings.follow_up_required IS 'Flag indicating if follow-up action is needed';
+COMMENT ON TABLE t_customer_meetings IS 'Customer meeting scheduling, tracking, and follow-up management';
+COMMENT ON COLUMN t_customer_meetings.meeting_type IS 'Type: review, planning, onboarding, grievance, other';
+COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: in_person, video_call, phone_call';
+COMMENT ON COLUMN t_customer_meetings.scheduled_date IS 'Date when meeting is scheduled (ISO format)';
+COMMENT ON COLUMN t_customer_meetings.scheduled_time IS 'Time when meeting is scheduled (HH:MM format)';
+COMMENT ON COLUMN t_customer_meetings.duration_minutes IS 'Meeting duration in minutes (default: 60)';
+COMMENT ON COLUMN t_customer_meetings.status IS 'Status: scheduled, completed, cancelled, rescheduled';
+COMMENT ON COLUMN t_customer_meetings.meeting_location IS 'Physical location for in-person meetings';
+COMMENT ON COLUMN t_customer_meetings.meeting_link IS 'Video call URL for video_call meetings';
+COMMENT ON COLUMN t_customer_meetings.outcome IS 'Meeting outcome/summary after completion';
+COMMENT ON COLUMN t_customer_meetings.completed_at IS 'Timestamp when meeting was marked as completed';
+COMMENT ON COLUMN t_customer_meetings.cancelled_at IS 'Timestamp when meeting was cancelled';
+COMMENT ON COLUMN t_customer_meetings.cancellation_reason IS 'Reason for meeting cancellation';
 
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
@@ -285,11 +316,16 @@ CREATE TABLE t_import_sessions (
     status VARCHAR(50) DEFAULT 'pending' CHECK (
         status IN ('pending', 'staged', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')
     ),
+    current_stage VARCHAR(50),
     total_records INTEGER DEFAULT 0,
     processed_records INTEGER DEFAULT 0,
     successful_records INTEGER DEFAULT 0,
     failed_records INTEGER DEFAULT 0,
     duplicate_records INTEGER DEFAULT 0,
+    duplicate_check_result JSONB,
+    duplicate_classification VARCHAR(50),
+    duplicate_user_decision_at TIMESTAMP,
+    filename_duplicate_check JSONB,
     staging_completed_at TIMESTAMP,
     staging_total_rows INTEGER DEFAULT 0,
     batch_size INTEGER DEFAULT 100,
@@ -310,7 +346,12 @@ CREATE TABLE t_import_sessions (
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
+COMMENT ON COLUMN t_import_sessions.current_stage IS 'Current processing stage within the import workflow';
 COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
+COMMENT ON COLUMN t_import_sessions.duplicate_check_result IS 'JSON result of duplicate detection analysis';
+COMMENT ON COLUMN t_import_sessions.duplicate_classification IS 'Classification of duplicate status (exact, potential, none)';
+COMMENT ON COLUMN t_import_sessions.duplicate_user_decision_at IS 'Timestamp when user made decision about duplicates';
+COMMENT ON COLUMN t_import_sessions.filename_duplicate_check IS 'JSON result of filename-based duplicate detection';
 
 -- TABLE: t_import_staging_data
 CREATE TABLE t_import_staging_data (
@@ -479,7 +520,7 @@ CREATE TABLE t_scheme_bookmarks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     alias_name VARCHAR(255),
-    CONSTRAINT unique_tenant_bookmark UNIQUE(tenant_id, scheme_id, is_live)
+    CONSTRAINT unique_tenant_scheme UNIQUE(tenant_id, scheme_code, is_live)
 );
 
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
@@ -492,7 +533,7 @@ CREATE TABLE t_scheme_aliases (
     scheme_code VARCHAR(100),
     alias_name VARCHAR(500) NOT NULL,
     alias_name_normalized VARCHAR(500) NOT NULL,
-    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('auto', 'manual', 'import')),
+    source VARCHAR(50) DEFAULT 'manual',
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -505,7 +546,7 @@ COMMENT ON COLUMN t_scheme_aliases.alias_name IS 'The actual alias variation (e.
 COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces';
 COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV)';
 
--- TABLE: t_nav_data (CORRECTED - NO tenant_id column)
+-- TABLE: t_nav_data (NO tenant_id column)
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
@@ -694,12 +735,12 @@ INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, descri
      'Withdrawal or redemption of invested funds'),
 
     ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE,
-     'Funds moved out by switching to another scheme')
+     'Funds moved out by switching to another scheme'),
 
-     ('SELL', 'Sell', 'Deduction', TRUE,
-     'Funds moved out / encashed from the scheme')
+    ('SELL', 'Sell', 'Deduction', TRUE,
+     'Funds moved out / encashed from the scheme'),
 
-     ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
+    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
      'Funds added to system portfolio to balance the transaction records')
 ON CONFLICT (txn_code) DO NOTHING;
 
@@ -964,7 +1005,7 @@ CREATE TABLE t_goal_scheme_allocations (
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL,
     goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-    scheme_id INTEGER NOT NULL REFERENCES t_schemes(id),
+    scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
     allocation_percentage NUMERIC(5,2) NOT NULL CHECK (allocation_percentage >= 0 AND allocation_percentage <= 100),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1042,6 +1083,8 @@ CREATE TABLE t_market_indices (
     description TEXT,
     is_active BOOLEAN DEFAULT true,
     priority INTEGER DEFAULT 0,
+    
+    -- Download tracking fields
     total_records INTEGER DEFAULT 0,
     earliest_date DATE,
     latest_date DATE,
@@ -1049,16 +1092,38 @@ CREATE TABLE t_market_indices (
     last_download_at TIMESTAMP,
     last_download_error TEXT,
     historical_data_available BOOLEAN DEFAULT false,
+    
+    -- EOD retry fields
     next_eod_retry_at TIMESTAMP,
     eod_retry_count INTEGER DEFAULT 0,
     last_successful_eod_download_at TIMESTAMP,
+    
+    -- Data provider fields
+    data_provider VARCHAR(50) DEFAULT 'not_configured',
+    provider_symbol VARCHAR(100),
+    provider_enabled BOOLEAN DEFAULT false,
+    
+    -- Timestamp fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT chk_data_provider 
+        CHECK (data_provider IN ('yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'))
 );
 
-COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with Yahoo Finance integration';
-COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50)';
+-- Table comments
+COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with multi-provider support';
+COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50) - kept for backward compatibility';
 COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
+COMMENT ON COLUMN t_market_indices.data_provider IS 'Data source provider: yahoo_finance, nse_official, google_sheets, or not_configured';
+COMMENT ON COLUMN t_market_indices.provider_symbol IS 'Provider-specific symbol (e.g., ^NSEI for Yahoo, NIFTY 50 for NSE)';
+COMMENT ON COLUMN t_market_indices.provider_enabled IS 'Whether data provider is configured and enabled for this index';
+
+-- Indexes
+CREATE INDEX idx_market_indices_code ON t_market_indices(index_code) WHERE is_active = true;
+CREATE INDEX idx_market_indices_category ON t_market_indices(category) WHERE is_active = true;
+CREATE INDEX idx_market_indices_provider ON t_market_indices(data_provider, provider_enabled) WHERE is_active = true;
 
 -- Add foreign key constraint to t_tenants now that t_market_indices exists
 ALTER TABLE t_tenants
@@ -1174,19 +1239,19 @@ BEGIN
     RAISE NOTICE 'Creating User Preference Tables...';
 END $$;
 
-    -- TABLE: t_user_chart_preferences
-    CREATE TABLE t_user_chart_preferences (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        index_id INTEGER NOT NULL,
-        line_color VARCHAR(7) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
-    );
+-- TABLE: t_user_chart_preferences
+CREATE TABLE t_user_chart_preferences (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    index_id INTEGER NOT NULL,
+    line_color VARCHAR(7) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
+);
 
-    COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
-    COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
+COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
+COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
 
 -- ============================================================================
 -- SECTION 11: SYSTEM LOGS TABLE
@@ -1239,11 +1304,22 @@ BEGIN
     RAISE NOTICE '  - Comments on tables/columns';
     RAISE NOTICE '  - Proper sequences for auto-increment';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'CRITICAL FIXES IN THIS VERSION:';
-    RAISE NOTICE '  - ADDED: t_tenants.is_admin column (was missing!)';
-    RAISE NOTICE '  - REMOVED: t_nav_data.tenant_id column (was extra!)';
-    RAISE NOTICE '  - ADDED: t_tenants.default_comparison_index_id column (for portfolio comparison)';
-    RAISE NOTICE '  - Schema now 100 percent matches current_schema_utf8.sql';
+    RAISE NOTICE 'UPDATE NOTES (2025-11-05):';
+    RAISE NOTICE '  ✓ UPDATED: t_customer_meetings table structure';
+    RAISE NOTICE '    - Changed from single meeting_date to scheduled_date + scheduled_time';
+    RAISE NOTICE '    - Added duration_minutes field';
+    RAISE NOTICE '    - Replaced follow_up fields with status-based tracking';
+    RAISE NOTICE '    - Added meeting_location and meeting_link (separate fields)';
+    RAISE NOTICE '    - Added outcome field for completion summary';
+    RAISE NOTICE '    - Added completed_at, cancelled_at, cancellation_reason';
+    RAISE NOTICE '    - Updated meeting_mode values (underscores: in_person, video_call, phone_call)';
+    RAISE NOTICE '    - Added status field (scheduled, completed, cancelled, rescheduled)';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'CRITICAL SCHEMA FEATURES:';
+    RAISE NOTICE '  - t_tenants.is_admin column present';
+    RAISE NOTICE '  - t_nav_data has NO tenant_id column (global NAV data)';
+    RAISE NOTICE '  - t_tenants.default_comparison_index_id for portfolio comparison';
+    RAISE NOTICE '  - Schema matches production requirements';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';

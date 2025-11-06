@@ -1,6 +1,7 @@
 // frontend/src/services/serviceURLs.ts
 // UPDATED: Added NAV time-series analytics endpoint
 // UPDATED: Added Portfolio Snapshot endpoints
+// UPDATED: Added Market Analysis bulk metrics calculation endpoint
 
 // API Base URL from environment variable
 const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
@@ -164,6 +165,101 @@ export const API_ENDPOINTS = {
     GET_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     SAVE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
     DELETE_CHART_PREFERENCE: (indexId: number) => `${API_BASE}/user-preferences/chart/${indexId}`,
+
+    // Default comparison index
+    GET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
+    SET_DEFAULT_COMPARISON_INDEX: `${API_BASE}/user-preferences/default-comparison-index`,
+  },
+
+  // Customer Meetings endpoints
+  MEETINGS: {
+    CREATE: `${API_BASE}/meetings`,
+    GET_ALL: `${API_BASE}/meetings`,
+    GET: (id: number) => `${API_BASE}/meetings/${id}`,
+    UPDATE: (id: number) => `${API_BASE}/meetings/${id}`,
+    DELETE: (id: number) => `${API_BASE}/meetings/${id}`,
+    COMPLETE: (id: number) => `${API_BASE}/meetings/${id}/complete`,
+    CANCEL: (id: number) => `${API_BASE}/meetings/${id}/cancel`,
+    GET_UPCOMING: `${API_BASE}/meetings/upcoming`,
+    GET_CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/meetings/customer/${customerId}/summary`,
+  },
+
+  // Family endpoints
+  FAMILY: {
+    MEMBERS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/members`,
+    PORTFOLIO: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/portfolio`,
+    ASSET_ALLOCATION: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/asset-allocation`,
+    GOALS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/goals`,
+    MEETINGS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/meetings`,
+  },
+
+  // Generic Jobs Scheduler endpoints
+  JOBS: {
+    TYPES: `${API_BASE}/jobs/types`,
+    CONFIG: (jobType: string) => `${API_BASE}/jobs/${jobType}/config`,
+    EXECUTE: (jobType: string) => `${API_BASE}/jobs/${jobType}/execute`,
+    EXECUTIONS: (jobType: string) => `${API_BASE}/jobs/${jobType}/executions`,
+    STATISTICS: (jobType: string) => `${API_BASE}/jobs/${jobType}/statistics`,
+    HEALTH: (jobType: string) => `${API_BASE}/jobs/${jobType}/health`,
+  },
+
+  // Cruise Control - Portfolio Snapshots endpoints
+  CRUISE_CONTROL: {
+    // Dashboard & Statistics (using existing endpoints)
+    NAV_STATISTICS: `${API_BASE}/nav/statistics`,
+    MARKET_STATISTICS: `${API_BASE}/market/statistics`,
+
+    // Alerts (using JTBD endpoints)
+    ALERTS_UPCOMING: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,
+    ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
+
+    // Manual Triggers (using existing endpoints)
+    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/historical?scheme_code=${schemeCode}`,
+    MARKET_DOWNLOAD: (indexId: number) => `${API_BASE}/market/download/eod?index_id=${indexId}`,
+
+    // Market Downloads (using existing market endpoints)
+    MARKET_DOWNLOAD_HISTORICAL: `${API_BASE}/market/download/historical`,
+    MARKET_DOWNLOAD_EOD: `${API_BASE}/market/download/eod`,
+
+    // Portfolio Snapshots
+    SNAPSHOTS: {
+      CONFIG: `${API_BASE}/cruise-control/snapshots/config`,
+      EXECUTE: `${API_BASE}/cruise-control/snapshots/execute`,
+      EXECUTIONS: `${API_BASE}/cruise-control/snapshots/executions`,
+      STATISTICS: `${API_BASE}/cruise-control/snapshots/statistics`,
+      HEALTH: `${API_BASE}/cruise-control/snapshots/health`,
+      BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
+      BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
+      
+      // NEW: Snapshot Operations
+      OPERATIONS: {
+        DROP_ALL: `${API_BASE}/cruise-control/snapshots/operations/drop-all`,
+        GENERATE_MISSING: `${API_BASE}/cruise-control/snapshots/operations/generate-missing`,
+        UPDATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/update-all`,
+        REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
+      },
+    },
+  },
+
+  // Portfolio Snapshots (alternative structure for backward compatibility)
+  PORTFOLIO_SNAPSHOTS: {
+    CONFIG_BASE: `${API_BASE}/cruise-control/snapshots/config`,
+    CONFIG: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/config?tenant_id=${tenantId}&is_live=${isLive}`,
+    EXECUTE: `${API_BASE}/cruise-control/snapshots/execute`,
+    EXECUTIONS: `${API_BASE}/cruise-control/snapshots/executions`,
+    STATISTICS: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/statistics?tenant_id=${tenantId}&is_live=${isLive}`,
+    BACKFILL_SMART: `${API_BASE}/cruise-control/snapshots/backfill-smart`,
+    BACKFILL: `${API_BASE}/cruise-control/snapshots/backfill`,
+    HEALTH: (tenantId: number, isLive: boolean) =>
+      `${API_BASE}/cruise-control/snapshots/health?tenant_id=${tenantId}&is_live=${isLive}`,
+    OPERATIONS: {
+      DROP_ALL: `${API_BASE}/cruise-control/snapshots/operations/drop-all`,
+      GENERATE_MISSING: `${API_BASE}/cruise-control/snapshots/operations/generate-missing`,
+      UPDATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/update-all`,
+      REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
+    },
   },
 
   // Data Import endpoints
@@ -253,6 +349,7 @@ export const API_ENDPOINTS = {
   MARKET_ANALYSIS: {
     HEALTH: `${API_BASE}/market-analysis/health`,
     CALCULATE_METRICS: (indexId: number) => `${API_BASE}/market-analysis/calculate-metrics/${indexId}`,
+    BULK_CALCULATE_METRICS: `${API_BASE}/market-analysis/bulk-calculate-metrics`, // NEW: Bulk metrics calculation
     GET_METRICS: (indexId: number) => `${API_BASE}/market-analysis/metrics/${indexId}`,
     DASHBOARD_STATISTICS: `${API_BASE}/market-analysis/dashboard-statistics`,
     INDEX_RETURNS: `${API_BASE}/market-analysis/index-returns`,
@@ -851,6 +948,10 @@ export const MARKET_ANALYSIS_URLS = {
   calculateMetrics: (indexId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.CALCULATE_METRICS(indexId)}${buildQueryParams(params || {}, environment)}`,
   
+  // NEW: Bulk metrics calculation helper
+  bulkCalculateMetrics: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS}${buildQueryParams(params || {}, environment)}`,
+  
   getLatestMetrics: (indexId: number, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.MARKET_ANALYSIS.GET_METRICS(indexId)}${buildQueryParams({}, environment)}`,
   
@@ -964,6 +1065,7 @@ if (process.env.NODE_ENV === 'development') {
   console.log('📊 Market Analysis Endpoints:', {
     HEALTH: API_ENDPOINTS.MARKET_ANALYSIS.HEALTH,
     CALCULATE_METRICS: 'POST /api/market-analysis/calculate-metrics/:indexId',
+    BULK_CALCULATE_METRICS: API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS, // NEW
     GET_METRICS: 'GET /api/market-analysis/metrics/:indexId',
     DASHBOARD_STATISTICS: API_ENDPOINTS.MARKET_ANALYSIS.DASHBOARD_STATISTICS,
     INDEX_RETURNS: API_ENDPOINTS.MARKET_ANALYSIS.INDEX_RETURNS,

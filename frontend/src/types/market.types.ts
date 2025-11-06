@@ -13,11 +13,21 @@ export type JobType = 'historical' | 'eod' | 'manual';
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+export type DataProvider = 'yahoo_finance' | 'nse_official' | 'google_sheets' | 'not_configured';
+
 // Category labels for UI
 export const CATEGORY_LABELS: Record<MarketIndexCategory, string> = {
   broad: 'Broad Market',
   sectoral: 'Sectoral',
   thematic: 'Thematic'
+};
+
+// Provider labels for UI
+export const PROVIDER_LABELS: Record<DataProvider, string> = {
+  yahoo_finance: 'Yahoo Finance',
+  nse_official: 'NSE Official',
+  google_sheets: 'Google Sheets',
+  not_configured: 'Not Configured'
 };
 
 // Status colors for UI
@@ -26,6 +36,14 @@ export const STATUS_COLORS = {
   failed: '#EF4444',
   pending: '#F59E0B',
   in_progress: '#3B82F6'
+};
+
+// Provider colors for UI
+export const PROVIDER_COLORS = {
+  yahoo_finance: '#6001D2',
+  nse_official: '#0066CC',
+  google_sheets: '#34A853',
+  not_configured: '#6B7280'
 };
 
 // ==================== MARKET INDEX ====================
@@ -53,6 +71,11 @@ export interface MarketIndex {
   next_eod_retry_at: string | null;
   eod_retry_count: number;
   last_successful_eod_download_at: string | null;
+  
+  // ====== NEW: Data Provider Configuration ======
+  data_provider: DataProvider;
+  provider_symbol: string | null;
+  provider_enabled: boolean;
   
   // Timestamps
   created_at: string;
@@ -137,6 +160,12 @@ export interface DownloadEODRequest {
   index_id: number;
 }
 
+export interface UpdateProviderRequest {
+  data_provider: DataProvider;
+  provider_symbol?: string;
+  provider_enabled: boolean;
+}
+
 // ==================== API RESPONSE TYPES ====================
 
 export interface ApiResponse<T = any> {
@@ -214,6 +243,7 @@ export interface IndexCardProps {
   onDownloadHistorical: (index: MarketIndex) => void;
   onDownloadEOD: (index: MarketIndex) => void;
   onDelete: (index: MarketIndex) => void;
+  onUpdateProvider?: (index: MarketIndex, provider: UpdateProviderRequest) => void;
   isDownloading?: boolean;
 }
 
@@ -246,6 +276,13 @@ export interface DownloadProgressProps {
   onCancel?: () => void;
 }
 
+export interface ProviderConfigProps {
+  index: MarketIndex;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (provider: UpdateProviderRequest) => void;
+}
+
 // ==================== UTILITY TYPES ====================
 
 export interface DateRange {
@@ -259,9 +296,16 @@ export interface StatusBadge {
   icon: string;
 }
 
+export interface ProviderBadge {
+  label: string;
+  color: string;
+  icon: string;
+}
+
 // Helper type for index with computed properties
 export interface EnhancedMarketIndex extends MarketIndex {
   statusBadge: StatusBadge;
+  providerBadge: ProviderBadge;
   hasData: boolean;
   dataRangeText: string;
   lastUpdateText: string;
@@ -361,6 +405,25 @@ export const getStatusBadge = (index: MarketIndex): StatusBadge => {
   };
 };
 
+// Get provider badge configuration
+export const getProviderBadge = (index: MarketIndex): ProviderBadge => {
+  const provider = index.data_provider;
+  const enabled = index.provider_enabled;
+  
+  const icons = {
+    yahoo_finance: '🟣',
+    nse_official: '🔵',
+    google_sheets: '🟢',
+    not_configured: '⚪'
+  };
+  
+  return {
+    label: enabled ? PROVIDER_LABELS[provider] : `${PROVIDER_LABELS[provider]} (Disabled)`,
+    color: enabled ? PROVIDER_COLORS[provider] : '#9CA3AF',
+    icon: icons[provider]
+  };
+};
+
 // Get time ago text
 export const getTimeAgo = (dateString: string | null): string => {
   if (!dateString) return 'Never';
@@ -427,6 +490,27 @@ export const validateDateRange = (startDate: string, endDate: string): Validatio
   return errors;
 };
 
+// Validate provider configuration
+export const validateProviderConfig = (provider: DataProvider, symbol: string | null): ValidationError[] => {
+  const errors: ValidationError[] = [];
+  
+  if (provider !== 'not_configured' && !symbol) {
+    errors.push({
+      field: 'provider_symbol',
+      message: 'Provider symbol is required when provider is configured'
+    });
+  }
+  
+  if (symbol && symbol.trim().length === 0) {
+    errors.push({
+      field: 'provider_symbol',
+      message: 'Provider symbol cannot be empty'
+    });
+  }
+  
+  return errors;
+};
+
 // ==================== TYPE GUARDS ====================
 
 export const isMarketIndex = (obj: any): obj is MarketIndex => {
@@ -447,11 +531,16 @@ export const isApiResponse = <T>(obj: any): obj is ApiResponse<T> => {
   );
 };
 
+export const isDataProvider = (value: any): value is DataProvider => {
+  return ['yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'].includes(value);
+};
+
 // ==================== EXPORT ALL ====================
 
 export type {
   // Re-export for convenience
   MarketIndexCategory as Category,
   DownloadStatus as Status,
-  FilterStatus as Filter
+  FilterStatus as Filter,
+  DataProvider as Provider
 };

@@ -115,6 +115,27 @@ interface IndexMetricsApiResponse {
   error?: string;
 }
 
+export interface BulkCalculateMetricsResponse {
+  success: boolean;
+  summary: {
+    total_indices: number;
+    successful: number;
+    failed: number;
+    total_records_processed: number;
+    total_time_ms: number;
+    average_time_per_index_ms: number;
+  };
+  results: Array<{
+    index_id: number;
+    index_name: string;
+    success: boolean;
+    records_processed: number;
+    error?: string;
+    calculation_time_ms: number;
+  }>;
+  message: string;
+}
+
 // ==================== MAIN SERVICE CLASS ====================
 
 export class MarketAnalysisService {
@@ -140,6 +161,48 @@ export class MarketAnalysisService {
       return await apiService.post<CalculateMetricsResponse>(url, body);
     } catch (error: any) {
       console.error('Calculate metrics failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate metrics for multiple indices in bulk
+   */
+  static async bulkCalculateMetrics(
+    indexIds: number[],
+    recalculate: boolean = false
+  ): Promise<BulkCalculateMetricsResponse> {
+    try {
+      if (!indexIds || indexIds.length === 0) {
+        throw new MarketAnalysisError('No index IDs provided', 'INVALID_INPUT');
+      }
+
+      if (indexIds.length > 50) {
+        throw new MarketAnalysisError(
+          'Maximum 50 indices can be calculated at once',
+          'INVALID_INPUT'
+        );
+      }
+
+      const body = {
+        index_ids: indexIds,
+        recalculate: recalculate
+      };
+
+      const url = API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS;
+      
+      const response = await apiService.post<BulkCalculateMetricsResponse>(url, body);
+
+      if (response.success) {
+        return response;
+      }
+
+      throw new MarketAnalysisError(
+        'Failed to perform bulk metrics calculation',
+        'BULK_CALCULATE_ERROR'
+      );
+    } catch (error: any) {
+      console.error('Bulk calculate metrics failed:', error);
       throw error;
     }
   }

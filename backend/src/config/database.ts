@@ -14,10 +14,10 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://kewal_app_user:app123@localhost:5432/kewalinvest',
   
   // Connection Pool Settings
-  max: 500,                      // Maximum number of clients in the pool
+  max: 15000,                      // Maximum number of clients in the pool
   min: 5,                        // Minimum number of clients in the pool
-  idleTimeoutMillis: 3000000,     // 5 minutes - how long a client can be idle before being removed
-  connectionTimeoutMillis: 200000, // 20 seconds - how long to wait for a connection
+  idleTimeoutMillis: 30000000,     // 5 minutes - how long a client can be idle before being removed
+  connectionTimeoutMillis: 2000000, // 20 seconds - how long to wait for a connection
   
   // Statement Timeout
   statement_timeout: 0,          // No timeout - managed per operation for flexibility

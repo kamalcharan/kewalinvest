@@ -118,6 +118,7 @@ export interface GoalConfiguration {
   description?: string;
   priority: 'critical' | 'high' | 'medium' | 'low';
   is_active: boolean;
+  is_in_watchlist?: boolean;
   config_data: GoalConfig;
   next_alert_date?: string; // Not used for goals
   created_by: number;

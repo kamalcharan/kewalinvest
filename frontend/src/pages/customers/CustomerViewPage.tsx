@@ -34,8 +34,6 @@ import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTr
 import GoalCard from '../../components/goals/GoalCard';
 import GoalSetupModal from '../../components/goals/GoalSetupModal';
 import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
-import { GoalProgressTracker } from '../../components/goals/GoalProgressTracker';
-import { GoalWatchlistPanel } from '../../components/goals/GoalWatchlistPanel';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
@@ -50,10 +48,9 @@ const CustomerViewPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const customerId = id ? parseInt(id) : null;
-
+  
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions') || 'overview';
   const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
-
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
@@ -216,12 +213,8 @@ const CustomerViewPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const params: { tab: string; view?: string } = { tab: activeTab };
-    if (viewMode === 'family') {
-      params.view = 'family';
-    }
-    setSearchParams(params);
-  }, [activeTab, viewMode, setSearchParams]);
+    setSearchParams({ tab: activeTab });
+  }, [activeTab, setSearchParams]);
 
   useEffect(() => {
     console.group('CustomerViewPage Debug Info');
@@ -246,25 +239,6 @@ const CustomerViewPage: React.FC = () => {
     if (portfolioWithMoM.length < 2) return null;
     return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
   }, [portfolioWithMoM]);
-
-  // Watchlist toggle handler
-  const handleWatchlistToggle = async (goalId: number, isInWatchlist: boolean) => {
-    if (!customerId) return;
-
-    try {
-      if (isInWatchlist) {
-        await removeFromWatchlistMutation.mutateAsync({ goalId, customerId });
-      } else {
-        await addToWatchlistMutation.mutateAsync({
-          goalId,
-          customerId,
-          reason: 'Manual watchlist addition by user'
-        });
-      }
-    } catch (error: any) {
-      console.error('Watchlist toggle failed:', error);
-    }
-  };
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -563,6 +537,31 @@ const CustomerViewPage: React.FC = () => {
     }
   };
 
+  // Watchlist toggle handler
+  const handleWatchlistToggle = async (goalId: number, isInWatchlist: boolean) => {
+    if (!customerId) return;
+
+    try {
+      if (isInWatchlist) {
+        // Remove from watchlist
+        await removeFromWatchlistMutation.mutateAsync({
+          goalId,
+          customerId
+        });
+      } else {
+        // Add to watchlist - with a default reason
+        await addToWatchlistMutation.mutateAsync({
+          goalId,
+          customerId,
+          reason: 'Manual watchlist addition by user'
+        });
+      }
+      // Query invalidation in the hooks will automatically refetch
+    } catch (error: any) {
+      console.error('Watchlist toggle failed:', error);
+    }
+  };
+
   if (!customerId) {
     return <ErrorState 
       message="Invalid Customer ID" 
@@ -640,30 +639,16 @@ const CustomerViewPage: React.FC = () => {
 
       {/* Content Area */}
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
-        {/* Family View Mode */}
+        {/* Family View */}
         {viewMode === 'family' && customer.family_code ? (
-          <>
-            {(() => {
-              const familyHeadCode = customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code;
-              console.log('🔍 Family View Debug:', {
-                viewMode,
-                family_code: customer.family_code,
-                is_family_head: customer.is_family_head,
-                iwell_code: customer.iwell_code,
-                family_head_iwell_code: customer.family_head_iwell_code,
-                computed_familyHeadCode: familyHeadCode
-              });
-              return null;
-            })()}
-            <FamilyPortfolioView
-              familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
-              onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
-            />
-          </>
+          <FamilyPortfolioView
+            familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
+            onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
+          />
         ) : (
           <>
-            {/* Overview Tab */}
-            {activeTab === 'overview' && (
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
           <>
             {!portfolio ? (
               <EmptyState
@@ -794,20 +779,20 @@ const CustomerViewPage: React.FC = () => {
                         <div style={{ width: '100%', height: '100%' }}>
                           {/* FIXED: Proper props with comparison data */}
                           <PerformanceSparkline
-                            performanceData={portfolioWithMoM}
-                            data={portfolio.performance.map(p => p.current_value ?? 0)}
-                            width={600}
-                            height={250}
-                            showArea={true}
-                            showDots={true}
-                            interactive={true}
-                            timeframe={selectedTimeframe}
-                            showTimelineMarkers={true}
-                            timelineMarkerSize={5}
-                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-                            comparisonData={comparisonIndexData}
-                            comparisonIndexName={defaultComparisonIndex?.index_name}
-                          />
+  performanceData={portfolioWithMoM}
+  data={portfolio.performance.map(p => p.current_value ?? 0)}
+  width={600}
+  height={250}
+  showArea={true}
+  showDots={true}
+  interactive={true}
+  timeframe={selectedTimeframe}
+  showTimelineMarkers={true}
+  timelineMarkerSize={5}
+  showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+comparisonData={comparisonIndexData}
+  comparisonIndexName={defaultComparisonIndex?.index_name}
+/>
                           <div style={{
                             fontSize: '12px',
                             color: colors.utility.secondaryText,
@@ -1267,60 +1252,45 @@ const CustomerViewPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-                {/* Left Column - Goals List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Active Goals */}
-                  {goals.filter(g => g.is_active).map(goal => (
-                    <GoalCard
-                      key={goal.id}
-                      goal={goal}
-                      onEdit={(goalId: number) => {
-                        setSelectedGoalId(goalId);
-                        setShowGoalDetailsModal(true);
-                      }}
-                      onRecalculate={async (goalId: number) => {
-                        setSelectedGoalId(goalId);
-                        setShowGoalRecalculationModal(true);
-                        setRecalculationResult(null);
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Comprehensive Goal Cards */}
+                {goals.filter(g => g.is_active).map(goal => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    onEdit={(goalId: number) => {
+                      setSelectedGoalId(goalId);
+                      setShowGoalDetailsModal(true);
+                    }}
+                    onRecalculate={async (goalId: number) => {
+                      setSelectedGoalId(goalId);
+                      setShowGoalRecalculationModal(true);
+                      setRecalculationResult(null);
 
-                        try {
-                          const result = await recalculateGoalMutation.mutateAsync(goalId);
-                          setRecalculationResult({
-                            previousCorpus: result.current_value,
-                            newCorpus: result.projected_corpus,
-                            error: false
-                          });
-                          refetchGoals();
-                        } catch (error) {
-                          setRecalculationResult({ error: true });
-                        }
-                      }}
-                      onToggleWatchlist={handleWatchlistToggle}
-                      showAllocations={true}
-                    />
-                  ))}
-                </div>
-
-                {/* Right Column - Tracking Panels */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Progress Tracker */}
-                  <GoalProgressTracker
-                    customerId={customerId!}
-                    onWatchlistChange={() => refetchGoals()}
+                      try {
+                        const result = await recalculateGoalMutation.mutateAsync(goalId);
+                        setRecalculationResult({
+                          previousCorpus: result.current_value,
+                          newCorpus: result.projected_corpus,
+                          error: false
+                        });
+                        refetchGoals();
+                      } catch (error) {
+                        setRecalculationResult({ error: true });
+                      }
+                    }}
+                    onToggleWatchlist={handleWatchlistToggle}
+                    showAllocations={true}
                   />
+                ))}
 
-                  {/* Watchlist Panel */}
-                  <GoalWatchlistPanel customerId={customerId!} />
-
-                  {/* Asset Allocation Utilization */}
-                  <AssetAllocationUtilization customerId={customerId!} />
-                </div>
+                {/* Asset Allocation Utilization */}
+                <AssetAllocationUtilization customerId={customerId!} />
               </div>
             )}
 
-            {/* Legacy JTBD Section */}
-            {jtbds && jtbds.length > 0 && (
+            {/* Alerts & Reminders Section - excluding goals */}
+            {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
               <div style={{ marginTop: '24px' }}>
                 <h3 style={{
                   fontSize: '18px',
@@ -1442,7 +1412,7 @@ const CustomerViewPage: React.FC = () => {
             )}
           </>
         )}
-          </>
+        </>
         )}
       </div>
 

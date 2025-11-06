@@ -1,9 +1,10 @@
 // frontend/src/components/goals/GoalCard.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GoalConfiguration, isTimeBasedGoal, isPriceBasedGoal, isTimeAndPriceGoal } from '../../types/goal.types';
 import { useDeleteGoal } from '../../hooks/useGoals';
+import { GoalService, SchemeAllocationUtilization } from '../../services/goal.service';
 import {
   formatCurrency,
   formatDate,
@@ -20,20 +21,40 @@ interface GoalCardProps {
   goal: GoalConfiguration;
   onEdit?: (goalId: number) => void;
   onRecalculate?: (goalId: number) => void;
+  onToggleWatchlist?: (goalId: number, isInWatchlist: boolean) => void;
   compact?: boolean;
+  showAllocations?: boolean;
 }
 
 const GoalCard: React.FC<GoalCardProps> = ({
   goal,
   onEdit,
   onRecalculate,
-  compact = false
+  onToggleWatchlist,
+  compact = false,
+  showAllocations = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [allocationData, setAllocationData] = useState<SchemeAllocationUtilization[]>([]);
   const deleteMutation = useDeleteGoal();
+
+  // Fetch allocation utilization data when showing allocations
+  useEffect(() => {
+    if (showAllocations && goal.customer_id) {
+      GoalService.getAssetAllocationUtilization(goal.customer_id)
+        .then(response => {
+          if (response.success && response.data) {
+            setAllocationData(response.data);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load allocation data:', error);
+        });
+    }
+  }, [showAllocations, goal.customer_id]);
 
   const config = goal.config_data;
   const status = getGoalStatus(goal);
@@ -41,6 +62,18 @@ const GoalCard: React.FC<GoalCardProps> = ({
   const priorityDisplay = getPriorityDisplay(goal.priority);
   const goalTypeIcon = getGoalTypeIcon(config.goal_type);
   const goalTypeColor = getGoalTypeColor(config.goal_type);
+
+  // Helper to get allocation info for a scheme
+  const getSchemeAllocationInfo = (schemeCode: string) => {
+    return allocationData.find(s => s.scheme_code === schemeCode);
+  };
+
+  // Helper to get availability color
+  const getAvailabilityColor = (availablePercentage: number): string => {
+    if (availablePercentage < 20) return colors.semantic.error;
+    if (availablePercentage < 50) return colors.semantic.warning;
+    return colors.semantic.success;
+  };
 
   // Get key metrics based on goal type
   const getKeyMetrics = () => {
@@ -135,6 +168,12 @@ const GoalCard: React.FC<GoalCardProps> = ({
   const PlayIcon = () => (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+
+  const StarIcon = ({ filled = false }: { filled?: boolean }) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 
@@ -234,13 +273,36 @@ const GoalCard: React.FC<GoalCardProps> = ({
           </div>
 
           {/* Right: Action Buttons */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '4px',
             flexShrink: 0,
             marginLeft: '12px'
           }}>
+            {/* Watchlist Toggle */}
+            {onToggleWatchlist && (
+              <button
+                onClick={() => onToggleWatchlist(goal.id, goal.is_in_watchlist || false)}
+                title={goal.is_in_watchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+                style={{
+                  padding: '6px',
+                  backgroundColor: goal.is_in_watchlist ? '#F59E0B20' : 'transparent',
+                  color: goal.is_in_watchlist ? '#F59E0B' : colors.utility.secondaryText,
+                  border: `1px solid ${goal.is_in_watchlist ? '#F59E0B' : colors.utility.secondaryText}40`,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '28px',
+                  minHeight: '28px'
+                }}
+              >
+                <StarIcon filled={goal.is_in_watchlist} />
+              </button>
+            )}
+
             {/* Recalculate */}
             {onRecalculate && (
               <button
@@ -411,6 +473,111 @@ const GoalCard: React.FC<GoalCardProps> = ({
                   {actions[0].description}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* FUND ALLOCATIONS (with availability tracking) */}
+        {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px',
+            backgroundColor: colors.utility.primaryText + '05',
+            borderRadius: '6px',
+            border: `1px solid ${colors.utility.primaryText}10`
+          }}>
+            <div style={{
+              fontSize: '11px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span>📊</span>
+              <span>Fund Allocations</span>
+            </div>
+            {config.linked_schemes.map((scheme, idx) => {
+              const allocationInfo = getSchemeAllocationInfo(scheme.scheme_code);
+              return (
+                <div key={idx} style={{
+                  marginBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
+                  paddingBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
+                  borderBottom: idx < config.linked_schemes.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '4px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.utility.primaryText,
+                      fontWeight: '500',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {scheme.scheme_name}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      marginLeft: '8px'
+                    }}>
+                      <div style={{
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        color: colors.brand.primary
+                      }}>
+                        {scheme.allocation_percentage}%
+                      </div>
+                      {allocationInfo && allocationInfo.available_percentage != null && (
+                        <div style={{
+                          fontSize: '9px',
+                          color: getAvailabilityColor(allocationInfo.available_percentage),
+                          marginTop: '2px'
+                        }}>
+                          {allocationInfo.available_percentage.toFixed(1)}% available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: '9px',
+                    color: colors.utility.secondaryText
+                  }}>
+                    {scheme.scheme_code}
+                    {allocationInfo && allocationInfo.is_fully_allocated && (
+                      <span style={{
+                        marginLeft: '8px',
+                        padding: '2px 6px',
+                        backgroundColor: colors.semantic.error + '20',
+                        borderRadius: '4px',
+                        fontSize: '8px',
+                        fontWeight: '600',
+                        color: colors.semantic.error
+                      }}>
+                        FULLY ALLOCATED
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{
+              marginTop: '8px',
+              paddingTop: '8px',
+              borderTop: `1px solid ${colors.utility.primaryText}10`,
+              fontSize: '10px',
+              color: colors.utility.secondaryText,
+              fontStyle: 'italic'
+            }}>
+              💡 Available % shows remaining fund capacity across all goals (max 100% per fund)
             </div>
           </div>
         )}

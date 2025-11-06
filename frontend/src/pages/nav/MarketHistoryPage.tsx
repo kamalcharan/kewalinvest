@@ -1,5 +1,6 @@
 // frontend/src/pages/nav/MarketHistoryPage.tsx
 // Market Data History - Download and manage NSE market indices
+// WITH BULK OPERATIONS SUPPORT
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,11 +12,14 @@ import FilterBar, { type FilterState } from '../../components/market/FilterBar';
 import IndexCard from '../../components/market/IndexCard';
 import DateRangePicker from '../../components/market/DateRangePicker';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
+import { BulkDownloadModal } from '../../components/market/BulkDownloadModal';
+import { BulkMetricsModal } from '../../components/market/BulkMetricsModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
 import MarketService from '../../services/market.service';
 import { marketAnalysisService } from '../../services/marketAnalysis.service';
 import type { MarketIndex } from '../../types/market.types';
+import { CheckSquare, Square, Download, Calculator } from 'lucide-react';
 
 const MarketHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,6 +33,11 @@ const MarketHistoryPage: React.FC = () => {
     status: 'all',
     search: ''
   });
+
+  // BULK OPERATIONS STATE
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [showBulkDownloadModal, setShowBulkDownloadModal] = useState(false);
+  const [showBulkMetricsModal, setShowBulkMetricsModal] = useState(false);
 
   // Modal states
   const [selectedIndex, setSelectedIndex] = useState<MarketIndex | null>(null);
@@ -62,9 +71,70 @@ const MarketHistoryPage: React.FC = () => {
     isProcessing
   } = useMarketDashboard(filters);
 
+  // ==================== BULK OPERATIONS HANDLERS ====================
+  
+  const handleSelectAll = useCallback(() => {
+    if (selectedIndices.size === indices.length) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(indices.map(idx => idx.id)));
+    }
+  }, [indices, selectedIndices]);
+
+  const handleSelectIndex = useCallback((indexId: number) => {
+    const newSelected = new Set(selectedIndices);
+    if (newSelected.has(indexId)) {
+      newSelected.delete(indexId);
+    } else {
+      newSelected.add(indexId);
+    }
+    setSelectedIndices(newSelected);
+  }, [selectedIndices]);
+
+  const getSelectedIndicesData = useCallback((): MarketIndex[] => {
+    return indices.filter(idx => selectedIndices.has(idx.id));
+  }, [indices, selectedIndices]);
+
+  const handleBulkDownload = useCallback(() => {
+    const selected = getSelectedIndicesData();
+    if (selected.length === 0) return;
+    
+    // Validate that selected indices have providers enabled
+    const enabledCount = selected.filter(idx => idx.provider_enabled).length;
+    if (enabledCount === 0) {
+      toastService.warning('None of the selected indices have data providers configured and enabled.');
+      return;
+    }
+    
+    setShowBulkDownloadModal(true);
+  }, [getSelectedIndicesData]);
+
+  const handleBulkCalculate = useCallback(() => {
+    const selected = getSelectedIndicesData();
+    if (selected.length === 0) return;
+    
+    // Validate that selected indices have data
+    const withDataCount = selected.filter(idx => idx.historical_data_available).length;
+    if (withDataCount === 0) {
+      toastService.warning('None of the selected indices have historical data. Please download data first.');
+      return;
+    }
+    
+    setShowBulkMetricsModal(true);
+  }, [getSelectedIndicesData]);
+
+  const handleBulkOperationSuccess = useCallback(() => {
+    refetchAll();
+    setSelectedIndices(new Set());
+  }, [refetchAll]);
+
+  // ==================== EXISTING HANDLERS ====================
+
   // Handle filter change
   const handleFilterChange = useCallback((newFilters: FilterState) => {
     setFilters(newFilters);
+    // Clear selection when filters change
+    setSelectedIndices(new Set());
     
     FrontendErrorLogger.info(
       'Filters changed',
@@ -457,6 +527,10 @@ const MarketHistoryPage: React.FC = () => {
     }
   }, []);
 
+  // Calculate derived values
+  const isAllSelected = indices.length > 0 && selectedIndices.size === indices.length;
+  const selectedCount = selectedIndices.size;
+
   // Error display
   if (error) {
     return (
@@ -623,6 +697,129 @@ const MarketHistoryPage: React.FC = () => {
           isLoading={isLoading}
         />
 
+        {/* ==================== BULK ACTIONS BAR ==================== */}
+        {indices.length > 0 && (
+          <div style={{
+            backgroundColor: `${colors.brand.primary}08`,
+            borderRadius: '12px',
+            padding: '20px',
+            border: `2px solid ${colors.brand.primary}30`
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '16px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <button
+                  onClick={handleSelectAll}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  {isAllSelected ? (
+                    <CheckSquare style={{ width: '20px', height: '20px', color: colors.brand.primary }} />
+                  ) : (
+                    <Square style={{ width: '20px', height: '20px', color: colors.utility.secondaryText }} />
+                  )}
+                  Select All
+                </button>
+                
+                {selectedCount > 0 && (
+                  <span style={{
+                    padding: '6px 12px',
+                    backgroundColor: colors.brand.primary,
+                    color: 'white',
+                    borderRadius: '999px',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}>
+                    {selectedCount} {selectedCount === 1 ? 'index' : 'indices'} selected
+                  </span>
+                )}
+              </div>
+
+              {selectedCount > 0 && (
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleBulkDownload}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      backgroundColor: colors.brand.primary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      transition: 'transform 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <Download style={{ width: '16px', height: '16px' }} />
+                    Bulk Download ({selectedCount})
+                  </button>
+                  <button
+                    onClick={handleBulkCalculate}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      backgroundColor: colors.semantic.success,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      transition: 'transform 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <Calculator style={{ width: '16px', height: '16px' }} />
+                    Bulk Calculate ({selectedCount})
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Indices Grid */}
         <div style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -724,18 +921,42 @@ const MarketHistoryPage: React.FC = () => {
               gap: '12px'
             }}>
               {indices.map((index) => (
-                <IndexCard
-                  key={index.id}
-                  index={index}
-                  onViewDashboard={handleViewDashboard}
-                  onCalculateMetrics={handleCalculateMetrics}
-                  onDownloadHistorical={handleDownloadHistorical}
-                  onDownloadEOD={handleDownloadEOD}
-                  onDelete={handleDelete}
-                  showDeleteButton={isSuperAdmin}
-                  isDownloading={downloadingIndexId === index.id}
-                  isCalculating={calculatingIndexId === index.id}
-                />
+                <div key={index.id} style={{ position: 'relative' }}>
+                  {/* Selection Checkbox Overlay */}
+                  <div
+                    onClick={() => handleSelectIndex(index.id)}
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: '12px',
+                      zIndex: 10,
+                      cursor: 'pointer',
+                      padding: '4px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      borderRadius: '6px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    {selectedIndices.has(index.id) ? (
+                      <CheckSquare style={{ width: '20px', height: '20px', color: colors.brand.primary }} />
+                    ) : (
+                      <Square style={{ width: '20px', height: '20px', color: colors.utility.secondaryText }} />
+                    )}
+                  </div>
+
+                  {/* Index Card */}
+                  <IndexCard
+                    index={index}
+                    onViewDashboard={handleViewDashboard}
+                    onCalculateMetrics={handleCalculateMetrics}
+                    onDownloadHistorical={handleDownloadHistorical}
+                    onDownloadEOD={handleDownloadEOD}
+                    onDelete={handleDelete}
+                    showDeleteButton={isSuperAdmin}
+                    isDownloading={downloadingIndexId === index.id}
+                    isCalculating={calculatingIndexId === index.id}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -763,6 +984,8 @@ const MarketHistoryPage: React.FC = () => {
           • Auto-scheduled EOD downloads run daily at 8:00 PM IST
           <br />
           • All downloads are asynchronous and may take a few moments to complete
+          <br />
+          <strong style={{ color: colors.brand.primary }}>✨ New: Use bulk operations to download and calculate metrics for multiple indices at once!</strong>
         </div>
       </div>
 
@@ -792,6 +1015,21 @@ const MarketHistoryPage: React.FC = () => {
         cancelText="Cancel"
         type="error"
         isLoading={isProcessing}
+      />
+
+      {/* BULK OPERATION MODALS */}
+      <BulkDownloadModal
+        isOpen={showBulkDownloadModal}
+        onClose={() => setShowBulkDownloadModal(false)}
+        selectedIndices={getSelectedIndicesData()}
+        onSuccess={handleBulkOperationSuccess}
+      />
+
+      <BulkMetricsModal
+        isOpen={showBulkMetricsModal}
+        onClose={() => setShowBulkMetricsModal(false)}
+        selectedIndices={getSelectedIndicesData()}
+        onSuccess={handleBulkOperationSuccess}
       />
 
       {/* Download Progress Overlay */}
