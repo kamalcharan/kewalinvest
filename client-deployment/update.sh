@@ -45,7 +45,7 @@ echo "   Tag: ${IMAGE_TAG:-latest}"
 echo ""
 
 # Confirmation prompt
-read -p "Continue with update? (yes/no): " CONFIRM
+read -p "Continue with update? (y/n): " CONFIRM
 CONFIRM_LOWER=$(echo "$CONFIRM" | tr '[:upper:]' '[:lower:]')
 if [ "$CONFIRM_LOWER" != "yes" ] && [ "$CONFIRM_LOWER" != "y" ]; then
     echo "Update cancelled."
@@ -176,7 +176,7 @@ echo "Do you want to apply database migrations?"
 echo "  • Only needed if database schema has changed"
 echo "  • Safe to skip if only frontend/backend code updated"
 echo ""
-read -p "Apply database migrations? (yes/no): " APPLY_MIGRATIONS
+read -p "Apply database migrations? (y/n): " APPLY_MIGRATIONS
 APPLY_MIGRATIONS_LOWER=$(echo "$APPLY_MIGRATIONS" | tr '[:upper:]' '[:lower:]')
 
 if [ "$APPLY_MIGRATIONS_LOWER" = "yes" ] || [ "$APPLY_MIGRATIONS_LOWER" = "y" ]; then
