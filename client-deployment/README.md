@@ -1,6 +1,6 @@
 # KewalInvest - Deployment Guide
 
-## Quick Start (2 Commands)
+## 🚀 For Customers: Quick Start (2 Commands)
 
 ```bash
 ./configure.sh    # Step 1: Auto-generate secure configuration
@@ -8,6 +8,24 @@
 ```
 
 That's it! Your application will be running at **http://localhost:3000**
+
+---
+
+## 👨‍💻 For Developers: Build Images First
+
+**IMPORTANT:** Before distributing this package to customers, you MUST build and push Docker images:
+
+```bash
+cd client-deployment
+./configure.sh           # Create .env file with registry settings
+./build-and-push.sh      # Build and push images to Docker Hub
+```
+
+This will build and push:
+- `vikuna/kewalinvest-backend:latest`
+- `vikuna/kewalinvest-frontend:latest`
+
+Only AFTER pushing images should you package and distribute the `client-deployment` folder.
 
 ---
 

@@ -43,7 +43,34 @@ source .env
 set +a
 
 echo "📥 Pulling images from Docker Hub..."
-docker-compose -f docker-compose.prod.yml pull
+echo "   Registry: ${DOCKER_REGISTRY:-vikuna}"
+echo "   Tag: ${IMAGE_TAG:-latest}"
+echo ""
+
+# Try to pull images
+if ! docker-compose -f docker-compose.prod.yml pull; then
+    echo ""
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${RED}   ❌ Failed to Pull Docker Images${NC}"
+    echo -e "${RED}=========================================${NC}"
+    echo ""
+    echo -e "${YELLOW}The Docker images don't exist on Docker Hub.${NC}"
+    echo ""
+    echo "This deployment package requires pre-built images from:"
+    echo "  • ${DOCKER_REGISTRY:-vikuna}/kewalinvest-backend:${IMAGE_TAG:-latest}"
+    echo "  • ${DOCKER_REGISTRY:-vikuna}/kewalinvest-frontend:${IMAGE_TAG:-latest}"
+    echo ""
+    echo "If you are the developer:"
+    echo "  1. Run: ./build-and-push.sh"
+    echo "  2. Then distribute this package to customers"
+    echo ""
+    echo "If you are a customer:"
+    echo "  Contact support - the deployment package is incomplete"
+    echo ""
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Images pulled successfully${NC}"
 
 echo ""
 echo "🛑 Stopping existing containers (if any)..."
