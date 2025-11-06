@@ -125,7 +125,7 @@ export const MeetingsList: React.FC<MeetingsListProps> = ({ customerId }) => {
 
   const handleDelete = async (meeting: JTBDExecution) => {
     try {
-      await deleteMutation.mutateAsync(meeting.id);
+      await deleteMutation.mutateAsync({ id: meeting.id, customerId: meeting.customer_id });
       refetch();
     } catch (error) {
       console.error('Error deleting meeting:', error);

@@ -114,18 +114,29 @@ export class JTBDUnifiedController {
         page_size: req.query.page_size ? parseInt(req.query.page_size as string) : 20
       };
 
-      const result = await this.jtbdService.getJTBDs(
-        user!.tenant_id,
-        isLive,
-        filters
-      );
-
-      res.json({
-        success: true,
-        data: result.jtbds,
-        pagination: result.pagination,
-        timestamp: new Date().toISOString()
-      });
+      // If customer_id provided, get customer-specific JTBDs
+      if (filters.customer_id) {
+        const jtbds = await this.jtbdService.getCustomerJTBDs(
+          user!.tenant_id,
+          isLive,
+          filters.customer_id
+        );
+        res.json({
+          success: true,
+          data: jtbds,
+          total: jtbds.length,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // For now, return empty array if no customer_id
+        // TODO: Implement tenant-wide JTBD listing with pagination
+        res.json({
+          success: true,
+          data: [],
+          total: 0,
+          timestamp: new Date().toISOString()
+        });
+      }
     } catch (error: any) {
       console.error('Error getting JTBD configs:', error);
       res.status(500).json({
@@ -611,7 +622,7 @@ export class JTBDUnifiedController {
 
       // Get both configurations and executions summary
       const [configSummary, executionSummary] = await Promise.all([
-        this.jtbdService.getCustomerJTBDSummary(user!.tenant_id, isLive, customerId),
+        this.jtbdService.getCustomerSummary(user!.tenant_id, isLive, customerId),
         this.executionService.getCustomerJobsSummary(user!.tenant_id, isLive, customerId)
       ]);
 

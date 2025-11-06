@@ -551,15 +551,8 @@ export interface JTBDData {
   }>;
 }
 
-export interface JTBDFilters {
-  priority?: JTBDPriority[];
-  actionType?: JTBDActionType[];
-  goalType?: JTBDGoalType[];
-  onTrackOnly?: boolean;
-  hasDeadline?: boolean;
-  sortBy?: 'priority' | 'deadline' | 'value' | 'impact';
-  sortOrder?: 'asc' | 'desc';
-}
+// Note: JTBDFilters already defined above (line 109)
+// Removed duplicate interface definition to fix TypeScript error
 
 export interface JTBDMetrics {
   totalActions: number;

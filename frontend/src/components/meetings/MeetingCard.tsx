@@ -400,7 +400,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
       )}
 
       {/* Cancellation Reason */}
-      {meeting.cancellation_reason && (
+      {meetingData.cancellation_reason && (
         <div
           style={{
             marginTop: '12px',
@@ -422,7 +422,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
             Cancellation Reason
           </div>
           <div style={{ fontSize: '14px', color: colors.utility.primaryText, lineHeight: '1.5' }}>
-            {meeting.cancellation_reason}
+            {meetingData.cancellation_reason}
           </div>
         </div>
       )}
