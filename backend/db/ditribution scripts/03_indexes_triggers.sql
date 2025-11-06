@@ -5,7 +5,7 @@
 -- Execution: Run THIRD after 01_init.sql and 02_tables.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-10-25 (Added duplicate detection indexes from migration 006)
+-- Updated: 2025-11-05 (Added t_customer_meetings indexes and trigger)
 -- ============================================================================
 
 -- ============================================================================
@@ -16,7 +16,7 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Creating Indexes and Triggers';
     RAISE NOTICE 'Database: kewalinvest';
-    RAISE NOTICE 'Complete regeneration with duplicate detection';
+    RAISE NOTICE 'Complete regeneration with meeting management';
     RAISE NOTICE '========================================';
 END $$;
 
@@ -27,7 +27,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating Trigger Functions...';
-    RAISE NOTICE 'Total trigger functions: 3';
+    RAISE NOTICE 'Total trigger functions: 4';
 END $$;
 
 -- Function: update_updated_at_column()
@@ -99,6 +99,19 @@ $$;
 ALTER FUNCTION public.normalize_alias_name() OWNER TO kewal_admin;
 COMMENT ON FUNCTION public.normalize_alias_name() IS 'Auto-normalize alias names for case-insensitive matching';
 
+-- Function: update_customer_meetings_timestamp() - NEW
+CREATE OR REPLACE FUNCTION public.update_customer_meetings_timestamp() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.update_customer_meetings_timestamp() OWNER TO kewal_admin;
+COMMENT ON FUNCTION public.update_customer_meetings_timestamp() IS 'Automatically update updated_at timestamp for customer meetings';
+
 DO $$
 BEGIN
     RAISE NOTICE '✓ Trigger functions created successfully';
@@ -110,7 +123,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating performance indexes...';
-    RAISE NOTICE 'Total indexes to create: 179 (165 base + 14 duplicate detection)';
+    RAISE NOTICE 'Total indexes to create: 185+ (179 base + 6 meetings)';
 END $$;
 
 -- ============================================================================
@@ -160,6 +173,23 @@ CREATE INDEX idx_addresses_customer ON t_customer_addresses USING btree (custome
 CREATE INDEX idx_addresses_primary ON t_customer_addresses USING btree (customer_id, is_primary) WHERE (is_primary = true);
 CREATE INDEX idx_addresses_city ON t_customer_addresses USING btree (city);
 CREATE INDEX idx_addresses_pincode ON t_customer_addresses USING btree (pincode);
+
+-- ============================================================================
+-- 2.2.1: CUSTOMER MEETINGS INDEXES (NEW - 2025-11-05)
+-- ============================================================================
+CREATE INDEX idx_customer_meetings_customer ON t_customer_meetings USING btree (tenant_id, is_live, customer_id);
+CREATE INDEX idx_customer_meetings_scheduled_date ON t_customer_meetings USING btree (scheduled_date);
+CREATE INDEX idx_customer_meetings_status ON t_customer_meetings USING btree (status);
+CREATE INDEX idx_customer_meetings_upcoming ON t_customer_meetings USING btree (tenant_id, is_live, status, scheduled_date)
+    WHERE status = 'scheduled';
+CREATE INDEX idx_customer_meetings_tenant ON t_customer_meetings USING btree (tenant_id, is_live);
+CREATE INDEX idx_customer_meetings_created_by ON t_customer_meetings USING btree (created_by);
+
+COMMENT ON INDEX idx_customer_meetings_customer IS 'Fast lookup for customer meetings by tenant and customer';
+COMMENT ON INDEX idx_customer_meetings_scheduled_date IS 'Fast filtering by scheduled date';
+COMMENT ON INDEX idx_customer_meetings_status IS 'Fast filtering by meeting status';
+COMMENT ON INDEX idx_customer_meetings_upcoming IS 'Optimized for upcoming scheduled meetings query (filtered index)';
+COMMENT ON INDEX idx_customer_meetings_tenant IS 'Tenant isolation for meetings';
 
 -- ============================================================================
 -- 2.3: CUSTOMER BOOKMARKS INDEXES
@@ -443,7 +473,7 @@ CREATE INDEX idx_user_chart_prefs_index ON t_user_chart_preferences USING btree 
 CREATE INDEX idx_user_chart_prefs_user_index ON t_user_chart_preferences USING btree (user_id, index_id);
 
 -- ============================================================================
--- 2.11: DUPLICATE DETECTION INDEXES (NEW - Migration 006)
+-- 2.11: DUPLICATE DETECTION INDEXES (Migration 006)
 -- Purpose: Optimize duplicate check queries for filename, customer, and transaction detection
 -- ============================================================================
 DO $$
@@ -535,7 +565,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- JOB SCHEDULER & EXECUTION INDEXES
+-- 2.12: JOB SCHEDULER & EXECUTION INDEXES
 -- ============================================================================
 DO $$
 BEGIN
@@ -606,7 +636,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating updated_at timestamp triggers...';
-    RAISE NOTICE 'Total triggers to create: 25';
+    RAISE NOTICE 'Total triggers to create: 26 (including t_customer_meetings)';
 END $$;
 
 -- Core entity triggers
@@ -627,6 +657,10 @@ CREATE TRIGGER update_customer_bookmarks_updated_at BEFORE UPDATE ON t_customer_
 
 CREATE TRIGGER update_bookmark_reasons_updated_at BEFORE UPDATE ON m_bookmark_reasons
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Customer meetings trigger (NEW - 2025-11-05)
+CREATE TRIGGER update_customer_meetings_updated_at BEFORE UPDATE ON t_customer_meetings
+    FOR EACH ROW EXECUTE FUNCTION update_customer_meetings_timestamp();
 
 -- Portfolio and transaction triggers
 CREATE TRIGGER update_portfolio_updated_at BEFORE UPDATE ON t_customer_master_portfolio
@@ -711,6 +745,7 @@ DECLARE
     v_trigger_count INTEGER;
     v_index_count INTEGER;
     v_duplicate_index_count INTEGER;
+    v_meeting_index_count INTEGER;
 BEGIN
     -- Count triggers
     SELECT COUNT(*) INTO v_trigger_count
@@ -747,18 +782,32 @@ BEGIN
         )
     );
 
+    -- Count meeting indexes
+    SELECT COUNT(*) INTO v_meeting_index_count
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+    AND indexname LIKE 'idx_customer_meetings%';
+
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Indexes and Triggers Complete';
     RAISE NOTICE 'Triggers created: %', v_trigger_count;
     RAISE NOTICE 'Total indexes created: %', v_index_count;
     RAISE NOTICE 'Duplicate detection indexes: %', v_duplicate_index_count;
+    RAISE NOTICE 'Customer meetings indexes: %', v_meeting_index_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Migration Updates Included:';
-    RAISE NOTICE '  ✓ Added 14 duplicate detection indexes';
-    RAISE NOTICE '    - 13 from Migration 006 (filename, PAN, email, mobile, transaction)';
-    RAISE NOTICE '    - 1 from Migration 001 (file_hash for content-based detection)';
-    RAISE NOTICE '  ✓ Indexes are tenant-scoped and optimized';
-    RAISE NOTICE '  ✓ GIN index for JSONB mapped_data queries';
+    RAISE NOTICE 'UPDATE NOTES (2025-11-05):';
+    RAISE NOTICE '  ✓ Added 6 indexes for t_customer_meetings';
+    RAISE NOTICE '    - idx_customer_meetings_customer (tenant + customer lookup)';
+    RAISE NOTICE '    - idx_customer_meetings_scheduled_date (date filtering)';
+    RAISE NOTICE '    - idx_customer_meetings_status (status filtering)';
+    RAISE NOTICE '    - idx_customer_meetings_upcoming (filtered index for upcoming meetings)';
+    RAISE NOTICE '    - idx_customer_meetings_tenant (tenant isolation)';
+    RAISE NOTICE '    - idx_customer_meetings_created_by (user tracking)';
+    RAISE NOTICE '  ✓ Added trigger: update_customer_meetings_updated_at';
+    RAISE NOTICE '  ✓ Migration Updates Included:';
+    RAISE NOTICE '    - 14 duplicate detection indexes';
+    RAISE NOTICE '    - 14 job scheduler & execution indexes';
+    RAISE NOTICE '  ✓ All indexes are tenant-scoped and optimized';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Performance optimizations ready!';
     RAISE NOTICE 'Next: Run 04_functions_views_policies.sql';
