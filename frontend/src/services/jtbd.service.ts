@@ -10,7 +10,16 @@ import {
   CustomerJTBDSummary,
   CalculatedAlertInstance,
   JTBDWithCommunication,
-  AlertsByDate
+  AlertsByDate,
+  // New unified types
+  JTBDExecution,
+  CreateExecutionRequest,
+  UpdateExecutionRequest,
+  CompleteExecutionRequest,
+  CancelExecutionRequest,
+  ExecutionFilters,
+  ExecutionListResponse,
+  CustomerJobsSummary,
 } from '../types/jtbd.types';
 
 // API Response wrappers
@@ -84,6 +93,32 @@ interface UpcomingAlertsApiResponse {
 interface AlertsByDateApiResponse {
   success: boolean;
   data: AlertsByDate[];
+  error?: string;
+}
+
+// NEW: Execution API Response wrappers
+interface ExecutionApiResponse {
+  success: boolean;
+  data: JTBDExecution;
+  message?: string;
+  error?: string;
+}
+
+interface ExecutionListApiResponse {
+  success: boolean;
+  data: ExecutionListResponse;
+  error?: string;
+}
+
+interface ExecutionArrayApiResponse {
+  success: boolean;
+  data: JTBDExecution[];
+  error?: string;
+}
+
+interface CustomerJobsSummaryApiResponse {
+  success: boolean;
+  data: CustomerJobsSummary;
   error?: string;
 }
 
@@ -256,7 +291,156 @@ export class JTBDService {
   }
 
   /**
-   * DASHBOARD METHODS
+   * ========================================================================
+   * EXECUTION METHODS (Unified JTBD v2 - Meetings, SIP Plans, etc.)
+   * ========================================================================
+   */
+
+  /**
+   * Get executions with filters (bot-friendly queries)
+   */
+  static async getExecutions(filters?: ExecutionFilters): Promise<ExecutionListApiResponse> {
+    try {
+      const params = new URLSearchParams();
+
+      if (filters?.customer_id) params.append('customer_id', filters.customer_id.toString());
+      if (filters?.config_id) params.append('config_id', filters.config_id.toString());
+      if (filters?.execution_type) params.append('execution_type', filters.execution_type);
+      if (filters?.execution_status) params.append('execution_status', filters.execution_status);
+      if (filters?.priority) params.append('priority', filters.priority);
+      if (filters?.from_date) params.append('from_date', filters.from_date);
+      if (filters?.to_date) params.append('to_date', filters.to_date);
+      if (filters?.page) params.append('page', filters.page.toString());
+      if (filters?.page_size) params.append('page_size', filters.page_size.toString());
+
+      const url = `${API_ENDPOINTS.JTBD_V2.EXECUTION.LIST}?${params.toString()}`;
+      return await apiService.get<ExecutionListApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching executions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get single execution by ID
+   */
+  static async getExecution(executionId: number): Promise<ExecutionApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.GET(executionId);
+      return await apiService.get<ExecutionApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new execution (meeting, SIP instance, etc.)
+   */
+  static async createExecution(data: CreateExecutionRequest): Promise<ExecutionApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.CREATE;
+      return await apiService.post<ExecutionApiResponse>(url, data);
+    } catch (error: any) {
+      console.error('Error creating execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update execution
+   */
+  static async updateExecution(
+    executionId: number,
+    data: UpdateExecutionRequest
+  ): Promise<ExecutionApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.UPDATE(executionId);
+      return await apiService.patch<ExecutionApiResponse>(url, data);
+    } catch (error: any) {
+      console.error('Error updating execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Complete execution (with deviation tracking)
+   */
+  static async completeExecution(
+    executionId: number,
+    data: CompleteExecutionRequest
+  ): Promise<ExecutionApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.COMPLETE(executionId);
+      return await apiService.post<ExecutionApiResponse>(url, data);
+    } catch (error: any) {
+      console.error('Error completing execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel execution (with reason)
+   */
+  static async cancelExecution(
+    executionId: number,
+    data: CancelExecutionRequest
+  ): Promise<ExecutionApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.CANCEL(executionId);
+      return await apiService.post<ExecutionApiResponse>(url, data);
+    } catch (error: any) {
+      console.error('Error cancelling execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete execution
+   */
+  static async deleteExecution(executionId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.EXECUTION.DELETE(executionId);
+      return await apiService.delete(url);
+    } catch (error: any) {
+      console.error('Error deleting execution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get upcoming executions (dashboard view)
+   */
+  static async getUpcomingExecutions(days: number = 30): Promise<ExecutionArrayApiResponse> {
+    try {
+      const params = new URLSearchParams();
+      params.append('days', days.toString());
+
+      const url = `${API_ENDPOINTS.JTBD_V2.UPCOMING}?${params.toString()}`;
+      return await apiService.get<ExecutionArrayApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching upcoming executions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get customer jobs summary (execution overview)
+   */
+  static async getCustomerJobsSummary(customerId: number): Promise<CustomerJobsSummaryApiResponse> {
+    try {
+      const url = API_ENDPOINTS.JTBD_V2.CUSTOMER_SUMMARY(customerId);
+      return await apiService.get<CustomerJobsSummaryApiResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching customer jobs summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ========================================================================
+   * DASHBOARD METHODS (Old JTBD system)
+   * ========================================================================
    */
 
   /**
