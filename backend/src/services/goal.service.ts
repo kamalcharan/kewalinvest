@@ -123,48 +123,75 @@ export class GoalService {
       );
 
       // Create SIP execution records for monthly investments (if applicable)
-      if (finalConfig.monthly_sip && finalConfig.monthly_sip > 0 && finalConfig.duration_months) {
-        console.log(`Creating ${finalConfig.duration_months} monthly SIP executions for goal ${goalId}`);
+      if (finalConfig.monthly_contribution && finalConfig.monthly_contribution > 0) {
+        console.log(`[Goal Service] Checking SIP execution creation for goal ${goalId}`);
+        console.log(`[Goal Service] Goal type: ${finalConfig.goal_type}`);
+        console.log(`[Goal Service] Monthly contribution: ${finalConfig.monthly_contribution}`);
+        console.log(`[Goal Service] Final config:`, JSON.stringify(finalConfig, null, 2));
 
-        const executionService = new JTBDExecutionService(pool);
-        const startDate = new Date(finalConfig.start_date);
+        let durationMonths = 0;
+        let startDate = new Date(); // Default to today
 
-        // Create execution records for each month
-        for (let month = 0; month < finalConfig.duration_months; month++) {
-          const scheduledDate = new Date(startDate);
-          scheduledDate.setMonth(scheduledDate.getMonth() + month);
-
-          // Format as YYYY-MM-DD
-          const dateStr = scheduledDate.toISOString().split('T')[0];
-
-          const sipExecutionData = {
-            month_number: month + 1,
-            total_months: finalConfig.duration_months,
-            sip_amount: finalConfig.monthly_sip,
-            goal_id: goalId,
-            goal_title: data.title,
-          };
-
-          await executionService.createExecution(
-            tenantId,
-            isLive,
-            {
-              config_id: goalId,
-              customer_id: data.customer_id,
-              execution_type: 'goal_sip_plan',
-              title: `SIP Payment ${month + 1}/${finalConfig.duration_months} - ${data.title}`,
-              description: `Monthly SIP of ₹${finalConfig.monthly_sip}`,
-              priority: 'medium',
-              scheduled_date: dateStr,
-              scheduled_time: null,
-              execution_status: 'planned',
-              execution_data: sipExecutionData,
-            },
-            createdBy
-          );
+        // Calculate duration based on goal type
+        if (finalConfig.goal_type === 'time_based_goal') {
+          const target = new Date(finalConfig.target_date);
+          durationMonths = Math.ceil((target.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)); // Avg month length
+        } else if (finalConfig.goal_type === 'price_based_goal') {
+          durationMonths = finalConfig.months_to_achievement || 0;
+        } else if (finalConfig.goal_type === 'time_and_price_goal') {
+          const target = new Date(finalConfig.target_date);
+          durationMonths = Math.ceil((target.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)); // Avg month length
         }
 
-        console.log(`Successfully created ${finalConfig.duration_months} SIP executions for goal ${goalId}`);
+        console.log(`[Goal Service] Calculated duration: ${durationMonths} months`);
+
+        if (durationMonths > 0 && durationMonths <= 600) { // Max 50 years = 600 months
+          console.log(`[Goal Service] Creating ${durationMonths} monthly SIP executions for goal ${goalId}`);
+
+          const executionService = new JTBDExecutionService(pool);
+
+          // Create execution records for each month
+          for (let month = 0; month < durationMonths; month++) {
+            const scheduledDate = new Date(startDate);
+            scheduledDate.setMonth(scheduledDate.getMonth() + month);
+
+            // Format as YYYY-MM-DD
+            const dateStr = scheduledDate.toISOString().split('T')[0];
+
+            const sipExecutionData = {
+              month_number: month + 1,
+              total_months: durationMonths,
+              sip_amount: finalConfig.monthly_contribution,
+              goal_id: goalId,
+              goal_title: data.title,
+              goal_type: finalConfig.goal_type,
+            };
+
+            await executionService.createExecution(
+              tenantId,
+              isLive,
+              {
+                config_id: goalId,
+                customer_id: data.customer_id,
+                execution_type: 'goal_sip_plan',
+                title: `SIP Payment ${month + 1}/${durationMonths} - ${data.title}`,
+                description: `Monthly SIP of ₹${finalConfig.monthly_contribution}`,
+                priority: 'medium',
+                scheduled_date: dateStr,
+                scheduled_time: null,
+                execution_status: 'planned',
+                execution_data: sipExecutionData,
+              },
+              createdBy
+            );
+          }
+
+          console.log(`[Goal Service] Successfully created ${durationMonths} SIP executions for goal ${goalId}`);
+        } else {
+          console.log(`[Goal Service] Skipping SIP execution creation - invalid duration: ${durationMonths}`);
+        }
+      } else {
+        console.log(`[Goal Service] Skipping SIP execution creation - no monthly contribution or zero amount`);
       }
 
       // Update customer goal count

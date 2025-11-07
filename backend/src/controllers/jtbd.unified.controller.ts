@@ -285,8 +285,13 @@ export class JTBDUnifiedController {
       const isLive = environment === 'live';
       const data = req.body as CreateExecutionRequest;
 
+      console.log('[JTBD Controller] ===== CREATE EXECUTION REQUEST =====');
+      console.log('[JTBD Controller] User:', user?.user_id, 'Tenant:', user?.tenant_id, 'Environment:', environment);
+      console.log('[JTBD Controller] Request body:', JSON.stringify(data, null, 2));
+
       // Validation
       if (!data.customer_id) {
+        console.log('[JTBD Controller] Validation failed: customer_id missing');
         res.status(400).json({
           success: false,
           error: 'customer_id is required'
@@ -295,6 +300,7 @@ export class JTBDUnifiedController {
       }
 
       if (!data.execution_type) {
+        console.log('[JTBD Controller] Validation failed: execution_type missing');
         res.status(400).json({
           success: false,
           error: 'execution_type is required'
@@ -303,6 +309,7 @@ export class JTBDUnifiedController {
       }
 
       if (!data.title) {
+        console.log('[JTBD Controller] Validation failed: title missing');
         res.status(400).json({
           success: false,
           error: 'title is required'
@@ -311,12 +318,15 @@ export class JTBDUnifiedController {
       }
 
       if (!data.scheduled_date) {
+        console.log('[JTBD Controller] Validation failed: scheduled_date missing');
         res.status(400).json({
           success: false,
           error: 'scheduled_date is required'
         });
         return;
       }
+
+      console.log('[JTBD Controller] Validation passed, calling execution service');
 
       const execution = await this.executionService.createExecution(
         user!.tenant_id,
@@ -325,6 +335,8 @@ export class JTBDUnifiedController {
         user!.user_id
       );
 
+      console.log('[JTBD Controller] Execution created successfully:', execution.id);
+
       res.status(201).json({
         success: true,
         data: execution,
@@ -332,7 +344,9 @@ export class JTBDUnifiedController {
         timestamp: new Date().toISOString()
       });
     } catch (error: any) {
-      console.error('Error creating execution:', error);
+      console.error('[JTBD Controller] ===== ERROR CREATING EXECUTION =====');
+      console.error('[JTBD Controller] Error:', error);
+      console.error('[JTBD Controller] Stack:', error.stack);
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to create execution'
