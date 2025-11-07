@@ -55,23 +55,31 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
   };
 
   // Create sparkline SVG path
-  const createSparklinePath = (data: number[]): string => {
+  const createSparklinePath = (data: number[], width: number = 100, height: number = 32): string => {
     if (!data || data.length < 2) return '';
-    
-    const width = 80;
-    const height = 30;
+
     const padding = 2;
-    
+
     const min = Math.min(...data);
     const max = Math.max(...data);
-    const range = max - min || 1;
-    
+    const range = max - min;
+
+    // If all values are the same, create a horizontal line in the middle
+    if (range === 0) {
+      const y = height / 2;
+      const points = data.map((_, index) => {
+        const x = (index / (data.length - 1)) * (width - padding * 2) + padding;
+        return `${x},${y}`;
+      });
+      return `M ${points.join(' L ')}`;
+    }
+
     const points = data.map((value, index) => {
       const x = (index / (data.length - 1)) * (width - padding * 2) + padding;
       const y = height - ((value - min) / range * (height - padding * 2) + padding);
       return `${x},${y}`;
     });
-    
+
     return `M ${points.join(' L ')}`;
   };
 
@@ -145,9 +153,9 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
         </div>
 
         {showSparkline && portfolio.performance && portfolio.performance.length > 0 && (
-          <svg width="80" height="30" style={{ display: 'block' }}>
+          <svg width="80" height="30" viewBox="0 0 80 30" style={{ display: 'block' }}>
             <path
-              d={createSparklinePath(portfolio.performance.map(p => p.current_value ?? 0))}
+              d={createSparklinePath(portfolio.performance.map(p => p.current_value ?? 0), 80, 30)}
               fill="none"
               stroke={sparklineColor}
               strokeWidth="1.5"
@@ -285,9 +293,9 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
           alignItems: 'center',
           justifyContent: 'center'
         }}>
-          <svg width="100%" height="32" preserveAspectRatio="none" viewBox="0 0 100 32">
+          <svg width="100%" height="32" viewBox="0 0 100 32">
             <path
-              d={createSparklinePath(portfolio.performance.map(p => p.current_value ?? 0))}
+              d={createSparklinePath(portfolio.performance.map(p => p.current_value ?? 0), 100, 32)}
               fill="none"
               stroke={sparklineColor}
               strokeWidth="1.5"

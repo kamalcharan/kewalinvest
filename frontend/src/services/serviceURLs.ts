@@ -114,7 +114,7 @@ export const API_ENDPOINTS = {
     GET_MONTHLY_MARKET_VALUE: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-market-value`,
   },
   
-  // JTBD (Jobs To Be Done) endpoints
+  // JTBD (Jobs To Be Done) endpoints - OLD (will be deprecated)
   JTBD: {
     CREATE: `${API_BASE}/jtbd`,
     GET_CUSTOMER_JTBDS: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}`,
@@ -131,6 +131,33 @@ export const API_ENDPOINTS = {
     CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
     TRANSACTION_TYPES: `${API_BASE}/jtbd/transaction-types`,
     OCCURRENCES: (id: number) => `${API_BASE}/jtbd/${id}/occurrences`,
+  },
+
+  // JTBD V2 - Unified (Configurations + Executions + Meetings) - NEW
+  JTBD_V2: {
+    // Configuration endpoints
+    CONFIG: {
+      LIST: `${API_BASE}/jtbd-v2/config`, // GET with filters: ?customer_id=123&category=alert&type=portfolio_alert
+      CREATE: `${API_BASE}/jtbd-v2/config`,
+      GET: (id: number) => `${API_BASE}/jtbd-v2/config/${id}`,
+      UPDATE: (id: number) => `${API_BASE}/jtbd-v2/config/${id}`,
+      DELETE: (id: number) => `${API_BASE}/jtbd-v2/config/${id}`,
+    },
+
+    // Execution endpoints (meetings, SIP plans, etc.)
+    EXECUTION: {
+      LIST: `${API_BASE}/jtbd-v2/execution`, // GET with filters: ?customer_id=123&type=client_meeting&status=planned
+      CREATE: `${API_BASE}/jtbd-v2/execution`,
+      GET: (id: number) => `${API_BASE}/jtbd-v2/execution/${id}`,
+      UPDATE: (id: number) => `${API_BASE}/jtbd-v2/execution/${id}`,
+      DELETE: (id: number) => `${API_BASE}/jtbd-v2/execution/${id}`,
+      COMPLETE: (id: number) => `${API_BASE}/jtbd-v2/execution/${id}/complete`,
+      CANCEL: (id: number) => `${API_BASE}/jtbd-v2/execution/${id}/cancel`,
+    },
+
+    // Summary/Dashboard endpoints
+    UPCOMING: `${API_BASE}/jtbd-v2/upcoming`, // GET with filters: ?days=30&type=client_meeting
+    CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd-v2/customer/${customerId}/summary`,
   },
   
   // Goal Management endpoints
@@ -612,6 +639,43 @@ export const JTBD_URLS = {
   
   getOccurrences: (id: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.JTBD.OCCURRENCES(id)}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
+// JTBD V2 - Unified URL helpers (NEW - Bot-friendly)
+export const JTBD_V2_URLS = {
+  // Configuration operations
+  getConfigs: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CONFIG.LIST}${buildQueryParams(params || {}, environment)}`,
+  createConfig: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CONFIG.CREATE}${buildQueryParams({}, environment)}`,
+  getConfig: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CONFIG.GET(id)}${buildQueryParams({}, environment)}`,
+  updateConfig: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CONFIG.UPDATE(id)}${buildQueryParams({}, environment)}`,
+  deleteConfig: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CONFIG.DELETE(id)}${buildQueryParams({}, environment)}`,
+
+  // Execution operations
+  getExecutions: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.LIST}${buildQueryParams(params || {}, environment)}`,
+  createExecution: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.CREATE}${buildQueryParams({}, environment)}`,
+  getExecution: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.GET(id)}${buildQueryParams({}, environment)}`,
+  updateExecution: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.UPDATE(id)}${buildQueryParams({}, environment)}`,
+  deleteExecution: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.DELETE(id)}${buildQueryParams({}, environment)}`,
+  completeExecution: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.COMPLETE(id)}${buildQueryParams({}, environment)}`,
+  cancelExecution: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.EXECUTION.CANCEL(id)}${buildQueryParams({}, environment)}`,
+
+  // Dashboard/Summary operations
+  getUpcoming: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.UPCOMING}${buildQueryParams(params || {}, environment)}`,
+  getCustomerSummary: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.JTBD_V2.CUSTOMER_SUMMARY(customerId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Goal-specific URL helpers

@@ -12,7 +12,16 @@ import {
   CustomerJTBDSummary,
   CalculatedAlertInstance,
   JTBDWithCommunication,
-  AlertsByDate
+  AlertsByDate,
+  // New unified types
+  JTBDExecution,
+  CreateExecutionRequest,
+  UpdateExecutionRequest,
+  CompleteExecutionRequest,
+  CancelExecutionRequest,
+  ExecutionFilters,
+  ExecutionListResponse,
+  CustomerJobsSummary,
 } from '../types/jtbd.types';
 
 // Query Keys for consistent caching
@@ -38,10 +47,21 @@ export const JTBD_QUERY_KEYS = {
     startDate?: string;  // NEW
     endDate?: string;    // NEW
   }) => [...JTBD_QUERY_KEYS.dashboard(), 'upcoming', params] as const,
-  alertsByDate: (startDate: string, endDate: string) => 
+  alertsByDate: (startDate: string, endDate: string) =>
     [...JTBD_QUERY_KEYS.dashboard(), 'by-date', startDate, endDate] as const,
-  communicationQueue: (status?: string, limit?: number) => 
+  communicationQueue: (status?: string, limit?: number) =>
     [...JTBD_QUERY_KEYS.dashboard(), 'queue', status || 'all', limit || 50] as const,
+
+  // NEW: Execution keys (Unified JTBD v2)
+  executions: () => [...JTBD_QUERY_KEYS.all, 'executions'] as const,
+  executionsList: (filters?: ExecutionFilters) =>
+    [...JTBD_QUERY_KEYS.executions(), 'list', filters] as const,
+  executionDetail: (id: number) =>
+    [...JTBD_QUERY_KEYS.executions(), 'detail', id] as const,
+  upcomingExecutions: (days?: number) =>
+    [...JTBD_QUERY_KEYS.executions(), 'upcoming', days || 30] as const,
+  customerJobsSummary: (customerId: number) =>
+    [...JTBD_QUERY_KEYS.all, 'jobs-summary', customerId] as const,
 } as const;
 
 // Error handling
@@ -354,6 +374,406 @@ export function useCommunicationQueue(
     gcTime: 5 * 60 * 1000, // 5 minutes
   });
 }
+
+// ============================================================================
+// EXECUTION HOOKS (Unified JTBD v2 - Meetings, SIP Plans, etc.)
+// ============================================================================
+
+/**
+ * Hook: Get executions with filters
+ * Bot-friendly query hook for timeline views
+ */
+export function useJTBDExecutions(filters?: ExecutionFilters) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<ExecutionListResponse, Error>({
+    queryKey: JTBD_QUERY_KEYS.executionsList(filters),
+    queryFn: async (): Promise<ExecutionListResponse> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.getExecutions(filters);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch executions');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook: Get single execution by ID
+ */
+export function useJTBDExecution(executionId?: number) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<JTBDExecution, Error>({
+    queryKey: executionId ? JTBD_QUERY_KEYS.executionDetail(executionId) : ['jtbd', 'execution', 'empty'],
+    queryFn: async (): Promise<JTBDExecution> => {
+      if (!user || !tenantId || !executionId) {
+        throw new Error('Authentication or execution ID required');
+      }
+
+      const response = await JTBDService.getExecution(executionId);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Execution not found');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId && !!executionId,
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+/**
+ * Hook: Get upcoming executions (dashboard view)
+ */
+export function useUpcomingExecutions(days: number = 30) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<JTBDExecution[], Error>({
+    queryKey: JTBD_QUERY_KEYS.upcomingExecutions(days),
+    queryFn: async (): Promise<JTBDExecution[]> => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.getUpcomingExecutions(days);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch upcoming executions');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook: Get customer jobs summary (executions overview)
+ */
+export function useCustomerJobsSummary(customerId?: number) {
+  const { user, tenantId } = useAuth();
+
+  return useQuery<CustomerJobsSummary, Error>({
+    queryKey: customerId ? JTBD_QUERY_KEYS.customerJobsSummary(customerId) : ['jtbd', 'jobs-summary', 'empty'],
+    queryFn: async (): Promise<CustomerJobsSummary> => {
+      if (!user || !tenantId || !customerId) {
+        throw new Error('Authentication or customer ID required');
+      }
+
+      const response = await JTBDService.getCustomerJobsSummary(customerId);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch customer jobs summary');
+      }
+
+      return response.data;
+    },
+    enabled: !!user && !!tenantId && !!customerId,
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Mutation: Create execution (meeting, SIP instance, etc.)
+ */
+export function useCreateExecution() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<JTBDExecution, Error, CreateExecutionRequest>({
+    mutationFn: async (data: CreateExecutionRequest) => {
+      console.log('🔵 useCreateExecution: Starting mutation', {
+        timestamp: new Date().toISOString(),
+        customerId: data.customer_id,
+        type: data.execution_type
+      });
+
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.createExecution(data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to create execution');
+      }
+
+      console.log('✅ useCreateExecution: Mutation successful', {
+        timestamp: new Date().toISOString(),
+        executionId: response.data.id
+      });
+
+      return response.data;
+    },
+
+    retry: false,
+
+    onSuccess: (newExecution) => {
+      console.log('🎉 useCreateExecution: onSuccess triggered', {
+        timestamp: new Date().toISOString(),
+        executionId: newExecution.id,
+        customerId: newExecution.customer_id
+      });
+
+      // Invalidate executions list
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.executions()
+      });
+
+      // Invalidate upcoming executions
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.upcomingExecutions()
+      });
+
+      // Invalidate customer jobs summary
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.customerJobsSummary(newExecution.customer_id)
+      });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.dashboard()
+      });
+
+      // Set the new execution in cache
+      queryClient.setQueryData(JTBD_QUERY_KEYS.executionDetail(newExecution.id), newExecution);
+
+      toastService.success(`${newExecution.title} created successfully`);
+    },
+
+    onError: (error) => {
+      console.error('❌ useCreateExecution: onError triggered', {
+        timestamp: new Date().toISOString(),
+        error: error.message
+      });
+
+      handleAPIError(error, 'Failed to create execution');
+    },
+  });
+}
+
+/**
+ * Mutation: Update execution
+ */
+export function useUpdateExecution() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<JTBDExecution, Error, { id: number; data: UpdateExecutionRequest }>({
+    mutationFn: async ({ id, data }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.updateExecution(id, data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update execution');
+      }
+
+      return response.data;
+    },
+
+    retry: false,
+
+    onSuccess: (updatedExecution) => {
+      // Invalidate executions list
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.executions()
+      });
+
+      // Invalidate upcoming executions
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.upcomingExecutions()
+      });
+
+      // Invalidate customer jobs summary
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.customerJobsSummary(updatedExecution.customer_id)
+      });
+
+      // Update the execution in cache
+      queryClient.setQueryData(JTBD_QUERY_KEYS.executionDetail(updatedExecution.id), updatedExecution);
+
+      toastService.success(`${updatedExecution.title} updated successfully`);
+    },
+
+    onError: (error) => {
+      handleAPIError(error, 'Failed to update execution');
+    }
+  });
+}
+
+/**
+ * Mutation: Complete execution
+ */
+export function useCompleteExecution() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<JTBDExecution, Error, { id: number; data: CompleteExecutionRequest }>({
+    mutationFn: async ({ id, data }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.completeExecution(id, data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to complete execution');
+      }
+
+      return response.data;
+    },
+
+    retry: false,
+
+    onSuccess: (completedExecution) => {
+      // Invalidate all execution-related queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.executions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.upcomingExecutions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.customerJobsSummary(completedExecution.customer_id)
+      });
+
+      // Update the execution in cache
+      queryClient.setQueryData(JTBD_QUERY_KEYS.executionDetail(completedExecution.id), completedExecution);
+
+      toastService.success(`${completedExecution.title} completed successfully`);
+    },
+
+    onError: (error) => {
+      handleAPIError(error, 'Failed to complete execution');
+    }
+  });
+}
+
+/**
+ * Mutation: Cancel execution
+ */
+export function useCancelExecution() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<JTBDExecution, Error, { id: number; data: CancelExecutionRequest }>({
+    mutationFn: async ({ id, data }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.cancelExecution(id, data);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to cancel execution');
+      }
+
+      return response.data;
+    },
+
+    retry: false,
+
+    onSuccess: (cancelledExecution) => {
+      // Invalidate all execution-related queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.executions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.upcomingExecutions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.customerJobsSummary(cancelledExecution.customer_id)
+      });
+
+      // Update the execution in cache
+      queryClient.setQueryData(JTBD_QUERY_KEYS.executionDetail(cancelledExecution.id), cancelledExecution);
+
+      toastService.success(`${cancelledExecution.title} cancelled`);
+    },
+
+    onError: (error) => {
+      handleAPIError(error, 'Failed to cancel execution');
+    }
+  });
+}
+
+/**
+ * Mutation: Delete execution
+ */
+export function useDeleteExecution() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<void, Error, { id: number; customerId: number }>({
+    mutationFn: async ({ id }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.deleteExecution(id);
+
+      if (!response.success) {
+        throw new Error('Failed to delete execution');
+      }
+    },
+
+    retry: false,
+
+    onSuccess: (_, { id, customerId }) => {
+      // Invalidate all execution-related queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.executions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.upcomingExecutions()
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.customerJobsSummary(customerId)
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.dashboard()
+      });
+
+      // Remove from cache
+      queryClient.removeQueries({
+        queryKey: JTBD_QUERY_KEYS.executionDetail(id)
+      });
+
+      toastService.success('Execution deleted successfully');
+    },
+
+    onError: (error) => {
+      handleAPIError(error, 'Failed to delete execution');
+    }
+  });
+}
+
+// ============================================================================
+// CONFIGURATION HOOKS (Original JTBD system)
+// ============================================================================
 
 /**
  * Mutation: Create JTBD

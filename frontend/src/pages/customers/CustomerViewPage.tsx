@@ -37,6 +37,7 @@ import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
+import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
 
@@ -49,9 +50,9 @@ const CustomerViewPage: React.FC = () => {
   
   const customerId = id ? parseInt(id) : null;
   
-  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions') || 'overview';
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions') || 'overview';
   const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'meetings' | 'transactions'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
@@ -613,7 +614,7 @@ const CustomerViewPage: React.FC = () => {
       {/* Tabs */}
       <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'meetings', 'transactions'].map(tab => (
+          {['overview', 'portfolio', 'goals', 'jobs', 'transactions'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -631,7 +632,7 @@ const CustomerViewPage: React.FC = () => {
                 transition: 'all 0.2s ease'
               }}
             >
-              {tab === 'goals' ? 'Goals & Actions' : tab}
+              {tab === 'goals' ? 'Goals & Actions' : tab === 'jobs' ? 'Jobs to Do' : tab}
             </button>
           ))}
         </div>
@@ -1313,9 +1314,9 @@ comparisonData={comparisonIndexData}
           </div>
         )}
 
-        {/* Meetings Tab */}
-        {activeTab === 'meetings' && customerId && (
-          <MeetingsList customerId={customerId} />
+        {/* Jobs to Do Tab */}
+        {activeTab === 'jobs' && customerId && (
+          <JTBDExecutionTimeline customerId={customerId} />
         )}
 
         {/* Transactions Tab */}
