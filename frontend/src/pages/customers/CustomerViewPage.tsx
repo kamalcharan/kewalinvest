@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
+import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   toggleFullscreen,
@@ -613,29 +613,60 @@ const CustomerViewPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'jobs', 'transactions'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              style={{
-                padding: '16px 24px',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === tab ? `3px solid ${colors.brand.primary}` : '3px solid transparent',
-                color: activeTab === tab ? colors.brand.primary : colors.utility.secondaryText,
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab === 'goals' ? 'Goals & Actions' : tab === 'jobs' ? 'Jobs to Do' : tab}
-            </button>
-          ))}
+      <div style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        borderBottom: `1px solid ${colors.utility.primaryText}10`
+      }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', padding: '0 24px' }}>
+          {[
+            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
+            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
+            { key: 'goals', label: 'Goals Management', icon: Target },
+            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare },
+            { key: 'transactions', label: 'Transactions', icon: DollarSign }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                style={{
+                  padding: '16px 20px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderBottom: isActive ? `4px solid ${colors.brand.primary}` : '4px solid transparent',
+                  color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  letterSpacing: '0.3px',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryText + '08';
+                    e.currentTarget.style.color = colors.utility.primaryText;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = colors.utility.secondaryText;
+                  }
+                }}
+              >
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
