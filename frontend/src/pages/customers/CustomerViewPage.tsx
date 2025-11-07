@@ -37,6 +37,7 @@ import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
+import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
@@ -64,6 +65,9 @@ const CustomerViewPage: React.FC = () => {
   const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
+
+  // Meeting modal state
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   // Goal mutation hooks
   const recalculateGoalMutation = useRecalculateGoal();
@@ -602,6 +606,7 @@ const CustomerViewPage: React.FC = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onNewGoal={() => setShowGoalSetupModal(true)}
+        onMeeting={() => setShowMeetingModal(true)}
       />
 
       {/* Key Metrics Bar */}
@@ -1495,6 +1500,16 @@ comparisonData={comparisonIndexData}
           previousCorpus={recalculationResult?.previousCorpus}
           newCorpus={recalculationResult?.newCorpus}
           error={recalculationResult?.error}
+        />
+      )}
+
+      {/* Meeting Modal */}
+      {showMeetingModal && (
+        <CreateMeetingModal
+          customerId={customerId!}
+          isOpen={showMeetingModal}
+          onClose={() => setShowMeetingModal(false)}
+          onSuccess={() => setShowMeetingModal(false)}
         />
       )}
     </div>

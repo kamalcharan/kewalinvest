@@ -39,6 +39,42 @@ const MEETING_MODE_CONFIG: Record<MeetingMode, { label: string; icon: any }> = {
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
 
+// Date shortcuts
+const getDateShortcuts = () => {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const nextMonday = new Date(today);
+  const daysUntilMonday = (8 - today.getDay()) % 7 || 7;
+  nextMonday.setDate(today.getDate() + daysUntilMonday);
+
+  const nextFriday = new Date(today);
+  const daysUntilFriday = (5 - today.getDay() + 7) % 7 || 7;
+  nextFriday.setDate(today.getDate() + daysUntilFriday);
+
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    today: { label: 'Today', value: formatDate(today) },
+    tomorrow: { label: 'Tomorrow', value: formatDate(tomorrow) },
+    nextMonday: { label: 'Next Mon', value: formatDate(nextMonday) },
+    nextFriday: { label: 'Next Fri', value: formatDate(nextFriday) },
+  };
+};
+
+// Common business hours (9 AM - 6 PM in 30-minute intervals)
+const TIME_SLOTS = [
+  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+];
+
 interface CreateMeetingModalProps {
   customerId: number;
   meeting?: JTBDExecution; // If provided, modal is in edit mode
@@ -515,7 +551,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
 
               {/* Right Column */}
               <div>
-                {/* Date */}
+                {/* Date with Shortcuts */}
                 <div style={{ marginBottom: '24px' }}>
                   <label
                     style={{
@@ -528,6 +564,33 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                   >
                     Date *
                   </label>
+                  {/* Date Shortcuts */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                    {Object.entries(getDateShortcuts()).map(([key, { label, value }]) => {
+                      const isSelected = formData.scheduled_date === value;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, scheduled_date: value })}
+                          style={{
+                            padding: '8px 6px',
+                            borderRadius: '6px',
+                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                            backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.primaryBackground,
+                            color: isSelected ? colors.brand.primary : colors.utility.primaryText,
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Custom Date Picker */}
                   <input
                     type="date"
                     value={formData.scheduled_date}
@@ -549,7 +612,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                   )}
                 </div>
 
-                {/* Time */}
+                {/* Time Dropdown */}
                 <div style={{ marginBottom: '24px' }}>
                   <label
                     style={{
@@ -562,8 +625,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                   >
                     Time *
                   </label>
-                  <input
-                    type="time"
+                  <select
                     value={formData.scheduled_time}
                     onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
                     style={{
@@ -573,9 +635,24 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                       border: `1px solid ${errors.scheduled_time ? colors.semantic.error : colors.utility.primaryText}20`,
                       backgroundColor: colors.utility.primaryBackground,
                       color: colors.utility.primaryText,
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      cursor: 'pointer'
                     }}
-                  />
+                  >
+                    <option value="">Select time</option>
+                    {TIME_SLOTS.map((time) => {
+                      const [hours, minutes] = time.split(':');
+                      const hour = parseInt(hours);
+                      const ampm = hour >= 12 ? 'PM' : 'AM';
+                      const displayHour = hour > 12 ? hour - 12 : hour;
+                      const displayTime = `${displayHour}:${minutes} ${ampm}`;
+                      return (
+                        <option key={time} value={time}>
+                          {displayTime}
+                        </option>
+                      );
+                    })}
+                  </select>
                   {errors.scheduled_time && (
                     <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
                       {errors.scheduled_time}

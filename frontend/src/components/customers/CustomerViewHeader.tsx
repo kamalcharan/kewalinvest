@@ -13,6 +13,7 @@ interface CustomerViewHeaderProps {
   portfolio: CustomerPortfolioResponse | null;
   customerId: number;
   onNewGoal?: () => void;
+  onMeeting?: () => void;
   // Family view props
   viewMode?: 'individual' | 'family';
   onViewModeChange?: (mode: 'individual' | 'family') => void;
@@ -23,6 +24,7 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   portfolio,
   customerId,
   onNewGoal,
+  onMeeting,
   viewMode = 'individual',
   onViewModeChange
 }) => {
@@ -148,7 +150,7 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
             )}
 
             <button
-              onClick={() => navigate('/meetings')}
+              onClick={onMeeting || (() => navigate('/meetings'))}
               style={{
                 padding: '8px 14px',
                 backgroundColor: colors.utility.secondaryBackground,
