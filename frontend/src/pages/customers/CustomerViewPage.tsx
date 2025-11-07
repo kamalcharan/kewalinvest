@@ -35,6 +35,7 @@ import GoalCard from '../../components/goals/GoalCard';
 import GoalSetupModal from '../../components/goals/GoalSetupModal';
 import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
+import { GoalMetricsBar } from '../../components/goals/GoalMetricsBar';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
@@ -1192,34 +1193,43 @@ comparisonData={comparisonIndexData}
 
         {/* Goals & Actions Tab */}
         {activeTab === 'goals' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Header with Action Button */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  color: colors.utility.primaryText,
-                  margin: '0 0 8px 0'
-                }}>
-                  Goals & Tracking
-                </h2>
-                {goalSummary && (
-                  <p style={{
-                    fontSize: '14px',
-                    color: colors.utility.secondaryText,
-                    margin: 0
+          <>
+            {/* Goal Metrics Bar */}
+            {goalSummary && (
+              <GoalMetricsBar
+                goalSummary={goalSummary}
+                goals={goals}
+              />
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '24px 32px' }}>
+              {/* Header with Action Button */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <h2 style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: colors.utility.primaryText,
+                    margin: '0 0 8px 0'
                   }}>
-                    {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.goals_on_track} on track •
-                    {goalSummary.goals_behind} behind
-                  </p>
-                )}
-              </div>
+                    Goals & Tracking
+                  </h2>
+                  {goalSummary && (
+                    <p style={{
+                      fontSize: '14px',
+                      color: colors.utility.secondaryText,
+                      margin: 0
+                    }}>
+                      {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
+                      {goalSummary.goals_on_track} on track •
+                      {goalSummary.goals_behind} behind
+                    </p>
+                  )}
+                </div>
               <button
                 onClick={() => setShowGoalSetupModal(true)}
                 style={{
@@ -1348,7 +1358,8 @@ comparisonData={comparisonIndexData}
                 />
               </div>
             )}
-          </div>
+            </div>
+          </>
         )}
 
         {/* Jobs to Do Tab */}
