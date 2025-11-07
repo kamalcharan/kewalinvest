@@ -37,6 +37,7 @@ import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import { GoalMetricsBar } from '../../components/goals/GoalMetricsBar';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
+import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
@@ -1202,162 +1203,154 @@ comparisonData={comparisonIndexData}
               />
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '24px 32px' }}>
-              {/* Header with Action Button */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <div>
-                  <h2 style={{
-                    fontSize: '24px',
-                    fontWeight: '700',
-                    color: colors.utility.primaryText,
-                    margin: '0 0 8px 0'
+            <div style={{ padding: '24px 32px' }}>
+              {/* 2-Column Layout: Goals + Quick Actions */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px' }}>
+                {/* Left Column - Goals List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Header with Action Button */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
                   }}>
-                    Goals & Tracking
-                  </h2>
-                  {goalSummary && (
-                    <p style={{
-                      fontSize: '14px',
-                      color: colors.utility.secondaryText,
-                      margin: 0
+                    <div>
+                      <h2 style={{
+                        fontSize: '24px',
+                        fontWeight: '700',
+                        color: colors.utility.primaryText,
+                        margin: '0 0 8px 0'
+                      }}>
+                        Goals & Tracking
+                      </h2>
+                      {goalSummary && (
+                        <p style={{
+                          fontSize: '14px',
+                          color: colors.utility.secondaryText,
+                          margin: 0
+                        }}>
+                          {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
+                          {goalSummary.goals_on_track} on track •
+                          {goalSummary.goals_behind} behind
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {goalsLoading ? (
+                    <div style={{
+                      padding: '40px',
+                      textAlign: 'center',
+                      color: colors.utility.secondaryText
                     }}>
-                      {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                      {goalSummary.goals_on_track} on track •
-                      {goalSummary.goals_behind} behind
-                    </p>
+                      Loading goals...
+                    </div>
+                  ) : goals.length === 0 ? (
+                    <div style={{
+                      padding: '60px 40px',
+                      textAlign: 'center',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      border: `2px dashed ${colors.utility.primaryText}20`
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        marginBottom: '8px'
+                      }}>
+                        No Goals Set
+                      </h3>
+                      <p style={{
+                        fontSize: '14px',
+                        color: colors.utility.secondaryText,
+                        marginBottom: '24px'
+                      }}>
+                        Create your first investment goal to start tracking progress
+                      </p>
+                      <button
+                        onClick={() => setShowGoalSetupModal(true)}
+                        style={{
+                          padding: '12px 24px',
+                          backgroundColor: colors.brand.primary,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Create First Goal
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Comprehensive Goal Cards */}
+                      {goals.filter(g => g.is_active).map(goal => (
+                        <GoalCard
+                          key={goal.id}
+                          goal={goal}
+                          onEdit={(goalId: number) => {
+                            setSelectedGoalId(goalId);
+                            setShowGoalDetailsModal(true);
+                          }}
+                          onRecalculate={async (goalId: number) => {
+                            setSelectedGoalId(goalId);
+                            setShowGoalRecalculationModal(true);
+                            setRecalculationResult(null);
+
+                            try {
+                              const result = await recalculateGoalMutation.mutateAsync(goalId);
+                              setRecalculationResult({
+                                previousCorpus: result.current_value,
+                                newCorpus: result.projected_corpus,
+                                error: false
+                              });
+                              refetchGoals();
+                            } catch (error) {
+                              setRecalculationResult({ error: true });
+                            }
+                          }}
+                          onToggleWatchlist={handleWatchlistToggle}
+                          showAllocations={true}
+                        />
+                      ))}
+
+                      {/* Asset Allocation Utilization */}
+                      <AssetAllocationUtilization customerId={customerId!} />
+                    </>
+                  )}
+
+                  {/* Alerts & Reminders Section - excluding goals */}
+                  {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
+                    <div>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        marginBottom: '16px'
+                      }}>
+                        Alerts & Reminders
+                      </h3>
+                      <JTBDList
+                        customerId={customerId}
+                        onSetupNew={() => setShowJTBDSetupModal(true)}
+                        onEdit={(jtbdId) => {
+                          console.log('Edit JTBD:', jtbdId);
+                        }}
+                        showFilters={true}
+                      />
+                    </div>
                   )}
                 </div>
-              <button
-                onClick={() => setShowGoalSetupModal(true)}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: colors.brand.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ fontSize: '18px' }}>+</span>
-                Create New Goal
-              </button>
-            </div>
 
-            {goalsLoading ? (
-              <div style={{
-                padding: '40px',
-                textAlign: 'center',
-                color: colors.utility.secondaryText
-              }}>
-                Loading goals...
+                {/* Right Column - Quick Actions Sidebar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <GoalQuickActions onCreateGoal={() => setShowGoalSetupModal(true)} />
+                </div>
               </div>
-            ) : goals.length === 0 ? (
-              <div style={{
-                padding: '60px 40px',
-                textAlign: 'center',
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                border: `2px dashed ${colors.utility.primaryText}20`
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  marginBottom: '8px'
-                }}>
-                  No Goals Set
-                </h3>
-                <p style={{
-                  fontSize: '14px',
-                  color: colors.utility.secondaryText,
-                  marginBottom: '24px'
-                }}>
-                  Create your first investment goal to start tracking progress
-                </p>
-                <button
-                  onClick={() => setShowGoalSetupModal(true)}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: colors.brand.primary,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Create First Goal
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Comprehensive Goal Cards */}
-                {goals.filter(g => g.is_active).map(goal => (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    onEdit={(goalId: number) => {
-                      setSelectedGoalId(goalId);
-                      setShowGoalDetailsModal(true);
-                    }}
-                    onRecalculate={async (goalId: number) => {
-                      setSelectedGoalId(goalId);
-                      setShowGoalRecalculationModal(true);
-                      setRecalculationResult(null);
-
-                      try {
-                        const result = await recalculateGoalMutation.mutateAsync(goalId);
-                        setRecalculationResult({
-                          previousCorpus: result.current_value,
-                          newCorpus: result.projected_corpus,
-                          error: false
-                        });
-                        refetchGoals();
-                      } catch (error) {
-                        setRecalculationResult({ error: true });
-                      }
-                    }}
-                    onToggleWatchlist={handleWatchlistToggle}
-                    showAllocations={true}
-                  />
-                ))}
-
-                {/* Asset Allocation Utilization */}
-                <AssetAllocationUtilization customerId={customerId!} />
-              </div>
-            )}
-
-            {/* Alerts & Reminders Section - excluding goals */}
-            {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
-              <div style={{ marginTop: '24px' }}>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  marginBottom: '16px'
-                }}>
-                  Alerts & Reminders
-                </h3>
-                <JTBDList
-                  customerId={customerId}
-                  onSetupNew={() => setShowJTBDSetupModal(true)}
-                  onEdit={(jtbdId) => {
-                    console.log('Edit JTBD:', jtbdId);
-                  }}
-                  showFilters={true}
-                />
-              </div>
-            )}
             </div>
           </>
         )}
