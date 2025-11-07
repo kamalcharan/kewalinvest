@@ -32,10 +32,9 @@ import { CustomerViewHeader } from '../../components/customers/CustomerViewHeade
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
 import GoalCard from '../../components/goals/GoalCard';
-import GoalSetupModal from '../../components/goals/GoalSetupModal';
+import GoalWizardModal from '../../components/goals/GoalWizardModal';
 import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
-import { GoalMetricsBar } from '../../components/goals/GoalMetricsBar';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
@@ -1540,8 +1539,9 @@ comparisonData={comparisonIndexData}
 
       {/* Goal Modals */}
       {showGoalSetupModal && (
-        <GoalSetupModal
+        <GoalWizardModal
           customerId={customerId!}
+          isOpen={showGoalSetupModal}
           onClose={() => setShowGoalSetupModal(false)}
           onSuccess={() => {
             setShowGoalSetupModal(false);
