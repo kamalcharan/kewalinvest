@@ -11,9 +11,10 @@ import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 interface JTBDExecutionCardProps {
   execution: JTBDExecution;
   onUpdate?: () => void;
+  onEdit?: (execution: JTBDExecution) => void;
 }
 
-export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution, onUpdate }) => {
+export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution, onUpdate, onEdit }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -252,6 +253,35 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
         {/* Action Icons */}
         {canComplete && (
           <div style={{ display: 'flex', gap: '6px', marginLeft: '4px', flexShrink: 0 }}>
+            {/* Edit Button - Only for meetings */}
+            {onEdit && [JTBD_TYPE.CLIENT_MEETING, JTBD_TYPE.PORTFOLIO_REVIEW, JTBD_TYPE.GOAL_REVIEW].includes(execution.execution_type as any) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(execution); }}
+                title="Edit"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  padding: 0,
+                  backgroundColor: colors.semantic.info + '20',
+                  border: `1px solid ${colors.semantic.info}40`,
+                  borderRadius: '6px',
+                  color: colors.semantic.info,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.semantic.info + '30';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.semantic.info + '20';
+                }}
+              >
+                <Edit2 size={14} />
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); handleComplete(); }}
               title="Complete"

@@ -25,6 +25,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
   const [typeFilter, setTypeFilter] = useState<ExecutionTypeFilter>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<JTBDExecution | undefined>();
 
   // Fetch all executions for this customer
   const { data: executionsData, isLoading, refetch } = useJTBDExecutions({
@@ -394,6 +395,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
                     key={execution.id}
                     execution={execution}
                     onUpdate={() => refetch()}
+                    onEdit={(meeting) => setEditingMeeting(meeting)}
                   />
                 ))}
               </div>
@@ -409,6 +411,20 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => refetch()}
+        />
+      )}
+
+      {/* Edit Meeting Modal */}
+      {editingMeeting && (
+        <CreateMeetingModal
+          customerId={customerId}
+          meeting={editingMeeting}
+          isOpen={!!editingMeeting}
+          onClose={() => setEditingMeeting(undefined)}
+          onSuccess={() => {
+            refetch();
+            setEditingMeeting(undefined);
+          }}
         />
       )}
     </div>
