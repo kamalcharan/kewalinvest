@@ -148,7 +148,7 @@ export class GoalService {
         if (durationMonths > 0 && durationMonths <= 600) { // Max 50 years = 600 months
           console.log(`[Goal Service] Creating ${durationMonths} monthly SIP executions for goal ${goalId}`);
 
-          const executionService = new JTBDExecutionService(pool);
+          const executionService = new JTBDExecutionService();
 
           // Create execution records for each month
           for (let month = 0; month < durationMonths; month++) {
@@ -178,8 +178,6 @@ export class GoalService {
                 description: `Monthly SIP of ₹${finalConfig.monthly_contribution}`,
                 priority: 'medium',
                 scheduled_date: dateStr,
-                scheduled_time: null,
-                execution_status: 'planned',
                 execution_data: sipExecutionData,
               },
               createdBy
