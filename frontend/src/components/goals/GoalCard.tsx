@@ -477,107 +477,133 @@ const GoalCard: React.FC<GoalCardProps> = ({
           </div>
         )}
 
-        {/* FUND ALLOCATIONS (with availability tracking) */}
+        {/* FUND ALLOCATIONS - Simple Pie Chart */}
         {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
           <div style={{
             marginTop: '12px',
-            padding: '10px',
+            padding: '12px',
             backgroundColor: colors.utility.primaryText + '05',
-            borderRadius: '6px',
-            border: `1px solid ${colors.utility.primaryText}10`
+            borderRadius: '8px',
+            border: `1px solid ${colors.utility.primaryText}10`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px'
           }}>
+            {/* Simple Donut Chart */}
             <div style={{
-              fontSize: '11px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              marginBottom: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
+              position: 'relative',
+              width: '80px',
+              height: '80px',
+              flexShrink: 0
             }}>
-              <span>📊</span>
-              <span>Fund Allocations</span>
-            </div>
-            {config.linked_schemes.map((scheme, idx) => {
-              const allocationInfo = getSchemeAllocationInfo(scheme.scheme_code);
-              return (
-                <div key={idx} style={{
-                  marginBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
-                  paddingBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
-                  borderBottom: idx < config.linked_schemes.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none'
+              {/* Background circle */}
+              <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="32"
+                  fill="none"
+                  stroke={colors.utility.primaryText + '15'}
+                  strokeWidth="12"
+                />
+                {/* Progress circle */}
+                {metrics?.progress != null && (
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="32"
+                    fill="none"
+                    stroke={colors.brand.primary}
+                    strokeWidth="12"
+                    strokeDasharray={`${(metrics.progress / 100) * 201} 201`}
+                    strokeLinecap="round"
+                  />
+                )}
+              </svg>
+              {/* Center text */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: colors.brand.primary,
+                  lineHeight: '1'
                 }}>
-                  <div style={{
+                  {metrics?.progress != null ? `${Math.round(metrics.progress)}%` : '-'}
+                </div>
+                <div style={{
+                  fontSize: '9px',
+                  color: colors.utility.secondaryText,
+                  marginTop: '2px'
+                }}>
+                  Complete
+                </div>
+              </div>
+            </div>
+
+            {/* Fund Legend */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span>📊</span>
+                <span>Fund Allocation</span>
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.secondaryText,
+                lineHeight: '1.6'
+              }}>
+                {config.linked_schemes.slice(0, 3).map((scheme, idx) => (
+                  <div key={idx} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '4px'
+                    alignItems: 'center',
+                    marginBottom: idx < Math.min(config.linked_schemes.length, 3) - 1 ? '4px' : '0'
                   }}>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.utility.primaryText,
-                      fontWeight: '500',
-                      flex: 1,
+                    <span style={{
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                      paddingRight: '8px',
+                      color: colors.utility.primaryText
                     }}>
-                      {scheme.scheme_name}
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      marginLeft: '8px'
+                      {scheme.scheme_name.length > 25
+                        ? scheme.scheme_name.substring(0, 25) + '...'
+                        : scheme.scheme_name}
+                    </span>
+                    <span style={{
+                      fontWeight: '600',
+                      color: colors.brand.primary,
+                      flexShrink: 0
                     }}>
-                      <div style={{
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        color: colors.brand.primary
-                      }}>
-                        {scheme.allocation_percentage}%
-                      </div>
-                      {allocationInfo && allocationInfo.available_percentage != null && (
-                        <div style={{
-                          fontSize: '9px',
-                          color: getAvailabilityColor(allocationInfo.available_percentage),
-                          marginTop: '2px'
-                        }}>
-                          {allocationInfo.available_percentage.toFixed(1)}% available
-                        </div>
-                      )}
-                    </div>
+                      {scheme.allocation_percentage}%
+                    </span>
                   </div>
+                ))}
+                {config.linked_schemes.length > 3 && (
                   <div style={{
-                    fontSize: '9px',
-                    color: colors.utility.secondaryText
+                    marginTop: '6px',
+                    fontSize: '10px',
+                    color: colors.utility.secondaryText,
+                    fontStyle: 'italic'
                   }}>
-                    {scheme.scheme_code}
-                    {allocationInfo && allocationInfo.is_fully_allocated && (
-                      <span style={{
-                        marginLeft: '8px',
-                        padding: '2px 6px',
-                        backgroundColor: colors.semantic.error + '20',
-                        borderRadius: '4px',
-                        fontSize: '8px',
-                        fontWeight: '600',
-                        color: colors.semantic.error
-                      }}>
-                        FULLY ALLOCATED
-                      </span>
-                    )}
+                    +{config.linked_schemes.length - 3} more fund{config.linked_schemes.length - 3 > 1 ? 's' : ''}
                   </div>
-                </div>
-              );
-            })}
-            <div style={{
-              marginTop: '8px',
-              paddingTop: '8px',
-              borderTop: `1px solid ${colors.utility.primaryText}10`,
-              fontSize: '10px',
-              color: colors.utility.secondaryText,
-              fontStyle: 'italic'
-            }}>
-              💡 Available % shows remaining fund capacity across all goals (max 100% per fund)
+                )}
+              </div>
             </div>
           </div>
         )}
