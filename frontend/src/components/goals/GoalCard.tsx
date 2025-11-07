@@ -372,83 +372,139 @@ const GoalCard: React.FC<GoalCardProps> = ({
           </div>
         </div>
 
-        {/* METRICS ROW */}
+        {/* SINGLE ROW LAYOUT: Left (Primary Metric) | Center (Pie Chart) | Right (Target Date) */}
         {metrics && (
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {/* Primary Metric */}
-              <div>
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              justifyContent: 'space-between',
+              marginBottom: '10px'
+            }}>
+              {/* Left: Primary Metric */}
+              <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
                   {metrics.primaryLabel}
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: colors.utility.primaryText }}>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText }}>
                   {metrics.primary}
                 </div>
+                {/* Current value for progress-based goals */}
+                {metrics.progress !== null && (
+                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                    Current: {formatCurrency(config.current_value, true)} ({formatPercentage(metrics.progress, 1)})
+                  </div>
+                )}
               </div>
 
-              {/* Secondary Metric */}
-              <div>
+              {/* Center: Pie Chart with Tooltip */}
+              {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
+                <div
+                  style={{ position: 'relative', flexShrink: 0 }}
+                  title={`Fund Allocation:\n${config.linked_schemes.map(s => `${s.scheme_name}: ${s.allocation_percentage}%`).join('\n')}`}
+                >
+                  <div style={{
+                    position: 'relative',
+                    width: '80px',
+                    height: '80px',
+                    cursor: 'pointer'
+                  }}>
+                    <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
+                      <circle
+                        cx="40"
+                        cy="40"
+                        r="32"
+                        fill="none"
+                        stroke={colors.utility.primaryText + '15'}
+                        strokeWidth="12"
+                      />
+                      {metrics?.progress != null && (
+                        <circle
+                          cx="40"
+                          cy="40"
+                          r="32"
+                          fill="none"
+                          stroke={colors.brand.primary}
+                          strokeWidth="12"
+                          strokeDasharray={`${(metrics.progress / 100) * 201} 201`}
+                          strokeLinecap="round"
+                        />
+                      )}
+                    </svg>
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{
+                        fontSize: '16px',
+                        fontWeight: '700',
+                        color: colors.brand.primary,
+                        lineHeight: '1'
+                      }}>
+                        {metrics?.progress != null ? `${Math.round(metrics.progress)}%` : '-'}
+                      </div>
+                      <div style={{
+                        fontSize: '9px',
+                        color: colors.utility.secondaryText,
+                        marginTop: '2px'
+                      }}>
+                        Complete
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Right: Target Date (Bottom Corner) */}
+              <div style={{
+                textAlign: 'right',
+                alignSelf: 'flex-end',
+                minWidth: '120px'
+              }}>
                 <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
                   {metrics.secondaryLabel}
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: colors.utility.primaryText }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
                   {metrics.secondary}
                 </div>
+                {/* Additional Info for Time & Price Goals */}
+                {isTimeAndPriceGoal(config) && metrics.probability !== undefined && (
+                  <div style={{ marginTop: '4px', fontSize: '10px' }}>
+                    <div>
+                      <span style={{ color: colors.utility.secondaryText }}>Success: </span>
+                      <span style={{
+                        fontWeight: '600',
+                        color: metrics.probability >= 75 ? '#10B981' : metrics.probability >= 60 ? '#F59E0B' : '#DC2626'
+                      }}>
+                        {formatPercentage(metrics.probability, 0)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Progress Bar (for goals with target amount) */}
             {metrics.progress !== null && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                    {formatCurrency(config.current_value, true)} / {formatCurrency(isTimeAndPriceGoal(config) ? config.target_amount : isPriceBasedGoal(config) ? config.target_amount : 0, true)}
-                  </span>
-                  <span style={{ fontSize: '11px', fontWeight: '600', color: status.color }}>
-                    {formatPercentage(metrics.progress, 1)}
-                  </span>
-                </div>
+              <div style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: colors.utility.primaryText + '10',
+                borderRadius: '3px',
+                overflow: 'hidden',
+                marginTop: '8px'
+              }}>
                 <div style={{
-                  width: '100%',
-                  height: '6px',
-                  backgroundColor: colors.utility.primaryText + '10',
-                  borderRadius: '3px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    width: `${Math.min(100, metrics.progress)}%`,
-                    height: '100%',
-                    backgroundColor: status.color,
-                    transition: 'width 0.3s ease',
-                    borderRadius: '3px'
-                  }} />
-                </div>
-              </div>
-            )}
-
-            {/* Additional Info for Time & Price Goals */}
-            {isTimeAndPriceGoal(config) && metrics.probability !== undefined && (
-              <div style={{ marginTop: '6px', display: 'flex', gap: '12px', fontSize: '10px' }}>
-                <div>
-                  <span style={{ color: colors.utility.secondaryText }}>Success: </span>
-                  <span style={{ 
-                    fontWeight: '600', 
-                    color: metrics.probability >= 75 ? '#10B981' : metrics.probability >= 60 ? '#F59E0B' : '#DC2626'
-                  }}>
-                    {formatPercentage(metrics.probability, 0)}
-                  </span>
-                </div>
-                {metrics.gap !== undefined && (
-                  <div>
-                    <span style={{ color: colors.utility.secondaryText }}>Gap: </span>
-                    <span style={{ 
-                      fontWeight: '600', 
-                      color: metrics.gap >= 0 ? '#10B981' : '#DC2626'
-                    }}>
-                      {metrics.gap >= 0 ? '+' : ''}{formatCurrency(metrics.gap, true)}
-                    </span>
-                  </div>
-                )}
+                  width: `${Math.min(100, metrics.progress)}%`,
+                  height: '100%',
+                  backgroundColor: status.color,
+                  transition: 'width 0.3s ease',
+                  borderRadius: '3px'
+                }} />
               </div>
             )}
           </div>
@@ -472,137 +528,6 @@ const GoalCard: React.FC<GoalCardProps> = ({
                 <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '2px' }}>
                   {actions[0].description}
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* FUND ALLOCATIONS - Simple Pie Chart */}
-        {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
-          <div style={{
-            marginTop: '12px',
-            padding: '12px',
-            backgroundColor: colors.utility.primaryText + '05',
-            borderRadius: '8px',
-            border: `1px solid ${colors.utility.primaryText}10`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            {/* Simple Donut Chart */}
-            <div style={{
-              position: 'relative',
-              width: '80px',
-              height: '80px',
-              flexShrink: 0
-            }}>
-              {/* Background circle */}
-              <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
-                <circle
-                  cx="40"
-                  cy="40"
-                  r="32"
-                  fill="none"
-                  stroke={colors.utility.primaryText + '15'}
-                  strokeWidth="12"
-                />
-                {/* Progress circle */}
-                {metrics?.progress != null && (
-                  <circle
-                    cx="40"
-                    cy="40"
-                    r="32"
-                    fill="none"
-                    stroke={colors.brand.primary}
-                    strokeWidth="12"
-                    strokeDasharray={`${(metrics.progress / 100) * 201} 201`}
-                    strokeLinecap="round"
-                  />
-                )}
-              </svg>
-              {/* Center text */}
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center'
-              }}>
-                <div style={{
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  color: colors.brand.primary,
-                  lineHeight: '1'
-                }}>
-                  {metrics?.progress != null ? `${Math.round(metrics.progress)}%` : '-'}
-                </div>
-                <div style={{
-                  fontSize: '9px',
-                  color: colors.utility.secondaryText,
-                  marginTop: '2px'
-                }}>
-                  Complete
-                </div>
-              </div>
-            </div>
-
-            {/* Fund Legend */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <span>📊</span>
-                <span>Fund Allocation</span>
-              </div>
-              <div style={{
-                fontSize: '11px',
-                color: colors.utility.secondaryText,
-                lineHeight: '1.6'
-              }}>
-                {config.linked_schemes.slice(0, 3).map((scheme, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: idx < Math.min(config.linked_schemes.length, 3) - 1 ? '4px' : '0'
-                  }}>
-                    <span style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      flex: 1,
-                      paddingRight: '8px',
-                      color: colors.utility.primaryText
-                    }}>
-                      {scheme.scheme_name.length > 25
-                        ? scheme.scheme_name.substring(0, 25) + '...'
-                        : scheme.scheme_name}
-                    </span>
-                    <span style={{
-                      fontWeight: '600',
-                      color: colors.brand.primary,
-                      flexShrink: 0
-                    }}>
-                      {scheme.allocation_percentage}%
-                    </span>
-                  </div>
-                ))}
-                {config.linked_schemes.length > 3 && (
-                  <div style={{
-                    marginTop: '6px',
-                    fontSize: '10px',
-                    color: colors.utility.secondaryText,
-                    fontStyle: 'italic'
-                  }}>
-                    +{config.linked_schemes.length - 3} more fund{config.linked_schemes.length - 3 > 1 ? 's' : ''}
-                  </div>
-                )}
               </div>
             </div>
           </div>
