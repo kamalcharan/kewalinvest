@@ -2,7 +2,7 @@
 // Unified timeline showing ALL execution types (meetings, SIP plans, alerts)
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Calendar, Filter } from 'lucide-react';
+import { Plus, Calendar, Filter, Repeat, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useJTBDExecutions } from '../../hooks/useJTBD';
 import { JTBDExecutionCard } from './JTBDExecutionCard';
@@ -252,8 +252,8 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
         {([
           { key: 'all', label: 'All', icon: Filter },
           { key: 'meetings', label: 'Meetings', icon: Calendar },
-          { key: 'sip_plans', label: 'SIP Plans', icon: null },
-          { key: 'alerts', label: 'Alerts', icon: null },
+          { key: 'sip_plans', label: 'SIP Plans', icon: Repeat },
+          { key: 'alerts', label: 'Alerts', icon: AlertTriangle },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -273,7 +273,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
               transition: 'all 0.2s'
             }}
           >
-            {Icon && <Icon size={16} />}
+            <Icon size={16} />
             {label}
           </button>
         ))}
@@ -308,7 +308,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
       </div>
 
       {/* Upcoming Celebrations Section */}
-      {activeTab === 'upcoming' && (
+      {(typeFilter === 'alerts' || typeFilter === 'all') && (
         <div style={{ marginBottom: '32px' }}>
           {/* Section Header */}
           <div style={{
@@ -335,7 +335,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           </div>
 
           {/* Celebration Cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
             {/* Dummy Birthday Card - Example */}
             <BirthdayCard
               name="John Doe"
@@ -388,7 +388,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
               </div>
 
               {/* Execution Cards */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
                 {groupedByDate[dateKey].map(execution => (
                   <JTBDExecutionCard
                     key={execution.id}
