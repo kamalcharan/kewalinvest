@@ -28,12 +28,14 @@ export class JTBDExecutionService {
 
   /**
    * Create new execution (meeting, SIP plan instance, etc.)
+   * @param client Optional client for transaction support
    */
   async createExecution(
     tenantId: number,
     isLive: boolean,
     data: CreateExecutionRequest,
-    createdBy: number
+    createdBy: number,
+    client?: PoolClient
   ): Promise<JTBDExecution> {
     const query = `
       INSERT INTO t_jtbd_executions (
@@ -60,7 +62,9 @@ export class JTBDExecutionService {
       createdBy
     ];
 
-    const result = await this.db.query(query, values);
+    // Use provided client (transaction) or pool
+    const executor = client || this.db;
+    const result = await executor.query(query, values);
     return result.rows[0];
   }
 

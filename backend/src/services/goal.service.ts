@@ -150,7 +150,7 @@ export class GoalService {
 
           const executionService = new JTBDExecutionService();
 
-          // Create execution records for each month
+          // Create execution records for each month (within same transaction)
           for (let month = 0; month < durationMonths; month++) {
             const scheduledDate = new Date(startDate);
             scheduledDate.setMonth(scheduledDate.getMonth() + month);
@@ -180,7 +180,8 @@ export class GoalService {
                 scheduled_date: dateStr,
                 execution_data: sipExecutionData,
               },
-              createdBy
+              createdBy,
+              client // Pass transaction client for FK constraint
             );
           }
 
