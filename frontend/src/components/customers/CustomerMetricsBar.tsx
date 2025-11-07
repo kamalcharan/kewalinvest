@@ -48,126 +48,149 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
 
   return (
     <div style={{
-      backgroundColor: colors.utility.secondaryBackground,
-      borderBottom: `1px solid ${colors.utility.primaryText}10`,
-      padding: '14px 24px' // Reduced from 20px 24px (30% reduction)
+      backgroundColor: colors.utility.primaryBackground,
+      padding: '24px'
     }}>
       <div style={{
         maxWidth: '1400px',
         margin: '0 auto',
         display: 'grid',
-        gridTemplateColumns: 'repeat(6, 1fr)',
-        gap: '20px' // Reduced from 24px
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px'
       }}>
-        {/* Current Value */}
-        <div>
+        {/* Total Portfolio - Highlight Card */}
+        <div style={{
+          background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          color: 'white'
+        }}>
           <div style={{
-            fontSize: '20px', // Reduced from 24px
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.9)',
+            fontWeight: '600',
+            letterSpacing: '0.5px',
+            marginBottom: '8px'
+          }}>
+            Total Portfolio
+          </div>
+          <div style={{
+            fontSize: '28px',
             fontWeight: '700',
-            color: colors.utility.primaryText
+            marginBottom: '4px'
           }}>
             {formatCurrency(portfolio.summary.current_value)}
           </div>
           <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
+            fontSize: '13px',
+            color: 'rgba(255,255,255,0.8)'
           }}>
-            CURRENT VALUE
+            Across {portfolio.holdings?.length || portfolio.summary.total_schemes || 0} schemes
           </div>
         </div>
 
-        {/* Profit/Loss */}
-        <div>
+        {/* This Month Change */}
+        <div style={{
+          background: colors.utility.secondaryBackground,
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
           <div style={{
-            fontSize: '20px', // Reduced from 24px
-            fontWeight: '700',
-            color: getValueColor(profitLoss)
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            color: colors.utility.secondaryText,
+            fontWeight: '600',
+            letterSpacing: '0.5px',
+            marginBottom: '8px'
           }}>
-            {formatCurrency(Math.abs(profitLoss))}
+            Total Profit/Loss
           </div>
           <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
+            fontSize: '28px',
+            fontWeight: '700',
+            marginBottom: '4px',
+            color: getValueColor(profitLoss)
           }}>
-            {profitLoss >= 0 ? 'TOTAL PROFIT' : 'TOTAL LOSS'}
+            {profitLoss >= 0 ? '+' : '-'}{formatCurrency(Math.abs(profitLoss))}
+          </div>
+          <div style={{
+            fontSize: '13px',
+            color: colors.utility.secondaryText
+          }}>
+            {profitLoss >= 0 ? 'Absolute gain' : 'Absolute loss'}
           </div>
         </div>
 
         {/* Today's Change */}
-        <div>
+        <div style={{
+          background: colors.utility.secondaryBackground,
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
           <div style={{
-            fontSize: '20px', // Reduced from 24px
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            color: colors.utility.secondaryText,
+            fontWeight: '600',
+            letterSpacing: '0.5px',
+            marginBottom: '8px'
+          }}>
+            Today's Change
+          </div>
+          <div style={{
+            fontSize: '28px',
             fontWeight: '700',
+            marginBottom: '4px',
             color: getValueColor(dayChangePercentage),
             display: 'flex',
             alignItems: 'center',
-            gap: '5px' // Reduced from 6px
+            gap: '8px'
           }}>
             {formatPercentage(dayChangePercentage)}
-            {dayChangePercentage >= 0 ? <TrendUpIcon size={16} /> : <TrendDownIcon size={16} />}
+            {dayChangePercentage >= 0 ? <TrendUpIcon size={20} /> : <TrendDownIcon size={20} />}
           </div>
           <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
+            fontSize: '13px',
+            color: colors.utility.secondaryText
           }}>
-            TODAY'S CHANGE
+            From yesterday's close
           </div>
         </div>
 
         {/* Overall Return */}
-        <div>
+        <div style={{
+          background: colors.utility.secondaryBackground,
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
           <div style={{
-            fontSize: '20px', // Reduced from 24px
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            color: colors.utility.secondaryText,
+            fontWeight: '600',
+            letterSpacing: '0.5px',
+            marginBottom: '8px'
+          }}>
+            Overall Return
+          </div>
+          <div style={{
+            fontSize: '28px',
             fontWeight: '700',
+            marginBottom: '4px',
             color: getValueColor(returnPercentage)
           }}>
             {formatPercentage(returnPercentage)}
           </div>
           <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
+            fontSize: '13px',
+            color: colors.utility.secondaryText
           }}>
-            OVERALL RETURN
-          </div>
-        </div>
-
-        {/* Total Funds */}
-        <div>
-          <div style={{
-            fontSize: '20px', // Reduced from 24px
-            fontWeight: '700',
-            color: colors.utility.primaryText
-          }}>
-            {portfolio.holdings?.length || portfolio.summary.total_schemes || 0}
-          </div>
-          <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
-          }}>
-            TOTAL FUNDS
-          </div>
-        </div>
-
-        {/* Active Alerts */}
-        <div>
-          <div style={{
-            fontSize: '20px', // Reduced from 24px
-            fontWeight: '700',
-            color: jtbds && jtbds.length > 0 ? colors.semantic.success : colors.utility.secondaryText
-          }}>
-            {jtbds?.length || 0}
-          </div>
-          <div style={{
-            fontSize: '10px', // Reduced from 11px
-            color: colors.utility.secondaryText,
-            marginTop: '3px' // Reduced from 4px
-          }}>
-            ACTIVE ALERTS
+            Since inception
           </div>
         </div>
       </div>
