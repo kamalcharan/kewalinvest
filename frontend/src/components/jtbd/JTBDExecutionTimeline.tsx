@@ -6,6 +6,7 @@ import { Plus, Calendar, Filter } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useJTBDExecutions } from '../../hooks/useJTBD';
 import { JTBDExecutionCard } from './JTBDExecutionCard';
+import { BirthdayCard, AnniversaryCard } from './CelebrationCards';
 import { CreateMeetingModal } from '../meetings/CreateMeetingModal';
 import type { JTBDExecution, ExecutionFilters } from '../../types/jtbd.types';
 import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
@@ -305,6 +306,51 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           </button>
         ))}
       </div>
+
+      {/* Upcoming Celebrations Section */}
+      {activeTab === 'upcoming' && (
+        <div style={{ marginBottom: '32px' }}>
+          {/* Section Header */}
+          <div style={{
+            fontSize: '12px',
+            fontWeight: '700',
+            color: colors.utility.secondaryText,
+            marginBottom: '12px',
+            letterSpacing: '0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <div style={{
+              width: '24px',
+              height: '2px',
+              backgroundColor: colors.utility.secondaryText + '40'
+            }} />
+            UPCOMING CELEBRATIONS
+            <div style={{
+              flex: 1,
+              height: '2px',
+              backgroundColor: colors.utility.secondaryText + '40'
+            }} />
+          </div>
+
+          {/* Celebration Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Dummy Birthday Card - Example */}
+            <BirthdayCard
+              name="John Doe"
+              date="15 Dec"
+              daysUntil={5}
+            />
+            {/* Dummy Anniversary Card - Example */}
+            <AnniversaryCard
+              name="Jane Smith"
+              date="20 Dec"
+              daysUntil={10}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Timeline Content */}
       {isLoading ? (
