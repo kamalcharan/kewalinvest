@@ -8,7 +8,7 @@ import { useCreateJTBD } from '../../hooks/useJTBD';
 import PortfolioAlertForm from './forms/PortfolioAlertForm';
 import TimeAlertForm from './forms/TimeAlertForm';
 import ProfileTriggerForm from './forms/ProfileTriggerForm';
-import GoalSetupModal from '../goals/GoalSetupModal';
+import GoalWizardModal from '../goals/GoalWizardModal';
 
 
 interface JTBDSetupModalProps {
@@ -459,9 +459,9 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
         </div>
       )}
 
-      {/* Goal Setup Modal - Rendered when goal_tracking is selected */}
+      {/* Goal Wizard Modal - Rendered when goal_tracking is selected */}
       {showGoalModal && (
-        <GoalSetupModal
+        <GoalWizardModal
           customerId={customerId}
           isOpen={showGoalModal}
           onClose={handleGoalModalClose}
