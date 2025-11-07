@@ -29,7 +29,8 @@ export const IndividualFamilySwitch: React.FC<IndividualFamilySwitchProps> = ({
       gap: '12px',
       padding: '6px 12px',
       borderRadius: '20px',
-      backgroundColor: colors.utility.primaryBackground,
+      background: `linear-gradient(135deg, ${colors.brand.primary}15 0%, ${colors.brand.secondary}10 100%)`,
+      border: `1px solid ${colors.utility.primaryText}10`,
       opacity: disabled ? 0.6 : 1
     }}>
       <span style={{
