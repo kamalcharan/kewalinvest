@@ -27,7 +27,6 @@ import marketAnalysisRoutes from './routes/marketAnalysis.routes';
 import goalRoutes from './routes/goal.routes';
 import userPreferencesRoutes from './routes/userPreferences.routes';
 import schemeAnalysisRoutes from './routes/schemeAnalysis.routes';
-import meetingRoutes from './routes/meeting.routes';
 import familyRoutes from './routes/family.routes';
 import schemeAliasRoutes from './routes/schemeAlias.routes';
 import bookmarkRoutes from './routes/bookmark.routes';
@@ -220,7 +219,7 @@ app.use('/api/jtbd', jtbdRoutes); // OLD: Will be deprecated - use jtbd-v2 for n
 app.use('/api/jtbd-v2', jtbdUnifiedRoutes); // NEW: Unified JTBD (configs + executions, meetings consolidated)
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
-app.use('/api/meetings', meetingRoutes);
+// OLD: app.use('/api/meetings', meetingRoutes); // REMOVED: Replaced by /api/jtbd-v2
 app.use('/api/family', familyRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/cruise-control', cruiseControlRoutes);
