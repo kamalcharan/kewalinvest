@@ -601,6 +601,7 @@ const CustomerViewPage: React.FC = () => {
         customerId={customer.id}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onNewGoal={() => setShowGoalSetupModal(true)}
       />
 
       {/* Key Metrics Bar */}
