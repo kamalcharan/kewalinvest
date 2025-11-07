@@ -3,15 +3,32 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, Video, Phone, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { CustomerMeeting, MeetingType, MeetingMode, MeetingStatus } from '../../types/meeting.types';
-import { MEETING_TYPE_LABELS, MEETING_MODE_LABELS, MEETING_STATUS_LABELS } from '../../types/meeting.types';
+import type {
+  JTBDExecution,
+  MeetingExecutionData,
+  ExecutionStatus
+} from '../../types/jtbd.types';
+import { EXECUTION_STATUS } from '../../constants/jtbd.constants';
+
+type MeetingMode = 'in_person' | 'video_call' | 'phone_call';
+
+// Label mappings
+const EXECUTION_STATUS_LABELS: Record<string, string> = {
+  [EXECUTION_STATUS.PLANNED]: 'Scheduled',
+  [EXECUTION_STATUS.DUE]: 'Due',
+  [EXECUTION_STATUS.COMPLETED]: 'Completed',
+  [EXECUTION_STATUS.CANCELLED]: 'Cancelled',
+  [EXECUTION_STATUS.NOT_EXECUTED]: 'Missed',
+  [EXECUTION_STATUS.DELAYED]: 'Delayed',
+  [EXECUTION_STATUS.FAILED]: 'Failed',
+};
 
 interface MeetingCardProps {
-  meeting: CustomerMeeting;
-  onEdit?: (meeting: CustomerMeeting) => void;
-  onComplete?: (meeting: CustomerMeeting) => void;
-  onCancel?: (meeting: CustomerMeeting) => void;
-  onDelete?: (meeting: CustomerMeeting) => void;
+  meeting: JTBDExecution;
+  onEdit?: (meeting: JTBDExecution) => void;
+  onComplete?: (meeting: JTBDExecution) => void;
+  onCancel?: (meeting: JTBDExecution) => void;
+  onDelete?: (meeting: JTBDExecution) => void;
   isUpcoming?: boolean;
 }
 
@@ -46,16 +63,21 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
+  // Extract meeting data from execution_data
+  const meetingData = (meeting.execution_data || {}) as MeetingExecutionData;
+
   // Get status color
-  const getStatusColor = (status: MeetingStatus) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled':
+      case EXECUTION_STATUS.PLANNED:
+      case EXECUTION_STATUS.DUE:
         return colors.semantic.info;
-      case 'completed':
+      case EXECUTION_STATUS.COMPLETED:
         return colors.semantic.success;
-      case 'cancelled':
+      case EXECUTION_STATUS.CANCELLED:
+      case EXECUTION_STATUS.NOT_EXECUTED:
         return colors.semantic.error;
-      case 'rescheduled':
+      case EXECUTION_STATUS.DELAYED:
         return colors.semantic.warning;
       default:
         return colors.utility.secondaryText;
@@ -74,10 +96,10 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
     }
   };
 
-  const statusColor = getStatusColor(meeting.status);
-  const canEdit = meeting.status === 'scheduled';
-  const canComplete = meeting.status === 'scheduled';
-  const canCancel = meeting.status === 'scheduled';
+  const statusColor = getStatusColor(meeting.execution_status);
+  const canEdit = meeting.execution_status === EXECUTION_STATUS.PLANNED || meeting.execution_status === EXECUTION_STATUS.DUE;
+  const canComplete = meeting.execution_status === EXECUTION_STATUS.PLANNED || meeting.execution_status === EXECUTION_STATUS.DUE;
+  const canCancel = meeting.execution_status === EXECUTION_STATUS.PLANNED || meeting.execution_status === EXECUTION_STATUS.DUE;
 
   return (
     <div
@@ -111,7 +133,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
                 color: colors.utility.primaryText
               }}
             >
-              {MEETING_TYPE_LABELS[meeting.meeting_type]}
+              {meeting.title}
             </h3>
             <div
               style={{
@@ -124,7 +146,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
                 color: statusColor
               }}
             >
-              {MEETING_STATUS_LABELS[meeting.status]}
+              {EXECUTION_STATUS_LABELS[meeting.execution_status] || meeting.execution_status}
             </div>
           </div>
         </div>
@@ -247,28 +269,31 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Clock size={16} color={colors.utility.secondaryText} />
           <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-            {formatTime(meeting.scheduled_time)} ({meeting.duration_minutes} min)
+            {formatTime(meeting.scheduled_time || '00:00')} ({meetingData.duration_minutes || 60} min)
           </span>
         </div>
 
         {/* Mode */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {getMeetingModeIcon(meeting.meeting_mode)}
-          <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-            {MEETING_MODE_LABELS[meeting.meeting_mode]}
-          </span>
-        </div>
-
-        {/* Location/Link */}
-        {meeting.meeting_location && (
-          <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
-            {meeting.meeting_location}
+        {meetingData.meeting_mode && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {getMeetingModeIcon(meetingData.meeting_mode as MeetingMode)}
+            <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
+              {meetingData.meeting_mode === 'in_person' ? 'In Person' :
+               meetingData.meeting_mode === 'video_call' ? 'Video Call' : 'Phone Call'}
+            </span>
           </div>
         )}
-        {meeting.meeting_link && (
+
+        {/* Location/Link */}
+        {meetingData.location && (
+          <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+            {meetingData.location}
+          </div>
+        )}
+        {meetingData.meeting_link && (
           <div style={{ fontSize: '14px' }}>
             <a
-              href={meeting.meeting_link}
+              href={meetingData.meeting_link}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: colors.brand.primary, textDecoration: 'none' }}
@@ -281,7 +306,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
       </div>
 
       {/* Agenda */}
-      {meeting.agenda && (
+      {meetingData.agenda && (
         <div
           style={{
             marginTop: '12px',
@@ -303,13 +328,13 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
             Agenda
           </div>
           <div style={{ fontSize: '14px', color: colors.utility.primaryText, lineHeight: '1.5' }}>
-            {meeting.agenda}
+            {meetingData.agenda}
           </div>
         </div>
       )}
 
       {/* Notes (for completed/cancelled meetings) */}
-      {meeting.notes && (
+      {meetingData.meeting_notes && (
         <div style={{ marginTop: '12px' }}>
           <button
             onClick={(e) => {
@@ -340,14 +365,14 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
                 lineHeight: '1.6'
               }}
             >
-              {meeting.notes}
+              {meetingData.meeting_notes}
             </div>
           )}
         </div>
       )}
 
       {/* Outcome (for completed meetings) */}
-      {meeting.outcome && (
+      {meetingData.outcome && (
         <div
           style={{
             marginTop: '12px',
@@ -369,13 +394,13 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
             Outcome
           </div>
           <div style={{ fontSize: '14px', color: colors.utility.primaryText, lineHeight: '1.5' }}>
-            {meeting.outcome}
+            {meetingData.outcome}
           </div>
         </div>
       )}
 
       {/* Cancellation Reason */}
-      {meeting.cancellation_reason && (
+      {meetingData.cancellation_reason && (
         <div
           style={{
             marginTop: '12px',
@@ -397,7 +422,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({
             Cancellation Reason
           </div>
           <div style={{ fontSize: '14px', color: colors.utility.primaryText, lineHeight: '1.5' }}>
-            {meeting.cancellation_reason}
+            {meetingData.cancellation_reason}
           </div>
         </div>
       )}
