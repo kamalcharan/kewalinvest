@@ -83,6 +83,9 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
 
     // Filter by type
     if (typeFilter !== 'all') {
+      console.log('[JTBDExecutionTimeline] Type filter active:', typeFilter);
+      console.log('[JTBDExecutionTimeline] Before type filtering:', filtered.length, 'executions');
+
       switch (typeFilter) {
         case 'meetings':
           filtered = filtered.filter(ex =>
@@ -92,9 +95,15 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           );
           break;
         case 'sip_plans':
-          filtered = filtered.filter(ex =>
-            ex.execution_type === JTBD_TYPE.GOAL_SIP_PLAN
-          );
+          console.log('[JTBDExecutionTimeline] Filtering for SIP plans, looking for type:', JTBD_TYPE.GOAL_SIP_PLAN);
+          console.log('[JTBDExecutionTimeline] All execution types:', executions.map(e => e.execution_type));
+          filtered = filtered.filter(ex => {
+            const matches = ex.execution_type === JTBD_TYPE.GOAL_SIP_PLAN;
+            if (!matches) {
+              console.log('[JTBDExecutionTimeline] Execution filtered out:', ex.id, ex.title, 'type:', ex.execution_type);
+            }
+            return matches;
+          });
           break;
         case 'alerts':
           filtered = filtered.filter(ex =>
@@ -104,6 +113,8 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           );
           break;
       }
+
+      console.log('[JTBDExecutionTimeline] After type filtering:', filtered.length, 'executions');
     }
 
     // Sort by scheduled date
