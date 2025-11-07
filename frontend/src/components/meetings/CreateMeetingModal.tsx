@@ -75,6 +75,15 @@ const TIME_SLOTS = [
   '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
 ];
 
+// Helper to get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface CreateMeetingModalProps {
   customerId: number;
   meeting?: JTBDExecution; // If provided, modal is in edit mode
@@ -109,12 +118,14 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const createMutation = useCreateExecution();
   const updateMutation = useUpdateExecution();
 
+  console.log('[CreateMeetingModal] Rendered - isOpen:', isOpen, 'customerId:', customerId, 'isEditMode:', isEditMode);
+
   // Form state
   const [formData, setFormData] = useState<MeetingFormData>({
     meeting_type: 'review',
     meeting_mode: 'in_person',
-    scheduled_date: '',
-    scheduled_time: '',
+    scheduled_date: getTodayDate(), // Default to today
+    scheduled_time: '10:00', // Default to 10:00 AM
     duration_minutes: 60,
     agenda: ''
   });
@@ -150,8 +161,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       setFormData({
         meeting_type: 'review',
         meeting_mode: 'in_person',
-        scheduled_date: '',
-        scheduled_time: '',
+        scheduled_date: getTodayDate(), // Default to today
+        scheduled_time: '10:00', // Default to 10:00 AM
         duration_minutes: 60,
         agenda: ''
       });
@@ -181,9 +192,10 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
 
     const validationResult = validate();
     console.log('[CreateMeetingModal] Validation result:', validationResult);
+    console.log('[CreateMeetingModal] Errors:', errors);
 
     if (!validationResult) {
-      console.log('[CreateMeetingModal] Validation FAILED, stopping');
+      console.log('[CreateMeetingModal] Validation FAILED, stopping. Errors:', errors);
       return;
     }
 
@@ -251,8 +263,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
     setFormData({
       meeting_type: 'review',
       meeting_mode: 'in_person',
-      scheduled_date: '',
-      scheduled_time: '',
+      scheduled_date: getTodayDate(), // Default to today
+      scheduled_time: '10:00', // Default to 10:00 AM
       duration_minutes: 60,
       agenda: ''
     });
