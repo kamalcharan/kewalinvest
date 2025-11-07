@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Option 2: Unified Timeline View</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafbfc;
+            color: #1a1a1a;
+        }
+        
+        /* Header Section */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 32px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .avatar-large {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            font-weight: 700;
+        }
+        .header-info h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: white; border: 1px solid #e5e7eb; color: #1a1a1a; }
+        .btn-secondary:hover { background: #f9fafb; }
+        
+        /* Metrics Bar */
+        .metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
+        }
+        .metric {
+            background: linear-gradient(135deg, #f9fafb 0%, white 100%);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #f3f4f6;
+        }
+        .metric-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .metric-change {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        .metric.highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .metric.highlight .metric-label,
+        .metric.highlight .metric-value,
+        .metric.highlight .metric-change { color: white; }
+        
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        /* Center Timeline */
+        .timeline-main {
+            flex: 1;
+            padding: 24px 32px;
+            max-width: 1100px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .section-filters {
+            display: flex;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Timeline Items */
+        .timeline-section {
+            margin-bottom: 32px;
+        }
+        .timeline-date-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 24px 0 16px;
+        }
+        .timeline-date-divider::before,
+        .timeline-date-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
+        .timeline-date-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .timeline-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .timeline-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        .timeline-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .timeline-card-left {
+            display: flex;
+            gap: 16px;
+            flex: 1;
+        }
+        .timeline-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .icon-meeting { background: #dbeafe; }
+        .icon-sip { background: #d1fae5; }
+        .icon-goal { background: #fef3c7; }
+        .icon-alert { background: #fee2e2; }
+        .icon-transaction { background: #e0e7ff; }
+        
+        .timeline-content { flex: 1; }
+        .timeline-card-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #1a1a1a;
+        }
+        .timeline-card-desc {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+        .timeline-card-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .timeline-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .mini-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+        .mini-btn-primary { background: #667eea; color: white; }
+        .mini-btn-secondary { background: #f3f4f6; color: #1a1a1a; }
+        
+        /* Goal Progress Bar in Timeline */
+        .goal-progress-inline {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+        }
+        .progress-bar-small {
+            height: 8px;
+            background: #f3f4f6;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .progress-fill-small {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            border-radius: 4px;
+        }
+        .progress-fill-small.behind {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        
+        /* Right Panel */
+        .insights-panel {
+            width: 380px;
+            padding: 24px;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            height: calc(100vh - 157px);
+            overflow-y: auto;
+            position: sticky;
+            top: 157px;
+        }
+        
+        .panel-section {
+            margin-bottom: 28px;
+        }
+        .panel-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .insight-card {
+            background: #f9fafb;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #667eea;
+        }
+        .insight-card.warning { border-left-color: #f59e0b; }
+        .insight-card.critical { border-left-color: #ef4444; }
+        .insight-card.success { border-left-color: #10b981; }
+        
+        .insight-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .insight-desc {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+        
+        .pie-chart {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(
+                #10b981 0% 78%,
+                #3b82f6 78% 93%,
+                #f59e0b 93% 100%
+            );
+            margin: 16px auto;
+            position: relative;
+        }
+        .pie-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .pie-value {
+            font-size: 20px;
+            color: #1a1a1a;
+            font-weight: 700;
+        }
+        
+        .legend-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .legend-item:last-child { border-bottom: none; }
+        .legend-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .legend-label {
+            font-size: 13px;
+            color: #1a1a1a;
+        }
+        .legend-value {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .tag {
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid;
+        }
+        .tag.blue { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+        .tag.green { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .tag.yellow { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-top">
+            <div class="header-left">
+                <div class="avatar-large">RK</div>
+                <div class="header-info">
+                    <h1>Rajesh Kumar</h1>
+                    <div class="header-meta">
+                        <span>📱 +91 98765 43210</span>
+                        <span>•</span>
+                        <span>📧 rajesh.k@email.com</span>
+                        <span>•</span>
+                        <span>CID: 10247</span>
+                        <span>•</span>
+                        <span>⚡ Moderate Risk</span>
+                        <span>•</span>
+                        <span>🟢 Active</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary">📊 Report</button>
+                <button class="btn btn-secondary">💰 Transaction</button>
+                <button class="btn btn-primary">📞 Schedule Meeting</button>
+            </div>
+        </div>
+        
+        <div class="metrics-bar">
+            <div class="metric highlight">
+                <div class="metric-label">Portfolio Value</div>
+                <div class="metric-value">₹45.7L</div>
+                <div class="metric-change">↗ +1.5% today</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Total Returns</div>
+                <div class="metric-value">+19.6%</div>
+                <div class="metric-change" style="color: #10b981;">+₹7.47L gains</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Active Goals</div>
+                <div class="metric-value">4</div>
+                <div class="metric-change">3 on track</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Monthly SIP</div>
+                <div class="metric-value">₹25K</div>
+                <div class="metric-change">3 schemes</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Holdings</div>
+                <div class="metric-value">12</div>
+                <div class="metric-change">All active</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Client Since</div>
+                <div class="metric-value">5.7Y</div>
+                <div class="metric-change">Mar 2019</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Timeline Section -->
+        <div class="timeline-main">
+            <div class="section-header">
+                <div class="section-title">🗓️ Unified Timeline & Activities</div>
+                <div class="section-filters">
+                    <button class="filter-btn active">All</button>
+                    <button class="filter-btn">Meetings</button>
+                    <button class="filter-btn">SIPs</button>
+                    <button class="filter-btn">Goals</button>
+                    <button class="filter-btn">Alerts</button>
+                </div>
+            </div>
+            
+            <!-- TODAY -->
+            <div class="timeline-section">
+                <div class="timeline-date-divider">
+                    <span class="timeline-date-label">🔴 Today - Nov 7, 2024</span>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-alert">⚠️</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">SIP Payment Failure - HDFC Midcap</div>
+                                <div class="timeline-card-desc">
+                                    ₹10,000 payment bounced due to insufficient funds. Last attempt: Nov 5. Contact client to resolve.
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>🔴 Critical</span>
+                                    <span>•</span>
+                                    <span>Auto-Debit Failed</span>
+                                    <span>•</span>
+                                    <span>Action Required</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-primary">Contact Client</button>
+                            <button class="mini-btn mini-btn-secondary">View Details</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- UPCOMING THIS WEEK -->
+            <div class="timeline-section">
+                <div class="timeline-date-divider">
+                    <span class="timeline-date-label">📅 Upcoming This Week</span>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-sip">💰</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Monthly SIP Payments (3 schemes)</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Nov 10, 2024</strong> - Scheduled investments across HDFC Midcap (₹10K), ICICI Bluechip (₹8K), and Axis Small Cap (₹7K)
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>💰 Total: ₹25,000</span>
+                                    <span>•</span>
+                                    <span>Auto-Debit Enabled</span>
+                                    <span>•</span>
+                                    <span>3 days from now</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-secondary">View Schedule</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-meeting">📞</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Quarterly Portfolio Review Meeting</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Nov 15, 2024 at 3:00 PM</strong> - Discuss portfolio performance, rebalancing strategy, and address the retirement goal lag. Also review SIP bounce resolution.
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>📍 Virtual (Zoom)</span>
+                                    <span>•</span>
+                                    <span>60 mins</span>
+                                    <span>•</span>
+                                    <span>8 days from now</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-primary">Send Reminder</button>
+                            <button class="mini-btn mini-btn-secondary">Reschedule</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- NEXT 30 DAYS -->
+            <div class="timeline-section">
+                <div class="timeline-date-divider">
+                    <span class="timeline-date-label">📆 Next 30 Days</span>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-goal">🎯</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Goal Review - Child Education (Aarav)</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Nov 22, 2024</strong> - Quarterly check on education goal progress. Currently at 73% (₹18.2L of ₹25L target). Due: Jun 2028.
+                                </div>
+                                <div class="goal-progress-inline">
+                                    <div class="progress-bar-small">
+                                        <div class="progress-fill-small" style="width: 73%"></div>
+                                    </div>
+                                    <div class="progress-label">
+                                        <span>73% Complete</span>
+                                        <span>₹6.8L remaining</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-secondary">View Goal</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-sip">💰</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Monthly SIP Payments - Dec 1</div>
+                                <div class="timeline-card-desc">
+                                    Next month's scheduled investments (₹25,000 total across 3 schemes)
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>💰 ₹25,000</span>
+                                    <span>•</span>
+                                    <span>24 days from now</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-alert">🎂</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Client Birthday</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Nov 15, 2024</strong> - Rajesh Kumar turns 42. Send birthday wishes and consider gifting a portfolio performance report.
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>🎉 Personal Milestone</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-primary">Send Wishes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- RECENT ACTIVITY -->
+            <div class="timeline-section">
+                <div class="timeline-date-divider">
+                    <span class="timeline-date-label">🕐 Recent Activity</span>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-transaction">💸</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">SIP Investment - 3 Schemes</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Nov 1, 2024</strong> - Successfully invested ₹25,000 across HDFC Midcap, ICICI Bluechip, and Axis Small Cap
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>✅ Completed</span>
+                                    <span>•</span>
+                                    <span>6 days ago</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-meeting">📞</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">Portfolio Review Meeting Completed</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Aug 15, 2024</strong> - Discussed Q2 performance, increased SIP allocation decision for 2025, and reviewed goal progress. Client satisfied with returns.
+                                </div>
+                                <div class="timeline-card-meta">
+                                    <span>📝 Notes Added</span>
+                                    <span>•</span>
+                                    <span>3 months ago</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="timeline-card-actions">
+                            <button class="mini-btn mini-btn-secondary">View Notes</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div class="timeline-card-left">
+                            <div class="timeline-icon icon-goal">🎯</div>
+                            <div class="timeline-content">
+                                <div class="timeline-card-title">New Goal Created - Europe Trip 2025</div>
+                                <div class="timeline-card-desc">
+                                    <strong>Jul 10, 2024</strong> - Target: ₹4L by Jun 2025. Current: ₹3.2L (80%). Linked to Parag Parikh Flexi Cap fund.
+                                </div>
+                                <div class="goal-progress-inline">
+                                    <div class="progress-bar-small">
+                                        <div class="progress-fill-small" style="width: 80%"></div>
+                                    </div>
+                                    <div class="progress-label">
+                                        <span>80% Complete</span>
+                                        <span>₹80K remaining</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Insights Panel -->
+        <div class="insights-panel">
+            <div class="panel-section">
+                <div class="panel-title">🎯 Key Insights</div>
+                
+                <div class="insight-card critical">
+                    <div class="insight-title">⚠️ SIP Bounce - Immediate Action</div>
+                    <div class="insight-desc">HDFC Midcap payment failed. Contact client urgently to resolve before next cycle.</div>
+                </div>
+                
+                <div class="insight-card warning">
+                    <div class="insight-title">📊 Portfolio Rebalancing Needed</div>
+                    <div class="insight-desc">Equity allocation at 78% (target: 65%). Consider moving 13% to debt/balanced funds.</div>
+                </div>
+                
+                <div class="insight-card success">
+                    <div class="insight-title">✅ Strong Performance This Quarter</div>
+                    <div class="insight-desc">Portfolio up 6.2% vs benchmark 5.1%. Small cap funds leading gains.</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-title">🎓 Education Goal On Track</div>
+                    <div class="insight-desc">73% complete with 3.5 years remaining. Projected to exceed target by ₹1.2L.</div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">📊 Asset Allocation</div>
+                <div class="pie-chart">
+                    <div class="pie-center">
+                        <div>Total</div>
+                        <div class="pie-value">₹45.7L</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="legend-item">
+                        <div class="legend-left">
+                            <div class="legend-dot" style="background: #10b981;"></div>
+                            <div class="legend-label">Equity</div>
+                        </div>
+                        <div class="legend-value">78%</div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-left">
+                            <div class="legend-dot" style="background: #3b82f6;"></div>
+                            <div class="legend-label">Debt</div>
+                        </div>
+                        <div class="legend-value">15%</div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-left">
+                            <div class="legend-dot" style="background: #f59e0b;"></div>
+                            <div class="legend-label">Gold/Others</div>
+                        </div>
+                        <div class="legend-value">7%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">🏆 Top Performers</div>
+                <div class="legend-item">
+                    <div class="legend-label">Axis Small Cap</div>
+                    <div class="legend-value" style="color: #10b981;">+31.2%</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-label">HDFC Midcap</div>
+                    <div class="legend-value" style="color: #10b981;">+24.3%</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-label">Mirae Emerging</div>
+                    <div class="legend-value" style="color: #10b981;">+22.1%</div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">👨‍👩‍👦 Family Portfolio</div>
+                <div style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">
+                    <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+                        <strong>Rajesh Kumar</strong><br>
+                        <span style="font-size: 12px;">₹45.7L (Primary)</span>
+                    </div>
+                    <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+                        <strong>Priya Kumar (Spouse)</strong><br>
+                        <span style="font-size: 12px;">₹12.3L (Linked)</span>
+                    </div>
+                    <div style="padding: 8px 0;">
+                        <strong>Aarav Kumar (Minor)</strong><br>
+                        <span style="font-size: 12px;">₹5.8L (Custodial)</span>
+                    </div>
+                </div>
+                <div style="padding: 12px; background: #f9fafb; border-radius: 6px; font-size: 13px;">
+                    <strong>Family AUM: ₹63.8L</strong>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">🏷️ Tags & Notes</div>
+                <div class="tag-cloud">
+                    <span class="tag blue">High Value</span>
+                    <span class="tag green">Active SIP</span>
+                    <span class="tag yellow">Needs Review</span>
+                    <span class="tag blue">Family Portfolio</span>
+                    <span class="tag green">5+ Years</span>
+                </div>
+                <div style="margin-top: 12px; padding: 12px; background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 12px; color: #92400e;">
+                    <strong>Last Note (Aug 15):</strong> Client wants to increase SIP by 20% from Jan 2025. Discuss tax-saving options in next meeting.
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

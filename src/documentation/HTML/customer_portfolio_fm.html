@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Portfolio - Rajesh Kumar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+        
+        .header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .back-btn {
+            background: #f8f9fa;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        
+        .back-btn:hover {
+            background: #e9ecef;
+        }
+        
+        .header-title h1 {
+            font-size: 1.3rem;
+            color: #2c3e50;
+        }
+        
+        .header-subtitle {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .customer-header {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .customer-profile {
+            display: flex;
+            gap: 2rem;
+            align-items: start;
+        }
+        
+        .customer-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        
+        .customer-info {
+            flex: 1;
+        }
+        
+        .customer-name {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .customer-meta {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e9ecef;
+            flex-wrap: wrap;
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .meta-label {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-bottom: 0.25rem;
+        }
+        
+        .meta-value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .tag {
+            display: inline-block;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-right: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .tag-primary {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .tag-warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f1f3f5;
+        }
+        
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .alert-box {
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: start;
+            gap: 1rem;
+            border-left: 4px solid;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+        }
+        
+        .alert-icon {
+            font-size: 1.5rem;
+            min-width: 25px;
+        }
+        
+        .alert-content {
+            flex: 1;
+        }
+        
+        .alert-title {
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: #2c3e50;
+        }
+        
+        .alert-text {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-outline {
+            background: white;
+            color: #3498db;
+            border: 2px solid #3498db;
+        }
+        
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .stat-change {
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+            color: #27ae60;
+        }
+        
+        .negative {
+            color: #e74c3c;
+        }
+        
+        /* NEXT ACTION SECTION - NEW */
+        .next-action-section {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .next-action-title {
+            font-size: 0.9rem;
+            color: #667eea;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+        
+        .next-action-content {
+            font-size: 1.1rem;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .next-action-desc {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+        }
+        
+        /* REBALANCING REQUEST SECTION - NEW */
+        .rebalancing-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .request-item {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+        }
+        
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 0.75rem;
+        }
+        
+        .request-date {
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .request-status {
+            display: inline-block;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-approved {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status-executed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .request-action {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        
+        .request-note {
+            font-size: 0.9rem;
+            color: #495057;
+            font-style: italic;
+            padding: 0.5rem;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 0.75rem;
+        }
+        
+        /* COMMUNICATION LOG - NEW */
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0.5rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e9ecef;
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding-bottom: 1.5rem;
+        }
+        
+        .timeline-marker {
+            position: absolute;
+            left: -1.65rem;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3498db;
+            border: 3px solid white;
+            box-shadow: 0 0 0 2px #3498db;
+        }
+        
+        .timeline-marker.success {
+            background: #27ae60;
+            box-shadow: 0 0 0 2px #27ae60;
+        }
+        
+        .timeline-marker.warning {
+            background: #f39c12;
+            box-shadow: 0 0 0 2px #f39c12;
+        }
+        
+        .timeline-content {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .timeline-title {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .timeline-date {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        
+        .timeline-text {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f3f5;
+            font-size: 0.9rem;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        @media (max-width: 1024px) {
+            .grid-2col {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <button class="back-btn" onclick="alert('Back to portfolio grid')">← Back</button>
+            <div class="header-title">
+                <h1>Customer Portfolio Management</h1>
+                <div class="header-subtitle">Fund manager portfolio view with execution tracking</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline btn-sm">📞 Log Call</button>
+            <button class="btn btn-outline btn-sm">📧 Send Email</button>
+            <button class="btn btn-primary btn-sm">+ Add Note</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Customer Header -->
+        <div class="customer-header">
+            <div class="customer-profile">
+                <div class="customer-avatar">RK</div>
+                <div class="customer-info">
+                    <div class="customer-name">
+                        Rajesh Kumar
+                        <span class="tag tag-primary">High Value</span>
+                    </div>
+                    <div class="customer-meta">
+                        <div class="meta-item">
+                            <div class="meta-label">Customer ID</div>
+                            <div class="meta-value">INV-10245</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Member Since</div>
+                            <div class="meta-value">Jan 2023 (2y 9mo)</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Risk Profile</div>
+                            <div class="meta-value">Moderate-Aggressive (7/10)</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Last Contact</div>
+                            <div class="meta-value">47 days ago (Oct 5)</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Next Scheduled</div>
+                            <div class="meta-value">Overdue (60-day review)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- NEXT ACTION SECTION -->
+        <div class="next-action-section">
+            <div class="next-action-title">⚡ Next Action Required</div>
+            <div class="next-action-content">Send rebalancing approval to client</div>
+            <div class="next-action-desc">
+                Portfolio equity allocation at 68% (target: 60%). Recommendation drafted and ready to send. 
+                Client call scheduled Oct 5 showed interest in rebalancing.
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary">Send to Client Now</button>
+                <button class="btn btn-outline btn-sm">View Recommendation</button>
+                <button class="btn btn-outline btn-sm">Schedule Call First</button>
+            </div>
+        </div>
+        
+        <!-- Alerts -->
+        <div class="card">
+            <div class="card-title">Alerts & Action Items</div>
+            
+            <div class="alert-box alert-warning">
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-content">
+                    <div class="alert-title">Portfolio Rebalancing Required</div>
+                    <div class="alert-text">Equity allocation at 68% (Target: 60%). Recommend selling ₹84,000 from equity funds.</div>
+                </div>
+                <button class="btn btn-primary btn-sm">Review</button>
+            </div>
+            
+            <div class="alert-box alert-danger">
+                <div class="alert-icon">🔴</div>
+                <div class="alert-content">
+                    <div class="alert-title">Client Contact Overdue</div>
+                    <div class="alert-text">Last contact: Oct 5 (47 days ago). Quarterly review typically every 90 days—schedule follow-up call.</div>
+                </div>
+                <button class="btn btn-primary btn-sm">Schedule Call</button>
+            </div>
+            
+            <div class="alert-box alert-info">
+                <div class="alert-icon">📅</div>
+                <div class="alert-content">
+                    <div class="alert-title">Recent Transaction</div>
+                    <div class="alert-text">Monthly SIP ₹15,000 processed Oct 12. Portfolio updated. Confirm with client if increasing SIP to ₹20K (discussed Oct 5).</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Portfolio Summary -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Portfolio Summary</div>
+                <button class="btn btn-outline btn-sm">View Full Details</button>
+            </div>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Current Value</div>
+                    <div class="stat-value">₹10.5L</div>
+                    <div class="stat-change">↑ ₹45K this month</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Invested</div>
+                    <div class="stat-value">₹7.5L</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Gain</div>
+                    <div class="stat-value" style="color: #27ae60;">₹3.0L</div>
+                    <div class="stat-change">+40.0% | XIRR: 15.8%</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">YTD Return</div>
+                    <div class="stat-value" style="color: #27ae60;">+15.8%</div>
+                    <div class="stat-change">vs Nifty: +12.0%</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Monthly SIP</div>
+                    <div class="stat-value">₹15K</div>
+                    <div class="stat-change">2 Active SIPs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Risk Score</div>
+                    <div class="stat-value">7/10</div>
+                    <div class="stat-change">Moderate-Aggressive</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- REBALANCING REQUEST HISTORY -->
+        <div class="card rebalancing-section">
+            <div class="card-header">
+                <div class="card-title">Rebalancing Request History</div>
+            </div>
+            
+            <div class="request-item">
+                <div class="request-header">
+                    <div>
+                        <div class="request-date">Oct 12, 2025</div>
+                        <div class="request-action">Recommendation: Sell ₹84K equity, buy ₹84K debt</div>
+                    </div>
+                    <span class="request-status status-pending">Pending Send</span>
+                </div>
+                <div class="request-note">
+                    Manager note: Drafted recommendation. Client mentioned interest in rebalancing during Oct 5 call. Ready to send immediately.
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary btn-sm">Send to Client</button>
+                    <button class="btn btn-outline btn-sm">Edit & Review</button>
+                </div>
+            </div>
+            
+            <div class="request-item">
+                <div class="request-header">
+                    <div>
+                        <div class="request-date">Jan 15, 2025</div>
+                        <div class="request-action">Rebalance: From 72% equity to 60% target</div>
+                    </div>
+                    <span class="request-status status-executed">Executed</span>
+                </div>
+                <div class="request-note">
+                    Sent to client Jan 10 → Approved Jan 12 → Sent to trading desk Jan 13 → Executed Jan 15
+                </div>
+            </div>
+            
+            <div class="request-item">
+                <div class="request-header">
+                    <div>
+                        <div class="request-date">Jul 20, 2024</div>
+                        <div class="request-action">Rebalance: Risk adjustment after job promotion</div>
+                    </div>
+                    <span class="request-status status-executed">Executed</span>
+                </div>
+                <div class="request-note">
+                    Updated target allocation from 50% to 60% equity based on increased risk appetite discussed in annual review.
+                </div>
+            </div>
+        </div>
+        
+        <!-- COMMUNICATION LOG -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Communication History (Last 90 Days)</div>
+                <button class="btn btn-outline btn-sm">+ Log New</button>
+            </div>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-marker success"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Phone Call - Portfolio Review</div>
+                            <div class="timeline-date">Oct 5, 2025</div>
+                        </div>
+                        <div class="timeline-text">
+                            <strong>Topics:</strong> Q3 performance (15.8% XIRR), discussed increasing SIP from ₹15K to ₹20K, mentioned rebalancing concerns<br>
+                            <strong>Outcome:</strong> Client happy with returns. Ready to increase SIP. Interested in rebalancing to reduce risk slightly.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Email - Monthly Statement</div>
+                            <div class="timeline-date">Oct 1, 2025</div>
+                        </div>
+                        <div class="timeline-text">
+                            Sent September 2025 monthly statement. Email opened Oct 2. No response/queries.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-marker warning"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Annual Review Meeting</div>
+                            <div class="timeline-date">Jan 15, 2025</div>
+                        </div>
+                        <div class="timeline-text">
+                            <strong>Discussed:</strong> Job promotion, updated risk profile to moderate-aggressive (7/10), increased target allocation to 60% equity<br>
+                            <strong>Actions:</strong> Set new goals (education ₹50L by 2035, home ₹1Cr by 2030), rebalanced portfolio
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">WhatsApp - Query</div>
+                            <div class="timeline-date">Aug 10, 2024</div>
+                        </div>
+                        <div class="timeline-text">
+                            Customer asked about tax implications of selling a small cap fund. Provided capital gains statement and tax planning advice.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- HOLDINGS & PERFORMANCE -->
+        <div class="grid-2col">
+            <div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Holdings Breakdown</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Scheme Name</th>
+                                <th>Invested</th>
+                                <th>Current</th>
+                                <th>Returns</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>HDFC Top 100</strong><br><small style="color: #7f8c8d;">Large Cap</small></td>
+                                <td>₹99,799</td>
+                                <td>₹1,16,533</td>
+                                <td><span class="badge badge-success">+16.8%</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>SBI Small Cap</strong><br><small style="color: #7f8c8d;">Small Cap</small></td>
+                                <td>₹1,50,000</td>
+                                <td>₹2,07,250</td>
+                                <td><span class="badge badge-success">+38.2%</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Axis Midcap</strong><br><small style="color: #7f8c8d;">Mid Cap</small></td>
+                                <td>₹84,843</td>
+                                <td>₹77,897</td>
+                                <td><span class="badge badge-danger">-8.2%</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>HDFC Bond</strong><br><small style="color: #7f8c8d;">Debt</small></td>
+                                <td>₹56,250</td>
+                                <td>₹60,250</td>
+                                <td><span class="badge badge-success">+7.1%</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Asset Allocation</div>
+                    </div>
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                        <canvas id="allocationChart" style="max-height: 280px;"></canvas>
+                    </div>
+                    <div style="margin-top: 1rem; text-align: center; font-size: 0.9rem; color: #6c757d;">
+                        <strong>Current:</strong> Equity 68% | Debt 25% | Gold 7%<br>
+                        <strong>Target:</strong> Equity 60% | Debt 30% | Gold 10%
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- GOALS -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Investment Goals</div>
+                <button class="btn btn-outline btn-sm">+ Add Goal</button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #3498db;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
+                        <strong>Child's Education</strong>
+                        <span style="color: #3498db; font-weight: 700;">₹50L</span>
+                    </div>
+                    <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem;">
+                        <div style="background: linear-gradient(90deg, #27ae60, #2ecc71); height: 100%; width: 45%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #6c757d;">
+                        <span>Target: 2035 (10y)</span>
+                        <span>Progress: 45%</span>
+                    </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #27ae60;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
+                        <strong>Retirement Fund</strong>
+                        <span style="color: #27ae60; font-weight: 700;">₹2Cr</span>
+                    </div>
+                    <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem;">
+                        <div style="background: linear-gradient(90deg, #27ae60, #2ecc71); height: 100%; width: 15%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #6c757d;">
+                        <span>Target: 2050 (25y)</span>
+                        <span>Progress: 15%</span>
+                    </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #f39c12;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
+                        <strong>Dream Home</strong>
+                        <span style="color: #f39c12; font-weight: 700;">₹1Cr</span>
+                    </div>
+                    <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem;">
+                        <div style="background: linear-gradient(90deg, #27ae60, #2ecc71); height: 100%; width: 25%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #6c757d;">
+                        <span>Target: 2030 (5y)</span>
+                        <span>Progress: 25%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const ctx = document.getElementById('allocationChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Equity (68%)', 'Debt (25%)', 'Gold (7%)'],
+                datasets: [{
+                    data: [68, 25, 7],
+                    backgroundColor: ['#e74c3c', '#27ae60', '#f39c12'],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { 
+                            font: { size: 12 },
+                            padding: 15
+                        }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+    </script>
+</body>
+</html>
