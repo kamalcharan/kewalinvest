@@ -476,12 +476,12 @@ const GoalDetailsPage: React.FC = () => {
                           <td style={{
                             padding: '12px 8px',
                             textAlign: 'right',
-                            color: snapshot.probability_of_success
+                            color: snapshot.probability_of_success !== null && snapshot.probability_of_success !== undefined
                               ? snapshot.probability_of_success >= 75 ? '#10B981' : snapshot.probability_of_success >= 60 ? '#F59E0B' : '#DC2626'
                               : colors.utility.secondaryText,
                             fontWeight: '600'
                           }}>
-                            {snapshot.probability_of_success ? formatPercentage(snapshot.probability_of_success, 0) : '-'}
+                            {snapshot.probability_of_success !== null && snapshot.probability_of_success !== undefined ? formatPercentage(snapshot.probability_of_success, 0) : '-'}
                           </td>
                         )}
                         <td style={{ padding: '12px 8px', textAlign: 'center' }}>
