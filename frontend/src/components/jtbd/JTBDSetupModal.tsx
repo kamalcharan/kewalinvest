@@ -2,13 +2,13 @@
 // UPDATED: Added Goal Tracking as 4th option
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreateJTBDRequest } from '../../types/jtbd.types';
 import { useCreateJTBD } from '../../hooks/useJTBD';
 import PortfolioAlertForm from './forms/PortfolioAlertForm';
 import TimeAlertForm from './forms/TimeAlertForm';
 import ProfileTriggerForm from './forms/ProfileTriggerForm';
-import GoalWizardModal from '../goals/GoalWizardModal';
 
 
 interface JTBDSetupModalProps {
@@ -29,23 +29,24 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [step, setStep] = useState<SetupStep>('select_type');
   const [selectedType, setSelectedType] = useState<JTBDType | null>(null);
-  const [showGoalModal, setShowGoalModal] = useState(false);
 
   const createJTBDMutation = useCreateJTBD();
 
   // Handle type selection
   const handleTypeSelect = (type: JTBDType) => {
     if (type === 'goal_tracking') {
-      // For goal tracking, open the goal setup modal directly
-      setShowGoalModal(true);
+      // For goal tracking, navigate to goal setup page
+      onClose(); // Close this modal first
+      navigate(`/customers/${customerId}/goals/new`);
       return;
     }
-    
+
     setSelectedType(type);
     setStep('configure');
   };
@@ -54,18 +55,6 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   const handleBack = () => {
     setStep('select_type');
     setSelectedType(null);
-  };
-
-  // Handle goal setup modal close
-  const handleGoalModalClose = () => {
-    setShowGoalModal(false);
-  };
-
-  // Handle goal setup modal success
-  const handleGoalSuccess = () => {
-    setShowGoalModal(false);
-    onSuccess?.();
-    handleClose();
   };
 
   // Handle form submission with race condition protection
@@ -203,8 +192,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
       />
 
       {/* Main Modal */}
-      {!showGoalModal && (
-        <div
+      <div
           style={{
             position: 'fixed',
             top: '50%',
@@ -457,17 +445,6 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {/* Goal Wizard Modal - Rendered when goal_tracking is selected */}
-      {showGoalModal && (
-        <GoalWizardModal
-          customerId={customerId}
-          isOpen={showGoalModal}
-          onClose={handleGoalModalClose}
-          onSuccess={handleGoalSuccess}
-        />
-      )}
 
       <style>{`
         @keyframes fadeIn {
