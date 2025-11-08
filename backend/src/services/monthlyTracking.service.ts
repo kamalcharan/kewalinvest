@@ -501,9 +501,7 @@ export class MonthlyTrackingService {
       const schemesQuery = `
         SELECT DISTINCT
           t.scheme_code,
-          sd.scheme_name,
-          COALESCE(sd.category, 'Uncategorized') as category,
-          COALESCE(sd.sub_category, '') as sub_category
+          sd.scheme_name
         FROM t_transaction_table t
         LEFT JOIN t_scheme_details sd ON t.scheme_code = sd.scheme_code
         WHERE t.tenant_id = $1
@@ -550,8 +548,6 @@ export class MonthlyTrackingService {
           return {
             scheme_code: scheme.scheme_code,
             scheme_name: scheme.scheme_name || scheme.scheme_code,
-            category: scheme.category,
-            sub_category: scheme.sub_category,
             monthly_data: (monthlyData.months || []) as any[],
             summary: monthlyData.summary || {}
           };
@@ -560,8 +556,6 @@ export class MonthlyTrackingService {
           return {
             scheme_code: scheme.scheme_code,
             scheme_name: scheme.scheme_name || scheme.scheme_code,
-            category: scheme.category,
-            sub_category: scheme.sub_category,
             monthly_data: [] as any[],
             summary: {},
             error: 'Failed to load data'
