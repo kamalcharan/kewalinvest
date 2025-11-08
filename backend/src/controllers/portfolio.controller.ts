@@ -492,14 +492,12 @@ export class PortfolioController {
       }
 
       const months = req.query.months ? parseInt(req.query.months as string) : 12;
-      const viewType = (req.query.view_type as string) || 'units'; // units, nav, market_value
 
       const data = await this.monthlyTrackingService.getAllSchemesMonthlySnapshots(
         user.tenant_id,
         isLive,
         parseInt(customerId),
-        months,
-        viewType
+        months
       );
 
       res.json({

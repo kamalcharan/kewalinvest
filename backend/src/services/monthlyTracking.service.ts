@@ -493,8 +493,7 @@ export class MonthlyTrackingService {
     tenantId: number,
     isLive: boolean,
     customerId: number,
-    months: number = 12,
-    viewType: string = 'units'
+    months: number = 12
   ): Promise<any> {
     try {
       // Get all active schemes from customer's portfolio
@@ -521,13 +520,12 @@ export class MonthlyTrackingService {
       if (schemesResult.rows.length === 0) {
         return {
           customer_id: customerId,
-          view_type: viewType,
           schemes: [],
           months_count: months
         };
       }
 
-      // Fetch monthly data for each scheme based on view type
+      // Fetch all monthly data for each scheme (units, NAV, market value) in parallel
       const schemePromises = schemesResult.rows.map(async (scheme) => {
         const filters = {
           customer_id: customerId,
@@ -536,22 +534,58 @@ export class MonthlyTrackingService {
         };
 
         try {
-          let monthlyData: any;
-          if (viewType === 'nav') {
-            monthlyData = await this.getMonthlyNAVPerformance(tenantId, isLive, filters);
-          } else if (viewType === 'market_value') {
-            monthlyData = await this.getMonthlyMarketValue(tenantId, isLive, filters);
-          } else {
-            monthlyData = await this.getMonthlyUnits(tenantId, isLive, filters);
-          }
+          // Fetch all three datasets in parallel for efficiency
+          const [unitsData, navData, marketValueData] = await Promise.all([
+            this.getMonthlyUnits(tenantId, isLive, filters),
+            this.getMonthlyNAVPerformance(tenantId, isLive, filters),
+            this.getMonthlyMarketValue(tenantId, isLive, filters)
+          ]);
+
+          // Combine all data into a unified structure
+          const unitsMonths = (unitsData.months || []) as any[];
+          const navMonths = (navData.months || []) as any[];
+          const marketValueMonths = (marketValueData.months || []) as any[];
+
+          // Create combined monthly data with all metrics
+          const combinedMonthlyData = unitsMonths.map((unitsMonth: any, idx: number) => {
+            const navMonth = navMonths[idx] || {};
+            const marketValueMonth = marketValueMonths[idx] || {};
+
+            return {
+              month: unitsMonth.month,
+              month_display: unitsMonth.month_display,
+              // Units data
+              opening_units: unitsMonth.opening_units,
+              units_added: unitsMonth.units_added,
+              units_redeemed: unitsMonth.units_redeemed,
+              closing_units: unitsMonth.closing_units,
+              // NAV data
+              opening_nav: navMonth.opening_nav,
+              closing_nav: navMonth.closing_nav,
+              nav_change: navMonth.nav_change,
+              nav_change_percentage: navMonth.nav_change_percentage,
+              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined,
+              // Market Value data
+              market_value: marketValueMonth.market_value,
+              month_change: marketValueMonth.month_change,
+              month_change_percentage: marketValueMonth.month_change_percentage
+            };
+          });
+
+          // Reverse the array to show newest month first
+          const reversedMonthlyData = combinedMonthlyData.reverse();
 
           return {
             scheme_code: scheme.scheme_code,
             scheme_name: scheme.scheme_name || scheme.scheme_code,
             category: scheme.category,
             sub_category: scheme.sub_category,
-            monthly_data: (monthlyData.months || []) as any[],
-            summary: monthlyData.summary || {}
+            monthly_data: reversedMonthlyData,
+            summary: {
+              units: unitsData.summary || {},
+              nav: navData.summary || {},
+              market_value: marketValueData.summary || {}
+            }
           };
         } catch (error) {
           console.error(`Error fetching data for scheme ${scheme.scheme_code}:`, error);
@@ -561,7 +595,11 @@ export class MonthlyTrackingService {
             category: scheme.category,
             sub_category: scheme.sub_category,
             monthly_data: [] as any[],
-            summary: {},
+            summary: {
+              units: {},
+              nav: {},
+              market_value: {}
+            },
             error: 'Failed to load data'
           };
         }
@@ -571,7 +609,6 @@ export class MonthlyTrackingService {
 
       return {
         customer_id: customerId,
-        view_type: viewType,
         schemes,
         months_count: months
       };

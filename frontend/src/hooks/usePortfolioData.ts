@@ -236,17 +236,16 @@ export const usePortfolioTotals = (customerId: number) => {
 
 /**
  * Hook for monthly snapshots of all schemes (TanStack Query)
- * Returns all schemes with their monthly data in one API call
+ * Returns all schemes with their monthly data (units, NAV, market value) in one API call
  */
 export const usePortfolioSnapshots = (
   customerId: number,
   months: number = 12,
-  viewType: 'units' | 'nav' | 'market_value' = 'units',
   options?: { enabled?: boolean }
 ) => {
   return useQuery({
-    queryKey: ['portfolio', 'monthly-snapshots', customerId, months, viewType],
-    queryFn: () => PortfolioService.getMonthlySnapshots(customerId, months, viewType),
+    queryKey: ['portfolio', 'monthly-snapshots', customerId, months],
+    queryFn: () => PortfolioService.getMonthlySnapshots(customerId, months),
     enabled: options?.enabled !== false && customerId > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000,   // 10 minutes (formerly cacheTime)

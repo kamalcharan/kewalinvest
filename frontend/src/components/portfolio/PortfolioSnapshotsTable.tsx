@@ -1,10 +1,10 @@
 // frontend/src/components/portfolio/PortfolioSnapshotsTable.tsx
-// Portfolio Snapshots Table showing all schemes with 12-month view
-// Inspired by HTML documentation design
+// Portfolio Snapshots Table with tree structure showing all metrics
+// Each scheme has 4 expandable rows: Units, NAV, Market Value, Performance
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
 
 interface PortfolioSnapshotsTableProps {
@@ -12,7 +12,7 @@ interface PortfolioSnapshotsTableProps {
   months?: number;
 }
 
-type ViewType = 'units' | 'nav' | 'market_value';
+type ExpandedRowType = 'units' | 'nav' | 'market_value' | 'performance';
 
 export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = ({
   customerId,
@@ -21,13 +21,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [viewType, setViewType] = useState<ViewType>('units');
   const [expandedSchemes, setExpandedSchemes] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
-    months,
-    viewType
+    months
   );
 
   const toggleSchemeExpansion = (schemeCode: string) => {
@@ -49,33 +47,21 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     return '';
   };
 
-  // Format value based on view type
-  const formatValue = (value: number | undefined, viewType: ViewType) => {
+  // Format value based on type
+  const formatValue = (value: number | undefined | null, type: 'units' | 'nav' | 'market_value' | 'percentage') => {
     if (value === undefined || value === null) return '-';
 
-    switch (viewType) {
+    switch (type) {
       case 'units':
         return value.toFixed(3);
       case 'nav':
         return `₹${value.toFixed(2)}`;
       case 'market_value':
         return `₹${(value / 100000).toFixed(2)}L`;
+      case 'percentage':
+        return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
       default:
         return value.toString();
-    }
-  };
-
-  // Get value from month data based on view type
-  const getValue = (monthData: any, viewType: ViewType) => {
-    switch (viewType) {
-      case 'units':
-        return monthData?.closing_units;
-      case 'nav':
-        return monthData?.closing_nav;
-      case 'market_value':
-        return monthData?.market_value;
-      default:
-        return 0;
     }
   };
 
@@ -132,7 +118,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       borderRadius: '12px',
       overflow: 'hidden'
     }}>
-      {/* Header with Tabs */}
+      {/* Header */}
       <div style={{
         padding: '20px',
         borderBottom: `2px solid ${colors.utility.primaryText}20`
@@ -141,48 +127,17 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
           fontSize: '18px',
           fontWeight: '600',
           color: colors.utility.primaryText,
-          margin: '0 0 16px 0'
+          margin: '0'
         }}>
           📈 Portfolio Snapshots - {months} Month View
         </h3>
-
-        {/* View Type Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          backgroundColor: colors.utility.primaryBackground,
-          borderRadius: '8px',
-          padding: '4px'
+        <p style={{
+          fontSize: '12px',
+          color: colors.utility.secondaryText,
+          margin: '8px 0 0 0'
         }}>
-          {[
-            { id: 'units' as ViewType, label: '📦 Units Snapshot', icon: '📦' },
-            { id: 'nav' as ViewType, label: '💰 NAV Values', icon: '💰' },
-            { id: 'market_value' as ViewType, label: '📊 Market Value', icon: '📊' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setViewType(tab.id)}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                border: 'none',
-                borderRadius: '6px',
-                background: viewType === tab.id
-                  ? colors.brand.primary
-                  : 'transparent',
-                color: viewType === tab.id
-                  ? 'white'
-                  : colors.utility.primaryText,
-                fontSize: '13px',
-                fontWeight: viewType === tab.id ? '600' : '500',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+          Click ▶ to expand and view Units, NAV, Market Value, and Performance metrics
+        </p>
       </div>
 
       {/* Table Container with Horizontal Scroll */}
@@ -208,19 +163,9 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                 left: 0,
                 backgroundColor: colors.utility.primaryBackground,
                 zIndex: 2,
-                minWidth: '280px'
+                minWidth: '320px'
               }}>
                 Scheme Name
-              </th>
-              <th style={{
-                padding: '12px',
-                textAlign: 'center',
-                fontSize: '11px',
-                fontWeight: '600',
-                color: colors.utility.secondaryText,
-                width: '50px'
-              }}>
-                📊
               </th>
               {monthHeaders.map((month: any, idx: number) => (
                 <th
@@ -232,14 +177,14 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     fontWeight: '600',
                     color: colors.utility.secondaryText,
                     textTransform: 'uppercase',
-                    minWidth: '80px',
-                    backgroundColor: idx === monthHeaders.length - 1
+                    minWidth: '90px',
+                    backgroundColor: idx === 0
                       ? `${colors.brand.primary}10`
                       : undefined
                   }}
                 >
                   {formatMonthHeader(month)}
-                  {idx === monthHeaders.length - 1 && (
+                  {idx === 0 && (
                     <span style={{ marginLeft: '4px', color: colors.brand.primary }}>*</span>
                   )}
                 </th>
@@ -258,8 +203,10 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                       borderBottom: `1px solid ${colors.utility.primaryText}10`,
                       backgroundColor: schemeIdx % 2 === 0
                         ? colors.utility.secondaryBackground
-                        : colors.utility.primaryBackground
+                        : colors.utility.primaryBackground,
+                      cursor: 'pointer'
                     }}
+                    onClick={() => toggleSchemeExpansion(scheme.scheme_code)}
                   >
                     <td style={{
                       padding: '12px 16px',
@@ -275,20 +222,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        <button
-                          onClick={() => toggleSchemeExpansion(scheme.scheme_code)}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            color: colors.utility.primaryText
-                          }}
-                        >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: colors.utility.primaryText
+                        }}>
                           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </button>
+                        </div>
                         <div>
                           <div style={{
                             fontWeight: '700',
@@ -301,136 +241,189 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             fontSize: '11px',
                             color: colors.utility.secondaryText
                           }}>
-                            {scheme.category}{scheme.sub_category ? ` • ${scheme.sub_category}` : ''}
+                            {scheme.scheme_code} • {scheme.category}{scheme.sub_category ? ` • ${scheme.sub_category}` : ''}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td style={{
+                    <td colSpan={monthHeaders.length} style={{
                       padding: '12px',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      fontSize: '11px',
+                      color: colors.utility.secondaryText
                     }}>
-                      <button
-                        style={{
-                          border: 'none',
-                          background: `${colors.brand.primary}15`,
-                          borderRadius: '6px',
-                          padding: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: colors.brand.primary
-                        }}
-                        title="View Chart"
-                      >
-                        <BarChart3 size={16} />
-                      </button>
+                      Click to expand metrics
                     </td>
-                    {scheme.monthly_data.map((month: any, idx: number) => (
-                      <td
-                        key={idx}
-                        style={{
-                          padding: '12px',
-                          textAlign: 'right',
-                          fontWeight: '500',
-                          color: colors.utility.primaryText,
-                          backgroundColor: idx === scheme.monthly_data.length - 1
-                            ? `${colors.brand.primary}10`
-                            : undefined
-                        }}
-                      >
-                        {formatValue(getValue(month, viewType), viewType)}
-                      </td>
-                    ))}
                   </tr>
 
-                  {/* Performance Summary Row (Expandable) */}
-                  {isExpanded && scheme.summary && (
+                  {/* Expandable Rows - Units */}
+                  {isExpanded && (
+                    <tr style={{
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      borderBottom: `1px solid ${colors.utility.primaryText}05`
+                    }}>
+                      <td style={{
+                        padding: '8px 16px 8px 48px',
+                        fontSize: '12px',
+                        color: colors.utility.primaryText,
+                        fontWeight: '500',
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: `${colors.utility.primaryText}05`,
+                        zIndex: 1
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📦</span>
+                          <span>Units</span>
+                        </div>
+                      </td>
+                      {scheme.monthly_data.map((month: any, idx: number) => (
+                        <td
+                          key={idx}
+                          style={{
+                            padding: '8px 12px',
+                            textAlign: 'right',
+                            fontWeight: '500',
+                            fontSize: '12px',
+                            color: colors.utility.primaryText,
+                            backgroundColor: idx === 0
+                              ? `${colors.brand.primary}10`
+                              : undefined
+                          }}
+                        >
+                          {formatValue(month.closing_units, 'units')}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+
+                  {/* Expandable Rows - NAV */}
+                  {isExpanded && (
+                    <tr style={{
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      borderBottom: `1px solid ${colors.utility.primaryText}05`
+                    }}>
+                      <td style={{
+                        padding: '8px 16px 8px 48px',
+                        fontSize: '12px',
+                        color: colors.utility.primaryText,
+                        fontWeight: '500',
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: `${colors.utility.primaryText}05`,
+                        zIndex: 1
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>💰</span>
+                          <span>NAV</span>
+                        </div>
+                      </td>
+                      {scheme.monthly_data.map((month: any, idx: number) => (
+                        <td
+                          key={idx}
+                          style={{
+                            padding: '8px 12px',
+                            textAlign: 'right',
+                            fontWeight: '500',
+                            fontSize: '12px',
+                            color: month.has_nav_data ? colors.utility.primaryText : colors.semantic.error,
+                            backgroundColor: idx === 0
+                              ? `${colors.brand.primary}10`
+                              : undefined
+                          }}
+                        >
+                          {month.has_nav_data
+                            ? formatValue(month.closing_nav, 'nav')
+                            : 'No data'}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+
+                  {/* Expandable Rows - Market Value */}
+                  {isExpanded && (
+                    <tr style={{
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      borderBottom: `1px solid ${colors.utility.primaryText}05`
+                    }}>
+                      <td style={{
+                        padding: '8px 16px 8px 48px',
+                        fontSize: '12px',
+                        color: colors.utility.primaryText,
+                        fontWeight: '500',
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: `${colors.utility.primaryText}05`,
+                        zIndex: 1
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📊</span>
+                          <span>Market Value</span>
+                        </div>
+                      </td>
+                      {scheme.monthly_data.map((month: any, idx: number) => (
+                        <td
+                          key={idx}
+                          style={{
+                            padding: '8px 12px',
+                            textAlign: 'right',
+                            fontWeight: '500',
+                            fontSize: '12px',
+                            color: colors.utility.primaryText,
+                            backgroundColor: idx === 0
+                              ? `${colors.brand.primary}10`
+                              : undefined
+                          }}
+                        >
+                          {formatValue(month.market_value, 'market_value')}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+
+                  {/* Expandable Rows - Performance */}
+                  {isExpanded && (
                     <tr style={{
                       backgroundColor: `${colors.utility.primaryText}05`,
                       borderBottom: `1px solid ${colors.utility.primaryText}10`
                     }}>
-                      <td
-                        colSpan={monthHeaders.length + 2}
-                        style={{
-                          padding: '12px 16px 12px 48px',
-                          fontSize: '12px',
-                          color: colors.utility.secondaryText
-                        }}
-                      >
-                        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                          {viewType === 'units' && (
-                            <>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  Closing Units:
-                                </strong>{' '}
-                                {formatValue(scheme.summary.closing_units, viewType)}
-                              </div>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  Units Added:
-                                </strong>{' '}
-                                {formatValue(scheme.summary.total_units_added, viewType)}
-                              </div>
-                            </>
-                          )}
-                          {viewType === 'nav' && (
-                            <>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  Latest NAV:
-                                </strong>{' '}
-                                {formatValue(scheme.summary.closing_nav, viewType)}
-                              </div>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  NAV Change:
-                                </strong>{' '}
-                                <span style={{
-                                  color: (scheme.summary.nav_change_percentage || 0) >= 0
-                                    ? colors.semantic.success
-                                    : colors.semantic.error
-                                }}>
-                                  {(scheme.summary.nav_change_percentage || 0) >= 0 ? '+' : ''}
-                                  {(scheme.summary.nav_change_percentage || 0).toFixed(2)}%
-                                </span>
-                              </div>
-                            </>
-                          )}
-                          {viewType === 'market_value' && (
-                            <>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  Current Value:
-                                </strong>{' '}
-                                {formatValue(scheme.summary.current_market_value, viewType)}
-                              </div>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  Total Invested:
-                                </strong>{' '}
-                                {formatValue(scheme.summary.total_invested, viewType)}
-                              </div>
-                              <div>
-                                <strong style={{ color: colors.utility.primaryText }}>
-                                  P&L:
-                                </strong>{' '}
-                                <span style={{
-                                  color: (scheme.summary.overall_profit_loss || 0) >= 0
-                                    ? colors.semantic.success
-                                    : colors.semantic.error
-                                }}>
-                                  {formatValue(scheme.summary.overall_profit_loss, viewType)}
-                                  {' '}({(scheme.summary.overall_profit_loss_percentage || 0) >= 0 ? '+' : ''}
-                                  {(scheme.summary.overall_profit_loss_percentage || 0).toFixed(2)}%)
-                                </span>
-                              </div>
-                            </>
-                          )}
+                      <td style={{
+                        padding: '8px 16px 8px 48px',
+                        fontSize: '12px',
+                        color: colors.utility.primaryText,
+                        fontWeight: '500',
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: `${colors.utility.primaryText}05`,
+                        zIndex: 1
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📈</span>
+                          <span>Performance (MoM)</span>
                         </div>
                       </td>
+                      {scheme.monthly_data.map((month: any, idx: number) => {
+                        const changePercentage = month.month_change_percentage || 0;
+                        return (
+                          <td
+                            key={idx}
+                            style={{
+                              padding: '8px 12px',
+                              textAlign: 'right',
+                              fontWeight: '500',
+                              fontSize: '12px',
+                              color: changePercentage >= 0
+                                ? colors.semantic.success
+                                : colors.semantic.error,
+                              backgroundColor: idx === 0
+                                ? `${colors.brand.primary}10`
+                                : undefined
+                            }}
+                          >
+                            {formatValue(changePercentage, 'percentage')}
+                          </td>
+                        );
+                      })}
                     </tr>
                   )}
                 </React.Fragment>
@@ -448,7 +441,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         fontSize: '12px',
         color: colors.utility.secondaryText
       }}>
-        * Current month data • Click 📊 to view detailed chart • Click ▶ to expand performance summary
+        * Current month data • Click ▶ to expand and view detailed metrics (Units, NAV, Market Value, Performance)
       </div>
     </div>
   );

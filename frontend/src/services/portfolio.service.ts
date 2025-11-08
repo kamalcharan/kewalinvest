@@ -125,18 +125,16 @@ export class PortfolioService {
 
   /**
    * Get monthly snapshots for all schemes in customer's portfolio
-   * Returns all schemes with their monthly data in one call
+   * Returns all schemes with their monthly data (units, NAV, market value) in one call
    */
   static async getMonthlySnapshots(
     customerId: number,
-    months: number = 12,
-    viewType: 'units' | 'nav' | 'market_value' = 'units'
+    months: number = 12
   ): Promise<any> {
     try {
       const url = API_ENDPOINTS.PORTFOLIO.GET_MONTHLY_SNAPSHOTS(customerId);
       const params = new URLSearchParams();
       params.append('months', months.toString());
-      params.append('view_type', viewType);
 
       return await apiService.get<any>(`${url}?${params.toString()}`);
     } catch (error: any) {
