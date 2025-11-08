@@ -32,7 +32,6 @@ import { CustomerViewHeader } from '../../components/customers/CustomerViewHeade
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
 import GoalCard from '../../components/goals/GoalCard';
-import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
@@ -60,7 +59,6 @@ const CustomerViewPage: React.FC = () => {
   const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
   // Goal modal states
-  const [showGoalDetailsModal, setShowGoalDetailsModal] = useState(false);
   const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
@@ -1274,10 +1272,6 @@ comparisonData={comparisonIndexData}
                       <GoalCard
                         key={goal.id}
                         goal={goal}
-                        onEdit={(goalId: number) => {
-                          setSelectedGoalId(goalId);
-                          setShowGoalDetailsModal(true);
-                        }}
                         onRecalculate={async (goalId: number) => {
                           setSelectedGoalId(goalId);
                           setShowGoalRecalculationModal(true);
@@ -1536,17 +1530,6 @@ comparisonData={comparisonIndexData}
       )}
 
       {/* Goal Modals */}
-      {showGoalDetailsModal && selectedGoalId && (
-        <GoalDetailsModal
-          goalId={selectedGoalId}
-          onClose={() => {
-            setShowGoalDetailsModal(false);
-            setSelectedGoalId(null);
-            refetchGoals();
-          }}
-        />
-      )}
-
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}

@@ -1,11 +1,11 @@
 // frontend/src/pages/goals/GoalSetupPage.tsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Target, Calendar, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreateGoalRequest, GoalTrackingType, LinkedScheme, DEFAULT_RETURN_RATE, DEFAULT_INFLATION_RATE } from '../../types/goal.types';
-import { useCreateGoal, useGoalProjection } from '../../hooks/useGoals';
+import { useCreateGoal, useGoalProjection, useGoal, useUpdateGoal } from '../../hooks/useGoals';
 import { useCustomerSchemes } from '../../hooks/useJTBD';
 import GoalSchemeSelector from '../../components/goals/forms/GoalSchemeSelector';
 import { generateGoalTitle } from '../../utils/goalUtils';
@@ -20,22 +20,25 @@ interface GoalSetupPageProps {
 
 const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
   const navigate = useNavigate();
-  const { customerId: customerIdParam } = useParams<{ customerId: string }>();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const { customerId: customerIdParam, goalId: goalIdParam } = useParams<{ customerId: string; goalId?: string }>();
 
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Get mode and IDs from params/query
-  const mode: GoalMode = (searchParams.get('mode') as GoalMode) || 'create';
-  const goalId = searchParams.get('goalId') ? parseInt(searchParams.get('goalId')!) : undefined;
+  // Determine mode from URL path
   const customerId = customerIdParam ? parseInt(customerIdParam) : undefined;
+  const goalId = goalIdParam ? parseInt(goalIdParam) : undefined;
+  const mode: GoalMode = location.pathname.includes('/edit') ? 'edit' : location.pathname.includes('/rebalance') ? 'rebalance' : 'create';
 
   // Goal type selection
   const [selectedType, setSelectedType] = useState<GoalTrackingType | null>(null);
 
   // Fetch customer schemes
   const { data: schemes, isLoading: schemesLoading } = useCustomerSchemes(customerId!);
+
+  // Fetch existing goal data for edit/rebalance modes
+  const { data: existingGoal, isLoading: goalLoading } = useGoal(goalId || 0, { enabled: !!goalId && (mode === 'edit' || mode === 'rebalance') });
 
   // Goal projection calculator
   const {
@@ -47,6 +50,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
   } = useGoalProjection();
 
   const createGoalMutation = useCreateGoal();
+  const updateGoalMutation = useUpdateGoal();
 
   // Form state - restored from original forms
   const [goalName, setGoalName] = useState('');
@@ -62,6 +66,33 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
   const [notes, setNotes] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Populate form with existing goal data for edit/rebalance modes
+  useEffect(() => {
+    if (existingGoal && (mode === 'edit' || mode === 'rebalance')) {
+      const config = existingGoal.config_data;
+
+      // Set basic fields
+      setTitle(existingGoal.title);
+      setDescription(existingGoal.description || '');
+      setPriority(existingGoal.priority);
+      setNotes(existingGoal.notes || '');
+      setSelectedType(config.goal_type);
+      setGoalName(config.goal_name);
+      setExpectedReturnRate(config.expected_return_rate || DEFAULT_RETURN_RATE);
+      setInflationRate(config.inflation_rate || DEFAULT_INFLATION_RATE);
+      setMonthlyContribution(config.monthly_contribution || 0);
+      setLinkedSchemes(config.linked_schemes || []);
+
+      // Set type-specific fields
+      if ('target_corpus' in config) {
+        setTargetAmount(config.target_corpus || 0);
+      }
+      if ('target_date' in config && config.target_date) {
+        setTargetDate(config.target_date);
+      }
+    }
+  }, [existingGoal, mode]);
 
   // Calculate current portfolio value from selected schemes
   const currentValue = useMemo(() => {
@@ -272,20 +303,41 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
       configData.target_amount = targetAmount;
     }
 
-    const goalData: CreateGoalRequest = {
-      customer_id: customerId,
-      goal_type: selectedType,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      priority,
-      config_data: configData
-    };
-
     try {
-      await createGoalMutation.mutateAsync(goalData);
+      if (mode === 'create') {
+        // Create new goal
+        const goalData: CreateGoalRequest = {
+          customer_id: customerId,
+          goal_type: selectedType,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority,
+          config_data: configData
+        };
+        await createGoalMutation.mutateAsync(goalData);
+      } else if (mode === 'edit' && goalId) {
+        // Update existing goal
+        const updateData = {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority,
+          config_data: configData
+        };
+        await updateGoalMutation.mutateAsync({ goalId, data: updateData });
+      } else if (mode === 'rebalance' && goalId) {
+        // Rebalance: only update linked_schemes allocation
+        const updateData = {
+          config_data: {
+            ...existingGoal?.config_data,
+            linked_schemes: linkedSchemes
+          }
+        };
+        await updateGoalMutation.mutateAsync({ goalId, data: updateData });
+      }
+
       navigate(`/customers/${customerId}?tab=goals`);
     } catch (error) {
-      console.error('Error creating goal:', error);
+      console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} goal:`, error);
     }
   };
 
@@ -322,6 +374,47 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
     return `${value.toFixed(decimals)}%`;
   };
 
+  // Check if any mutation is pending
+  const isSubmitting = createGoalMutation.isPending || updateGoalMutation.isPending;
+
+  // For rebalance mode, only allow editing scheme allocations
+  const isRebalanceMode = mode === 'rebalance';
+  const isReadOnly = isRebalanceMode;
+
+  // Loading state for edit/rebalance modes
+  if ((mode === 'edit' || mode === 'rebalance') && goalLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: colors.utility.primaryBackground,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            border: `3px solid ${colors.brand.primary}20`,
+            borderTopColor: colors.brand.primary,
+            borderRadius: '50%',
+            margin: '0 auto 16px',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+            Loading goal...
+          </div>
+        </div>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -338,7 +431,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button
             onClick={() => navigate(`/customers/${customerId}?tab=goals`)}
-            disabled={createGoalMutation.isPending}
+            disabled={isSubmitting}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -348,7 +441,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
               border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               color: colors.utility.primaryText,
-              cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               fontWeight: '500'
             }}
@@ -475,7 +568,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                 selectedSchemes={linkedSchemes}
                 onChange={setLinkedSchemes}
                 error={errors.linkedSchemes}
-                disabled={schemesLoading || createGoalMutation.isPending}
+                disabled={schemesLoading || isSubmitting}
               />
             </div>
 
@@ -513,7 +606,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       value={goalName}
                       onChange={(e) => setGoalName(e.target.value)}
                       placeholder="e.g., Child's Education, House Down Payment"
-                      disabled={createGoalMutation.isPending}
+                      disabled={isSubmitting || isReadOnly}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -543,7 +636,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                         value={targetAmount || ''}
                         onChange={(e) => setTargetAmount(Number(e.target.value))}
                         placeholder="5000000"
-                        disabled={createGoalMutation.isPending}
+                        disabled={isSubmitting || isReadOnly}
                         style={{
                           width: '100%',
                           padding: '10px 12px',
@@ -573,7 +666,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                         value={targetDate}
                         onChange={(e) => setTargetDate(e.target.value)}
                         min={new Date().toISOString().split('T')[0]}
-                        disabled={createGoalMutation.isPending}
+                        disabled={isSubmitting || isReadOnly}
                         style={{
                           width: '100%',
                           padding: '10px 12px',
@@ -604,7 +697,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       value={monthlyContribution || ''}
                       onChange={(e) => setMonthlyContribution(Number(e.target.value))}
                       placeholder="10000"
-                      disabled={createGoalMutation.isPending}
+                      disabled={isSubmitting || isReadOnly}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -630,7 +723,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                         step="0.5"
                         value={expectedReturnRate}
                         onChange={(e) => setExpectedReturnRate(Number(e.target.value))}
-                        disabled={createGoalMutation.isPending}
+                        disabled={isSubmitting || isReadOnly}
                         style={{
                           width: '100%',
                           padding: '10px 12px',
@@ -653,7 +746,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                         step="0.5"
                         value={inflationRate}
                         onChange={(e) => setInflationRate(Number(e.target.value))}
-                        disabled={createGoalMutation.isPending}
+                        disabled={isSubmitting || isReadOnly}
                         style={{
                           width: '100%',
                           padding: '10px 12px',
@@ -677,7 +770,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="Auto-generated title"
-                      disabled={createGoalMutation.isPending}
+                      disabled={isSubmitting || isReadOnly}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -705,7 +798,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Additional details about the goal..."
                       rows={2}
-                      disabled={createGoalMutation.isPending}
+                      disabled={isSubmitting || isReadOnly}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -849,7 +942,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Additional notes..."
                     rows={2}
-                    disabled={createGoalMutation.isPending}
+                    disabled={isSubmitting || isReadOnly}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
@@ -904,7 +997,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       border: `1px solid ${colors.utility.primaryText}20`,
                       borderRadius: '6px',
                       color: colors.utility.primaryText,
-                      cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
                       fontSize: '14px',
                       fontWeight: '500'
                     }}
@@ -920,13 +1013,13 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
                       border: 'none',
                       borderRadius: '6px',
                       color: 'white',
-                      cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
                       fontSize: '14px',
                       fontWeight: '600',
-                      opacity: createGoalMutation.isPending ? 0.6 : 1
+                      opacity: isSubmitting ? 0.6 : 1
                     }}
                   >
-                    {createGoalMutation.isPending ? 'Creating...' : mode === 'edit' ? 'Update Goal' : 'Create Goal'}
+                    {isSubmitting ? (mode === 'edit' ? 'Updating...' : mode === 'rebalance' ? 'Rebalancing...' : 'Creating...') : (mode === 'edit' ? 'Update Goal' : mode === 'rebalance' ? 'Rebalance Goal' : 'Create Goal')}
                   </button>
                 </div>
               </div>

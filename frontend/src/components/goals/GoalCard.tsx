@@ -1,6 +1,7 @@
 // frontend/src/components/goals/GoalCard.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GoalConfiguration, isTimeBasedGoal, isPriceBasedGoal, isTimeAndPriceGoal } from '../../types/goal.types';
 import { useDeleteGoal } from '../../hooks/useGoals';
@@ -24,6 +25,7 @@ interface GoalCardProps {
   onToggleWatchlist?: (goalId: number, isInWatchlist: boolean) => void;
   compact?: boolean;
   showAllocations?: boolean;
+  hideActions?: boolean;
 }
 
 const GoalCard: React.FC<GoalCardProps> = ({
@@ -32,8 +34,10 @@ const GoalCard: React.FC<GoalCardProps> = ({
   onRecalculate,
   onToggleWatchlist,
   compact = false,
-  showAllocations = true
+  showAllocations = true,
+  hideActions = false
 }) => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -354,11 +358,11 @@ const GoalCard: React.FC<GoalCardProps> = ({
               </button>
             )}
 
-            {/* Edit */}
-            {onEdit && (
+            {/* View Details */}
+            {!hideActions && (
               <button
-                onClick={() => onEdit(goal.id)}
-                title="Edit Goal"
+                onClick={() => navigate(`/customers/${goal.customer_id}/goals/${goal.id}`)}
+                title="View Goal Details"
                 style={{
                   padding: '6px',
                   backgroundColor: 'transparent',
