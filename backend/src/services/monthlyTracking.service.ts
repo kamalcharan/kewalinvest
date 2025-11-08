@@ -497,23 +497,19 @@ export class MonthlyTrackingService {
     viewType: string = 'units'
   ): Promise<any> {
     try {
-      // Get all active schemes for this customer
+      // Get all active schemes from customer's portfolio
       const schemesQuery = `
-        SELECT DISTINCT
-          t.scheme_code,
-          sd.scheme_name,
-          COALESCE(sm_cat.name, 'Uncategorized') as category,
-          COALESCE(sm_type.name, '') as sub_category
-        FROM t_transaction_table t
-        LEFT JOIN t_scheme_details sd ON t.scheme_code = sd.scheme_code
-        LEFT JOIN t_scheme_masters sm_cat ON sd.scheme_category_id = sm_cat.id
-        LEFT JOIN t_scheme_masters sm_type ON sd.scheme_type_id = sm_type.id
-        WHERE t.tenant_id = $1
-          AND t.is_live = $2
-          AND t.customer_id = $3
-          AND t.is_active = true
-          AND t.portfolio_flag = true
-        ORDER BY sd.scheme_name
+        SELECT
+          scheme_code,
+          scheme_name,
+          COALESCE(category, 'Uncategorized') as category,
+          COALESCE(sub_category, '') as sub_category
+        FROM t_customer_master_portfolio
+        WHERE tenant_id = $1
+          AND is_live = $2
+          AND customer_id = $3
+          AND is_active = true
+        ORDER BY scheme_name
       `;
 
       const schemesResult = await this.db.query(schemesQuery, [
