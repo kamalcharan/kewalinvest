@@ -414,7 +414,6 @@ export const MarketAnalysisDashboard: React.FC = () => {
         </Card>
 
         {/* ==================== QUICK LINKS ==================== */}
-        {/* TODO: Uncomment when these pages are created
         <Card>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -446,7 +445,6 @@ export const MarketAnalysisDashboard: React.FC = () => {
             </button>
           </div>
         </Card>
-        */}
 
         {/* ==================== INFO BANNER ==================== */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
