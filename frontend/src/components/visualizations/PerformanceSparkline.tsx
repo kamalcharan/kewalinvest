@@ -133,12 +133,19 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
 
   const points = useMemo(() => {
     if (!data || data.length === 0) return [];
-    
+
     const min = Math.min(...data);
     const max = Math.max(...data);
-    const range = max - min || 1;
+    const rawRange = max - min;
+
+    // FIX: If range is too small (flat line), use 5% of average value as minimum range
+    // This prevents the graph from appearing as a straight line when values don't vary much
+    const avgValue = data.reduce((sum, val) => sum + val, 0) / data.length;
+    const minRange = avgValue * 0.05; // 5% of average
+    const range = Math.max(rawRange, minRange) || 1;
+
     const padding = 2;
-    
+
     return data.map((value, index) => ({
       x: (index / (Math.max(data.length - 1, 1))) * (width - padding * 2) + padding,
       y: height - ((value - min) / range * (height - padding * 2) + padding),
