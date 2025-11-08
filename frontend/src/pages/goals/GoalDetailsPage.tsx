@@ -5,12 +5,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Edit, Shuffle, Target } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGoal, useGoalHistory, useRecalculateGoal } from '../../hooks/useGoals';
+import { useJTBDExecutions } from '../../hooks/useJTBD';
 import { formatDate, formatCurrency, formatPercentage } from '../../utils/goalUtils';
 import GoalCard from '../../components/goals/GoalCard';
 import GoalProgressChart from '../../components/goals/GoalProgressChart';
 import GoalActionCard from '../../components/goals/GoalActionCard';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
+import JTBDExecutionCard from '../../components/jtbd/JTBDExecutionCard';
+import GoalMetricsCard from '../../components/goals/GoalMetricsCard';
 import { GoalActionItem } from '../../types/goal.types';
+import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 
 type TabType = 'overview' | 'history' | 'schemes' | 'actions';
 
@@ -29,6 +33,13 @@ const GoalDetailsPage: React.FC = () => {
 
   const { data: goal, isLoading: goalLoading, error: goalError, refetch: refetchGoal } = useGoal(goalIdNum);
   const { data: history, isLoading: historyLoading } = useGoalHistory(goalIdNum);
+
+  // Fetch SIP executions for this goal
+  const { data: sipExecutionsData, isLoading: sipExecutionsLoading, refetch: refetchSIPExecutions } = useJTBDExecutions({
+    config_id: goalIdNum,
+    execution_type: JTBD_TYPE.GOAL_SIP_PLAN
+  });
+
   const recalculateMutation = useRecalculateGoal();
 
   // Handle recalculate
@@ -153,6 +164,12 @@ const GoalDetailsPage: React.FC = () => {
   // Get actions for this goal
   const { getGoalActions } = require('../../utils/goalUtils');
   const actions = getGoalActions(goal);
+
+  // Calculate SIP metrics
+  const totalSIPs = sipExecutionsData?.executions.length || 0;
+  const missedSIPs = sipExecutionsData?.executions.filter(
+    ex => ex.execution_status === EXECUTION_STATUS.PENDING && new Date(ex.scheduled_date) < new Date()
+  ).length || 0;
 
   // Tabs config
   const tabs: { id: TabType; label: string; icon: string }[] = [
@@ -376,26 +393,36 @@ const GoalDetailsPage: React.FC = () => {
             {/* Goal Card */}
             <GoalCard goal={goal} compact={false} showAllocations={true} hideActions={true} />
 
-            {/* Progress Chart */}
-            <div style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px',
-              padding: '24px'
-            }}>
-              <h3 style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                margin: '0 0 20px 0'
+            {/* Progress Tracking - 70:30 Split */}
+            <div style={{ display: 'grid', gridTemplateColumns: '70% 30%', gap: '20px' }}>
+              {/* Left: Progress Chart (70%) */}
+              <div style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                padding: '24px'
               }}>
-                Progress Tracking
-              </h3>
-              <GoalProgressChart goalId={goalIdNum} height={300} showProjection={true} />
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  margin: '0 0 20px 0'
+                }}>
+                  Progress Tracking
+                </h3>
+                <GoalProgressChart goalId={goalIdNum} height={300} showProjection={true} />
+              </div>
+
+              {/* Right: Metrics Card (30%) */}
+              <GoalMetricsCard
+                goal={goal}
+                totalSIPs={totalSIPs}
+                missedSIPs={missedSIPs}
+              />
             </div>
           </div>
         )}
 
-        {/* History Tab */}
+        {/* History Tab - SIP Execution Records */}
         {activeTab === 'history' && (
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
@@ -408,9 +435,9 @@ const GoalDetailsPage: React.FC = () => {
               color: colors.utility.primaryText,
               margin: '0 0 20px 0'
             }}>
-              Goal History & Snapshots
+              SIP Execution History
             </h3>
-            {historyLoading ? (
+            {sipExecutionsLoading ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <div style={{
                   width: '32px',
@@ -422,84 +449,28 @@ const GoalDetailsPage: React.FC = () => {
                   animation: 'spin 0.8s linear infinite'
                 }} />
               </div>
-            ) : !history || history.length === 0 ? (
+            ) : !sipExecutionsData || sipExecutionsData.executions.length === 0 ? (
               <div style={{
                 textAlign: 'center',
                 padding: '60px 40px',
                 color: colors.utility.secondaryText
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📊</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>No History Available Yet</div>
-                <div style={{ fontSize: '13px' }}>Goal snapshots will appear here as the goal is tracked over time</div>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>💰</div>
+                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>No SIP Records Yet</div>
+                <div style={{ fontSize: '13px' }}>SIP execution records will appear here as they are scheduled and completed</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: '13px'
-                }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${colors.utility.primaryText}15` }}>
-                      <th style={{ padding: '12px 8px', textAlign: 'left', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>DATE</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>CURRENT VALUE</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>MONTHLY SIP</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>PROJECTED</th>
-                      {history[0]?.probability_of_success !== undefined && (
-                        <th style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>SUCCESS %</th>
-                      )}
-                      <th style={{ padding: '12px 8px', textAlign: 'center', color: colors.utility.secondaryText, fontWeight: '600', fontSize: '12px' }}>STATUS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((snapshot, idx) => (
-                      <tr
-                        key={idx}
-                        style={{
-                          borderBottom: `1px solid ${colors.utility.primaryText}08`,
-                          backgroundColor: idx % 2 === 0 ? 'transparent' : colors.utility.primaryBackground
-                        }}
-                      >
-                        <td style={{ padding: '12px 8px', color: colors.utility.primaryText, fontWeight: '500' }}>
-                          {formatDate(snapshot.snapshot_date, 'short')}
-                        </td>
-                        <td style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.primaryText, fontWeight: '600' }}>
-                          {formatCurrency(snapshot.current_value, true)}
-                        </td>
-                        <td style={{ padding: '12px 8px', textAlign: 'right', color: colors.utility.secondaryText }}>
-                          {formatCurrency(snapshot.monthly_contribution, true)}
-                        </td>
-                        <td style={{ padding: '12px 8px', textAlign: 'right', color: colors.brand.primary, fontWeight: '600' }}>
-                          {snapshot.projected_corpus ? formatCurrency(snapshot.projected_corpus, true) : '-'}
-                        </td>
-                        {history[0]?.probability_of_success !== undefined && (
-                          <td style={{
-                            padding: '12px 8px',
-                            textAlign: 'right',
-                            color: snapshot.probability_of_success !== null && snapshot.probability_of_success !== undefined
-                              ? snapshot.probability_of_success >= 75 ? '#10B981' : snapshot.probability_of_success >= 60 ? '#F59E0B' : '#DC2626'
-                              : colors.utility.secondaryText,
-                            fontWeight: '600'
-                          }}>
-                            {snapshot.probability_of_success !== null && snapshot.probability_of_success !== undefined ? formatPercentage(snapshot.probability_of_success, 0) : '-'}
-                          </td>
-                        )}
-                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            padding: '4px 10px',
-                            backgroundColor: snapshot.on_track ? '#10B981' + '20' : '#F59E0B' + '20',
-                            color: snapshot.on_track ? '#10B981' : '#F59E0B',
-                            borderRadius: '4px',
-                            fontWeight: '600'
-                          }}>
-                            {snapshot.on_track ? '✓ On Track' : '⚠ Behind'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {sipExecutionsData.executions.map((execution) => (
+                  <JTBDExecutionCard
+                    key={execution.id}
+                    execution={execution}
+                    onUpdate={() => {
+                      refetchSIPExecutions();
+                      refetchGoal();
+                    }}
+                  />
+                ))}
               </div>
             )}
           </div>

@@ -558,33 +558,106 @@ const GoalCard: React.FC<GoalCardProps> = ({
                 </div>
               )}
 
-              {/* Right: Target Date (Bottom Corner) */}
-              <div style={{
-                textAlign: 'right',
-                alignSelf: 'flex-end',
-                minWidth: '120px'
-              }}>
-                <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
-                  {metrics.secondaryLabel}
+              {/* Right: Timeline Slider (replaces target date) */}
+              {(isTimeBasedGoal(config) || isTimeAndPriceGoal(config)) && config.target_date && (
+                <div style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  maxWidth: '280px'
+                }}>
+                  {(() => {
+                    const startDate = new Date(goal.created_at);
+                    const targetDate = new Date(config.target_date);
+                    const today = new Date();
+
+                    const totalDays = Math.max(1, Math.floor((targetDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    const elapsedDays = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    const progressPercent = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
+
+                    return (
+                      <div>
+                        {/* Timeline Bar */}
+                        <div style={{
+                          position: 'relative',
+                          width: '100%',
+                          height: '8px',
+                          backgroundColor: colors.utility.primaryText + '15',
+                          borderRadius: '4px',
+                          overflow: 'hidden',
+                          marginBottom: '6px'
+                        }}>
+                          {/* Progress Fill */}
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            height: '100%',
+                            width: `${progressPercent}%`,
+                            background: `linear-gradient(90deg, ${colors.brand.primary} 0%, ${colors.brand.primary}CC 100%)`,
+                            transition: 'width 0.3s ease'
+                          }} />
+
+                          {/* Current Position Marker */}
+                          <div style={{
+                            position: 'absolute',
+                            left: `${progressPercent}%`,
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '14px',
+                            height: '14px',
+                            backgroundColor: colors.brand.primary,
+                            border: `2px solid ${colors.utility.secondaryBackground}`,
+                            borderRadius: '50%',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            zIndex: 1
+                          }} />
+                        </div>
+
+                        {/* Date Labels */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: '10px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          <div style={{ fontWeight: '500' }}>
+                            {formatDate(goal.created_at, 'short')}
+                          </div>
+                          <div style={{ fontWeight: '600', color: colors.utility.primaryText }}>
+                            {formatDate(config.target_date, 'short')}
+                          </div>
+                        </div>
+
+                        {/* Days Remaining */}
+                        <div style={{
+                          fontSize: '10px',
+                          color: colors.utility.secondaryText,
+                          textAlign: 'center',
+                          marginTop: '4px'
+                        }}>
+                          {Math.max(0, totalDays - elapsedDays)} days remaining
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-                  {metrics.secondary}
-                </div>
-                {/* Additional Info for Time & Price Goals */}
-                {isTimeAndPriceGoal(config) && metrics.probability !== undefined && (
-                  <div style={{ marginTop: '4px', fontSize: '10px' }}>
-                    <div>
-                      <span style={{ color: colors.utility.secondaryText }}>Success: </span>
-                      <span style={{
-                        fontWeight: '600',
-                        color: metrics.probability >= 75 ? '#10B981' : metrics.probability >= 60 ? '#F59E0B' : '#DC2626'
-                      }}>
-                        {formatPercentage(metrics.probability, 0)}
-                      </span>
-                    </div>
+              )}
+
+              {/* For Price-based goals without target date, show expected date */}
+              {isPriceBasedGoal(config) && !isTimeAndPriceGoal(config) && (
+                <div style={{
+                  textAlign: 'right',
+                  alignSelf: 'flex-end',
+                  minWidth: '120px'
+                }}>
+                  <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
+                    {metrics.secondaryLabel}
                   </div>
-                )}
-              </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                    {metrics.secondary}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Progress Bar (for goals with target amount) */}
