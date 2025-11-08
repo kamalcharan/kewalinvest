@@ -39,7 +39,20 @@ const GoalCard: React.FC<GoalCardProps> = ({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [allocationData, setAllocationData] = useState<SchemeAllocationUtilization[]>([]);
+  const [showTooltip, setShowTooltip] = useState(false);
   const deleteMutation = useDeleteGoal();
+
+  // Color palette for pie chart segments
+  const pieColors = [
+    '#3B82F6', // Blue
+    '#10B981', // Green
+    '#F59E0B', // Orange
+    '#8B5CF6', // Purple
+    '#EC4899', // Pink
+    '#06B6D4', // Cyan
+    '#EF4444', // Red
+    '#84CC16'  // Lime
+  ];
 
   // Fetch allocation utilization data when showing allocations
   useEffect(() => {
@@ -73,6 +86,21 @@ const GoalCard: React.FC<GoalCardProps> = ({
     if (availablePercentage < 20) return colors.semantic.error;
     if (availablePercentage < 50) return colors.semantic.warning;
     return colors.semantic.success;
+  };
+
+  // Helper to create pie chart path
+  const createPieSlice = (startAngle: number, endAngle: number, radius: number, cx: number, cy: number): string => {
+    const startRadians = (startAngle - 90) * (Math.PI / 180);
+    const endRadians = (endAngle - 90) * (Math.PI / 180);
+
+    const x1 = cx + radius * Math.cos(startRadians);
+    const y1 = cy + radius * Math.sin(startRadians);
+    const x2 = cx + radius * Math.cos(endRadians);
+    const y2 = cy + radius * Math.sin(endRadians);
+
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
   };
 
   // Get key metrics based on goal type
@@ -398,11 +426,12 @@ const GoalCard: React.FC<GoalCardProps> = ({
                 )}
               </div>
 
-              {/* Center: Pie Chart with Tooltip */}
+              {/* Center: Pie Chart with Fund Allocation */}
               {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
                 <div
                   style={{ position: 'relative', flexShrink: 0 }}
-                  title={`Fund Allocation:\n${config.linked_schemes.map(s => `${s.scheme_name}: ${s.allocation_percentage}%`).join('\n')}`}
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
                 >
                   <div style={{
                     position: 'relative',
@@ -410,52 +439,118 @@ const GoalCard: React.FC<GoalCardProps> = ({
                     height: '80px',
                     cursor: 'pointer'
                   }}>
-                    <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
-                      <circle
-                        cx="40"
-                        cy="40"
-                        r="32"
-                        fill="none"
-                        stroke={colors.utility.primaryText + '15'}
-                        strokeWidth="12"
-                      />
-                      {metrics?.progress != null && (
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r="32"
-                          fill="none"
-                          stroke={colors.brand.primary}
-                          strokeWidth="12"
-                          strokeDasharray={`${(metrics.progress / 100) * 201} 201`}
-                          strokeLinecap="round"
-                        />
-                      )}
+                    {/* Pie Chart SVG */}
+                    <svg width="80" height="80">
+                      {config.linked_schemes.map((scheme, index) => {
+                        let startAngle = 0;
+                        // Calculate start angle based on previous allocations
+                        for (let i = 0; i < index; i++) {
+                          startAngle += (config.linked_schemes[i].allocation_percentage / 100) * 360;
+                        }
+                        const endAngle = startAngle + (scheme.allocation_percentage / 100) * 360;
+                        const sliceColor = pieColors[index % pieColors.length];
+
+                        return (
+                          <path
+                            key={scheme.scheme_code}
+                            d={createPieSlice(startAngle, endAngle, 32, 40, 40)}
+                            fill={sliceColor}
+                            opacity={0.9}
+                          />
+                        );
+                      })}
+                      {/* Center white circle to create donut effect */}
+                      <circle cx="40" cy="40" r="20" fill={colors.utility.secondaryBackground} />
                     </svg>
+
+                    {/* Center percentage (goal progress, not allocation) */}
+                    {metrics?.progress != null && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '700',
+                          color: colors.utility.primaryText,
+                          lineHeight: '1'
+                        }}>
+                          {Math.round(metrics.progress)}%
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tooltip with Color Legends */}
+                  {showTooltip && (
                     <div style={{
                       position: 'absolute',
-                      top: '50%',
+                      top: '100%',
                       left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      textAlign: 'center'
+                      transform: 'translateX(-50%)',
+                      marginTop: '8px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      border: `1px solid ${colors.utility.primaryText}20`,
+                      borderRadius: '8px',
+                      padding: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 1000,
+                      minWidth: '200px',
+                      whiteSpace: 'nowrap'
                     }}>
                       <div style={{
-                        fontSize: '16px',
-                        fontWeight: '700',
-                        color: colors.brand.primary,
-                        lineHeight: '1'
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        marginBottom: '8px',
+                        paddingBottom: '6px',
+                        borderBottom: `1px solid ${colors.utility.primaryText}15`
                       }}>
-                        {metrics?.progress != null ? `${Math.round(metrics.progress)}%` : '-'}
+                        Fund Allocation
                       </div>
-                      <div style={{
-                        fontSize: '9px',
-                        color: colors.utility.secondaryText,
-                        marginTop: '2px'
-                      }}>
-                        Complete
-                      </div>
+                      {config.linked_schemes.map((scheme, index) => (
+                        <div
+                          key={scheme.scheme_code}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '6px'
+                          }}
+                        >
+                          {/* Color Legend Box */}
+                          <div style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '2px',
+                            backgroundColor: pieColors[index % pieColors.length],
+                            flexShrink: 0
+                          }} />
+                          {/* Scheme Name */}
+                          <div style={{
+                            flex: 1,
+                            fontSize: '11px',
+                            color: colors.utility.primaryText,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {scheme.scheme_name}
+                          </div>
+                          {/* Percentage */}
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: colors.utility.primaryText
+                          }}>
+                            {scheme.allocation_percentage}%
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
