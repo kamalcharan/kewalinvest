@@ -247,7 +247,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
                   {formatNumber(stats.best_performer.return_value)}
                 </p>
                 <button
-                  onClick={() => navigate(`/market/analysis/${stats.best_performer?.index_id}`)}
+                  onClick={() => navigate(`/market/indices/${stats.best_performer?.index_id}`)}
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
                 >
                   View Details →
@@ -280,7 +280,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
                   {stats.most_volatile.volatility_value?.toFixed(2)}%
                 </p>
                 <button
-                  onClick={() => navigate(`/market/analysis/${stats.most_volatile?.index_id}`)}
+                  onClick={() => navigate(`/market/indices/${stats.most_volatile?.index_id}`)}
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
                 >
                   View Details →
@@ -379,10 +379,10 @@ export const MarketAnalysisDashboard: React.FC = () => {
 
                     {/* Index Card */}
                     <button
-                      onClick={() => navigate(`/market/analysis/${index.index_id}`)}
+                      onClick={() => navigate(`/market/indices/${index.index_id}`)}
                       className={`w-full p-4 rounded-lg border-2 transition-all hover:shadow-md ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-50' 
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-200 hover:border-blue-300'
                       } ${hasData ? getBgColor(index.return_value) : 'bg-gray-50'}`}
                     >
@@ -414,6 +414,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
         </Card>
 
         {/* ==================== QUICK LINKS ==================== */}
+        {/* TODO: Uncomment when these pages are created
         <Card>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -425,7 +426,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
               <p className="font-semibold text-gray-900">Download Data</p>
               <p className="text-sm text-gray-600 mt-1">Manage historical data downloads</p>
             </button>
-            
+
             <button
               onClick={() => navigate('/market/indices')}
               className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
@@ -434,7 +435,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
               <p className="font-semibold text-gray-900">All Indices</p>
               <p className="text-sm text-gray-600 mt-1">Browse all market indices</p>
             </button>
-            
+
             <button
               onClick={() => navigate('/market/reports')}
               className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
@@ -445,6 +446,7 @@ export const MarketAnalysisDashboard: React.FC = () => {
             </button>
           </div>
         </Card>
+        */}
 
         {/* ==================== INFO BANNER ==================== */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
