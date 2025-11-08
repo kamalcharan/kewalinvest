@@ -21,9 +21,12 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
 
   // Calculate multi-factor status analysis
   const statusAnalysis = useMemo(() => {
-    const isOnTrack = goal.config_data.on_track !== false;
+    // Check if goal is on track (only available for time_and_price_goal)
+    const isOnTrack = 'on_track' in config ? config.on_track !== false : true;
     const currentValue = config.current_value || 0;
-    const projectedCorpus = config.projected_corpus || 0;
+
+    // projected_corpus only exists on time_based and time_and_price goals
+    const projectedCorpus = 'projected_corpus' in config ? config.projected_corpus || 0 : 0;
     const targetAmount = 'target_amount' in config ? config.target_amount : projectedCorpus;
     const monthlyContribution = config.monthly_contribution || 0;
     const expectedReturn = config.expected_return_rate || 12;
