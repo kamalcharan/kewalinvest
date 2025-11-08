@@ -127,12 +127,6 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         icon: Target
       },
       {
-        id: 'jtbd_dashboard',
-        name: 'JTBD Dashboard',
-        path: '/jtbd/dashboard',
-        icon: Bell
-      },
-      {
         id: 'index_analysis',
         name: 'Index Analysis',
         path: '/market/dashboard',
