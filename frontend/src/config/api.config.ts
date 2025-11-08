@@ -23,7 +23,7 @@ export const API_ENDPOINTS = {
 
 // Request timeout configuration
 export const API_CONFIG = {
-  timeout: 30000, // 30 seconds
+  timeout: 300000, // 5 minutes (for long-running operations like metric calculations)
   retryAttempts: 3,
   retryDelay: 1000, // 1 second
 } as const;
