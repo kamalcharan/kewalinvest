@@ -36,17 +36,23 @@ export const IndexComparisonOverlay: React.FC<IndexComparisonOverlayProps> = ({
   }
 
   // Determine if we're using date-aware data
-  const isDateAware = useDateMatching && 
-                      isDataPoint(portfolioData[0]) && 
+  const isDateAware = useDateMatching &&
+                      isDataPoint(portfolioData[0]) &&
                       isDataPoint(indexData[0]);
 
   // Get normalized index data
   const normalizedIndexData = isDateAware
     ? matchByDate(portfolioData as DataPoint[], indexData as DataPoint[])
     : normalizeData(
-        extractValues(indexData), 
+        extractValues(indexData),
         extractValues(portfolioData).length
       );
+
+  // Safety check: If normalized data is empty, don't render
+  if (!normalizedIndexData || normalizedIndexData.length === 0) {
+    console.warn('IndexComparisonOverlay: No normalized index data available');
+    return null;
+  }
 
   // Get portfolio values for scaling
   const portfolioValues = extractValues(portfolioData);
@@ -64,9 +70,11 @@ export const IndexComparisonOverlay: React.FC<IndexComparisonOverlayProps> = ({
   const range = Math.max(rawRange, minRange) || 1;
 
   // Calculate points for the line
+  // IMPORTANT: Use same padding and Y-axis formula as PerformanceSparkline for alignment
+  const padding = 2;
   const points = normalizedIndexData.map((value, index) => {
-    const x = (index / Math.max(normalizedIndexData.length - 1, 1)) * width;
-    const y = height - ((value - min) / range) * height;
+    const x = (index / Math.max(normalizedIndexData.length - 1, 1)) * (width - padding * 2) + padding;
+    const y = height - ((value - min) / range * (height - padding * 2) + padding);
     return { x, y, value };
   });
 
