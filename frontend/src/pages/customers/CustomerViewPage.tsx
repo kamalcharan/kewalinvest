@@ -44,11 +44,11 @@ import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { customerId: id } = useParams<{ customerId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const customerId = id ? parseInt(id) : null;
   
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions') || 'overview';
