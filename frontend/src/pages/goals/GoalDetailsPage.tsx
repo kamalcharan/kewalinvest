@@ -168,7 +168,7 @@ const GoalDetailsPage: React.FC = () => {
   // Calculate SIP metrics
   const totalSIPs = sipExecutionsData?.executions.length || 0;
   const missedSIPs = sipExecutionsData?.executions.filter(
-    ex => ex.execution_status === EXECUTION_STATUS.PENDING && new Date(ex.scheduled_date) < new Date()
+    ex => ex.execution_status === EXECUTION_STATUS.PLANNED && new Date(ex.scheduled_date) < new Date()
   ).length || 0;
 
   // Tabs config
