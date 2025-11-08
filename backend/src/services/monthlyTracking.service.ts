@@ -538,9 +538,9 @@ export class MonthlyTrackingService {
         };
 
         try {
-          let monthlyData;
+          let monthlyData: any;
           if (viewType === 'nav') {
-            monthlyData = await this.getMonthlyNAV(tenantId, isLive, filters);
+            monthlyData = await this.getMonthlyNAVPerformance(tenantId, isLive, filters);
           } else if (viewType === 'market_value') {
             monthlyData = await this.getMonthlyMarketValue(tenantId, isLive, filters);
           } else {
@@ -552,7 +552,7 @@ export class MonthlyTrackingService {
             scheme_name: scheme.scheme_name || scheme.scheme_code,
             category: scheme.category,
             sub_category: scheme.sub_category,
-            monthly_data: monthlyData.months || [],
+            monthly_data: (monthlyData.months || []) as any[],
             summary: monthlyData.summary || {}
           };
         } catch (error) {
@@ -562,7 +562,7 @@ export class MonthlyTrackingService {
             scheme_name: scheme.scheme_name || scheme.scheme_code,
             category: scheme.category,
             sub_category: scheme.sub_category,
-            monthly_data: [],
+            monthly_data: [] as any[],
             summary: {},
             error: 'Failed to load data'
           };
