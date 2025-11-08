@@ -466,4 +466,52 @@ export class PortfolioController {
       });
     }
   };
+
+  /**
+   * GET /api/portfolio/:customerId/monthly-snapshots
+   * Get monthly snapshots for ALL schemes in customer's portfolio
+   * Returns all schemes with their monthly data (units, NAV, market value) in one call
+   */
+  getAllSchemesMonthlySnapshots = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { customerId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      if (!customerId || isNaN(parseInt(customerId))) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const months = req.query.months ? parseInt(req.query.months as string) : 12;
+      const viewType = (req.query.view_type as string) || 'units'; // units, nav, market_value
+
+      const data = await this.monthlyTrackingService.getAllSchemesMonthlySnapshots(
+        user.tenant_id,
+        isLive,
+        parseInt(customerId),
+        months,
+        viewType
+      );
+
+      res.json({
+        success: true,
+        data
+      });
+    } catch (error: any) {
+      console.error('Error getting all schemes monthly snapshots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get monthly snapshots'
+      });
+    }
+  };
 }

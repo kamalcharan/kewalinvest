@@ -112,6 +112,7 @@ export const API_ENDPOINTS = {
     GET_MONTHLY_UNITS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-units`,
     GET_MONTHLY_NAV: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-nav`,
     GET_MONTHLY_MARKET_VALUE: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-market-value`,
+    GET_MONTHLY_SNAPSHOTS: (customerId: number) => `${API_BASE}/portfolio/${customerId}/monthly-snapshots`,
   },
   
   // JTBD (Jobs To Be Done) endpoints - OLD (will be deprecated)

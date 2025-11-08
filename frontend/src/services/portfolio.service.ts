@@ -124,6 +124,28 @@ export class PortfolioService {
   }
 
   /**
+   * Get monthly snapshots for all schemes in customer's portfolio
+   * Returns all schemes with their monthly data in one call
+   */
+  static async getMonthlySnapshots(
+    customerId: number,
+    months: number = 12,
+    viewType: 'units' | 'nav' | 'market_value' = 'units'
+  ): Promise<any> {
+    try {
+      const url = API_ENDPOINTS.PORTFOLIO.GET_MONTHLY_SNAPSHOTS(customerId);
+      const params = new URLSearchParams();
+      params.append('months', months.toString());
+      params.append('view_type', viewType);
+
+      return await apiService.get<any>(`${url}?${params.toString()}`);
+    } catch (error: any) {
+      console.error('Error fetching monthly snapshots:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper: Format currency (Indian Rupees)
    */
   static formatCurrency(amount: number): string {

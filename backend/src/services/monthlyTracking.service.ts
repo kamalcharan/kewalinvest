@@ -482,4 +482,105 @@ export class MonthlyTrackingService {
       throw new Error(`Failed to get monthly market value: ${error.message}`);
     }
   }
+
+  // ==================== ALL SCHEMES MONTHLY SNAPSHOTS ====================
+
+  /**
+   * Get monthly snapshots for ALL schemes in customer's portfolio
+   * Returns all schemes with their monthly data in one API call
+   */
+  async getAllSchemesMonthlySnapshots(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number,
+    months: number = 12,
+    viewType: string = 'units'
+  ): Promise<any> {
+    try {
+      // Get all active schemes for this customer
+      const schemesQuery = `
+        SELECT DISTINCT
+          t.scheme_code,
+          sd.scheme_name,
+          sd.category,
+          sd.sub_category
+        FROM t_transaction_table t
+        LEFT JOIN t_scheme_details sd ON t.scheme_code = sd.scheme_code
+        WHERE t.tenant_id = $1
+          AND t.is_live = $2
+          AND t.customer_id = $3
+          AND t.is_active = true
+          AND t.portfolio_flag = true
+        ORDER BY sd.scheme_name
+      `;
+
+      const schemesResult = await this.db.query(schemesQuery, [
+        tenantId,
+        isLive,
+        customerId
+      ]);
+
+      if (schemesResult.rows.length === 0) {
+        return {
+          customer_id: customerId,
+          view_type: viewType,
+          schemes: [],
+          months_count: months
+        };
+      }
+
+      // Fetch monthly data for each scheme based on view type
+      const schemePromises = schemesResult.rows.map(async (scheme) => {
+        const filters = {
+          customer_id: customerId,
+          scheme_code: scheme.scheme_code,
+          months
+        };
+
+        try {
+          let monthlyData;
+          if (viewType === 'nav') {
+            monthlyData = await this.getMonthlyNAV(tenantId, isLive, filters);
+          } else if (viewType === 'market_value') {
+            monthlyData = await this.getMonthlyMarketValue(tenantId, isLive, filters);
+          } else {
+            monthlyData = await this.getMonthlyUnits(tenantId, isLive, filters);
+          }
+
+          return {
+            scheme_code: scheme.scheme_code,
+            scheme_name: scheme.scheme_name || scheme.scheme_code,
+            category: scheme.category,
+            sub_category: scheme.sub_category,
+            monthly_data: monthlyData.months || [],
+            summary: monthlyData.summary || {}
+          };
+        } catch (error) {
+          console.error(`Error fetching data for scheme ${scheme.scheme_code}:`, error);
+          return {
+            scheme_code: scheme.scheme_code,
+            scheme_name: scheme.scheme_name || scheme.scheme_code,
+            category: scheme.category,
+            sub_category: scheme.sub_category,
+            monthly_data: [],
+            summary: {},
+            error: 'Failed to load data'
+          };
+        }
+      });
+
+      const schemes = await Promise.all(schemePromises);
+
+      return {
+        customer_id: customerId,
+        view_type: viewType,
+        schemes,
+        months_count: months
+      };
+
+    } catch (error: any) {
+      console.error('Error getting all schemes monthly snapshots:', error);
+      throw new Error(`Failed to get monthly snapshots: ${error.message}`);
+    }
+  }
 }
