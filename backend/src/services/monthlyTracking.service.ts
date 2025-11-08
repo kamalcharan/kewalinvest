@@ -482,4 +482,140 @@ export class MonthlyTrackingService {
       throw new Error(`Failed to get monthly market value: ${error.message}`);
     }
   }
+
+  // ==================== ALL SCHEMES MONTHLY SNAPSHOTS ====================
+
+  /**
+   * Get monthly snapshots for ALL schemes in customer's portfolio
+   * Returns all schemes with their monthly data in one API call
+   */
+  async getAllSchemesMonthlySnapshots(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number,
+    months: number = 12
+  ): Promise<any> {
+    try {
+      // Get all active schemes from customer's portfolio
+      const schemesQuery = `
+        SELECT
+          scheme_code,
+          scheme_name,
+          COALESCE(category, 'Uncategorized') as category,
+          COALESCE(sub_category, '') as sub_category
+        FROM t_customer_master_portfolio
+        WHERE tenant_id = $1
+          AND is_live = $2
+          AND customer_id = $3
+          AND is_active = true
+        ORDER BY scheme_name
+      `;
+
+      const schemesResult = await this.db.query(schemesQuery, [
+        tenantId,
+        isLive,
+        customerId
+      ]);
+
+      if (schemesResult.rows.length === 0) {
+        return {
+          customer_id: customerId,
+          schemes: [],
+          months_count: months
+        };
+      }
+
+      // Fetch all monthly data for each scheme (units, NAV, market value) in parallel
+      const schemePromises = schemesResult.rows.map(async (scheme) => {
+        const filters = {
+          customer_id: customerId,
+          scheme_code: scheme.scheme_code,
+          months
+        };
+
+        try {
+          // Fetch all three datasets in parallel for efficiency
+          const [unitsData, navData, marketValueData] = await Promise.all([
+            this.getMonthlyUnits(tenantId, isLive, filters),
+            this.getMonthlyNAVPerformance(tenantId, isLive, filters),
+            this.getMonthlyMarketValue(tenantId, isLive, filters)
+          ]);
+
+          // Combine all data into a unified structure
+          const unitsMonths = (unitsData.months || []) as any[];
+          const navMonths = (navData.months || []) as any[];
+          const marketValueMonths = (marketValueData.months || []) as any[];
+
+          // Create combined monthly data with all metrics
+          const combinedMonthlyData = unitsMonths.map((unitsMonth: any, idx: number) => {
+            const navMonth = navMonths[idx] || {};
+            const marketValueMonth = marketValueMonths[idx] || {};
+
+            return {
+              month: unitsMonth.month,
+              month_display: unitsMonth.month_display,
+              // Units data
+              opening_units: unitsMonth.opening_units,
+              units_added: unitsMonth.units_added,
+              units_redeemed: unitsMonth.units_redeemed,
+              closing_units: unitsMonth.closing_units,
+              // NAV data
+              opening_nav: navMonth.opening_nav,
+              closing_nav: navMonth.closing_nav,
+              nav_change: navMonth.nav_change,
+              nav_change_percentage: navMonth.nav_change_percentage,
+              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined,
+              // Market Value data
+              market_value: marketValueMonth.market_value,
+              month_change: marketValueMonth.month_change,
+              month_change_percentage: marketValueMonth.month_change_percentage
+            };
+          });
+
+          // Reverse the array to show newest month first
+          const reversedMonthlyData = combinedMonthlyData.reverse();
+
+          return {
+            scheme_code: scheme.scheme_code,
+            scheme_name: scheme.scheme_name || scheme.scheme_code,
+            category: scheme.category,
+            sub_category: scheme.sub_category,
+            monthly_data: reversedMonthlyData,
+            summary: {
+              units: unitsData.summary || {},
+              nav: navData.summary || {},
+              market_value: marketValueData.summary || {}
+            }
+          };
+        } catch (error) {
+          console.error(`Error fetching data for scheme ${scheme.scheme_code}:`, error);
+          return {
+            scheme_code: scheme.scheme_code,
+            scheme_name: scheme.scheme_name || scheme.scheme_code,
+            category: scheme.category,
+            sub_category: scheme.sub_category,
+            monthly_data: [] as any[],
+            summary: {
+              units: {},
+              nav: {},
+              market_value: {}
+            },
+            error: 'Failed to load data'
+          };
+        }
+      });
+
+      const schemes = await Promise.all(schemePromises);
+
+      return {
+        customer_id: customerId,
+        schemes,
+        months_count: months
+      };
+
+    } catch (error: any) {
+      console.error('Error getting all schemes monthly snapshots:', error);
+      throw new Error(`Failed to get monthly snapshots: ${error.message}`);
+    }
+  }
 }

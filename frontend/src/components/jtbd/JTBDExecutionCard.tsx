@@ -11,9 +11,10 @@ import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 interface JTBDExecutionCardProps {
   execution: JTBDExecution;
   onUpdate?: () => void;
+  onEdit?: (execution: JTBDExecution) => void;
 }
 
-export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution, onUpdate }) => {
+export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution, onUpdate, onEdit }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -129,25 +130,25 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
   const renderMeetingContent = () => {
     const data = execution.execution_data as MeetingExecutionData;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', fontSize: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
         {execution.scheduled_time && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: colors.utility.secondaryText }}>
-            <Clock size={14} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.utility.secondaryText }}>
+            <Clock size={12} />
             {formatTime(execution.scheduled_time)} ({data.duration_minutes || 60} min)
           </div>
         )}
         {data.meeting_mode && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: colors.utility.secondaryText }}>
-            {data.meeting_mode === 'in_person' && <MapPin size={14} />}
-            {data.meeting_mode === 'video_call' && <Video size={14} />}
-            {data.meeting_mode === 'phone_call' && <Phone size={14} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.utility.secondaryText }}>
+            {data.meeting_mode === 'in_person' && <MapPin size={12} />}
+            {data.meeting_mode === 'video_call' && <Video size={12} />}
+            {data.meeting_mode === 'phone_call' && <Phone size={12} />}
             {data.meeting_mode === 'in_person' ? 'In Person' :
              data.meeting_mode === 'video_call' ? 'Video Call' : 'Phone Call'}
             {data.location && ` - ${data.location}`}
           </div>
         )}
         {data.agenda && (
-          <div style={{ fontSize: '13px', color: colors.utility.secondaryText, fontStyle: 'italic' }}>
+          <div style={{ fontSize: '11px', color: colors.utility.secondaryText, fontStyle: 'italic' }}>
             {data.agenda}
           </div>
         )}
@@ -159,18 +160,18 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
   const renderSIPPlanContent = () => {
     const data = execution.execution_data as SIPPlanExecutionData;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', fontSize: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: colors.utility.primaryText, fontWeight: '600' }}>
-          <DollarSign size={14} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.utility.primaryText, fontWeight: '600' }}>
+          <DollarSign size={12} />
           ₹{data.amount?.toLocaleString('en-IN') || '0'}
         </div>
         {data.scheme_name && (
-          <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
+          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
             {data.scheme_name}
           </div>
         )}
         {data.month_number && data.total_months && (
-          <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
             Month {data.month_number} of {data.total_months}
           </div>
         )}
@@ -181,7 +182,7 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
   // Render alert content
   const renderAlertContent = () => {
     return (
-      <div style={{ marginTop: '8px', fontSize: '13px', color: colors.utility.secondaryText }}>
+      <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
         {execution.description}
       </div>
     );
@@ -194,62 +195,173 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
         border: `1px solid ${colors.utility.primaryText}10`,
         borderLeft: `4px solid ${typeConfig.color}`,
         borderRadius: '8px',
-        padding: '16px',
+        padding: '12px',
         transition: 'all 0.2s',
         cursor: 'pointer'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = `0 4px 12px ${colors.utility.primaryText}10`;
-        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = `0 2px 8px ${colors.utility.primaryText}15`;
+        e.currentTarget.style.transform = 'translateY(-1px)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.boxShadow = 'none';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-            {/* Type Icon */}
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: typeConfig.bgColor,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: typeConfig.color
-            }}>
-              <TypeIcon size={18} />
-            </div>
+      {/* Header - Single Line */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+        {/* Type Icon */}
+        <div style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '6px',
+          backgroundColor: typeConfig.bgColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: typeConfig.color,
+          flexShrink: 0
+        }}>
+          <TypeIcon size={16} />
+        </div>
 
-            {/* Title */}
-            <div style={{ flex: 1 }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-                {execution.title}
-              </h3>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '2px' }}>
-                {typeConfig.label}
-              </div>
-            </div>
-
-            {/* Status Badge */}
-            <div style={{
-              padding: '4px 10px',
-              borderRadius: '6px',
-              backgroundColor: statusColor + '20',
-              border: `1px solid ${statusColor}40`,
-              fontSize: '11px',
-              fontWeight: '600',
-              color: statusColor,
-              textTransform: 'uppercase'
-            }}>
-              {execution.execution_status}
-            </div>
+        {/* Title and Type */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {execution.title}
+          </h3>
+          <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '1px' }}>
+            {typeConfig.label}
           </div>
         </div>
+
+        {/* Status Badge */}
+        <div style={{
+          padding: '3px 8px',
+          borderRadius: '4px',
+          backgroundColor: statusColor + '20',
+          border: `1px solid ${statusColor}40`,
+          fontSize: '10px',
+          fontWeight: '600',
+          color: statusColor,
+          textTransform: 'uppercase',
+          flexShrink: 0
+        }}>
+          {execution.execution_status}
+        </div>
+
+        {/* Action Icons */}
+        {canComplete && (
+          <div style={{ display: 'flex', gap: '6px', marginLeft: '4px', flexShrink: 0 }}>
+            {/* Edit Button - Only for meetings */}
+            {onEdit && [JTBD_TYPE.CLIENT_MEETING, JTBD_TYPE.PORTFOLIO_REVIEW, JTBD_TYPE.GOAL_REVIEW].includes(execution.execution_type as any) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(execution); }}
+                title="Edit"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  padding: 0,
+                  backgroundColor: colors.semantic.info + '20',
+                  border: `1px solid ${colors.semantic.info}40`,
+                  borderRadius: '6px',
+                  color: colors.semantic.info,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.semantic.info + '30';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.semantic.info + '20';
+                }}
+              >
+                <Edit2 size={14} />
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleComplete(); }}
+              title="Complete"
+              style={{
+                width: '28px',
+                height: '28px',
+                padding: 0,
+                backgroundColor: colors.semantic.success + '20',
+                border: `1px solid ${colors.semantic.success}40`,
+                borderRadius: '6px',
+                color: colors.semantic.success,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.semantic.success + '30';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.semantic.success + '20';
+              }}
+            >
+              <Check size={14} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleCancel(); }}
+              title="Cancel"
+              style={{
+                width: '28px',
+                height: '28px',
+                padding: 0,
+                backgroundColor: colors.semantic.error + '20',
+                border: `1px solid ${colors.semantic.error}40`,
+                borderRadius: '6px',
+                color: colors.semantic.error,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.semantic.error + '30';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.semantic.error + '20';
+              }}
+            >
+              <X size={14} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              title="Delete"
+              style={{
+                width: '28px',
+                height: '28px',
+                padding: 0,
+                backgroundColor: colors.utility.secondaryBackground,
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '6px',
+                color: colors.utility.secondaryText,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.primaryText + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Type-specific Content */}
@@ -260,71 +372,6 @@ export const JTBDExecutionCard: React.FC<JTBDExecutionCardProps> = ({ execution,
         : execution.execution_type === JTBD_TYPE.GOAL_SIP_PLAN
         ? renderSIPPlanContent()
         : renderAlertContent()}
-
-      {/* Actions */}
-      {canComplete && (
-        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
-          <button
-            onClick={handleComplete}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              backgroundColor: colors.semantic.success + '20',
-              border: `1px solid ${colors.semantic.success}40`,
-              borderRadius: '6px',
-              color: colors.semantic.success,
-              fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-          >
-            <Check size={14} />
-            Complete
-          </button>
-          <button
-            onClick={handleCancel}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              backgroundColor: colors.semantic.error + '20',
-              border: `1px solid ${colors.semantic.error}40`,
-              borderRadius: '6px',
-              color: colors.semantic.error,
-              fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-          >
-            <X size={14} />
-            Cancel
-          </button>
-          <button
-            onClick={handleDelete}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: colors.utility.secondaryBackground,
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '6px',
-              color: colors.utility.secondaryText,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )}
     </div>
   );
 };

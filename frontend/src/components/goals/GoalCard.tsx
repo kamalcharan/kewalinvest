@@ -1,6 +1,7 @@
 // frontend/src/components/goals/GoalCard.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GoalConfiguration, isTimeBasedGoal, isPriceBasedGoal, isTimeAndPriceGoal } from '../../types/goal.types';
 import { useDeleteGoal } from '../../hooks/useGoals';
@@ -24,6 +25,7 @@ interface GoalCardProps {
   onToggleWatchlist?: (goalId: number, isInWatchlist: boolean) => void;
   compact?: boolean;
   showAllocations?: boolean;
+  hideActions?: boolean;
 }
 
 const GoalCard: React.FC<GoalCardProps> = ({
@@ -32,14 +34,29 @@ const GoalCard: React.FC<GoalCardProps> = ({
   onRecalculate,
   onToggleWatchlist,
   compact = false,
-  showAllocations = true
+  showAllocations = true,
+  hideActions = false
 }) => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [allocationData, setAllocationData] = useState<SchemeAllocationUtilization[]>([]);
+  const [showTooltip, setShowTooltip] = useState(false);
   const deleteMutation = useDeleteGoal();
+
+  // Color palette for pie chart segments
+  const pieColors = [
+    '#3B82F6', // Blue
+    '#10B981', // Green
+    '#F59E0B', // Orange
+    '#8B5CF6', // Purple
+    '#EC4899', // Pink
+    '#06B6D4', // Cyan
+    '#EF4444', // Red
+    '#84CC16'  // Lime
+  ];
 
   // Fetch allocation utilization data when showing allocations
   useEffect(() => {
@@ -73,6 +90,21 @@ const GoalCard: React.FC<GoalCardProps> = ({
     if (availablePercentage < 20) return colors.semantic.error;
     if (availablePercentage < 50) return colors.semantic.warning;
     return colors.semantic.success;
+  };
+
+  // Helper to create pie chart path
+  const createPieSlice = (startAngle: number, endAngle: number, radius: number, cx: number, cy: number): string => {
+    const startRadians = (startAngle - 90) * (Math.PI / 180);
+    const endRadians = (endAngle - 90) * (Math.PI / 180);
+
+    const x1 = cx + radius * Math.cos(startRadians);
+    const y1 = cy + radius * Math.sin(startRadians);
+    const x2 = cx + radius * Math.cos(endRadians);
+    const y2 = cy + radius * Math.sin(endRadians);
+
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
   };
 
   // Get key metrics based on goal type
@@ -326,11 +358,11 @@ const GoalCard: React.FC<GoalCardProps> = ({
               </button>
             )}
 
-            {/* Edit */}
-            {onEdit && (
+            {/* View Details */}
+            {!hideActions && (
               <button
-                onClick={() => onEdit(goal.id)}
-                title="Edit Goal"
+                onClick={() => navigate(`/customers/${goal.customer_id}/goals/${goal.id}`)}
+                title="View Goal Details"
                 style={{
                   padding: '6px',
                   backgroundColor: 'transparent',
@@ -372,83 +404,279 @@ const GoalCard: React.FC<GoalCardProps> = ({
           </div>
         </div>
 
-        {/* METRICS ROW */}
+        {/* SINGLE ROW LAYOUT: Left (Primary Metric) | Center (Pie Chart) | Right (Target Date) */}
         {metrics && (
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {/* Primary Metric */}
-              <div>
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              justifyContent: 'space-between',
+              marginBottom: '10px'
+            }}>
+              {/* Left: Primary Metric */}
+              <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
                   {metrics.primaryLabel}
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: colors.utility.primaryText }}>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText }}>
                   {metrics.primary}
                 </div>
+                {/* Current value for progress-based goals */}
+                {metrics.progress !== null && (
+                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                    Current: {formatCurrency(config.current_value, true)} ({formatPercentage(metrics.progress, 1)})
+                  </div>
+                )}
               </div>
 
-              {/* Secondary Metric */}
-              <div>
-                <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
-                  {metrics.secondaryLabel}
+              {/* Center: Pie Chart with Fund Allocation */}
+              {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
+                <div
+                  style={{ position: 'relative', flexShrink: 0 }}
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
+                >
+                  <div style={{
+                    position: 'relative',
+                    width: '80px',
+                    height: '80px',
+                    cursor: 'pointer'
+                  }}>
+                    {/* Pie Chart SVG */}
+                    <svg width="80" height="80">
+                      {config.linked_schemes.map((scheme, index) => {
+                        let startAngle = 0;
+                        // Calculate start angle based on previous allocations
+                        for (let i = 0; i < index; i++) {
+                          startAngle += (config.linked_schemes[i].allocation_percentage / 100) * 360;
+                        }
+                        const endAngle = startAngle + (scheme.allocation_percentage / 100) * 360;
+                        const sliceColor = pieColors[index % pieColors.length];
+
+                        return (
+                          <path
+                            key={scheme.scheme_code}
+                            d={createPieSlice(startAngle, endAngle, 32, 40, 40)}
+                            fill={sliceColor}
+                            opacity={0.9}
+                          />
+                        );
+                      })}
+                      {/* Center white circle to create donut effect */}
+                      <circle cx="40" cy="40" r="20" fill={colors.utility.secondaryBackground} />
+                    </svg>
+
+                    {/* Center percentage (goal progress, not allocation) */}
+                    {metrics?.progress != null && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '700',
+                          color: colors.utility.primaryText,
+                          lineHeight: '1'
+                        }}>
+                          {Math.round(metrics.progress)}%
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tooltip with Color Legends */}
+                  {showTooltip && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      marginTop: '8px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      border: `1px solid ${colors.utility.primaryText}20`,
+                      borderRadius: '8px',
+                      padding: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 1000,
+                      minWidth: '200px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <div style={{
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        marginBottom: '8px',
+                        paddingBottom: '6px',
+                        borderBottom: `1px solid ${colors.utility.primaryText}15`
+                      }}>
+                        Fund Allocation
+                      </div>
+                      {config.linked_schemes.map((scheme, index) => (
+                        <div
+                          key={scheme.scheme_code}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '6px'
+                          }}
+                        >
+                          {/* Color Legend Box */}
+                          <div style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '2px',
+                            backgroundColor: pieColors[index % pieColors.length],
+                            flexShrink: 0
+                          }} />
+                          {/* Scheme Name */}
+                          <div style={{
+                            flex: 1,
+                            fontSize: '11px',
+                            color: colors.utility.primaryText,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {scheme.scheme_name}
+                          </div>
+                          {/* Percentage */}
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: colors.utility.primaryText
+                          }}>
+                            {scheme.allocation_percentage}%
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: colors.utility.primaryText }}>
-                  {metrics.secondary}
+              )}
+
+              {/* Right: Timeline Slider (replaces target date) */}
+              {(isTimeBasedGoal(config) || isTimeAndPriceGoal(config)) && config.target_date && (
+                <div style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  maxWidth: '280px'
+                }}>
+                  {(() => {
+                    const startDate = new Date(goal.created_at);
+                    const targetDate = new Date(config.target_date);
+                    const today = new Date();
+
+                    const totalDays = Math.max(1, Math.floor((targetDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    const elapsedDays = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    const progressPercent = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
+
+                    return (
+                      <div>
+                        {/* Timeline Bar */}
+                        <div style={{
+                          position: 'relative',
+                          width: '100%',
+                          height: '8px',
+                          backgroundColor: colors.utility.primaryText + '15',
+                          borderRadius: '4px',
+                          overflow: 'hidden',
+                          marginBottom: '6px'
+                        }}>
+                          {/* Progress Fill */}
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            height: '100%',
+                            width: `${progressPercent}%`,
+                            background: `linear-gradient(90deg, ${colors.brand.primary} 0%, ${colors.brand.primary}CC 100%)`,
+                            transition: 'width 0.3s ease'
+                          }} />
+
+                          {/* Current Position Marker */}
+                          <div style={{
+                            position: 'absolute',
+                            left: `${progressPercent}%`,
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '14px',
+                            height: '14px',
+                            backgroundColor: colors.brand.primary,
+                            border: `2px solid ${colors.utility.secondaryBackground}`,
+                            borderRadius: '50%',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            zIndex: 1
+                          }} />
+                        </div>
+
+                        {/* Date Labels */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: '10px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          <div style={{ fontWeight: '500' }}>
+                            {formatDate(goal.created_at, 'short')}
+                          </div>
+                          <div style={{ fontWeight: '600', color: colors.utility.primaryText }}>
+                            {formatDate(config.target_date, 'short')}
+                          </div>
+                        </div>
+
+                        {/* Days Remaining */}
+                        <div style={{
+                          fontSize: '10px',
+                          color: colors.utility.secondaryText,
+                          textAlign: 'center',
+                          marginTop: '4px'
+                        }}>
+                          {Math.max(0, totalDays - elapsedDays)} days remaining
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
+              )}
+
+              {/* For Price-based goals without target date, show expected date */}
+              {isPriceBasedGoal(config) && !isTimeAndPriceGoal(config) && (
+                <div style={{
+                  textAlign: 'right',
+                  alignSelf: 'flex-end',
+                  minWidth: '120px'
+                }}>
+                  <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
+                    {metrics.secondaryLabel}
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                    {metrics.secondary}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Progress Bar (for goals with target amount) */}
             {metrics.progress !== null && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                    {formatCurrency(config.current_value, true)} / {formatCurrency(isTimeAndPriceGoal(config) ? config.target_amount : isPriceBasedGoal(config) ? config.target_amount : 0, true)}
-                  </span>
-                  <span style={{ fontSize: '11px', fontWeight: '600', color: status.color }}>
-                    {formatPercentage(metrics.progress, 1)}
-                  </span>
-                </div>
+              <div style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: colors.utility.primaryText + '10',
+                borderRadius: '3px',
+                overflow: 'hidden',
+                marginTop: '8px'
+              }}>
                 <div style={{
-                  width: '100%',
-                  height: '6px',
-                  backgroundColor: colors.utility.primaryText + '10',
-                  borderRadius: '3px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    width: `${Math.min(100, metrics.progress)}%`,
-                    height: '100%',
-                    backgroundColor: status.color,
-                    transition: 'width 0.3s ease',
-                    borderRadius: '3px'
-                  }} />
-                </div>
-              </div>
-            )}
-
-            {/* Additional Info for Time & Price Goals */}
-            {isTimeAndPriceGoal(config) && metrics.probability !== undefined && (
-              <div style={{ marginTop: '6px', display: 'flex', gap: '12px', fontSize: '10px' }}>
-                <div>
-                  <span style={{ color: colors.utility.secondaryText }}>Success: </span>
-                  <span style={{ 
-                    fontWeight: '600', 
-                    color: metrics.probability >= 75 ? '#10B981' : metrics.probability >= 60 ? '#F59E0B' : '#DC2626'
-                  }}>
-                    {formatPercentage(metrics.probability, 0)}
-                  </span>
-                </div>
-                {metrics.gap !== undefined && (
-                  <div>
-                    <span style={{ color: colors.utility.secondaryText }}>Gap: </span>
-                    <span style={{ 
-                      fontWeight: '600', 
-                      color: metrics.gap >= 0 ? '#10B981' : '#DC2626'
-                    }}>
-                      {metrics.gap >= 0 ? '+' : ''}{formatCurrency(metrics.gap, true)}
-                    </span>
-                  </div>
-                )}
+                  width: `${Math.min(100, metrics.progress)}%`,
+                  height: '100%',
+                  backgroundColor: status.color,
+                  transition: 'width 0.3s ease',
+                  borderRadius: '3px'
+                }} />
               </div>
             )}
           </div>
@@ -473,111 +701,6 @@ const GoalCard: React.FC<GoalCardProps> = ({
                   {actions[0].description}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* FUND ALLOCATIONS (with availability tracking) */}
-        {!compact && showAllocations && config.linked_schemes && config.linked_schemes.length > 0 && (
-          <div style={{
-            marginTop: '12px',
-            padding: '10px',
-            backgroundColor: colors.utility.primaryText + '05',
-            borderRadius: '6px',
-            border: `1px solid ${colors.utility.primaryText}10`
-          }}>
-            <div style={{
-              fontSize: '11px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              marginBottom: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <span>📊</span>
-              <span>Fund Allocations</span>
-            </div>
-            {config.linked_schemes.map((scheme, idx) => {
-              const allocationInfo = getSchemeAllocationInfo(scheme.scheme_code);
-              return (
-                <div key={idx} style={{
-                  marginBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
-                  paddingBottom: idx < config.linked_schemes.length - 1 ? '8px' : '0',
-                  borderBottom: idx < config.linked_schemes.length - 1 ? `1px solid ${colors.utility.primaryText}10` : 'none'
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '4px'
-                  }}>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.utility.primaryText,
-                      fontWeight: '500',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {scheme.scheme_name}
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      marginLeft: '8px'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        color: colors.brand.primary
-                      }}>
-                        {scheme.allocation_percentage}%
-                      </div>
-                      {allocationInfo && allocationInfo.available_percentage != null && (
-                        <div style={{
-                          fontSize: '9px',
-                          color: getAvailabilityColor(allocationInfo.available_percentage),
-                          marginTop: '2px'
-                        }}>
-                          {allocationInfo.available_percentage.toFixed(1)}% available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: '9px',
-                    color: colors.utility.secondaryText
-                  }}>
-                    {scheme.scheme_code}
-                    {allocationInfo && allocationInfo.is_fully_allocated && (
-                      <span style={{
-                        marginLeft: '8px',
-                        padding: '2px 6px',
-                        backgroundColor: colors.semantic.error + '20',
-                        borderRadius: '4px',
-                        fontSize: '8px',
-                        fontWeight: '600',
-                        color: colors.semantic.error
-                      }}>
-                        FULLY ALLOCATED
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            <div style={{
-              marginTop: '8px',
-              paddingTop: '8px',
-              borderTop: `1px solid ${colors.utility.primaryText}10`,
-              fontSize: '10px',
-              color: colors.utility.secondaryText,
-              fontStyle: 'italic'
-            }}>
-              💡 Available % shows remaining fund capacity across all goals (max 100% per fund)
             </div>
           </div>
         )}

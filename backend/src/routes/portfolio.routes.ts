@@ -104,4 +104,14 @@ router.get('/:customerId/monthly-nav', portfolioController.getMonthlyNAV);
  */
 router.get('/:customerId/monthly-market-value', portfolioController.getMonthlyMarketValue);
 
+/**
+ * GET /api/portfolio/:customerId/monthly-snapshots
+ * Get monthly snapshots for ALL schemes in customer's portfolio
+ * Query params:
+ *   - months: Optional - Number of months (default: 12)
+ *   - view_type: Optional - 'units', 'nav', or 'market_value' (default: 'units')
+ * Returns all schemes with their monthly data in a single response
+ */
+router.get('/:customerId/monthly-snapshots', portfolioController.getAllSchemesMonthlySnapshots);
+
 export default router;

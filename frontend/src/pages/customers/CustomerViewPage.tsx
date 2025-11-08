@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
+import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   toggleFullscreen,
@@ -30,24 +30,26 @@ import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfo
 import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
-import { MonthlyTrackingTabs } from '../../components/monthly-tracking/MonthlyTrackingTabs';
+import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
+import { PortfolioAllocationSummary } from '../../components/portfolio/PortfolioAllocationSummary';
+import { SchemeCard } from '../../components/common/SchemeCard';
 import GoalCard from '../../components/goals/GoalCard';
-import GoalSetupModal from '../../components/goals/GoalSetupModal';
-import GoalDetailsModal from '../../components/goals/GoalDetailsModal';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
+import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
 import { MeetingsList } from '../../components/meetings/MeetingsList';
+import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { customerId: id } = useParams<{ customerId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const customerId = id ? parseInt(id) : null;
   
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions') || 'overview';
@@ -56,14 +58,14 @@ const CustomerViewPage: React.FC = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
-  const [selectedSchemeForTracking, setSelectedSchemeForTracking] = useState<string | null>(null);
 
   // Goal modal states
-  const [showGoalSetupModal, setShowGoalSetupModal] = useState(false);
-  const [showGoalDetailsModal, setShowGoalDetailsModal] = useState(false);
   const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
+
+  // Meeting modal state
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   // Goal mutation hooks
   const recalculateGoalMutation = useRecalculateGoal();
@@ -139,12 +141,6 @@ const CustomerViewPage: React.FC = () => {
     }
   }, [activeTab, customerId]);
 
-  // Auto-select first scheme for monthly tracking
-  useEffect(() => {
-    if (portfolio?.holdings && portfolio.holdings.length > 0 && !selectedSchemeForTracking) {
-      setSelectedSchemeForTracking(portfolio.holdings[0].scheme_code);
-    }
-  }, [portfolio]);
 
   // FIXED: Load default comparison index and its data using new API method
   useEffect(() => {
@@ -601,6 +597,8 @@ const CustomerViewPage: React.FC = () => {
         customerId={customer.id}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onNewGoal={() => navigate(`/customers/${customer.id}/goals/new`)}
+        onMeeting={() => setShowMeetingModal(true)}
       />
 
       {/* Key Metrics Bar */}
@@ -612,29 +610,60 @@ const CustomerViewPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex' }}>
-          {['overview', 'portfolio', 'goals', 'jobs', 'transactions'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              style={{
-                padding: '16px 24px',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === tab ? `3px solid ${colors.brand.primary}` : '3px solid transparent',
-                color: activeTab === tab ? colors.brand.primary : colors.utility.secondaryText,
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab === 'goals' ? 'Goals & Actions' : tab === 'jobs' ? 'Jobs to Do' : tab}
-            </button>
-          ))}
+      <div style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        borderBottom: `1px solid ${colors.utility.primaryText}10`
+      }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', padding: '0 24px' }}>
+          {[
+            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
+            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
+            { key: 'goals', label: 'Goals Management', icon: Target },
+            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare },
+            { key: 'transactions', label: 'Transactions', icon: DollarSign }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                style={{
+                  padding: '16px 20px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderBottom: isActive ? `4px solid ${colors.brand.primary}` : '4px solid transparent',
+                  color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  letterSpacing: '0.3px',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryText + '08';
+                    e.currentTarget.style.color = colors.utility.primaryText;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = colors.utility.secondaryText;
+                  }
+                }}
+              >
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -837,6 +866,86 @@ comparisonData={comparisonIndexData}
                     </div>
                   </div>
 
+                  {/* Fund-wise Performance */}
+                  {portfolio.holdings && portfolio.holdings.length > 0 && (
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '24px'
+                    }}>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        margin: 0,
+                        marginBottom: '20px'
+                      }}>
+                        Fund-wise Performance
+                      </h3>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
+                            <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {portfolio.holdings.map((holding, idx) => {
+                            const isSmallReturn = Math.abs(holding.return_percentage) < 0.1;
+
+                            return (
+                              <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
+                                <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {formatCurrency(holding.total_invested)}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {formatCurrency(holding.current_value)}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right' }}>
+                                  {isSmallReturn ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                      <div style={{
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: getValueColor(holding.return_percentage)
+                                      }}>
+                                        {formatPercentage(holding.return_percentage)}
+                                      </div>
+                                      <div style={{
+                                        fontSize: '10px',
+                                        color: colors.utility.secondaryText,
+                                        fontStyle: 'italic'
+                                      }}>
+                                        (₹{holding.total_returns.toFixed(2)})
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      color: getValueColor(holding.return_percentage)
+                                    }}>
+                                      {formatPercentage(holding.return_percentage)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {(holding.allocation_percentage ?? 0).toFixed(1)}%
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
                   {/* Quick JTBD Summary */}
                   {jtbds && jtbds.length > 0 && (
                     <div style={{
@@ -934,59 +1043,73 @@ comparisonData={comparisonIndexData}
                     )}
                   </div>
 
-                  {/* Top Holdings */}
+                  {/* Portfolio Goal Allocation Summary */}
+                  {portfolio.holdings && portfolio.holdings.length > 0 && (() => {
+                    // Calculate portfolio-level allocation
+                    const totalPortfolioValue = portfolio.holdings.reduce((sum, h) => sum + (h.current_value || 0), 0);
+                    const totalAllocatedValue = portfolio.holdings.reduce((sum, h) => {
+                      const allocation = h.allocation || 0;
+                      return sum + ((h.current_value || 0) * allocation / 100);
+                    }, 0);
+                    const totalAllocatedPercentage = totalPortfolioValue > 0 ? (totalAllocatedValue / totalPortfolioValue) * 100 : 0;
+
+                    // Count unique schemes with allocations
+                    const allocatedSchemesCount = portfolio.holdings.filter(h => (h.allocation || 0) > 0).length;
+
+                    return (
+                      <PortfolioAllocationSummary
+                        totalPortfolioValue={totalPortfolioValue}
+                        allocatedValue={totalAllocatedValue}
+                        allocatedPercentage={totalAllocatedPercentage}
+                        goalsCount={goals?.length || 0}
+                        schemesCount={allocatedSchemesCount}
+                      />
+                    );
+                  })()}
+
+                  {/* Holdings */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
                     <div style={{
                       backgroundColor: colors.utility.secondaryBackground,
                       borderRadius: '12px',
                       padding: '24px'
                     }}>
-                      <h3 style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600', 
-                        color: colors.utility.primaryText, 
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
                         margin: 0,
                         marginBottom: '20px'
                       }}>
-                        Top Holdings
+                        Holdings ({portfolio.holdings.length})
                       </h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {portfolio.holdings.slice(0, 4).map((holding, idx) => (
-                          <div key={idx} style={{
-                            padding: '12px',
-                            backgroundColor: colors.utility.primaryBackground,
-                            borderRadius: '8px'
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
-                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
-                              </div>
-                              <div style={{ fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
-                                {formatPercentage(holding.return_percentage)}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                                Value: {formatCurrency(holding.current_value)}
-                              </div>
-                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                              </div>
-                            </div>
-                            <div style={{
-                              width: '100%',
-                              height: '4px',
-                              backgroundColor: colors.utility.primaryText + '20',
-                              borderRadius: '2px',
-                              overflow: 'hidden'
-                            }}>
-                              <div style={{
-                                width: `${holding.allocation_percentage ?? 0}%`,
-                                height: '100%',
-                                backgroundColor: colors.brand.primary
-                              }} />
-                            </div>
-                          </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                        gap: '12px',
+                        maxHeight: '600px',
+                        overflowY: 'auto',
+                        padding: '4px'
+                      }}>
+                        {portfolio.holdings.map((holding, idx) => (
+                          <SchemeCard
+                            key={idx}
+                            scheme={{
+                              scheme_code: holding.scheme_code,
+                              scheme_name: holding.scheme_name,
+                              fund_name: holding.fund_name,
+                              category: holding.category,
+                              sub_category: holding.sub_category,
+                              current_value: holding.current_value,
+                              allocation: holding.allocation,
+                              return_percentage: holding.return_percentage
+                            }}
+                            showAllocation={true}
+                            showValue={true}
+                            showReturn={true}
+                            showCategory={true}
+                            compact={true}
+                          />
                         ))}
                       </div>
                     </div>
@@ -1010,144 +1133,16 @@ comparisonData={comparisonIndexData}
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <CustomerPortfolioGapAlert 
+                <CustomerPortfolioGapAlert
                   customerId={customerId}
                   onRefresh={() => refetchPortfolio()}
                 />
-                
-                <PortfolioSummaryWidget portfolio={portfolio} compact={false} showSparkline={true} />
-                
-                {portfolio.holdings && portfolio.holdings.length > 0 && (
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px'
-                  }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
-                      margin: 0,
-                      marginBottom: '20px'
-                    }}>
-                      Fund-wise Performance
-                    </h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
-                          <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {portfolio.holdings.map((holding, idx) => {
-                          const isSmallReturn = Math.abs(holding.return_percentage) < 0.1;
-                          
-                          return (
-                            <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-                              <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {formatCurrency(holding.total_invested)}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {formatCurrency(holding.current_value)}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right' }}>
-                                {isSmallReturn ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                    <div style={{ 
-                                      fontSize: '13px', 
-                                      fontWeight: '600', 
-                                      color: getValueColor(holding.return_percentage) 
-                                    }}>
-                                      {formatPercentage(holding.return_percentage)}
-                                    </div>
-                                    <div style={{ 
-                                      fontSize: '10px', 
-                                      color: colors.utility.secondaryText,
-                                      fontStyle: 'italic'
-                                    }}>
-                                      (₹{holding.total_returns.toFixed(2)})
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div style={{ 
-                                    fontSize: '13px', 
-                                    fontWeight: '600', 
-                                    color: getValueColor(holding.return_percentage) 
-                                  }}>
-                                    {formatPercentage(holding.return_percentage)}
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
 
-                {/* Monthly Tracking Section */}
-                {portfolio.holdings && portfolio.holdings.length > 0 && selectedSchemeForTracking && (
-                  <div>
-                    {/* Scheme Selector for Monthly Tracking */}
-                    <div style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '12px',
-                      padding: '16px 24px',
-                      marginBottom: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px'
-                    }}>
-                      <label style={{
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: colors.utility.primaryText,
-                        whiteSpace: 'nowrap'
-                      }}>
-                        Monthly Tracking for:
-                      </label>
-                      <select
-                        value={selectedSchemeForTracking}
-                        onChange={(e) => setSelectedSchemeForTracking(e.target.value)}
-                        style={{
-                          flex: 1,
-                          padding: '10px 14px',
-                          fontSize: '14px',
-                          color: colors.utility.primaryText,
-                          backgroundColor: colors.utility.primaryBackground,
-                          border: `1px solid ${colors.utility.primaryText}20`,
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          outline: 'none'
-                        }}
-                      >
-                        {portfolio.holdings.map((holding) => (
-                          <option key={holding.scheme_code} value={holding.scheme_code}>
-                            {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Monthly Tracking Tabs */}
-                    <MonthlyTrackingTabs
-                      customerId={customerId}
-                      schemeCode={selectedSchemeForTracking}
-                      months={12}
-                    />
-                  </div>
-                )}
+                {/* Portfolio Snapshots Table - All Schemes Monthly View */}
+                <PortfolioSnapshotsTable
+                  customerId={customerId}
+                  months={12}
+                />
               </div>
             )}
           </>
@@ -1155,162 +1150,229 @@ comparisonData={comparisonIndexData}
 
         {/* Goals & Actions Tab */}
         {activeTab === 'goals' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Header with Action Button */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  color: colors.utility.primaryText,
-                  margin: '0 0 8px 0'
-                }}>
-                  Goals & Tracking
-                </h2>
-                {goalSummary && (
-                  <p style={{
-                    fontSize: '14px',
-                    color: colors.utility.secondaryText,
-                    margin: 0
+          <div style={{ padding: '24px 32px' }}>
+            {/* 2-Column Layout: Goals on Left | Metrics + Quick Actions on Right */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '24px' }}>
+              {/* Left Column - Goals List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Header */}
+                <div>
+                  <h2 style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: colors.utility.primaryText,
+                    margin: '0 0 8px 0'
                   }}>
-                    {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
-                    {goalSummary.goals_on_track} on track •
-                    {goalSummary.goals_behind} behind
-                  </p>
+                    Goals & Tracking
+                  </h2>
+                  {goalSummary && (
+                    <p style={{
+                      fontSize: '14px',
+                      color: colors.utility.secondaryText,
+                      margin: 0
+                    }}>
+                      {goals.length} active goal{goals.length !== 1 ? 's' : ''} •
+                      {goalSummary.goals_on_track} on track •
+                      {goalSummary.goals_behind} behind
+                    </p>
+                  )}
+                </div>
+
+                {goalsLoading ? (
+                  <div style={{
+                    padding: '40px',
+                    textAlign: 'center',
+                    color: colors.utility.secondaryText
+                  }}>
+                    Loading goals...
+                  </div>
+                ) : goals.length === 0 ? (
+                  <div style={{
+                    padding: '60px 40px',
+                    textAlign: 'center',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    borderRadius: '12px',
+                    border: `2px dashed ${colors.utility.primaryText}20`
+                  }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+                    <h3 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText,
+                      marginBottom: '8px'
+                    }}>
+                      No Goals Set
+                    </h3>
+                    <p style={{
+                      fontSize: '14px',
+                      color: colors.utility.secondaryText,
+                      marginBottom: '24px'
+                    }}>
+                      Create your first investment goal to start tracking progress
+                    </p>
+                    <button
+                      onClick={() => navigate(`/customers/${customerId}/goals/new`)}
+                      style={{
+                        padding: '12px 24px',
+                        backgroundColor: colors.brand.primary,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Create First Goal
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Comprehensive Goal Cards */}
+                    {goals.filter(g => g.is_active).map(goal => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        onRecalculate={async (goalId: number) => {
+                          setSelectedGoalId(goalId);
+                          setShowGoalRecalculationModal(true);
+                          setRecalculationResult(null);
+
+                          try {
+                            const result = await recalculateGoalMutation.mutateAsync(goalId);
+                            setRecalculationResult({
+                              previousCorpus: result.current_value,
+                              newCorpus: result.projected_corpus,
+                              error: false
+                            });
+                            refetchGoals();
+                          } catch (error) {
+                            setRecalculationResult({ error: true });
+                          }
+                        }}
+                        onToggleWatchlist={handleWatchlistToggle}
+                        showAllocations={true}
+                      />
+                    ))}
+
+                    {/* Asset Allocation Utilization */}
+                    <AssetAllocationUtilization customerId={customerId!} />
+                  </>
+                )}
+
+                {/* Alerts & Reminders Section - excluding goals */}
+                {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
+                  <div>
+                    <h3 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText,
+                      marginBottom: '16px'
+                    }}>
+                      Alerts & Reminders
+                    </h3>
+                    <JTBDList
+                      customerId={customerId}
+                      onSetupNew={() => setShowJTBDSetupModal(true)}
+                      onEdit={(jtbdId) => {
+                        console.log('Edit JTBD:', jtbdId);
+                      }}
+                      showFilters={true}
+                    />
+                  </div>
                 )}
               </div>
-              <button
-                onClick={() => setShowGoalSetupModal(true)}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: colors.brand.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ fontSize: '18px' }}>+</span>
-                Create New Goal
-              </button>
+
+              {/* Right Column - Metrics (2x2 Grid) + Quick Actions */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Goal Metrics - Compact 2x2 Grid */}
+                {goalSummary && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    {/* Card 1: Active Goals */}
+                    <div style={{
+                      background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
+                      borderRadius: '10px',
+                      padding: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      color: 'white'
+                    }}>
+                      <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '6px' }}>Active Goals</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', marginBottom: '6px' }}>
+                        {goalSummary.total_goals}
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: 0.85 }}>
+                        {goalSummary.goals_on_track} On Track • {goalSummary.goals_behind} Behind
+                      </div>
+                    </div>
+
+                    {/* Card 2: Total Target */}
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '10px',
+                      padding: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      border: `1px solid ${colors.utility.primaryText}10`
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '6px' }}>
+                        Total Target
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '700', color: colors.utility.primaryText }}>
+                        {formatCurrency(goalSummary.total_target_corpus)}
+                      </div>
+                    </div>
+
+                    {/* Card 3: Current Value */}
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '10px',
+                      padding: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      border: `1px solid ${colors.utility.primaryText}10`
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '6px' }}>
+                        Current Value
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '700', color: colors.utility.primaryText, marginBottom: '4px' }}>
+                        {formatCurrency(goalSummary.total_current_value)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.semantic.success }}>
+                        {goalSummary.total_target_corpus > 0
+                          ? formatPercentage((goalSummary.total_current_value / goalSummary.total_target_corpus) * 100)
+                          : '0%'} of target
+                      </div>
+                    </div>
+
+                    {/* Card 4: Goal SIPs */}
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '10px',
+                      padding: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      border: `1px solid ${colors.utility.primaryText}10`
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '6px' }}>
+                        Goal SIPs
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '700', color: colors.utility.primaryText }}>
+                        {formatCurrency(goals.reduce((sum, goal) => {
+                          const config = goal.config_data;
+                          if ('monthly_contribution' in config && config.monthly_contribution) {
+                            return sum + config.monthly_contribution;
+                          }
+                          return sum;
+                        }, 0))}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                        per month
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Actions */}
+                <GoalQuickActions onCreateGoal={() => navigate(`/customers/${customerId}/goals/new`)} />
+              </div>
             </div>
-
-            {goalsLoading ? (
-              <div style={{
-                padding: '40px',
-                textAlign: 'center',
-                color: colors.utility.secondaryText
-              }}>
-                Loading goals...
-              </div>
-            ) : goals.length === 0 ? (
-              <div style={{
-                padding: '60px 40px',
-                textAlign: 'center',
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                border: `2px dashed ${colors.utility.primaryText}20`
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  marginBottom: '8px'
-                }}>
-                  No Goals Set
-                </h3>
-                <p style={{
-                  fontSize: '14px',
-                  color: colors.utility.secondaryText,
-                  marginBottom: '24px'
-                }}>
-                  Create your first investment goal to start tracking progress
-                </p>
-                <button
-                  onClick={() => setShowGoalSetupModal(true)}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: colors.brand.primary,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Create First Goal
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Comprehensive Goal Cards */}
-                {goals.filter(g => g.is_active).map(goal => (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    onEdit={(goalId: number) => {
-                      setSelectedGoalId(goalId);
-                      setShowGoalDetailsModal(true);
-                    }}
-                    onRecalculate={async (goalId: number) => {
-                      setSelectedGoalId(goalId);
-                      setShowGoalRecalculationModal(true);
-                      setRecalculationResult(null);
-
-                      try {
-                        const result = await recalculateGoalMutation.mutateAsync(goalId);
-                        setRecalculationResult({
-                          previousCorpus: result.current_value,
-                          newCorpus: result.projected_corpus,
-                          error: false
-                        });
-                        refetchGoals();
-                      } catch (error) {
-                        setRecalculationResult({ error: true });
-                      }
-                    }}
-                    onToggleWatchlist={handleWatchlistToggle}
-                    showAllocations={true}
-                  />
-                ))}
-
-                {/* Asset Allocation Utilization */}
-                <AssetAllocationUtilization customerId={customerId!} />
-              </div>
-            )}
-
-            {/* Alerts & Reminders Section - excluding goals */}
-            {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
-              <div style={{ marginTop: '24px' }}>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  marginBottom: '16px'
-                }}>
-                  Alerts & Reminders
-                </h3>
-                <JTBDList
-                  customerId={customerId}
-                  onSetupNew={() => setShowJTBDSetupModal(true)}
-                  onEdit={(jtbdId) => {
-                    console.log('Edit JTBD:', jtbdId);
-                  }}
-                  showFilters={true}
-                />
-              </div>
-            )}
           </div>
         )}
 
@@ -1429,28 +1491,6 @@ comparisonData={comparisonIndexData}
       )}
 
       {/* Goal Modals */}
-      {showGoalSetupModal && (
-        <GoalSetupModal
-          customerId={customerId!}
-          onClose={() => setShowGoalSetupModal(false)}
-          onSuccess={() => {
-            setShowGoalSetupModal(false);
-            refetchGoals();
-          }}
-        />
-      )}
-
-      {showGoalDetailsModal && selectedGoalId && (
-        <GoalDetailsModal
-          goalId={selectedGoalId}
-          onClose={() => {
-            setShowGoalDetailsModal(false);
-            setSelectedGoalId(null);
-            refetchGoals();
-          }}
-        />
-      )}
-
       {showGoalRecalculationModal && selectedGoalId && (
         <GoalRecalculationModal
           goalId={selectedGoalId}
@@ -1463,6 +1503,16 @@ comparisonData={comparisonIndexData}
           previousCorpus={recalculationResult?.previousCorpus}
           newCorpus={recalculationResult?.newCorpus}
           error={recalculationResult?.error}
+        />
+      )}
+
+      {/* Meeting Modal */}
+      {showMeetingModal && (
+        <CreateMeetingModal
+          customerId={customerId!}
+          isOpen={showMeetingModal}
+          onClose={() => setShowMeetingModal(false)}
+          onSuccess={() => setShowMeetingModal(false)}
         />
       )}
     </div>

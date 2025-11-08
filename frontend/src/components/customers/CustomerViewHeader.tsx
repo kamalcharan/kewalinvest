@@ -1,7 +1,7 @@
 // frontend/src/components/customers/CustomerViewHeader.tsx
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Download as DownloadIcon } from 'lucide-react';
+import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Calendar as CalendarIcon, Target as TargetIcon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import FamilyMembersPopover from './FamilyMembersPopover';
 import { IndividualFamilySwitch } from './IndividualFamilySwitch';
@@ -12,7 +12,8 @@ interface CustomerViewHeaderProps {
   customer: CustomerWithContact;
   portfolio: CustomerPortfolioResponse | null;
   customerId: number;
-  onExportReport?: () => void;
+  onNewGoal?: () => void;
+  onMeeting?: () => void;
   // Family view props
   viewMode?: 'individual' | 'family';
   onViewModeChange?: (mode: 'individual' | 'family') => void;
@@ -22,7 +23,8 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   customer,
   portfolio,
   customerId,
-  onExportReport,
+  onNewGoal,
+  onMeeting,
   viewMode = 'individual',
   onViewModeChange
 }) => {
@@ -148,9 +150,9 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
             )}
 
             <button
-              onClick={onExportReport}
+              onClick={onMeeting || (() => navigate('/meetings'))}
               style={{
-                padding: '8px 14px', // Reduced from 10px 16px
+                padding: '8px 14px',
                 backgroundColor: colors.utility.secondaryBackground,
                 border: `1px solid ${colors.utility.primaryText}20`,
                 borderRadius: '8px',
@@ -159,26 +161,44 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '13px' // Reduced from 14px
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.primaryText + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
               }}
             >
-              <DownloadIcon size={16} /> Export
+              <CalendarIcon size={16} /> Meeting
             </button>
 
             <button
-              onClick={() => navigate(`/customers/${customerId}/edit`)}
+              onClick={onNewGoal}
               style={{
-                padding: '8px 16px', // Reduced from 10px 20px
+                padding: '8px 16px',
                 backgroundColor: colors.brand.primary,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: '500',
-                fontSize: '13px' // Reduced from 14px
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.9';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
               }}
             >
-              Edit Profile
+              <TargetIcon size={16} /> New Goal
             </button>
           </div>
         </div>

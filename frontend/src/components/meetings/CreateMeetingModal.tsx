@@ -1,7 +1,7 @@
 // frontend/src/components/meetings/CreateMeetingModal.tsx
 
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, TrendingUp, Target, UserPlus, AlertCircle, Users, MapPin, Video, Phone } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCreateExecution, useUpdateExecution } from '../../hooks/useJTBD';
 import type {
@@ -23,18 +23,65 @@ const MEETING_TYPE_MAP = {
 type OldMeetingType = keyof typeof MEETING_TYPE_MAP;
 type MeetingMode = 'in_person' | 'video_call' | 'phone_call';
 
-const MEETING_TYPE_LABELS: Record<OldMeetingType, string> = {
-  review: 'Portfolio Review',
-  planning: 'Goal Planning',
-  onboarding: 'Client Onboarding',
-  grievance: 'Grievance Resolution',
-  other: 'General Meeting',
+const MEETING_TYPE_CONFIG: Record<OldMeetingType, { label: string; icon: any }> = {
+  review: { label: 'Portfolio Review', icon: TrendingUp },
+  planning: { label: 'Goal Planning', icon: Target },
+  onboarding: { label: 'Client Onboarding', icon: UserPlus },
+  grievance: { label: 'Grievance Resolution', icon: AlertCircle },
+  other: { label: 'General Meeting', icon: Users },
 };
 
-const MEETING_MODE_LABELS: Record<MeetingMode, string> = {
-  in_person: 'In Person',
-  video_call: 'Video Call',
-  phone_call: 'Phone Call',
+const MEETING_MODE_CONFIG: Record<MeetingMode, { label: string; icon: any }> = {
+  in_person: { label: 'In Person', icon: MapPin },
+  video_call: { label: 'Video Call', icon: Video },
+  phone_call: { label: 'Phone Call', icon: Phone },
+};
+
+const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+
+// Date shortcuts
+const getDateShortcuts = () => {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const nextMonday = new Date(today);
+  const daysUntilMonday = (8 - today.getDay()) % 7 || 7;
+  nextMonday.setDate(today.getDate() + daysUntilMonday);
+
+  const nextFriday = new Date(today);
+  const daysUntilFriday = (5 - today.getDay() + 7) % 7 || 7;
+  nextFriday.setDate(today.getDate() + daysUntilFriday);
+
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    today: { label: 'Today', value: formatDate(today) },
+    tomorrow: { label: 'Tomorrow', value: formatDate(tomorrow) },
+    nextMonday: { label: 'Next Mon', value: formatDate(nextMonday) },
+    nextFriday: { label: 'Next Fri', value: formatDate(nextFriday) },
+  };
+};
+
+// Common business hours (9 AM - 6 PM in 30-minute intervals)
+const TIME_SLOTS = [
+  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+];
+
+// Helper to get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 interface CreateMeetingModalProps {
@@ -71,12 +118,14 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const createMutation = useCreateExecution();
   const updateMutation = useUpdateExecution();
 
+  console.log('[CreateMeetingModal] Rendered - isOpen:', isOpen, 'customerId:', customerId, 'isEditMode:', isEditMode);
+
   // Form state
   const [formData, setFormData] = useState<MeetingFormData>({
     meeting_type: 'review',
     meeting_mode: 'in_person',
-    scheduled_date: '',
-    scheduled_time: '',
+    scheduled_date: getTodayDate(), // Default to today
+    scheduled_time: '10:00', // Default to 10:00 AM
     duration_minutes: 60,
     agenda: ''
   });
@@ -112,8 +161,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       setFormData({
         meeting_type: 'review',
         meeting_mode: 'in_person',
-        scheduled_date: '',
-        scheduled_time: '',
+        scheduled_date: getTodayDate(), // Default to today
+        scheduled_time: '10:00', // Default to 10:00 AM
         duration_minutes: 60,
         agenda: ''
       });
@@ -143,9 +192,10 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
 
     const validationResult = validate();
     console.log('[CreateMeetingModal] Validation result:', validationResult);
+    console.log('[CreateMeetingModal] Errors:', errors);
 
     if (!validationResult) {
-      console.log('[CreateMeetingModal] Validation FAILED, stopping');
+      console.log('[CreateMeetingModal] Validation FAILED, stopping. Errors:', errors);
       return;
     }
 
@@ -164,7 +214,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       };
 
       // Generate title based on meeting type
-      const title = MEETING_TYPE_LABELS[formData.meeting_type];
+      const title = MEETING_TYPE_CONFIG[formData.meeting_type].label;
 
       if (isEditMode) {
         console.log('[CreateMeetingModal] Edit mode - updating');
@@ -213,8 +263,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
     setFormData({
       meeting_type: 'review',
       meeting_mode: 'in_person',
-      scheduled_date: '',
-      scheduled_time: '',
+      scheduled_date: getTodayDate(), // Default to today
+      scheduled_time: '10:00', // Default to 10:00 AM
       duration_minutes: 60,
       agenda: ''
     });
@@ -242,27 +292,29 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
         }}
         onClick={handleClose}
       >
-        {/* Modal */}
+        {/* Modal - Landscape Design */}
         <div
           style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderRadius: '16px',
-            maxWidth: '600px',
+            maxWidth: '1000px',
             width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+            maxHeight: '85vh',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            display: 'flex',
+            flexDirection: 'column'
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div
             style={{
-              padding: '24px',
+              padding: '20px 24px',
               borderBottom: `1px solid ${colors.utility.primaryText}10`,
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexShrink: 0
             }}
           >
             <h2
@@ -294,104 +346,263 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit}>
-            <div style={{ padding: '24px' }}>
-              {/* Meeting Type */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  Meeting Type *
-                </label>
-                <select
-                  value={formData.meeting_type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, meeting_type: e.target.value as OldMeetingType })
-                  }
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${errors.meeting_type ? colors.semantic.error : colors.utility.primaryText}20`,
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px'
-                  }}
-                >
-                  {Object.entries(MEETING_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                {errors.meeting_type && (
-                  <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '4px', display: 'block' }}>
-                    {errors.meeting_type}
-                  </span>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', flex: 1, overflow: 'auto' }}>
+              {/* Left Column */}
+              <div>
+                {/* Meeting Type - Radio Buttons */}
+                <div style={{ marginBottom: '24px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom: '12px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText
+                    }}
+                  >
+                    Meeting Type *
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {(Object.entries(MEETING_TYPE_CONFIG) as [OldMeetingType, { label: string; icon: any }][]).map(([key, config]) => {
+                      const Icon = config.icon;
+                      const isSelected = formData.meeting_type === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, meeting_type: key })}
+                          style={{
+                            padding: '12px',
+                            borderRadius: '8px',
+                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                            backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.primaryBackground,
+                            color: isSelected ? colors.brand.primary : colors.utility.primaryText,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s',
+                            fontSize: '13px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          <Icon size={20} />
+                          {config.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.meeting_type && (
+                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
+                      {errors.meeting_type}
+                    </span>
+                  )}
+                </div>
+
+                {/* Meeting Mode - Radio Buttons */}
+                <div style={{ marginBottom: '24px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom: '12px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText
+                    }}
+                  >
+                    Meeting Mode *
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    {(Object.entries(MEETING_MODE_CONFIG) as [MeetingMode, { label: string; icon: any }][]).map(([key, config]) => {
+                      const Icon = config.icon;
+                      const isSelected = formData.meeting_mode === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, meeting_mode: key })}
+                          style={{
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: `2px solid ${isSelected ? colors.utility.secondaryText : colors.utility.primaryText + '20'}`,
+                            backgroundColor: isSelected ? colors.utility.secondaryText + '15' : colors.utility.primaryBackground,
+                            color: isSelected ? colors.utility.secondaryText : colors.utility.primaryText,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          <Icon size={18} />
+                          {config.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.meeting_mode && (
+                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
+                      {errors.meeting_mode}
+                    </span>
+                  )}
+                </div>
+
+                {/* Duration - Quick Select */}
+                <div style={{ marginBottom: '24px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom: '12px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText
+                    }}
+                  >
+                    Duration *
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
+                    {DURATION_PRESETS.map((minutes) => {
+                      const isSelected = formData.duration_minutes === minutes;
+                      return (
+                        <button
+                          key={minutes}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, duration_minutes: minutes })}
+                          style={{
+                            padding: '10px 8px',
+                            borderRadius: '6px',
+                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                            backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.primaryBackground,
+                            color: isSelected ? colors.brand.primary : colors.utility.primaryText,
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {minutes}m
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.duration_minutes && (
+                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
+                      {errors.duration_minutes}
+                    </span>
+                  )}
+                </div>
+
+                {/* Location/Link based on mode */}
+                {formData.meeting_mode === 'in_person' && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText
+                      }}
+                    >
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.location || ''}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="Enter meeting location"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {formData.meeting_mode === 'video_call' && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText
+                      }}
+                    >
+                      Meeting Link
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.meeting_link || ''}
+                      onChange={(e) => setFormData({ ...formData, meeting_link: e.target.value })}
+                      placeholder="https://zoom.us/j/..."
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
                 )}
               </div>
 
-              {/* Meeting Mode */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  Meeting Mode *
-                </label>
-                <select
-                  value={formData.meeting_mode}
-                  onChange={(e) =>
-                    setFormData({ ...formData, meeting_mode: e.target.value as MeetingMode })
-                  }
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${errors.meeting_mode ? colors.semantic.error : colors.utility.primaryText}20`,
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px'
-                  }}
-                >
-                  {Object.entries(MEETING_MODE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                {errors.meeting_mode && (
-                  <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '4px', display: 'block' }}>
-                    {errors.meeting_mode}
-                  </span>
-                )}
-              </div>
-
-              {/* Date and Time */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-                <div>
+              {/* Right Column */}
+              <div>
+                {/* Date with Shortcuts */}
+                <div style={{ marginBottom: '24px' }}>
                   <label
                     style={{
                       display: 'block',
                       marginBottom: '8px',
                       fontSize: '14px',
-                      fontWeight: '500',
+                      fontWeight: '600',
                       color: colors.utility.primaryText
                     }}
                   >
                     Date *
                   </label>
+                  {/* Date Shortcuts */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                    {Object.entries(getDateShortcuts()).map(([key, { label, value }]) => {
+                      const isSelected = formData.scheduled_date === value;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, scheduled_date: value })}
+                          style={{
+                            padding: '8px 6px',
+                            borderRadius: '6px',
+                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                            backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.primaryBackground,
+                            color: isSelected ? colors.brand.primary : colors.utility.primaryText,
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Custom Date Picker */}
                   <input
                     type="date"
                     value={formData.scheduled_date}
@@ -407,26 +618,26 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                     }}
                   />
                   {errors.scheduled_date && (
-                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '4px', display: 'block' }}>
+                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
                       {errors.scheduled_date}
                     </span>
                   )}
                 </div>
 
-                <div>
+                {/* Time Dropdown */}
+                <div style={{ marginBottom: '24px' }}>
                   <label
                     style={{
                       display: 'block',
                       marginBottom: '8px',
                       fontSize: '14px',
-                      fontWeight: '500',
+                      fontWeight: '600',
                       color: colors.utility.primaryText
                     }}
                   >
                     Time *
                   </label>
-                  <input
-                    type="time"
+                  <select
                     value={formData.scheduled_time}
                     onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
                     style={{
@@ -436,74 +647,49 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                       border: `1px solid ${errors.scheduled_time ? colors.semantic.error : colors.utility.primaryText}20`,
                       backgroundColor: colors.utility.primaryBackground,
                       color: colors.utility.primaryText,
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      cursor: 'pointer'
                     }}
-                  />
+                  >
+                    <option value="">Select time</option>
+                    {TIME_SLOTS.map((time) => {
+                      const [hours, minutes] = time.split(':');
+                      const hour = parseInt(hours);
+                      const ampm = hour >= 12 ? 'PM' : 'AM';
+                      const displayHour = hour > 12 ? hour - 12 : hour;
+                      const displayTime = `${displayHour}:${minutes} ${ampm}`;
+                      return (
+                        <option key={time} value={time}>
+                          {displayTime}
+                        </option>
+                      );
+                    })}
+                  </select>
                   {errors.scheduled_time && (
-                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '4px', display: 'block' }}>
+                    <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '6px', display: 'block' }}>
                       {errors.scheduled_time}
                     </span>
                   )}
                 </div>
-              </div>
 
-              {/* Duration */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  Duration (minutes) *
-                </label>
-                <input
-                  type="number"
-                  value={formData.duration_minutes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 0 })
-                  }
-                  min="15"
-                  step="15"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${errors.duration_minutes ? colors.semantic.error : colors.utility.primaryText}20`,
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px'
-                  }}
-                />
-                {errors.duration_minutes && (
-                  <span style={{ fontSize: '12px', color: colors.semantic.error, marginTop: '4px', display: 'block' }}>
-                    {errors.duration_minutes}
-                  </span>
-                )}
-              </div>
-
-              {/* Location/Link based on mode */}
-              {formData.meeting_mode === 'in_person' && (
-                <div style={{ marginBottom: '20px' }}>
+                {/* Agenda */}
+                <div style={{ marginBottom: '24px' }}>
                   <label
                     style={{
                       display: 'block',
                       marginBottom: '8px',
                       fontSize: '14px',
-                      fontWeight: '500',
+                      fontWeight: '600',
                       color: colors.utility.primaryText
                     }}
                   >
-                    Location
+                    Agenda
                   </label>
-                  <input
-                    type="text"
-                    value={formData.location || ''}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Enter meeting location"
+                  <textarea
+                    value={formData.agenda || ''}
+                    onChange={(e) => setFormData({ ...formData, agenda: e.target.value })}
+                    placeholder="Enter meeting agenda..."
+                    rows={8}
                     style={{
                       width: '100%',
                       padding: '12px',
@@ -511,84 +697,24 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
                       border: `1px solid ${colors.utility.primaryText}20`,
                       backgroundColor: colors.utility.primaryBackground,
                       color: colors.utility.primaryText,
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-              )}
-
-              {formData.meeting_mode === 'video_call' && (
-                <div style={{ marginBottom: '20px' }}>
-                  <label
-                    style={{
-                      display: 'block',
-                      marginBottom: '8px',
                       fontSize: '14px',
-                      fontWeight: '500',
-                      color: colors.utility.primaryText
-                    }}
-                  >
-                    Meeting Link
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.meeting_link || ''}
-                    onChange={(e) => setFormData({ ...formData, meeting_link: e.target.value })}
-                    placeholder="https://zoom.us/j/..."
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      border: `1px solid ${colors.utility.primaryText}20`,
-                      backgroundColor: colors.utility.primaryBackground,
-                      color: colors.utility.primaryText,
-                      fontSize: '14px'
+                      resize: 'none',
+                      fontFamily: 'inherit'
                     }}
                   />
                 </div>
-              )}
-
-              {/* Agenda */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  Agenda
-                </label>
-                <textarea
-                  value={formData.agenda || ''}
-                  onChange={(e) => setFormData({ ...formData, agenda: e.target.value })}
-                  placeholder="Enter meeting agenda..."
-                  rows={4}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    backgroundColor: colors.utility.primaryBackground,
-                    color: colors.utility.primaryText,
-                    fontSize: '14px',
-                    resize: 'vertical',
-                    fontFamily: 'inherit'
-                  }}
-                />
               </div>
             </div>
 
             {/* Footer */}
             <div
               style={{
-                padding: '24px',
+                padding: '20px 24px',
                 borderTop: `1px solid ${colors.utility.primaryText}10`,
                 display: 'flex',
                 gap: '12px',
-                justifyContent: 'flex-end'
+                justifyContent: 'flex-end',
+                flexShrink: 0
               }}
             >
               <button

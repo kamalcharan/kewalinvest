@@ -1,12 +1,13 @@
 // src/hooks/usePortfolioData.ts
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { PortfolioService } from '../services/portfolio.service';
-import { 
-  CustomerPortfolioResponse, 
+import {
+  CustomerPortfolioResponse,
   PortfolioHolding,
   PortfolioFilters,
-  PortfolioStatistics 
+  PortfolioStatistics
 } from '../types/portfolio.types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -229,4 +230,24 @@ export const usePortfolioTotals = (customerId: number) => {
     error,
     refetch: fetchTotals
   };
+};
+
+// ==================== TANSTACK QUERY HOOKS ====================
+
+/**
+ * Hook for monthly snapshots of all schemes (TanStack Query)
+ * Returns all schemes with their monthly data (units, NAV, market value) in one API call
+ */
+export const usePortfolioSnapshots = (
+  customerId: number,
+  months: number = 12,
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ['portfolio', 'monthly-snapshots', customerId, months],
+    queryFn: () => PortfolioService.getMonthlySnapshots(customerId, months),
+    enabled: options?.enabled !== false && customerId > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000,   // 10 minutes (formerly cacheTime)
+  });
 };

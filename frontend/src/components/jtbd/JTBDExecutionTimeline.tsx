@@ -2,10 +2,11 @@
 // Unified timeline showing ALL execution types (meetings, SIP plans, alerts)
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Calendar, Filter } from 'lucide-react';
+import { Plus, Calendar, Filter, Repeat, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useJTBDExecutions } from '../../hooks/useJTBD';
 import { JTBDExecutionCard } from './JTBDExecutionCard';
+import { BirthdayCard, AnniversaryCard } from './CelebrationCards';
 import { CreateMeetingModal } from '../meetings/CreateMeetingModal';
 import type { JTBDExecution, ExecutionFilters } from '../../types/jtbd.types';
 import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
@@ -24,6 +25,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
   const [typeFilter, setTypeFilter] = useState<ExecutionTypeFilter>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<JTBDExecution | undefined>();
 
   // Fetch all executions for this customer
   const { data: executionsData, isLoading, refetch } = useJTBDExecutions({
@@ -251,8 +253,8 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
         {([
           { key: 'all', label: 'All', icon: Filter },
           { key: 'meetings', label: 'Meetings', icon: Calendar },
-          { key: 'sip_plans', label: 'SIP Plans', icon: null },
-          { key: 'alerts', label: 'Alerts', icon: null },
+          { key: 'sip_plans', label: 'SIP Plans', icon: Repeat },
+          { key: 'alerts', label: 'Alerts', icon: AlertTriangle },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -272,7 +274,7 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
               transition: 'all 0.2s'
             }}
           >
-            {Icon && <Icon size={16} />}
+            <Icon size={16} />
             {label}
           </button>
         ))}
@@ -305,6 +307,51 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           </button>
         ))}
       </div>
+
+      {/* Upcoming Celebrations Section */}
+      {(typeFilter === 'alerts' || typeFilter === 'all') && (
+        <div style={{ marginBottom: '32px' }}>
+          {/* Section Header */}
+          <div style={{
+            fontSize: '12px',
+            fontWeight: '700',
+            color: colors.utility.secondaryText,
+            marginBottom: '12px',
+            letterSpacing: '0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <div style={{
+              width: '24px',
+              height: '2px',
+              backgroundColor: colors.utility.secondaryText + '40'
+            }} />
+            UPCOMING CELEBRATIONS
+            <div style={{
+              flex: 1,
+              height: '2px',
+              backgroundColor: colors.utility.secondaryText + '40'
+            }} />
+          </div>
+
+          {/* Celebration Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
+            {/* Dummy Birthday Card - Example */}
+            <BirthdayCard
+              name="John Doe"
+              date="15 Dec"
+              daysUntil={5}
+            />
+            {/* Dummy Anniversary Card - Example */}
+            <AnniversaryCard
+              name="Jane Smith"
+              date="20 Dec"
+              daysUntil={10}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Timeline Content */}
       {isLoading ? (
@@ -342,12 +389,13 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
               </div>
 
               {/* Execution Cards */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
                 {groupedByDate[dateKey].map(execution => (
                   <JTBDExecutionCard
                     key={execution.id}
                     execution={execution}
                     onUpdate={() => refetch()}
+                    onEdit={(meeting) => setEditingMeeting(meeting)}
                   />
                 ))}
               </div>
@@ -363,6 +411,20 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => refetch()}
+        />
+      )}
+
+      {/* Edit Meeting Modal */}
+      {editingMeeting && (
+        <CreateMeetingModal
+          customerId={customerId}
+          meeting={editingMeeting}
+          isOpen={!!editingMeeting}
+          onClose={() => setEditingMeeting(undefined)}
+          onSuccess={() => {
+            refetch();
+            setEditingMeeting(undefined);
+          }}
         />
       )}
     </div>
