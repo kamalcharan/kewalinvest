@@ -864,6 +864,86 @@ comparisonData={comparisonIndexData}
                     </div>
                   </div>
 
+                  {/* Fund-wise Performance */}
+                  {portfolio.holdings && portfolio.holdings.length > 0 && (
+                    <div style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderRadius: '12px',
+                      padding: '24px'
+                    }}>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
+                        margin: 0,
+                        marginBottom: '20px'
+                      }}>
+                        Fund-wise Performance
+                      </h3>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
+                            <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
+                            <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {portfolio.holdings.map((holding, idx) => {
+                            const isSmallReturn = Math.abs(holding.return_percentage) < 0.1;
+
+                            return (
+                              <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
+                                <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {formatCurrency(holding.total_invested)}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {formatCurrency(holding.current_value)}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right' }}>
+                                  {isSmallReturn ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                      <div style={{
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: getValueColor(holding.return_percentage)
+                                      }}>
+                                        {formatPercentage(holding.return_percentage)}
+                                      </div>
+                                      <div style={{
+                                        fontSize: '10px',
+                                        color: colors.utility.secondaryText,
+                                        fontStyle: 'italic'
+                                      }}>
+                                        (₹{holding.total_returns.toFixed(2)})
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      color: getValueColor(holding.return_percentage)
+                                    }}>
+                                      {formatPercentage(holding.return_percentage)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
+                                  {(holding.allocation_percentage ?? 0).toFixed(1)}%
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
                   {/* Quick JTBD Summary */}
                   {jtbds && jtbds.length > 0 && (
                     <div style={{
@@ -1037,91 +1117,10 @@ comparisonData={comparisonIndexData}
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <CustomerPortfolioGapAlert 
+                <CustomerPortfolioGapAlert
                   customerId={customerId}
                   onRefresh={() => refetchPortfolio()}
                 />
-                
-                <PortfolioSummaryWidget portfolio={portfolio} compact={false} showSparkline={true} />
-                
-                {portfolio.holdings && portfolio.holdings.length > 0 && (
-                  <div style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderRadius: '12px',
-                    padding: '24px'
-                  }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
-                      margin: 0,
-                      marginBottom: '20px'
-                    }}>
-                      Fund-wise Performance
-                    </h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${colors.utility.primaryText}20` }}>
-                          <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: colors.utility.secondaryText }}>FUND NAME</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>INVESTED</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>CURRENT VALUE</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>RETURNS</th>
-                          <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: colors.utility.secondaryText }}>ALLOCATION</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {portfolio.holdings.map((holding, idx) => {
-                          const isSmallReturn = Math.abs(holding.return_percentage) < 0.1;
-                          
-                          return (
-                            <tr key={idx} style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
-                              <td style={{ padding: '12px', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {formatCurrency(holding.total_invested)}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {formatCurrency(holding.current_value)}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right' }}>
-                                {isSmallReturn ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                    <div style={{ 
-                                      fontSize: '13px', 
-                                      fontWeight: '600', 
-                                      color: getValueColor(holding.return_percentage) 
-                                    }}>
-                                      {formatPercentage(holding.return_percentage)}
-                                    </div>
-                                    <div style={{ 
-                                      fontSize: '10px', 
-                                      color: colors.utility.secondaryText,
-                                      fontStyle: 'italic'
-                                    }}>
-                                      (₹{holding.total_returns.toFixed(2)})
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div style={{ 
-                                    fontSize: '13px', 
-                                    fontWeight: '600', 
-                                    color: getValueColor(holding.return_percentage) 
-                                  }}>
-                                    {formatPercentage(holding.return_percentage)}
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', color: colors.utility.primaryText }}>
-                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
 
                 {/* Portfolio Snapshots Table - All Schemes Monthly View */}
                 <PortfolioSnapshotsTable
