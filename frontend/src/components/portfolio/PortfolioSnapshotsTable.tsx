@@ -301,7 +301,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             fontSize: '11px',
                             color: colors.utility.secondaryText
                           }}>
-                            {scheme.scheme_code}
+                            {scheme.category}{scheme.sub_category ? ` • ${scheme.sub_category}` : ''}
                           </div>
                         </div>
                       </div>
