@@ -502,8 +502,8 @@ export class MonthlyTrackingService {
         SELECT DISTINCT
           t.scheme_code,
           sd.scheme_name,
-          sd.category,
-          sd.sub_category
+          COALESCE(sd.category, 'Uncategorized') as category,
+          COALESCE(sd.sub_category, '') as sub_category
         FROM t_transaction_table t
         LEFT JOIN t_scheme_details sd ON t.scheme_code = sd.scheme_code
         WHERE t.tenant_id = $1
