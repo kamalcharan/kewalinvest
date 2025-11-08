@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ChevronDown, ChevronRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
+import { SchemeChartsModal } from './SchemeChartsModal';
 
 interface PortfolioSnapshotsTableProps {
   customerId: number;
@@ -22,6 +23,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [expandedSchemes, setExpandedSchemes] = useState<Set<string>>(new Set());
+  const [selectedScheme, setSelectedScheme] = useState<any>(null);
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
@@ -55,6 +58,16 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
   const collapseAll = () => {
     setExpandedSchemes(new Set());
+  };
+
+  const openChartModal = (scheme: any) => {
+    setSelectedScheme(scheme);
+    setIsChartModalOpen(true);
+  };
+
+  const closeChartModal = () => {
+    setIsChartModalOpen(false);
+    setSelectedScheme(null);
   };
 
   // Format month display (Nov'24)
@@ -326,8 +339,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // TODO: Implement chart view functionality
-                            console.log('View chart for:', scheme.scheme_code);
+                            openChartModal(scheme);
                           }}
                           style={{
                             border: 'none',
@@ -554,6 +566,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       }}>
         * Current month data • Click ▶ to expand and view detailed metrics (Units, NAV, Market Value, Performance)
       </div>
+
+      {/* Chart Modal */}
+      <SchemeChartsModal
+        isOpen={isChartModalOpen}
+        onClose={closeChartModal}
+        scheme={selectedScheme}
+      />
     </div>
   );
 };
