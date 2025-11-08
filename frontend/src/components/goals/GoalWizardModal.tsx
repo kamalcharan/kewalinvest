@@ -5,7 +5,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { CreateGoalRequest, GoalTrackingType } from '../../types/goal.types';
 import { useCreateGoal } from '../../hooks/useGoals';
 import { GoalService, SchemeAllocationUtilization } from '../../services/goal.service';
-import { useCustomerHoldings } from '../../hooks/usePortfolioData';
+import { usePortfolioData } from '../../hooks/usePortfolioData';
+import { PortfolioHolding } from '../../types/portfolio.types';
 
 interface GoalWizardModalProps {
   customerId: number;
@@ -38,9 +39,8 @@ interface FormData {
   target_amount?: number;
   current_value: number;
   monthly_contribution: number;
-  sip_date: number;
-  expected_roi: number;
-  expected_inflation: number;
+  expected_return_rate: number;
+  inflation_rate: number;
   priority: 'high' | 'medium' | 'low';
 
   // Step 4
@@ -65,9 +65,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
     start_date: new Date().toISOString().split('T')[0],
     current_value: 0,
     monthly_contribution: 0,
-    sip_date: 1,
-    expected_roi: 12,
-    expected_inflation: 6,
+    expected_return_rate: 12,
+    inflation_rate: 6,
     priority: 'high',
     linked_schemes: []
   });
@@ -76,7 +75,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
   const [selectedSchemes, setSelectedSchemes] = useState<Set<string>>(new Set());
 
   const createGoalMutation = useCreateGoal();
-  const { data: holdings } = useCustomerHoldings(customerId);
+  const { portfolio } = usePortfolioData({ customerId, autoFetch: true });
+  const holdings = portfolio?.holdings || [];
 
   // Load scheme utilization data
   useEffect(() => {
@@ -175,18 +175,16 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
         customer_id: customerId,
         goal_type: formData.goalType,
         title: formData.title,
-        goal_name: formData.goal_name,
         priority: formData.priority,
         config_data: {
+          goal_name: formData.goal_name,
           goal_type: formData.goalType,
-          start_date: formData.start_date,
           ...(formData.target_date && { target_date: formData.target_date }),
           ...(formData.target_amount && { target_amount: formData.target_amount }),
           current_value: formData.current_value,
           monthly_contribution: formData.monthly_contribution,
-          sip_date: formData.sip_date,
-          expected_roi: formData.expected_roi,
-          expected_inflation: formData.expected_inflation,
+          expected_return_rate: formData.expected_return_rate,
+          inflation_rate: formData.inflation_rate,
           linked_schemes: formData.linked_schemes.map(s => ({
             scheme_code: s.scheme_code,
             scheme_name: s.scheme_name,
@@ -215,9 +213,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
       start_date: getTodayDate(),
       current_value: 0,
       monthly_contribution: 0,
-      sip_date: 1,
-      expected_roi: 12,
-      expected_inflation: 6,
+      expected_return_rate: 12,
+      inflation_rate: 6,
       priority: 'high',
       linked_schemes: []
     });
@@ -239,7 +236,7 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
       newSelected.add(schemeCode);
       // Add to linked schemes with 0% allocation
       const utilization = schemeUtilization.find(u => u.scheme_code === schemeCode);
-      const holding = holdings?.find(h => h.scheme_code === schemeCode);
+      const holding = holdings.find((h: PortfolioHolding) => h.scheme_code === schemeCode);
       setFormData(prev => ({
         ...prev,
         linked_schemes: [...prev.linked_schemes, {
@@ -247,7 +244,7 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
           scheme_name: utilization?.scheme_name || holding?.scheme_name || schemeCode,
           allocation_percentage: 0,
           current_value: holding?.current_value,
-          asset_class: utilization?.asset_class
+          asset_class: holding?.category
         }]
       }));
     }
@@ -913,74 +910,41 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                 </div>
               )}
 
-              {/* Monthly SIP and SIP Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '20px' }}>
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText,
-                    marginBottom: '8px'
-                  }}>
-                    Monthly SIP Amount <span style={{ color: colors.semantic.error }}>*</span>
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{
-                      position: 'absolute',
-                      left: '16px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: colors.utility.secondaryText,
-                      fontWeight: '600'
-                    }}>₹</span>
-                    <input
-                      type="number"
-                      value={formData.monthly_contribution || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, monthly_contribution: parseFloat(e.target.value) || 0 }))}
-                      placeholder="15000"
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px 12px 36px',
-                        borderRadius: '8px',
-                        border: `1px solid ${colors.utility.primaryText}20`,
-                        fontSize: '14px',
-                        backgroundColor: colors.utility.secondaryBackground,
-                        color: colors.utility.primaryText
-                      }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText,
-                    marginBottom: '8px'
-                  }}>
-                    SIP Date
-                  </label>
-                  <select
-                    value={formData.sip_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sip_date: parseInt(e.target.value) }))}
+              {/* Monthly SIP Amount */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  marginBottom: '8px'
+                }}>
+                  Monthly SIP Amount <span style={{ color: colors.semantic.error }}>*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '16px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: colors.utility.secondaryText,
+                    fontWeight: '600'
+                  }}>₹</span>
+                  <input
+                    type="number"
+                    value={formData.monthly_contribution || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, monthly_contribution: parseFloat(e.target.value) || 0 }))}
+                    placeholder="15000"
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
+                      padding: '12px 16px 12px 36px',
                       borderRadius: '8px',
                       border: `1px solid ${colors.utility.primaryText}20`,
                       fontSize: '14px',
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText
                     }}
-                  >
-                    <option value={1}>1st of every month</option>
-                    <option value={5}>5th of every month</option>
-                    <option value={10}>10th of every month</option>
-                    <option value={15}>15th of every month</option>
-                    <option value={20}>20th of every month</option>
-                    <option value={25}>25th of every month</option>
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -1060,13 +1024,13 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                       color: colors.utility.primaryText,
                       marginBottom: '6px'
                     }}>
-                      Expected ROI (Annual %)
+                      Expected Return Rate (Annual %)
                     </label>
                     <div style={{ position: 'relative' }}>
                       <input
                         type="number"
-                        value={formData.expected_roi}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expected_roi: parseFloat(e.target.value) || 12 }))}
+                        value={formData.expected_return_rate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, expected_return_rate: parseFloat(e.target.value) || 12 }))}
                         step="0.5"
                         min="0"
                         max="30"
@@ -1098,13 +1062,13 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                       color: colors.utility.primaryText,
                       marginBottom: '6px'
                     }}>
-                      Expected Inflation (Annual %)
+                      Inflation Rate (Annual %)
                     </label>
                     <div style={{ position: 'relative' }}>
                       <input
                         type="number"
-                        value={formData.expected_inflation}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expected_inflation: parseFloat(e.target.value) || 6 }))}
+                        value={formData.inflation_rate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, inflation_rate: parseFloat(e.target.value) || 6 }))}
                         step="0.5"
                         min="0"
                         max="20"
@@ -1172,9 +1136,10 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                 marginBottom: '16px'
               }}>
                 {schemeUtilization.length > 0 ? schemeUtilization.map((scheme) => {
-                  const isFullyUtilized = scheme.utilization_percentage >= 100;
+                  const isFullyUtilized = scheme.is_fully_allocated;
                   const isSelected = selectedSchemes.has(scheme.scheme_code);
                   const allocation = formData.linked_schemes.find(s => s.scheme_code === scheme.scheme_code);
+                  const holding = holdings.find((h: PortfolioHolding) => h.scheme_code === scheme.scheme_code);
 
                   return (
                     <div
@@ -1235,7 +1200,7 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                           fontSize: '12px',
                           color: colors.utility.secondaryText
                         }}>
-                          {scheme.asset_class} • ₹{(scheme.current_value / 100000).toFixed(2)}L current value
+                          {holding?.category || 'N/A'} • ₹{((holding?.current_value || 0) / 100000).toFixed(2)}L current value
                         </div>
                       </div>
 
@@ -1254,8 +1219,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                           }}>
                             <div style={{
                               height: '100%',
-                              width: `${Math.min(100, scheme.utilization_percentage)}%`,
-                              backgroundColor: scheme.utilization_percentage >= 100
+                              width: `${Math.min(100, scheme.allocated_percentage)}%`,
+                              backgroundColor: scheme.is_fully_allocated
                                 ? colors.semantic.error
                                 : colors.brand.primary,
                               transition: 'width 0.3s'
@@ -1267,11 +1232,11 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                           fontWeight: '600',
                           minWidth: '45px',
                           textAlign: 'right',
-                          color: scheme.utilization_percentage >= 100
+                          color: scheme.is_fully_allocated
                             ? colors.semantic.error
                             : colors.utility.primaryText
                         }}>
-                          {scheme.utilization_percentage.toFixed(0)}%
+                          {scheme.allocated_percentage.toFixed(0)}%
                         </div>
                       </div>
 
