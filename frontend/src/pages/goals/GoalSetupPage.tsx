@@ -37,8 +37,8 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
   // Fetch customer schemes
   const { data: schemes, isLoading: schemesLoading } = useCustomerSchemes(customerId!);
 
-  // Fetch existing goal data for edit/rebalance modes
-  const { data: existingGoal, isLoading: goalLoading } = useGoal(goalId || 0, { enabled: !!goalId && (mode === 'edit' || mode === 'rebalance') });
+  // Fetch existing goal data for edit/rebalance modes (only if goalId exists)
+  const { data: existingGoal, isLoading: goalLoading } = useGoal(goalId || 0);
 
   // Goal projection calculator
   const {
@@ -69,14 +69,14 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
 
   // Populate form with existing goal data for edit/rebalance modes
   useEffect(() => {
-    if (existingGoal && (mode === 'edit' || mode === 'rebalance')) {
+    if (existingGoal && goalId && (mode === 'edit' || mode === 'rebalance')) {
       const config = existingGoal.config_data;
 
       // Set basic fields
       setTitle(existingGoal.title);
       setDescription(existingGoal.description || '');
       setPriority(existingGoal.priority);
-      setNotes(existingGoal.notes || '');
+      setNotes(config.notes || '');
       setSelectedType(config.goal_type);
       setGoalName(config.goal_name);
       setExpectedReturnRate(config.expected_return_rate || DEFAULT_RETURN_RATE);
@@ -85,14 +85,14 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
       setLinkedSchemes(config.linked_schemes || []);
 
       // Set type-specific fields
-      if ('target_corpus' in config) {
-        setTargetAmount(config.target_corpus || 0);
+      if ('target_amount' in config && config.target_amount) {
+        setTargetAmount(config.target_amount);
       }
       if ('target_date' in config && config.target_date) {
         setTargetDate(config.target_date);
       }
     }
-  }, [existingGoal, mode]);
+  }, [existingGoal, goalId, mode]);
 
   // Calculate current portfolio value from selected schemes
   const currentValue = useMemo(() => {
@@ -323,7 +323,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
           priority,
           config_data: configData
         };
-        await updateGoalMutation.mutateAsync({ goalId, data: updateData });
+        await updateGoalMutation.mutateAsync({ id: goalId, data: updateData });
       } else if (mode === 'rebalance' && goalId) {
         // Rebalance: only update linked_schemes allocation
         const updateData = {
@@ -332,7 +332,7 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
             linked_schemes: linkedSchemes
           }
         };
-        await updateGoalMutation.mutateAsync({ goalId, data: updateData });
+        await updateGoalMutation.mutateAsync({ id: goalId, data: updateData });
       }
 
       navigate(`/customers/${customerId}?tab=goals`);
