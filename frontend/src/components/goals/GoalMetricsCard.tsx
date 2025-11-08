@@ -10,10 +10,11 @@ import { formatCurrency, formatPercentage } from '../../utils/goalUtils';
 interface GoalMetricsCardProps {
   goal: GoalConfiguration;
   totalSIPs?: number;
+  completedSIPs?: number;
   missedSIPs?: number;
 }
 
-const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, missedSIPs = 0 }) => {
+const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, completedSIPs = 0, missedSIPs = 0 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -39,8 +40,8 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
       valueGapPercent = (valueGap / targetAmount) * 100;
     }
 
-    // Factor 2: SIP Consistency
-    const sipCompletionRate = totalSIPs > 0 ? ((totalSIPs - missedSIPs) / totalSIPs) * 100 : 100;
+    // Factor 2: SIP Consistency (based on actually completed SIPs)
+    const sipCompletionRate = totalSIPs > 0 ? (completedSIPs / totalSIPs) * 100 : 0;
 
     // Factor 3: Progress vs Timeline
     let timelineProgress = 0;
@@ -67,8 +68,10 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
 
       if (progressVsTimeline > 5) {
         explanation = `Current tracking ${Math.abs(progressVsTimeline).toFixed(1)}% ahead of target milestone`;
-      } else if (missedSIPs === 0 && totalSIPs > 0) {
+      } else if (completedSIPs > 0 && completedSIPs === totalSIPs) {
         explanation = `All ${totalSIPs} SIPs completed successfully`;
+      } else if (completedSIPs > 0) {
+        explanation = `${completedSIPs}/${totalSIPs} SIPs completed, on track`;
       } else {
         explanation = `Portfolio value is growing as expected`;
       }
@@ -104,7 +107,7 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
       sipCompletionRate,
       progressVsTimeline
     };
-  }, [goal, totalSIPs, missedSIPs, config, colors]);
+  }, [goal, totalSIPs, completedSIPs, missedSIPs, config, colors]);
 
   const StatusIcon = statusAnalysis.icon;
 
@@ -146,6 +149,12 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Total SIPs:</span>
             <span style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>{totalSIPs}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Completed:</span>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: colors.semantic.success }}>
+              {completedSIPs} ✓
+            </span>
           </div>
           {missedSIPs > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
