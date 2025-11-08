@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
 
 interface PortfolioSnapshotsTableProps {
@@ -308,7 +308,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         }}>
                           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </div>
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div style={{
                             fontWeight: '700',
                             color: colors.utility.primaryText,
@@ -323,6 +323,34 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             {scheme.scheme_code} • {scheme.category}{scheme.sub_category ? ` • ${scheme.sub_category}` : ''}
                           </div>
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Implement chart view functionality
+                            console.log('View chart for:', scheme.scheme_code);
+                          }}
+                          style={{
+                            border: 'none',
+                            background: `${colors.brand.primary}15`,
+                            borderRadius: '6px',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: colors.brand.primary,
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = `${colors.brand.primary}25`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = `${colors.brand.primary}15`;
+                          }}
+                          title="View Chart"
+                        >
+                          <BarChart3 size={16} />
+                        </button>
                       </div>
                     </td>
                     <td colSpan={monthHeaders.length} style={{
