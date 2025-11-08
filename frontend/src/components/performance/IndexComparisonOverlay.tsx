@@ -55,7 +55,13 @@ export const IndexComparisonOverlay: React.FC<IndexComparisonOverlayProps> = ({
   const allValues = [...portfolioValues, ...normalizedIndexData];
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
-  const range = max - min || 1;
+  const rawRange = max - min;
+
+  // FIX: Apply same minimum range threshold as PerformanceSparkline
+  // This prevents the comparison index from appearing as a straight line when values don't vary much
+  const avgValue = allValues.reduce((sum, val) => sum + val, 0) / allValues.length;
+  const minRange = avgValue * 0.05; // 5% of average
+  const range = Math.max(rawRange, minRange) || 1;
 
   // Calculate points for the line
   const points = normalizedIndexData.map((value, index) => {
