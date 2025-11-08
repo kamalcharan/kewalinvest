@@ -71,6 +71,7 @@ export interface PortfolioHolding {
   total_returns: number;
   return_percentage: number;
   allocation_percentage: number;
+  allocation?: number; // Goal allocation percentage (0-100) from t_customer_master_portfolio
   transaction_count: number;
   last_transaction_date?: string;
 }

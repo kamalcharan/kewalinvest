@@ -31,6 +31,8 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
+import { PortfolioAllocationSummary } from '../../components/portfolio/PortfolioAllocationSummary';
+import { SchemeCard } from '../../components/common/SchemeCard';
 import GoalCard from '../../components/goals/GoalCard';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
@@ -1041,59 +1043,73 @@ comparisonData={comparisonIndexData}
                     )}
                   </div>
 
-                  {/* Top Holdings */}
+                  {/* Portfolio Goal Allocation Summary */}
+                  {portfolio.holdings && portfolio.holdings.length > 0 && (() => {
+                    // Calculate portfolio-level allocation
+                    const totalPortfolioValue = portfolio.holdings.reduce((sum, h) => sum + (h.current_value || 0), 0);
+                    const totalAllocatedValue = portfolio.holdings.reduce((sum, h) => {
+                      const allocation = h.allocation || 0;
+                      return sum + ((h.current_value || 0) * allocation / 100);
+                    }, 0);
+                    const totalAllocatedPercentage = totalPortfolioValue > 0 ? (totalAllocatedValue / totalPortfolioValue) * 100 : 0;
+
+                    // Count unique schemes with allocations
+                    const allocatedSchemesCount = portfolio.holdings.filter(h => (h.allocation || 0) > 0).length;
+
+                    return (
+                      <PortfolioAllocationSummary
+                        totalPortfolioValue={totalPortfolioValue}
+                        allocatedValue={totalAllocatedValue}
+                        allocatedPercentage={totalAllocatedPercentage}
+                        goalsCount={goals?.length || 0}
+                        schemesCount={allocatedSchemesCount}
+                      />
+                    );
+                  })()}
+
+                  {/* Holdings */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
                     <div style={{
                       backgroundColor: colors.utility.secondaryBackground,
                       borderRadius: '12px',
                       padding: '24px'
                     }}>
-                      <h3 style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600', 
-                        color: colors.utility.primaryText, 
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: colors.utility.primaryText,
                         margin: 0,
                         marginBottom: '20px'
                       }}>
-                        Top Holdings
+                        Holdings ({portfolio.holdings.length})
                       </h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {portfolio.holdings.slice(0, 4).map((holding, idx) => (
-                          <div key={idx} style={{
-                            padding: '12px',
-                            backgroundColor: colors.utility.primaryBackground,
-                            borderRadius: '8px'
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
-                                {holding.fund_name || holding.scheme_name} ({holding.scheme_code})
-                              </div>
-                              <div style={{ fontSize: '13px', fontWeight: '600', color: getValueColor(holding.return_percentage) }}>
-                                {formatPercentage(holding.return_percentage)}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                                Value: {formatCurrency(holding.current_value)}
-                              </div>
-                              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                                {(holding.allocation_percentage ?? 0).toFixed(1)}%
-                              </div>
-                            </div>
-                            <div style={{
-                              width: '100%',
-                              height: '4px',
-                              backgroundColor: colors.utility.primaryText + '20',
-                              borderRadius: '2px',
-                              overflow: 'hidden'
-                            }}>
-                              <div style={{
-                                width: `${holding.allocation_percentage ?? 0}%`,
-                                height: '100%',
-                                backgroundColor: colors.brand.primary
-                              }} />
-                            </div>
-                          </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                        gap: '12px',
+                        maxHeight: '600px',
+                        overflowY: 'auto',
+                        padding: '4px'
+                      }}>
+                        {portfolio.holdings.map((holding, idx) => (
+                          <SchemeCard
+                            key={idx}
+                            scheme={{
+                              scheme_code: holding.scheme_code,
+                              scheme_name: holding.scheme_name,
+                              fund_name: holding.fund_name,
+                              category: holding.category,
+                              sub_category: holding.sub_category,
+                              current_value: holding.current_value,
+                              allocation: holding.allocation,
+                              return_percentage: holding.return_percentage
+                            }}
+                            showAllocation={true}
+                            showValue={true}
+                            showReturn={true}
+                            showCategory={true}
+                            compact={true}
+                          />
                         ))}
                       </div>
                     </div>

@@ -663,6 +663,7 @@ export class PortfolioService {
           parseFloat(h.current_value),
           totalValue
         ),
+        allocation: parseFloat(h.allocation) || 0, // Goal allocation from t_customer_master_portfolio
         transaction_count: parseInt(h.transaction_count),
         last_transaction_date: h.last_transaction_date
       }));
