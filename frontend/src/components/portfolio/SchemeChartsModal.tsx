@@ -16,7 +16,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
+  Cell
 } from 'recharts';
 
 interface SchemeChartsModalProps {
@@ -79,17 +80,22 @@ export const SchemeChartsModal: React.FC<SchemeChartsModalProps> = ({
           }}>
             {payload[0]?.payload?.fullMonth}
           </p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{
-              margin: '4px 0',
-              color: entry.color,
-              fontSize: '11px'
-            }}>
-              {entry.name}: {entry.value !== null ? entry.value.toFixed(2) : 'No data'}
-              {entry.dataKey === 'marketValue' && ' L'}
-              {entry.dataKey === 'performance' && ' %'}
-            </p>
-          ))}
+          {payload.map((entry: any, index: number) => {
+            const isValidNumber = entry.value !== null && entry.value !== undefined && typeof entry.value === 'number';
+            const formattedValue = isValidNumber ? entry.value.toFixed(2) : 'No data';
+
+            return (
+              <p key={index} style={{
+                margin: '4px 0',
+                color: entry.color,
+                fontSize: '11px'
+              }}>
+                {entry.name}: {formattedValue}
+                {entry.dataKey === 'marketValue' && isValidNumber && ' L'}
+                {entry.dataKey === 'performance' && isValidNumber && ' %'}
+              </p>
+            );
+          })}
         </div>
       );
     }
@@ -378,13 +384,12 @@ export const SchemeChartsModal: React.FC<SchemeChartsModalProps> = ({
                 />
                 <Bar
                   dataKey="performance"
-                  fill={colors.semantic.success}
                   name="MoM Change %"
                   radius={[4, 4, 0, 0]}
                 >
                   {chartData.map((entry, index) => (
-                    <Bar
-                      key={`bar-${index}`}
+                    <Cell
+                      key={`cell-${index}`}
                       fill={entry.performance >= 0 ? colors.semantic.success : colors.semantic.error}
                     />
                   ))}
