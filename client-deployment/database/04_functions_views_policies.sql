@@ -5,9 +5,7 @@
 -- Execution: Run FOURTH after 03_indexes_triggers.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-01-09 (Added transaction import, materialized view, refresh function)
--- Updated: 2025-01-15 (Added v_tenant_customer_schemes view for NAV refactor)
--- Updated: 2025-11-02 (Added orphan status tracking, PAN fallback, customer name lookup)
+-- Updated: 2025-11-08 (Integrated Migration 006, JTBD Consolidation, Migration 007)
 -- ============================================================================
 
 -- ============================================================================
@@ -22,8 +20,6 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: current_tenant_id
--- Description: Get current tenant_id from session context for RLS
--- Usage: Set with: SET app.current_tenant_id = '2';
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION current_tenant_id() 
 RETURNS INTEGER AS $$
@@ -39,8 +35,6 @@ COMMENT ON FUNCTION current_tenant_id IS 'Get current tenant ID from session for
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: current_environment
--- Description: Get current environment (live/test) from session context
--- Usage: SET app.current_environment = 'live';
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION current_environment() 
 RETURNS VARCHAR AS $$
@@ -55,33 +49,50 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 COMMENT ON FUNCTION current_environment IS 'Get current environment (live/test) from session';
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: normalize_customer_name
--- Description: Normalize customer names for matching during imports
--- Purpose: Remove titles, special chars, standardize for lookups
--- NEW: Added for customer name-based lookup support
+-- FUNCTION: normalize_customer_name (Migration 006)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION normalize_customer_name(p_name TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql IMMUTABLE
 AS $$
+DECLARE
+    normalized TEXT;
+    salutations TEXT[] := ARRAY['MR', 'MRS', 'MS', 'DR', 'SRI', 'SHRI', 'SMT', 'MISS', 'PROF'];
+    salutation TEXT;
 BEGIN
-    IF p_name IS NULL OR TRIM(p_name) = '' THEN
+    IF p_name IS NULL THEN
         RETURN NULL;
     END IF;
-    
-    -- Remove titles (MR, MRS, MS, DR, PROF, SRI, SMT)
-    -- Remove special characters
-    -- Normalize whitespace
-    -- Convert to uppercase
-    RETURN UPPER(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(
-                REGEXP_REPLACE(p_name, '^(MR|MRS|MS|DR|PROF|SRI|SMT)\.?\s+', '', 'i'),
-                '[^A-Z0-9\s]', '', 'g'
-            ),
-            '\s+', ' ', 'g'
-        )
-    );
+
+    normalized := UPPER(TRIM(p_name));
+
+    FOREACH salutation IN ARRAY salutations
+    LOOP
+        IF normalized ~ ('^' || salutation || '\.')
+        THEN
+            normalized := TRIM(REGEXP_REPLACE(normalized, '^' || salutation || '\.', '', 'i'));
+        END IF;
+
+        IF normalized ~ ('^' || salutation || '\s')
+        THEN
+            normalized := TRIM(REGEXP_REPLACE(normalized, '^' || salutation || '\s+', '', 'i'));
+        END IF;
+
+        IF normalized = salutation
+        THEN
+            normalized := '';
+        END IF;
+    END LOOP;
+
+    normalized := REGEXP_REPLACE(normalized, '[^A-Z0-9\s]', '', 'g');
+    normalized := REGEXP_REPLACE(normalized, '\s+', ' ', 'g');
+    normalized := TRIM(normalized);
+
+    IF normalized = '' THEN
+        RETURN NULL;
+    END IF;
+
+    RETURN normalized;
 END;
 $$;
 
@@ -97,8 +108,6 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: check_customer_duplicate
--- Description: Check if customer already exists by PAN, email, or mobile
--- NOTE: Uses PLAIN TEXT pan field (not encrypted)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION check_customer_duplicate(
     p_tenant_id INTEGER,
@@ -113,7 +122,6 @@ AS $$
 DECLARE
     v_exists BOOLEAN;
 BEGIN
-    -- Check by PAN if provided (PLAIN TEXT comparison)
     IF p_pan IS NOT NULL AND p_pan != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_customers 
@@ -128,7 +136,6 @@ BEGIN
         END IF;
     END IF;
     
-    -- Check by email
     IF p_email IS NOT NULL AND p_email != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_contact_channels cc
@@ -145,7 +152,6 @@ BEGIN
         END IF;
     END IF;
     
-    -- Check by mobile
     IF p_mobile IS NOT NULL AND p_mobile != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_contact_channels cc
@@ -170,8 +176,6 @@ COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers u
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_single_customer_record
--- Description: Process a single customer record from staging
--- NOTE: Uses PLAIN TEXT for pan and iwell_code (no encryption)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_single_customer_record(p_staging_id INTEGER)
 RETURNS VOID
@@ -189,7 +193,6 @@ DECLARE
     v_anniversary_date DATE;
     v_iwell_code VARCHAR(100);
 BEGIN
-    -- Get staging record
     SELECT * INTO v_staging
     FROM t_import_staging_data
     WHERE id = p_staging_id;
@@ -198,7 +201,6 @@ BEGIN
         RETURN;
     END IF;
     
-    -- Mark as processing
     UPDATE t_import_staging_data
     SET processing_status = 'processing'
     WHERE id = p_staging_id;
@@ -207,7 +209,6 @@ BEGIN
     v_error_messages := ARRAY[]::TEXT[];
     
     BEGIN
-        -- Check for duplicates
         v_is_duplicate := check_customer_duplicate(
             v_staging.tenant_id,
             v_staging.is_live,
@@ -225,7 +226,6 @@ BEGIN
             RETURN;
         END IF;
         
-        -- Clean and validate prefix
         v_clean_prefix := TRIM(v_mapped_data->>'prefix');
         v_clean_prefix := REPLACE(v_clean_prefix, '.', '');
         v_clean_prefix := INITCAP(LOWER(v_clean_prefix));
@@ -238,7 +238,6 @@ BEGIN
             v_clean_prefix := 'Sri';
         END IF;
         
-        -- ✅ FIXED: Removed normalized_name (it's GENERATED ALWAYS)
         INSERT INTO t_contacts (
             tenant_id,
             is_live,
@@ -255,7 +254,6 @@ BEGIN
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_contact_id;
         
-        -- Create contact channels (email)
         IF v_mapped_data->>'email' IS NOT NULL AND TRIM(v_mapped_data->>'email') != '' THEN
             INSERT INTO t_contact_channels (
                 contact_id,
@@ -274,7 +272,6 @@ BEGIN
             );
         END IF;
         
-        -- Create contact channels (mobile)
         IF v_mapped_data->>'mobile' IS NOT NULL AND TRIM(v_mapped_data->>'mobile') != '' THEN
             INSERT INTO t_contact_channels (
                 contact_id,
@@ -293,7 +290,6 @@ BEGIN
             );
         END IF;
         
-        -- Handle date conversion for DD-MM-YYYY format
         v_date_of_birth := NULL;
         IF v_mapped_data->>'date_of_birth' IS NOT NULL AND TRIM(v_mapped_data->>'date_of_birth') != '' THEN
             BEGIN
@@ -311,7 +307,6 @@ BEGIN
             END;
         END IF;
         
-        -- Handle anniversary date
         v_anniversary_date := NULL;
         IF v_mapped_data->>'anniversary_date' IS NOT NULL AND TRIM(v_mapped_data->>'anniversary_date') != '' THEN
             BEGIN
@@ -329,10 +324,8 @@ BEGIN
             END;
         END IF;
         
-        -- Extract iwell_code (already uppercase from transformation)
         v_iwell_code := NULLIF(TRIM(v_mapped_data->>'iwell_code'), '');
 
-        -- Create customer record with PLAIN TEXT fields
         INSERT INTO t_customers (
             contact_id,
             tenant_id,
@@ -359,7 +352,6 @@ BEGIN
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_customer_id;
 
-        -- Create address if provided
         IF (v_mapped_data->>'address_line1' IS NOT NULL AND TRIM(v_mapped_data->>'address_line1') != '') OR 
            (v_mapped_data->>'city' IS NOT NULL AND TRIM(v_mapped_data->>'city') != '') THEN
             INSERT INTO t_customer_addresses (
@@ -389,7 +381,6 @@ BEGIN
             );
         END IF;
         
-        -- Mark as success
         UPDATE t_import_staging_data
         SET processing_status = 'success',
             created_record_id = v_customer_id,
@@ -398,7 +389,6 @@ BEGIN
         WHERE id = p_staging_id;
         
     EXCEPTION WHEN OTHERS THEN
-        -- Handle errors
         v_error_messages := array_append(v_error_messages, SQLERRM);
         
         UPDATE t_import_staging_data
@@ -407,7 +397,6 @@ BEGIN
             processed_at = CURRENT_TIMESTAMP
         WHERE id = p_staging_id;
         
-        -- Cleanup partial records if any
         IF v_contact_id IS NOT NULL THEN
             DELETE FROM t_contacts WHERE id = v_contact_id;
         END IF;
@@ -415,12 +404,10 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - uses plain text PAN/IWELL and normalized names';
+COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - normalized_name auto-generated';
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_customer_import_with_timing
--- Description: Process customer import with controlled timing
--- Returns: JSONB with processing results
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_customer_import_with_timing(
     p_session_id INTEGER,
@@ -445,7 +432,6 @@ DECLARE
 BEGIN
     v_start_time := CURRENT_TIMESTAMP;
     
-    -- Get session details
     SELECT * INTO v_session
     FROM t_import_sessions
     WHERE id = p_session_id;
@@ -454,24 +440,20 @@ BEGIN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
     
-    -- Get total record count
     SELECT COUNT(*) INTO v_total_records
     FROM t_import_staging_data
     WHERE session_id = p_session_id
     AND processing_status = 'pending';
     
-    -- Calculate batch size and delays for target duration
     v_records_per_batch := GREATEST(1, v_total_records / 10);
     v_delay_per_batch := (p_target_duration_ms / 10.0 || ' milliseconds')::INTERVAL;
     
-    -- Update session to processing
     UPDATE t_import_sessions
     SET status = 'processing',
         processing_started_at = CURRENT_TIMESTAMP,
         total_records = v_total_records
     WHERE id = p_session_id;
     
-    -- Process records in batches
     FOR v_staging_record IN 
         SELECT * FROM t_import_staging_data
         WHERE session_id = p_session_id
@@ -479,10 +461,8 @@ BEGIN
         ORDER BY row_number
         FOR UPDATE SKIP LOCKED
     LOOP
-        -- Process individual record
         PERFORM process_single_customer_record(v_staging_record.id);
         
-        -- Update counters based on result
         SELECT processing_status INTO v_staging_record
         FROM t_import_staging_data
         WHERE id = v_staging_record.id;
@@ -495,7 +475,6 @@ BEGIN
             WHEN 'duplicate' THEN v_duplicate_count := v_duplicate_count + 1;
         END CASE;
         
-        -- Update progress every batch
         IF v_processed_count % v_records_per_batch = 0 OR v_processed_count = v_total_records THEN
             v_batch_count := v_batch_count + 1;
             
@@ -508,14 +487,12 @@ BEGIN
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = p_session_id;
             
-            -- Add delay between batches (except for last batch)
             IF v_processed_count < v_total_records THEN
                 PERFORM pg_sleep(EXTRACT(EPOCH FROM v_delay_per_batch));
             END IF;
         END IF;
     END LOOP;
     
-    -- Final session update
     UPDATE t_import_sessions
     SET status = CASE 
             WHEN v_failed_count = 0 THEN 'completed'
@@ -528,7 +505,6 @@ BEGIN
         duplicate_records = v_duplicate_count
     WHERE id = p_session_id;
     
-    -- Return summary
     v_result := jsonb_build_object(
         'sessionId', p_session_id,
         'totalProcessed', v_processed_count,
@@ -558,7 +534,6 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_single_scheme_record
--- Description: Process a single scheme record from staging
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_single_scheme_record(p_staging_id INTEGER)
 RETURNS VOID
@@ -576,7 +551,6 @@ DECLARE
     v_closure_date DATE;
     v_minimum_amount DECIMAL(15,2);
 BEGIN
-    -- Get staging record
     SELECT * INTO v_staging
     FROM t_import_staging_data
     WHERE id = p_staging_id;
@@ -585,7 +559,6 @@ BEGIN
         RETURN;
     END IF;
     
-    -- Mark as processing
     UPDATE t_import_staging_data
     SET processing_status = 'processing'
     WHERE id = p_staging_id;
@@ -594,7 +567,6 @@ BEGIN
     v_error_messages := ARRAY[]::TEXT[];
     
     BEGIN
-        -- Check for duplicate by scheme_code
         SELECT COUNT(*) > 0 INTO v_is_duplicate
         FROM t_scheme_details
         WHERE scheme_code = v_mapped_data->>'scheme_code'
@@ -602,7 +574,6 @@ BEGIN
           AND is_live = v_staging.is_live;
         
         IF v_is_duplicate THEN
-            -- Update existing scheme
             UPDATE t_scheme_details
             SET 
                 amc_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'amc_name'), ''), amc_name),
@@ -622,7 +593,6 @@ BEGIN
               AND is_live = v_staging.is_live
             RETURNING id INTO v_scheme_id;
             
-            -- Mark as duplicate
             UPDATE t_import_staging_data
             SET processing_status = 'duplicate',
                 warnings = array_append(warnings, 'Scheme already exists - updated'),
@@ -634,7 +604,6 @@ BEGIN
             RETURN;
         END IF;
         
-        -- Get scheme_type_id if scheme_type is provided
         v_scheme_type_id := NULL;
         IF v_mapped_data->>'scheme_type' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_type') != '' THEN
             SELECT id INTO v_scheme_type_id
@@ -647,7 +616,6 @@ BEGIN
             LIMIT 1;
         END IF;
         
-        -- Get scheme_category_id if scheme_category is provided
         v_scheme_category_id := NULL;
         IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
             SELECT id INTO v_scheme_category_id
@@ -660,7 +628,6 @@ BEGIN
             LIMIT 1;
         END IF;
         
-        -- Parse launch_date
         v_launch_date := NULL;
         IF v_mapped_data->>'launch_date' IS NOT NULL AND TRIM(v_mapped_data->>'launch_date') != '' THEN
             BEGIN
@@ -678,7 +645,6 @@ BEGIN
             END;
         END IF;
         
-        -- Parse closure_date
         v_closure_date := NULL;
         IF v_mapped_data->>'closure_date' IS NOT NULL AND TRIM(v_mapped_data->>'closure_date') != '' THEN
             BEGIN
@@ -696,7 +662,6 @@ BEGIN
             END;
         END IF;
         
-        -- Parse minimum amount
         v_minimum_amount := NULL;
         IF v_mapped_data->>'scheme_minimum_amount' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_minimum_amount') != '' THEN
             BEGIN
@@ -706,7 +671,6 @@ BEGIN
             END;
         END IF;
         
-        -- Create new scheme record
         INSERT INTO t_scheme_details (
             tenant_id,
             is_live,
@@ -741,7 +705,6 @@ BEGIN
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_scheme_id;
         
-        -- Mark as success
         UPDATE t_import_staging_data
         SET processing_status = 'success',
             created_record_id = v_scheme_id,
@@ -750,7 +713,6 @@ BEGIN
         WHERE id = p_staging_id;
         
     EXCEPTION WHEN OTHERS THEN
-        -- Handle errors
         v_error_messages := array_append(v_error_messages, SQLERRM);
         
         UPDATE t_import_staging_data
@@ -766,7 +728,6 @@ COMMENT ON FUNCTION process_single_scheme_record IS 'Process single scheme recor
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_scheme_import_with_timing
--- Description: Process scheme import with controlled timing
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_scheme_import_with_timing(
     p_session_id INTEGER,
@@ -793,13 +754,11 @@ DECLARE
 BEGIN
     v_start_time := clock_timestamp();
     
-    -- Update session status to processing
     UPDATE t_import_sessions 
     SET status = 'processing',
         processing_started_at = v_start_time
     WHERE id = p_session_id;
     
-    -- Process records in batches
     FOR v_staging_record IN 
         SELECT id, processing_status
         FROM t_import_staging_data
@@ -807,15 +766,12 @@ BEGIN
         AND processing_status = 'pending'
         ORDER BY row_number
     LOOP
-        -- Process single record
         PERFORM process_single_scheme_record(v_staging_record.id);
         
-        -- Get the updated status
         SELECT processing_status INTO v_staging_record
         FROM t_import_staging_data
         WHERE id = v_staging_record.id;
         
-        -- Update counters
         v_processed_count := v_processed_count + 1;
         
         CASE v_staging_record.processing_status
@@ -824,7 +780,6 @@ BEGIN
             WHEN 'duplicate' THEN v_duplicate_count := v_duplicate_count + 1;
         END CASE;
         
-        -- Check if we should sleep
         IF v_processed_count % 10 = 0 THEN
             v_end_time := clock_timestamp();
             v_sleep_ms := (p_target_duration_ms / v_batch_size) - 
@@ -838,7 +793,6 @@ BEGIN
     
     v_end_time := clock_timestamp();
     
-    -- Update session with final statistics
     UPDATE t_import_sessions 
     SET status = CASE 
             WHEN v_failed_count > 0 THEN 'completed_with_errors'
@@ -864,8 +818,6 @@ COMMENT ON FUNCTION process_scheme_import_with_timing IS 'Process scheme import 
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: lookup_scheme_by_alias
--- Description: Fast lookup to find scheme by alias name during transaction import
--- Returns: scheme_id, scheme_code, scheme_name, matched_alias
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION lookup_scheme_by_alias(
     p_alias_name VARCHAR
@@ -903,11 +855,7 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: process_transaction_import_session
--- Description: Process transaction imports with flexible customer lookup methods
--- Methods: iwell_code (default), customer_name, both
--- Features: PAN fallback, orphan tracking, scheme alias lookup
--- NEW: Replaces process_transaction_import_with_timing with enhanced features
+-- FUNCTION: process_transaction_import_session (Complete from original)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_transaction_import_session(
     p_session_id INTEGER,
@@ -942,7 +890,6 @@ DECLARE
     v_txn_id INTEGER;
     v_session_info RECORD;
 BEGIN
-    -- Get session info
     SELECT tenant_id, is_live INTO v_session_info
     FROM t_import_sessions
     WHERE id = p_session_id;
@@ -951,7 +898,6 @@ BEGIN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
 
-    -- Update session status to processing
     UPDATE t_import_sessions
     SET status = 'processing',
         processing_started_at = NOW()
@@ -959,7 +905,6 @@ BEGIN
 
     RAISE NOTICE '[Session %] Starting processing with lookup method: %', p_session_id, p_customer_lookup_method;
 
-    -- Process all pending records
     FOR v_staging_record IN (
         SELECT
             id,
@@ -981,11 +926,7 @@ BEGIN
             v_txn_type_id := NULL;
             v_error_msg := NULL;
 
-            -- ==================================================
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
-            -- ==================================================
-
-            -- Method 1: IWELL Code (with PAN fallback)
             IF p_customer_lookup_method = 'iwell_code' THEN
                 IF v_staging_record.mapped_data->>'iwell_code' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
@@ -996,7 +937,6 @@ BEGIN
                       AND c.is_active = true
                     LIMIT 1;
 
-                    -- PAN FALLBACK if IWELL not found
                     IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                         SELECT c.id INTO v_customer_id
                         FROM t_customers c
@@ -1021,10 +961,8 @@ BEGIN
                     v_error_msg := 'IWELL code is required but not provided';
                 END IF;
 
-            -- Method 2: Customer Name (with PAN fallback)
             ELSIF p_customer_lookup_method = 'customer_name' THEN
                 IF v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
-                    -- Try normalized name match
                     SELECT c.id INTO v_customer_id
                     FROM t_customers c
                     INNER JOIN t_contacts ct ON ct.id = c.contact_id
@@ -1035,7 +973,6 @@ BEGIN
                       AND ct.is_active = true
                     LIMIT 1;
 
-                    -- PAN FALLBACK if name not found
                     IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                         SELECT c.id INTO v_customer_id
                         FROM t_customers c
@@ -1060,9 +997,7 @@ BEGIN
                     v_error_msg := 'Customer name is required but not provided';
                 END IF;
 
-            -- Method 3: Both (try IWELL first, fallback to name, then PAN)
             ELSIF p_customer_lookup_method = 'both' THEN
-                -- Try IWELL code first
                 IF v_staging_record.mapped_data->>'iwell_code' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
                     FROM t_customers c
@@ -1073,7 +1008,6 @@ BEGIN
                     LIMIT 1;
                 END IF;
 
-                -- Fallback to customer name
                 IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'customer_name' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
                     FROM t_customers c
@@ -1086,7 +1020,6 @@ BEGIN
                     LIMIT 1;
                 END IF;
 
-                -- Final fallback to PAN
                 IF v_customer_id IS NULL AND v_staging_record.mapped_data->>'pan' IS NOT NULL THEN
                     SELECT c.id INTO v_customer_id
                     FROM t_customers c
@@ -1106,7 +1039,6 @@ BEGIN
                 END IF;
             END IF;
 
-            -- If no customer found, mark as orphan and continue
             IF v_customer_id IS NULL THEN
                 UPDATE t_import_staging_data
                 SET processing_status = 'orphan',
@@ -1119,20 +1051,16 @@ BEGIN
                 CONTINUE;
             END IF;
 
-            -- ==================================================
-            -- TRANSACTION TYPE LOOKUP & VALIDATION
-            -- ==================================================
+            -- TRANSACTION TYPE LOOKUP
             IF v_staging_record.mapped_data->>'txn_code' IS NOT NULL
                AND TRIM(v_staging_record.mapped_data->>'txn_code') != '' THEN
 
-                -- Look up transaction type by txn_code
                 SELECT id INTO v_txn_type_id
                 FROM m_transaction_types
                 WHERE UPPER(TRIM(txn_code)) = UPPER(TRIM(v_staging_record.mapped_data->>'txn_code'))
                   AND is_active = true
                 LIMIT 1;
 
-                -- If not found by txn_code, try txn_name
                 IF v_txn_type_id IS NULL THEN
                     SELECT id INTO v_txn_type_id
                     FROM m_transaction_types
@@ -1141,11 +1069,8 @@ BEGIN
                     LIMIT 1;
                 END IF;
 
-                -- If still not found, FAIL the record
                 IF v_txn_type_id IS NULL THEN
-                    v_error_msg := 'Invalid transaction type: ' ||
-                                  (v_staging_record.mapped_data->>'txn_code') ||
-                                  '. Valid types: SIP, PURCHASE, REDEMPTION, SWITCH IN, SWITCH OUT, STP IN, STP OUT, SELL, OPENING BALANCE';
+                    v_error_msg := 'Invalid transaction type: ' || (v_staging_record.mapped_data->>'txn_code');
 
                     UPDATE t_import_staging_data
                     SET processing_status = 'failed',
@@ -1155,12 +1080,9 @@ BEGIN
 
                     v_failed_count := v_failed_count + 1;
                     v_processed_count := v_processed_count + 1;
-                    RAISE NOTICE '[Session %] Row %: FAILED - %',
-                        p_session_id, v_staging_record.row_number, v_error_msg;
                     CONTINUE;
                 END IF;
             ELSE
-                -- txn_code is required
                 v_error_msg := 'Transaction type (txn_code) is required';
 
                 UPDATE t_import_staging_data
@@ -1174,20 +1096,16 @@ BEGIN
                 CONTINUE;
             END IF;
 
-            -- ==================================================
-            -- SCHEME LOOKUP - MUST BE IN TENANT'S BOOKMARKS
-            -- ==================================================
+            -- SCHEME LOOKUP
             IF v_staging_record.mapped_data->>'scheme_name' IS NOT NULL AND
                TRIM(v_staging_record.mapped_data->>'scheme_name') != '' THEN
 
-                -- Step 1: Find scheme_id from alias table
                 SELECT sa.scheme_id INTO v_scheme_id
                 FROM t_scheme_aliases sa
                 WHERE sa.is_active = true
                   AND LOWER(TRIM(sa.alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
                 LIMIT 1;
 
-                -- Step 2: Check if tenant has bookmarked this scheme
                 IF v_scheme_id IS NOT NULL THEN
                     SELECT
                         sb.id,
@@ -1204,7 +1122,6 @@ BEGIN
                       AND sb.is_active = true
                     LIMIT 1;
 
-                    -- If not found in bookmarks, try to get from t_scheme_details as fallback
                     IF v_bookmark_id IS NULL THEN
                         SELECT scheme_name INTO v_scheme_name
                         FROM t_scheme_details
@@ -1213,9 +1130,6 @@ BEGIN
                 END IF;
             END IF;
 
-            -- ==================================================
-            -- CRITICAL: FAIL IF SCHEME NOT BOOKMARKED OR NO SCHEME_CODE
-            -- ==================================================
             IF v_bookmark_id IS NULL OR v_scheme_code IS NULL OR TRIM(v_scheme_code) = '' THEN
                 v_error_msg := 'Scheme not bookmarked by tenant or has no scheme_code: ' ||
                               COALESCE(v_scheme_name, v_staging_record.mapped_data->>'scheme_name', 'N/A');
@@ -1228,14 +1142,10 @@ BEGIN
 
                 v_failed_count := v_failed_count + 1;
                 v_processed_count := v_processed_count + 1;
-                RAISE NOTICE '[Session %] Row %: FAILED - %',
-                    p_session_id, v_staging_record.row_number, v_error_msg;
                 CONTINUE;
             END IF;
 
-            -- ==================================================
             -- DUPLICATE CHECK
-            -- ==================================================
             IF EXISTS (
                 SELECT 1 FROM t_transaction_table
                 WHERE customer_id = v_customer_id
@@ -1255,11 +1165,7 @@ BEGIN
                 CONTINUE;
             END IF;
 
-            -- ==================================================
             -- CREATE/UPDATE PORTFOLIO ENTRY
-            -- CRITICAL: Use v_scheme_code from bookmark lookup, NOT mapped_data
-            -- This is REQUIRED for materialized view t_customer_portfolio_totals
-            -- ==================================================
             INSERT INTO t_customer_master_portfolio (
                 tenant_id,
                 is_live,
@@ -1272,8 +1178,8 @@ BEGIN
                 v_staging_record.tenant_id,
                 v_staging_record.is_live,
                 v_customer_id,
-                v_scheme_code,                    -- ← From bookmark lookup
-                v_scheme_name,                    -- ← From bookmark lookup
+                v_scheme_code,
+                v_scheme_name,
                 v_staging_record.mapped_data->>'folio_no',
                 (v_staging_record.mapped_data->>'txn_date')::DATE
             )
@@ -1283,9 +1189,7 @@ BEGIN
                 folio_no = COALESCE(EXCLUDED.folio_no, t_customer_master_portfolio.folio_no),
                 updated_at = CURRENT_TIMESTAMP;
 
-            -- ==================================================
-            -- INSERT TRANSACTION WITH BOOKMARKED SCHEME DATA
-            -- ==================================================
+            -- INSERT TRANSACTION
             INSERT INTO t_transaction_table (
                 tenant_id,
                 is_live,
@@ -1315,8 +1219,8 @@ BEGIN
                 true,
                 v_customer_id,
                 v_scheme_id,
-                v_scheme_code,                    -- ← From bookmarks
-                v_scheme_name,                    -- ← From bookmarks
+                v_scheme_code,
+                v_scheme_name,
                 v_staging_record.mapped_data->>'folio_no',
                 v_txn_type_id,
                 (v_staging_record.mapped_data->>'txn_date')::DATE,
@@ -1334,7 +1238,6 @@ BEGIN
                 NOW()
             ) RETURNING id INTO v_txn_id;
 
-            -- Mark as success
             UPDATE t_import_staging_data
             SET processing_status = 'success',
                 created_record_id = v_txn_id,
@@ -1346,7 +1249,6 @@ BEGIN
             v_processed_count := v_processed_count + 1;
 
         EXCEPTION WHEN OTHERS THEN
-            -- Mark as failed with error
             UPDATE t_import_staging_data
             SET processing_status = 'failed',
                 error_messages = ARRAY[SQLERRM],
@@ -1359,7 +1261,6 @@ BEGIN
             RAISE NOTICE '[Session %] Error processing row %: %', p_session_id, v_staging_record.row_number, SQLERRM;
         END;
 
-        -- Checkpoint every batch_size records
         IF v_processed_count % v_batch_size = 0 THEN
             UPDATE t_import_sessions
             SET successful_records = v_success_count,
@@ -1370,12 +1271,10 @@ BEGIN
                 updated_at = NOW()
             WHERE id = p_session_id;
 
-            RAISE NOTICE '[Session %] Checkpoint: % processed (% success, % failed, % orphan, % duplicate)',
-                p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count;
+            RAISE NOTICE '[Session %] Checkpoint: % processed', p_session_id, v_processed_count;
         END IF;
     END LOOP;
 
-    -- Final session update
     UPDATE t_import_sessions
     SET status = CASE
             WHEN v_failed_count + v_orphan_count > 0 THEN 'completed_with_errors'
@@ -1390,11 +1289,6 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_session_id;
 
-    RAISE NOTICE '[Session %] Completed: % total (% success, % failed, % orphan, % duplicate) in % seconds',
-        p_session_id, v_processed_count, v_success_count, v_failed_count, v_orphan_count, v_duplicate_count,
-        EXTRACT(EPOCH FROM (NOW() - v_start_time));
-
-    -- Return summary
     RETURN QUERY SELECT
         v_processed_count,
         v_success_count,
@@ -1405,7 +1299,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports - validates against tenant bookmarks, requires valid scheme_code and txn_type_id, and maintains t_customer_master_portfolio for materialized view';
+COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS
@@ -1417,7 +1311,6 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: cleanup_old_staging_data
--- Description: Remove old staging data after retention period
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION cleanup_old_staging_data(
     p_days_to_keep INTEGER DEFAULT 30
@@ -1432,7 +1325,6 @@ DECLARE
 BEGIN
     v_cutoff_date := CURRENT_TIMESTAMP - (p_days_to_keep || ' days')::INTERVAL;
     
-    -- Delete old staging data for completed sessions
     WITH deleted_staging AS (
         DELETE FROM t_import_staging_data
         WHERE session_id IN (
@@ -1444,7 +1336,6 @@ BEGIN
     )
     SELECT COUNT(*) INTO v_deleted_staging_records FROM deleted_staging;
     
-    -- Delete old completed sessions
     WITH deleted_sessions AS (
         DELETE FROM t_import_sessions
         WHERE status IN ('completed', 'completed_with_errors', 'cancelled')
@@ -1453,7 +1344,6 @@ BEGIN
     )
     SELECT COUNT(*) INTO v_deleted_sessions FROM deleted_sessions;
     
-    -- Return summary
     RETURN jsonb_build_object(
         'deleted_sessions', v_deleted_sessions,
         'deleted_staging_records', v_deleted_staging_records,
@@ -1467,7 +1357,6 @@ COMMENT ON FUNCTION cleanup_old_staging_data IS 'Remove staging data older than 
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: cleanup_session_staging_data
--- Description: Clean up staging data immediately after successful import
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION cleanup_session_staging_data(
     p_session_id INTEGER,
@@ -1479,7 +1368,6 @@ AS $$
 DECLARE
     v_session RECORD;
 BEGIN
-    -- Get session details
     SELECT * INTO v_session
     FROM t_import_sessions
     WHERE id = p_session_id;
@@ -1489,24 +1377,20 @@ BEGIN
         RETURN;
     END IF;
     
-    -- Only clean up completed sessions
     IF v_session.status NOT IN ('completed', 'completed_with_errors') THEN
-        RAISE NOTICE 'Session % is not completed (status: %)', p_session_id, v_session.status;
+        RAISE NOTICE 'Session % is not completed', p_session_id;
         RETURN;
     END IF;
     
     IF p_keep_failed_records THEN
-        -- Delete only successful records to save space
         DELETE FROM t_import_staging_data
         WHERE session_id = p_session_id
         AND processing_status IN ('success', 'duplicate');
     ELSE
-        -- Delete all staging records for this session
         DELETE FROM t_import_staging_data
         WHERE session_id = p_session_id;
     END IF;
     
-    -- Update session to indicate staging data was cleaned
     UPDATE t_import_sessions
     SET processing_metadata = COALESCE(processing_metadata, '{}'::jsonb) || 
         jsonb_build_object('staging_cleaned_at', CURRENT_TIMESTAMP)
@@ -1517,8 +1401,7 @@ $$;
 COMMENT ON FUNCTION cleanup_session_staging_data IS 'Clean up staging data for a completed session';
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: get_staging_storage_stats
--- Description: Get staging storage statistics
+-- FUNCTION: get_staging_storage_stats (UPDATED: Migration 006)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_staging_storage_stats()
 RETURNS TABLE (
@@ -1558,10 +1441,57 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION get_staging_storage_stats IS 'Get storage statistics for import staging tables including orphan tracking';
+COMMENT ON FUNCTION get_staging_storage_stats IS 'Get storage statistics for import staging tables including orphan tracking (Migration 006)';
 
 -- ============================================================================
--- SECTION 6: VIEWS
+-- SECTION 6: STAGING DATA EDIT HELPER (Migration 006)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Staging Data Edit Helper Functions...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: record_staging_edit (Migration 006)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION record_staging_edit(
+    p_staging_id INTEGER,
+    p_field_name TEXT,
+    p_old_value TEXT,
+    p_new_value TEXT,
+    p_edited_by INTEGER
+)
+RETURNS VOID AS $$
+DECLARE
+    v_edit_entry JSONB;
+    v_current_history JSONB;
+BEGIN
+    v_edit_entry := jsonb_build_object(
+        'edited_at', NOW(),
+        'edited_by', p_edited_by,
+        'field', p_field_name,
+        'old_value', p_old_value,
+        'new_value', p_new_value
+    );
+
+    SELECT COALESCE(edit_history, '[]'::jsonb)
+    INTO v_current_history
+    FROM t_import_staging_data
+    WHERE id = p_staging_id;
+
+    UPDATE t_import_staging_data
+    SET
+        edit_history = v_current_history || v_edit_entry,
+        edited_at = NOW(),
+        edited_by = p_edited_by
+    WHERE id = p_staging_id;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION record_staging_edit IS 'Records an edit to a staging record in the edit_history array (Migration 006)';
+
+-- ============================================================================
+-- SECTION 7: VIEWS
 -- ============================================================================
 DO $$ 
 BEGIN
@@ -1569,9 +1499,7 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- VIEW: v_import_staging_statistics
--- Description: Aggregated statistics for staging table by session
--- UPDATED: Added orphan_rows tracking and enhanced metrics
+-- VIEW: v_import_staging_statistics (UPDATED: Migration 006)
 -- ----------------------------------------------------------------------------
 DROP VIEW IF EXISTS v_import_staging_statistics CASCADE;
 
@@ -1582,7 +1510,6 @@ SELECT
     is_live,
     import_type,
     
-    -- Total and status counts
     COUNT(*) AS total_rows,
     COUNT(*) FILTER (WHERE processing_status = 'pending') AS pending_rows,
     COUNT(*) FILTER (WHERE processing_status = 'processing') AS processing_rows,
@@ -1592,25 +1519,21 @@ SELECT
     COUNT(*) FILTER (WHERE processing_status = 'orphan') AS orphan_rows,
     COUNT(*) FILTER (WHERE processing_status = 'skipped') AS skipped_rows,
     
-    -- Timestamps
     MIN(created_at) AS staging_started_at,
     MAX(processed_at) AS last_processed_at,
     
-    -- Success rate calculation
     ROUND(
         COUNT(*) FILTER (WHERE processing_status = 'success')::numeric 
         / NULLIF(COUNT(*), 0)::numeric * 100::numeric, 
         2
     ) AS success_rate,
     
-    -- Processing success rate (successful + duplicates) / total
     ROUND(
         (COUNT(*) FILTER (WHERE processing_status IN ('success', 'duplicate'))::numeric)
         / NULLIF(COUNT(*), 0)::numeric * 100::numeric,
         2
     ) AS processing_success_rate,
     
-    -- Error rate (failed + orphan) / total
     ROUND(
         (COUNT(*) FILTER (WHERE processing_status IN ('failed', 'orphan'))::numeric) 
         / NULLIF(COUNT(*), 0)::numeric * 100::numeric,
@@ -1619,12 +1542,10 @@ SELECT
 FROM t_import_staging_data
 GROUP BY session_id, tenant_id, is_live, import_type;
 
-COMMENT ON VIEW v_import_staging_statistics IS 'Aggregated statistics for staging table by session including orphan record tracking';
+COMMENT ON VIEW v_import_staging_statistics IS 'Aggregated statistics for staging table including orphan record tracking (Migration 006)';
 
 -- ----------------------------------------------------------------------------
--- VIEW: v_import_staging_progress
--- Description: Real-time import progress monitoring
--- UPDATED: Added orphan tracking and enhanced progress metrics
+-- VIEW: v_import_staging_progress (UPDATED: Migration 006)
 -- ----------------------------------------------------------------------------
 DROP VIEW IF EXISTS v_import_staging_progress CASCADE;
 
@@ -1639,7 +1560,6 @@ SELECT
     s.total_batches,
     s.last_processed_row,
     
-    -- Real-time counts from staging table
     COALESCE(st.pending_rows, 0::bigint) AS pending_rows,
     COALESCE(st.processing_rows, 0::bigint) AS processing_rows,
     COALESCE(st.success_rows, 0::bigint) AS success_rows,
@@ -1648,13 +1568,11 @@ SELECT
     COALESCE(st.orphan_rows, 0::bigint) AS orphan_rows,
     COALESCE(st.skipped_rows, 0::bigint) AS skipped_rows,
     
-    -- Session-level counts (final after processing completes)
     s.successful_records,
     s.failed_records,
     s.duplicate_records,
     s.orphan_records,
     
-    -- Progress calculation
     CASE
         WHEN s.staging_total_rows > 0 THEN 
             ROUND(
@@ -1665,12 +1583,10 @@ SELECT
         ELSE 0::numeric
     END AS completion_percentage,
     
-    -- Timestamps
     s.processing_started_at,
     s.staging_completed_at,
     s.processing_completed_at,
     
-    -- Performance metrics
     CASE
         WHEN s.processing_started_at IS NOT NULL AND 
              (st.success_rows + st.failed_rows + st.duplicate_rows + st.orphan_rows) > 0 THEN 
@@ -1679,7 +1595,6 @@ SELECT
         ELSE NULL::numeric
     END AS avg_seconds_per_record,
     
-    -- Estimated time remaining (in seconds)
     CASE
         WHEN s.processing_started_at IS NOT NULL AND 
              st.pending_rows > 0 AND
@@ -1693,13 +1608,44 @@ SELECT
 FROM t_import_sessions s
 LEFT JOIN v_import_staging_statistics st ON s.id = st.session_id;
 
-COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring view with orphan record tracking';
+COMMENT ON VIEW v_import_staging_progress IS 'Real-time import progress monitoring with orphan record tracking (Migration 006)';
+
+-- ----------------------------------------------------------------------------
+-- VIEW: v_import_records_for_review (NEW: Migration 006)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_import_records_for_review AS
+SELECT
+    s.id,
+    s.session_id AS import_session_id,
+    s.tenant_id,
+    s.is_live,
+    s.row_number,
+    s.processing_status AS status,
+    s.mapped_data,
+    s.error_messages,
+    s.warnings,
+    s.match_type,
+    s.match_confidence,
+    s.ambiguous_matches,
+    s.requires_review,
+    s.edited_at,
+    s.edited_by,
+    s.reprocess_count,
+    s.created_at,
+    sess.session_name,
+    sess.import_type,
+    u.email as edited_by_username
+FROM t_import_staging_data s
+INNER JOIN t_import_sessions sess ON sess.id = s.session_id
+LEFT JOIN t_users u ON u.id = s.edited_by
+WHERE s.processing_status IN ('failed', 'orphan', 'duplicate')
+   OR s.requires_review = true
+ORDER BY s.session_id DESC, s.row_number ASC;
+
+COMMENT ON VIEW v_import_records_for_review IS 'View of all staging records that failed, are orphaned, duplicates, or require manual review (Migration 006)';
 
 -- ----------------------------------------------------------------------------
 -- VIEW: v_tenant_customer_schemes
--- Description: Identify unique schemes used across customer portfolios per tenant
--- Purpose: Compare with t_scheme_bookmarks to detect unbookmarked schemes
--- Usage: Find schemes customers use that aren't bookmarked for NAV tracking
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_tenant_customer_schemes AS
 SELECT 
@@ -1716,20 +1662,10 @@ FROM t_transaction_table tt
 WHERE tt.is_active = true
 GROUP BY tt.tenant_id, tt.is_live, tt.scheme_code, tt.scheme_name;
 
-COMMENT ON VIEW v_tenant_customer_schemes IS 
-'Unique schemes from customer transactions - used for bookmark gap detection';
-
-COMMENT ON COLUMN v_tenant_customer_schemes.customer_count IS 
-'Number of distinct customers holding this scheme';
-
-COMMENT ON COLUMN v_tenant_customer_schemes.transaction_count IS 
-'Total transactions across all customers for this scheme';
-
-COMMENT ON COLUMN v_tenant_customer_schemes.total_invested IS 
-'Sum of amounts where portfolio_flag = true';
+COMMENT ON VIEW v_tenant_customer_schemes IS 'Unique schemes from customer transactions - used for bookmark gap detection';
 
 -- ============================================================================
--- SECTION 7: REGULAR VIEW - PORTFOLIO TOTALS (Always Fresh)
+-- SECTION 8: REGULAR VIEW - PORTFOLIO TOTALS (Always Fresh)
 -- ============================================================================
 DO $$
 BEGIN
@@ -1737,9 +1673,7 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- VIEW: t_customer_portfolio_totals (Regular View - Always Fresh)
--- Description: Real-time portfolio totals with returns (calculates on-the-fly)
--- NOTE: Changed from MATERIALIZED VIEW to regular VIEW for always-fresh data
+-- VIEW: t_customer_portfolio_totals (UPDATED: Migration 007 - allocation)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW t_customer_portfolio_totals AS
 SELECT
@@ -1753,22 +1687,19 @@ SELECT
     p.sub_category,
     p.fund_name,
     p.start_date,
+    p.allocation,
 
-    -- Transaction Counts
     COUNT(DISTINCT t.id) as transaction_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Addition' THEN t.id END) as purchase_count,
     COUNT(DISTINCT CASE WHEN tt.txn_type = 'Deduction' THEN t.id END) as redemption_count,
 
-    -- Units Totals
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
                      WHEN tt.txn_type = 'Deduction' THEN -t.units
                      ELSE 0 END), 0) as total_units,
 
-    -- Investment Amount
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0) as total_invested,
 
-    -- Latest NAV
     (SELECT nav FROM t_transaction_table
      WHERE customer_id = p.customer_id
        AND scheme_code = p.scheme_code
@@ -1776,7 +1707,6 @@ SELECT
      ORDER BY txn_date DESC
      LIMIT 1) as latest_nav,
 
-    -- Current Value
     COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
                      WHEN tt.txn_type = 'Deduction' THEN -t.units
                      ELSE 0 END), 0) *
@@ -1787,7 +1717,6 @@ SELECT
               ORDER BY txn_date DESC
               LIMIT 1), 0) as current_value,
 
-    -- Total Returns
     (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units
                       WHEN tt.txn_type = 'Deduction' THEN -t.units
                       ELSE 0 END), 0) *
@@ -1800,7 +1729,6 @@ SELECT
     (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
      COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) as total_returns,
 
-    -- Return Percentage
     CASE
         WHEN (COALESCE(SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.total_amount ELSE 0 END), 0) -
               COALESCE(SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.total_amount ELSE 0 END), 0)) > 0
@@ -1839,41 +1767,18 @@ GROUP BY
     p.id, p.tenant_id, p.is_live, p.customer_id,
     p.scheme_code, p.scheme_name, p.folio_no,
     p.category, p.sub_category, p.fund_name,
-    p.start_date, p.is_active;
+    p.start_date, p.is_active, p.allocation;
 
-COMMENT ON VIEW t_customer_portfolio_totals IS 'Real-time portfolio totals with returns and performance metrics - calculates on-the-fly for always-fresh data';
-
--- ============================================================================
--- PERFORMANCE INDEXES FOR UNDERLYING TABLES (CRITICAL for regular views)
--- ============================================================================
-
--- Index on t_customer_master_portfolio for fast customer lookups
-CREATE INDEX IF NOT EXISTS idx_portfolio_customer_lookup
-ON t_customer_master_portfolio(customer_id, tenant_id, is_live, is_active);
-
--- Index on t_customer_master_portfolio for scheme lookups
-CREATE INDEX IF NOT EXISTS idx_portfolio_scheme_lookup
-ON t_customer_master_portfolio(scheme_code, tenant_id, is_live);
-
--- Comprehensive index on t_transaction_table for portfolio calculations
--- INCLUDE clause adds additional columns to the index for covering queries
-CREATE INDEX IF NOT EXISTS idx_transactions_portfolio_calc
-ON t_transaction_table(customer_id, scheme_code, tenant_id, is_live, is_active, portfolio_flag)
-INCLUDE (txn_date, units, total_amount, nav, txn_type_id);
+COMMENT ON VIEW t_customer_portfolio_totals IS 'Real-time portfolio totals with returns and goal allocation (Migration 007) - calculates on-the-fly';
 
 -- ============================================================================
--- SECTION 7B: v_portfolio_current MATERIALIZED VIEW
+-- SECTION 9: MATERIALIZED VIEW - v_portfolio_current
 -- ============================================================================
 DO $$ 
 BEGIN
     RAISE NOTICE 'Creating v_portfolio_current Materialized View...';
 END $$;
 
--- ----------------------------------------------------------------------------
--- MATERIALIZED VIEW: v_portfolio_current
--- Description: Current portfolio values with month-end comparison using NAV data
--- Purpose: Calculate current portfolio values using latest NAV and compare with month-end
--- ----------------------------------------------------------------------------
 CREATE MATERIALIZED VIEW IF NOT EXISTS v_portfolio_current AS
 SELECT 
     t.customer_id,
@@ -1885,29 +1790,24 @@ SELECT
     p.fund_name,
     SUM(t.units) AS total_units,
     
-    -- Today's NAV (latest available)
     today_nav.nav_date AS today_nav_date,
     today_nav.nav_value AS today_nav,
     (SUM(t.units) * today_nav.nav_value) AS scheme_value_today,
     
-    -- Month-end NAV (last day of previous month)
     month_end_nav.nav_date AS month_end_nav_date,
     month_end_nav.nav_value AS month_end_nav,
     (SUM(t.units) * month_end_nav.nav_value) AS scheme_value_month_end,
     
-    -- Change in value since month-end
     ((SUM(t.units) * today_nav.nav_value) - (SUM(t.units) * month_end_nav.nav_value)) AS scheme_value_change
     
 FROM t_transaction_table t
 
--- Join portfolio details
 LEFT JOIN t_customer_master_portfolio p ON 
     t.customer_id = p.customer_id 
     AND t.scheme_code = p.scheme_code 
     AND t.tenant_id = p.tenant_id 
     AND t.is_live = p.is_live
 
--- Get today's NAV (latest available NAV <= today)
 LEFT JOIN LATERAL (
     SELECT nav_date, nav_value
     FROM t_nav_data
@@ -1918,7 +1818,6 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) today_nav ON true
 
--- Get month-end NAV (latest NAV <= last day of previous month)
 LEFT JOIN LATERAL (
     SELECT nav_date, nav_value
     FROM t_nav_data
@@ -1946,67 +1845,50 @@ GROUP BY
     month_end_nav.nav_value
 WITH NO DATA;
 
-COMMENT ON MATERIALIZED VIEW v_portfolio_current IS 
-'Current portfolio values with month-end comparison using NAV data from t_nav_data';
+COMMENT ON MATERIALIZED VIEW v_portfolio_current IS 'Current portfolio values with month-end comparison using NAV data';
 
--- Create unique index for concurrent refresh
 CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_current_unique 
     ON v_portfolio_current(tenant_id, customer_id, scheme_code);
 
--- Create additional indexes for performance
 CREATE INDEX IF NOT EXISTS idx_portfolio_current_tenant_customer 
     ON v_portfolio_current(tenant_id, customer_id);
 
 CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code 
     ON v_portfolio_current(scheme_code);
 
--- Initial population of materialized view
 REFRESH MATERIALIZED VIEW v_portfolio_current;
 
 -- ============================================================================
--- SECTION 8: PORTFOLIO VIEW COMPATIBILITY FUNCTIONS
+-- SECTION 10: PORTFOLIO VIEW COMPATIBILITY FUNCTIONS
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE 'Creating Portfolio View Compatibility Functions...';
 END $$;
 
--- ----------------------------------------------------------------------------
--- FUNCTION: refresh_portfolio_totals (NO-OP)
--- Description: No longer needed - t_customer_portfolio_totals is now a regular view
--- NOTE: Kept for backward compatibility with existing code that calls it
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION refresh_portfolio_totals()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- No-op: t_customer_portfolio_totals is now a regular VIEW (always fresh)
-    -- This function is kept for backward compatibility
-    -- Regular views don't need refreshing - they calculate on-the-fly
     RAISE NOTICE 't_customer_portfolio_totals is now a regular VIEW - no refresh needed';
 END;
 $$;
 
-COMMENT ON FUNCTION refresh_portfolio_totals IS
-'NO-OP function for backward compatibility. t_customer_portfolio_totals is now a regular VIEW (always fresh, no refresh needed).';
+COMMENT ON FUNCTION refresh_portfolio_totals IS 'NO-OP function for backward compatibility';
 
 -- ============================================================================
--- SECTION 9: ROW LEVEL SECURITY (RLS) POLICIES
+-- SECTION 11: ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
 DO $$ 
 BEGIN
     RAISE NOTICE 'Creating Row Level Security Policies...';
 END $$;
 
--- Enable RLS on core tables
 ALTER TABLE t_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE t_chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE t_chat_messages ENABLE ROW LEVEL SECURITY;
 
--- ----------------------------------------------------------------------------
--- RLS POLICIES: Tenant Isolation
--- ----------------------------------------------------------------------------
 DROP POLICY IF EXISTS tenant_isolation_users ON t_users;
 CREATE POLICY tenant_isolation_users ON t_users
     FOR ALL
@@ -2022,9 +1904,6 @@ CREATE POLICY tenant_isolation_chat_messages ON t_chat_messages
     FOR ALL
     USING (tenant_id = current_tenant_id());
 
--- ----------------------------------------------------------------------------
--- RLS POLICIES: Environment Filtering (Live/Test)
--- ----------------------------------------------------------------------------
 DROP POLICY IF EXISTS environment_filter_users ON t_users;
 CREATE POLICY environment_filter_users ON t_users
     FOR SELECT
@@ -2058,30 +1937,22 @@ CREATE POLICY environment_filter_chat_messages ON t_chat_messages
         END
     );
 
-COMMENT ON POLICY tenant_isolation_users ON t_users IS 'Isolate users by tenant_id';
-COMMENT ON POLICY environment_filter_users ON t_users IS 'Filter users by environment (live/test)';
-
 -- ============================================================================
--- SECTION 10: GRANT PERMISSIONS
+-- SECTION 12: GRANT PERMISSIONS
 -- ============================================================================
 DO $$ 
 BEGIN
     RAISE NOTICE 'Granting Permissions...';
 END $$;
 
--- Grant permissions on all tables
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO kewal_admin;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO kewal_admin;
-
--- Grant execute on all functions
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO kewal_admin;
-
--- Grant usage on schema
 GRANT USAGE ON SCHEMA public TO kewal_admin;
 
--- Grant specific permissions on views
 GRANT ALL ON TABLE v_import_staging_statistics TO kewal_admin;
 GRANT ALL ON TABLE v_import_staging_progress TO kewal_admin;
+GRANT ALL ON TABLE v_import_records_for_review TO kewal_admin;
 GRANT ALL ON TABLE v_tenant_customer_schemes TO kewal_admin;
 
 -- ============================================================================
@@ -2092,25 +1963,16 @@ DECLARE
     v_function_count INTEGER;
     v_view_count INTEGER;
     v_policy_count INTEGER;
-    v_mat_view_count INTEGER;
 BEGIN
-    -- Count functions
     SELECT COUNT(*) INTO v_function_count
     FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE n.nspname = 'public';
     
-    -- Count views
     SELECT COUNT(*) INTO v_view_count
     FROM information_schema.views
     WHERE table_schema = 'public';
     
-    -- Count materialized views
-    SELECT COUNT(*) INTO v_mat_view_count
-    FROM pg_matviews
-    WHERE schemaname = 'public';
-    
-    -- Count policies
     SELECT COUNT(*) INTO v_policy_count
     FROM pg_policies
     WHERE schemaname = 'public';
@@ -2119,39 +1981,28 @@ BEGIN
     RAISE NOTICE 'Functions, Views, and Policies created!';
     RAISE NOTICE 'Total functions: %', v_function_count;
     RAISE NOTICE 'Total views: %', v_view_count;
-    RAISE NOTICE 'Total materialized views: %', v_mat_view_count;
     RAISE NOTICE 'Total RLS policies: %', v_policy_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'UPDATE NOTES (2025-11-02):';
-    RAISE NOTICE '  ✓ Added orphan status tracking';
-    RAISE NOTICE '  ✓ Added normalize_customer_name() function';
-    RAISE NOTICE '  ✓ Added process_transaction_import_session() with:';
-    RAISE NOTICE '    - Multiple customer lookup methods';
-    RAISE NOTICE '    - PAN fallback for all lookup methods';
-    RAISE NOTICE '    - Scheme alias lookup support';
-    RAISE NOTICE '    - Enhanced orphan detection';
-    RAISE NOTICE '    - Batch checkpoint logging';
-    RAISE NOTICE '  ✓ Updated customer import to store normalized names';
-    RAISE NOTICE '  ✓ Updated v_import_staging_statistics view';
-    RAISE NOTICE '  ✓ Updated v_import_staging_progress view';
-    RAISE NOTICE '  ✓ Updated get_staging_storage_stats()';
+    RAISE NOTICE 'MIGRATION INTEGRATION SUMMARY:';
+    RAISE NOTICE '  ✓ Migration 006: Name normalization';
+    RAISE NOTICE '    - normalize_customer_name() function';
+    RAISE NOTICE '    - record_staging_edit() helper function';
+    RAISE NOTICE '    - v_import_records_for_review view';
+    RAISE NOTICE '    - Updated v_import_staging_statistics';
+    RAISE NOTICE '    - Updated v_import_staging_progress';
+    RAISE NOTICE '    - Updated get_staging_storage_stats()';
+    RAISE NOTICE '  ✓ Migration 007: Allocation tracking';
+    RAISE NOTICE '    - t_customer_portfolio_totals includes allocation';
+    RAISE NOTICE '  ✓ JTBD Consolidation:';
+    RAISE NOTICE '    - No additional functions/views required';
+    RAISE NOTICE '    - All logic handled via triggers in 03 script';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'DEPLOYMENT NOTES:';
-    RAISE NOTICE '  - Ensure t_import_sessions has orphan_records column';
-    RAISE NOTICE '  - Ensure t_import_staging_data allows "orphan" status';
-    RAISE NOTICE '  - Ensure t_contacts has normalized_name TEXT column';
-    RAISE NOTICE '  - Test transaction import with all lookup methods';
-    RAISE NOTICE '  - Verify PAN fallback logic works correctly';
-    RAISE NOTICE '  - Test scheme alias matching';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE 'USAGE:';
-    RAISE NOTICE '  Transaction Import Methods:';
-    RAISE NOTICE '  - iwell_code (default): Lookup by IWELL code with PAN fallback';
-    RAISE NOTICE '  - customer_name: Lookup by normalized name with PAN fallback';
-    RAISE NOTICE '  - both: Try IWELL → Name → PAN in sequence';
-    RAISE NOTICE '';
-    RAISE NOTICE '  Example:';
-    RAISE NOTICE '  SELECT * FROM process_transaction_import_session(123, ''both'');';
+    RAISE NOTICE '  - Orphan tracking fully operational';
+    RAISE NOTICE '  - Customer name lookups use normalized_name';
+    RAISE NOTICE '  - Staging edit history tracking ready';
+    RAISE NOTICE '  - Manual review workflow enabled';
+    RAISE NOTICE '  - Goal allocation visible in portfolio views';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 05_seed_data.sql';
     RAISE NOTICE '========================================';

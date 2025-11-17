@@ -5,7 +5,7 @@
 -- Execution: Run THIRD after 01_init.sql and 02_tables.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-11-05 (Added t_customer_meetings indexes and trigger)
+-- Updated: 2025-11-08 (Integrated Migration 006, JTBD Consolidation, Migration 007)
 -- ============================================================================
 
 -- ============================================================================
@@ -16,18 +16,18 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Creating Indexes and Triggers';
     RAISE NOTICE 'Database: kewalinvest';
-    RAISE NOTICE 'Complete regeneration with meeting management';
+    RAISE NOTICE 'Complete with all migrations integrated';
     RAISE NOTICE '========================================';
 END $$;
 
 -- ============================================================================
--- SECTION 1.5: TRIGGER FUNCTIONS (MOVED FROM SCRIPT 04)
+-- SECTION 1.5: TRIGGER FUNCTIONS
 -- Note: These functions must exist before creating triggers in Section 3
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE 'Creating Trigger Functions...';
-    RAISE NOTICE 'Total trigger functions: 4';
+    RAISE NOTICE 'Total trigger functions: 6';
 END $$;
 
 -- Function: update_updated_at_column()
@@ -99,7 +99,7 @@ $$;
 ALTER FUNCTION public.normalize_alias_name() OWNER TO kewal_admin;
 COMMENT ON FUNCTION public.normalize_alias_name() IS 'Auto-normalize alias names for case-insensitive matching';
 
--- Function: update_customer_meetings_timestamp() - NEW
+-- Function: update_customer_meetings_timestamp()
 CREATE OR REPLACE FUNCTION public.update_customer_meetings_timestamp() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -112,9 +112,86 @@ $$;
 ALTER FUNCTION public.update_customer_meetings_timestamp() OWNER TO kewal_admin;
 COMMENT ON FUNCTION public.update_customer_meetings_timestamp() IS 'Automatically update updated_at timestamp for customer meetings';
 
+-- ============================================================================
+-- CRITICAL: Function for Migration 007 - Scheme Allocation Auto-Sync
+-- ============================================================================
+
+-- Function: update_scheme_allocation() (Migration 007)
+CREATE OR REPLACE FUNCTION public.update_scheme_allocation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  v_tenant_id INTEGER;
+  v_is_live BOOLEAN;
+  v_customer_id INTEGER;
+BEGIN
+  -- Get context from the modified row
+  IF TG_OP = 'DELETE' THEN
+    v_tenant_id := OLD.tenant_id;
+    v_is_live := OLD.is_live;
+    v_customer_id := OLD.customer_id;
+  ELSE
+    v_tenant_id := NEW.tenant_id;
+    v_is_live := NEW.is_live;
+    v_customer_id := NEW.customer_id;
+  END IF;
+
+  -- Recalculate allocation for all schemes of this customer
+  WITH goal_allocations AS (
+    SELECT
+      scheme_code,
+      SUM(allocation_pct::decimal) AS total_allocated
+    FROM (
+      SELECT
+        (jsonb_array_elements(config_data->'linked_schemes')->>'scheme_code') AS scheme_code,
+        (jsonb_array_elements(config_data->'linked_schemes')->>'allocation_percentage') AS allocation_pct
+      FROM t_jtbd_configurations
+      WHERE tenant_id = v_tenant_id
+        AND is_live = v_is_live
+        AND customer_id = v_customer_id
+        AND jtbd_type = 'goal_tracking'
+        AND is_active = true
+    ) AS scheme_allocs
+    GROUP BY scheme_code
+  )
+  UPDATE t_customer_master_portfolio p
+  SET allocation = LEAST(COALESCE(ga.total_allocated, 0), 100.00)
+  FROM goal_allocations ga
+  WHERE p.scheme_code = ga.scheme_code
+    AND p.tenant_id = v_tenant_id
+    AND p.is_live = v_is_live
+    AND p.customer_id = v_customer_id;
+
+  -- Reset allocation for schemes no longer in any active goal
+  UPDATE t_customer_master_portfolio
+  SET allocation = 0
+  WHERE tenant_id = v_tenant_id
+    AND is_live = v_is_live
+    AND customer_id = v_customer_id
+    AND scheme_code NOT IN (
+      SELECT DISTINCT (jsonb_array_elements(config_data->'linked_schemes')->>'scheme_code')
+      FROM t_jtbd_configurations
+      WHERE tenant_id = v_tenant_id
+        AND is_live = v_is_live
+        AND customer_id = v_customer_id
+        AND jtbd_type = 'goal_tracking'
+        AND is_active = true
+    );
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
+ALTER FUNCTION public.update_scheme_allocation() OWNER TO kewal_admin;
+COMMENT ON FUNCTION public.update_scheme_allocation() IS 'Automatically recalculates scheme allocation percentages when goals are created/updated/deleted';
+
 DO $$
 BEGIN
-    RAISE NOTICE '✓ Trigger functions created successfully';
+    RAISE NOTICE '✓ Trigger functions created successfully (including update_scheme_allocation)';
 END $$;
 
 -- ============================================================================
@@ -123,7 +200,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Creating performance indexes...';
-    RAISE NOTICE 'Total indexes to create: 185+ (179 base + 6 meetings)';
+    RAISE NOTICE 'Total indexes to create: 195+ (base + meetings + JTBD + migration 006 + 007)';
 END $$;
 
 -- ============================================================================
@@ -146,6 +223,13 @@ CREATE INDEX idx_contacts_tenant ON t_contacts USING btree (tenant_id, is_live);
 CREATE INDEX idx_contacts_is_customer ON t_contacts USING btree (is_customer) WHERE (is_customer = true);
 CREATE INDEX idx_contacts_name ON t_contacts USING btree (name);
 CREATE INDEX idx_contacts_active ON t_contacts USING btree (tenant_id, is_active, is_live);
+
+-- Migration 006: Normalized name index for customer lookup
+CREATE INDEX IF NOT EXISTS idx_contacts_normalized_name
+ON t_contacts(normalized_name)
+WHERE is_active = true;
+
+COMMENT ON INDEX idx_contacts_normalized_name IS 'Fast customer name lookups using normalized names (Migration 006)';
 
 CREATE INDEX idx_channels_contact ON t_contact_channels USING btree (contact_id);
 CREATE INDEX idx_channels_email ON t_contact_channels USING btree (channel_value)
@@ -175,7 +259,7 @@ CREATE INDEX idx_addresses_city ON t_customer_addresses USING btree (city);
 CREATE INDEX idx_addresses_pincode ON t_customer_addresses USING btree (pincode);
 
 -- ============================================================================
--- 2.2.1: CUSTOMER MEETINGS INDEXES (NEW - 2025-11-05)
+-- 2.2.1: CUSTOMER MEETINGS INDEXES
 -- ============================================================================
 CREATE INDEX idx_customer_meetings_customer ON t_customer_meetings USING btree (tenant_id, is_live, customer_id);
 CREATE INDEX idx_customer_meetings_scheduled_date ON t_customer_meetings USING btree (scheduled_date);
@@ -186,10 +270,7 @@ CREATE INDEX idx_customer_meetings_tenant ON t_customer_meetings USING btree (te
 CREATE INDEX idx_customer_meetings_created_by ON t_customer_meetings USING btree (created_by);
 
 COMMENT ON INDEX idx_customer_meetings_customer IS 'Fast lookup for customer meetings by tenant and customer';
-COMMENT ON INDEX idx_customer_meetings_scheduled_date IS 'Fast filtering by scheduled date';
-COMMENT ON INDEX idx_customer_meetings_status IS 'Fast filtering by meeting status';
-COMMENT ON INDEX idx_customer_meetings_upcoming IS 'Optimized for upcoming scheduled meetings query (filtered index)';
-COMMENT ON INDEX idx_customer_meetings_tenant IS 'Tenant isolation for meetings';
+COMMENT ON INDEX idx_customer_meetings_upcoming IS 'Optimized for upcoming scheduled meetings query';
 
 -- ============================================================================
 -- 2.3: CUSTOMER BOOKMARKS INDEXES
@@ -215,38 +296,12 @@ CREATE INDEX idx_portfolio_category ON t_customer_master_portfolio USING btree (
 CREATE INDEX idx_portfolio_fund_name ON t_customer_master_portfolio USING btree (fund_name);
 CREATE INDEX idx_portfolio_active ON t_customer_master_portfolio USING btree (customer_id, is_active) WHERE (is_active = true);
 
--- ============================================================================
--- 2.4.1: MATERIALIZED VIEW INDEXES (CONDITIONAL)
--- Note: These views are created in 04_functions_views_policies.sql
--- We check if they exist before creating indexes
--- ============================================================================
-DO $$
-BEGIN
-    -- Check and create indexes for t_customer_portfolio_totals
-    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 't_customer_portfolio_totals') THEN
-        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_customer ON t_customer_portfolio_totals USING btree (customer_id);
-        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_scheme ON t_customer_portfolio_totals USING btree (scheme_code);
-        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_tenant ON t_customer_portfolio_totals USING btree (tenant_id, is_live);
-        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_category ON t_customer_portfolio_totals USING btree (category);
-        CREATE INDEX IF NOT EXISTS idx_portfolio_totals_value ON t_customer_portfolio_totals USING btree (current_value DESC);
-        -- CRITICAL: Unique index required for CONCURRENT refresh
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_totals_pk ON t_customer_portfolio_totals USING btree (customer_id, scheme_code, tenant_id, is_live);
-        RAISE NOTICE '✓ Created 6 indexes for t_customer_portfolio_totals (including unique index for concurrent refresh)';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_customer_portfolio_totals indexes - materialized view will be created in script 04';
-    END IF;
+-- Index for faster lookups in regular view queries
+CREATE INDEX IF NOT EXISTS idx_portfolio_customer_lookup
+ON t_customer_master_portfolio(customer_id, tenant_id, is_live, is_active);
 
-    -- Check and create indexes for v_portfolio_current
-    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'v_portfolio_current') THEN
-        CREATE INDEX IF NOT EXISTS idx_portfolio_current_tenant_customer ON v_portfolio_current USING btree (tenant_id, customer_id);
-        CREATE INDEX IF NOT EXISTS idx_portfolio_current_scheme_code ON v_portfolio_current USING btree (scheme_code);
-        -- CRITICAL: Unique index required for CONCURRENT refresh
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_current_unique ON v_portfolio_current USING btree (tenant_id, customer_id, scheme_code);
-        RAISE NOTICE '✓ Created 3 indexes for v_portfolio_current (including unique index for concurrent refresh)';
-    ELSE
-        RAISE NOTICE '⊘ Skipping v_portfolio_current indexes - materialized view will be created in script 04';
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_portfolio_scheme_lookup
+ON t_customer_master_portfolio(scheme_code, tenant_id, is_live);
 
 -- Transaction indexes
 CREATE INDEX idx_transactions_tenant ON t_transaction_table USING btree (tenant_id, is_live);
@@ -260,6 +315,13 @@ CREATE INDEX idx_transaction_duplicates ON t_transaction_table USING btree (is_p
 CREATE INDEX idx_transaction_staging_record ON t_transaction_table USING btree (staging_record_id);
 CREATE INDEX idx_transaction_import_session ON t_transaction_table USING btree (import_session_id);
 CREATE INDEX idx_transaction_scheme_id ON t_transaction_table USING btree (scheme_id);
+
+-- Comprehensive index for portfolio calculations (covering index)
+CREATE INDEX IF NOT EXISTS idx_transactions_portfolio_calc
+ON t_transaction_table(customer_id, scheme_code, tenant_id, is_live, is_active, portfolio_flag)
+INCLUDE (txn_date, units, total_amount, nav, txn_type_id);
+
+COMMENT ON INDEX idx_transactions_portfolio_calc IS 'Covering index for portfolio total calculations - includes all needed columns';
 
 CREATE INDEX idx_txn_types_active ON m_transaction_types USING btree (is_active) WHERE (is_active = true);
 CREATE INDEX idx_txn_types_code ON m_transaction_types USING btree (txn_code);
@@ -275,7 +337,8 @@ CREATE INDEX idx_file_uploads_tenant ON t_file_uploads USING btree (tenant_id, i
 CREATE INDEX idx_file_uploads_type ON t_file_uploads USING btree (file_type);
 CREATE INDEX idx_file_uploads_status ON t_file_uploads USING btree (processing_status);
 CREATE INDEX idx_file_uploads_customer ON t_file_uploads USING btree (customer_id) WHERE (customer_id IS NOT NULL);
--- Hash-based duplicate detection (from migration_001)
+
+-- Hash-based duplicate detection (from migration 001/006)
 CREATE INDEX IF NOT EXISTS idx_file_uploads_hash 
 ON t_file_uploads(file_hash, tenant_id, is_live) 
 WHERE file_hash IS NOT NULL;
@@ -291,33 +354,20 @@ CREATE INDEX idx_staging_data_tenant ON t_import_staging_data USING btree (tenan
 CREATE INDEX idx_staging_data_session ON t_import_staging_data USING btree (session_id);
 CREATE INDEX idx_staging_data_status ON t_import_staging_data USING btree (processing_status);
 
--- Conditional indexes for columns that may not exist
-DO $$
-BEGIN
-    -- Check if has_errors column exists
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 't_import_staging_data' 
-        AND column_name = 'has_errors'
-    ) THEN
-        CREATE INDEX IF NOT EXISTS idx_staging_data_errors ON t_import_staging_data USING btree (has_errors) WHERE (has_errors = true);
-        RAISE NOTICE '✓ Created index idx_staging_data_errors';
-    ELSE
-        RAISE NOTICE '⊘ Skipping idx_staging_data_errors - column has_errors does not exist';
-    END IF;
+-- Migration 006: Staging review indexes
+CREATE INDEX IF NOT EXISTS idx_staging_requires_review
+ON t_import_staging_data(session_id, requires_review)
+WHERE requires_review = true;
 
-    -- Check if is_duplicate column exists
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 't_import_staging_data' 
-        AND column_name = 'is_duplicate'
-    ) THEN
-        CREATE INDEX IF NOT EXISTS idx_staging_data_duplicates ON t_import_staging_data USING btree (is_duplicate) WHERE (is_duplicate = true);
-        RAISE NOTICE '✓ Created index idx_staging_data_duplicates';
-    ELSE
-        RAISE NOTICE '⊘ Skipping idx_staging_data_duplicates - column is_duplicate does not exist';
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_staging_processing_status_session
+ON t_import_staging_data(session_id, processing_status);
+
+CREATE INDEX IF NOT EXISTS idx_staging_edited
+ON t_import_staging_data(session_id, edited_at)
+WHERE edited_at IS NOT NULL;
+
+COMMENT ON INDEX idx_staging_requires_review IS 'Fast lookup for records requiring manual review (Migration 006)';
+COMMENT ON INDEX idx_staging_edited IS 'Track edited staging records (Migration 006)';
 
 CREATE INDEX idx_field_mappings_tenant ON t_import_field_mappings USING btree (tenant_id, is_live);
 CREATE INDEX idx_field_mappings_active ON t_import_field_mappings USING btree (is_active, is_default);
@@ -341,29 +391,10 @@ CREATE INDEX idx_scheme_aliases_lookup ON t_scheme_aliases USING btree (alias_na
 CREATE INDEX idx_scheme_aliases_scheme ON t_scheme_aliases USING btree (scheme_id, is_active);
 CREATE INDEX idx_scheme_aliases_active ON t_scheme_aliases USING btree (is_active, created_at DESC);
 
--- Conditional indexes for t_scheme_bookmarks (may not have scheme_code column)
-DO $$
-BEGIN
-    -- Always create these indexes if table exists
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_scheme_bookmarks') THEN
-        CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_tenant ON t_scheme_bookmarks USING btree (tenant_id, is_live, is_active);
-        CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_user ON t_scheme_bookmarks USING btree (user_id, is_active);
-        
-        -- Check if scheme_code column exists
-        IF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 't_scheme_bookmarks' 
-            AND column_name = 'scheme_code'
-        ) THEN
-            CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_scheme ON t_scheme_bookmarks USING btree (scheme_code);
-            RAISE NOTICE '✓ Created all indexes for t_scheme_bookmarks';
-        ELSE
-            RAISE NOTICE '⊘ Skipping idx_scheme_bookmarks_scheme - column scheme_code does not exist';
-        END IF;
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_scheme_bookmarks indexes - table does not exist';
-    END IF;
-END $$;
+-- t_scheme_bookmarks indexes
+CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_tenant ON t_scheme_bookmarks USING btree (tenant_id, is_live, is_active);
+CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_user ON t_scheme_bookmarks USING btree (user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_scheme_bookmarks_scheme ON t_scheme_bookmarks USING btree (scheme_code);
 
 CREATE INDEX idx_nav_data_scheme_live ON t_nav_data USING btree (scheme_code, is_live);
 CREATE INDEX idx_nav_data_scheme_date_live ON t_nav_data USING btree (scheme_code, nav_date, is_live);
@@ -380,63 +411,61 @@ CREATE INDEX idx_nav_jobs_pending ON t_nav_download_jobs USING btree (status, sc
 CREATE INDEX idx_nav_scheduler_active ON t_nav_scheduler_configs USING btree (is_live) WHERE (is_live = true);
 
 -- ============================================================================
--- 2.7: JTBD & GOALS INDEXES (CONDITIONAL)
--- Note: These tables may not exist in all environments
+-- 2.7: JTBD & GOALS INDEXES
 -- ============================================================================
-DO $$
-BEGIN
-    -- t_jtbd_configurations indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_jtbd_configurations') THEN
-        CREATE INDEX IF NOT EXISTS idx_jtbd_customer ON t_jtbd_configurations USING btree (customer_id);
-        CREATE INDEX IF NOT EXISTS idx_jtbd_active ON t_jtbd_configurations USING btree (is_active) WHERE (is_active = true);
-        RAISE NOTICE '✓ Created indexes for t_jtbd_configurations';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_jtbd_configurations indexes - table does not exist';
-    END IF;
 
-    -- t_customer_goals indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_customer_goals') THEN
-        CREATE INDEX IF NOT EXISTS idx_goals_jtbd ON t_customer_goals USING btree (jtbd_id);
-        CREATE INDEX IF NOT EXISTS idx_goals_customer ON t_customer_goals USING btree (customer_id);
-        CREATE INDEX IF NOT EXISTS idx_goals_active ON t_customer_goals USING btree (is_active) WHERE (is_active = true);
-        CREATE INDEX IF NOT EXISTS idx_goals_target_date ON t_customer_goals USING btree (target_date);
-        CREATE INDEX IF NOT EXISTS idx_goals_priority ON t_customer_goals USING btree (priority);
-        RAISE NOTICE '✓ Created indexes for t_customer_goals';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_customer_goals indexes - table does not exist';
-    END IF;
+-- t_jtbd_configurations indexes (base + JTBD Consolidation migration)
+CREATE INDEX IF NOT EXISTS idx_jtbd_customer ON t_jtbd_configurations USING btree (customer_id);
+CREATE INDEX IF NOT EXISTS idx_jtbd_active ON t_jtbd_configurations USING btree (is_active) WHERE (is_active = true);
 
-    -- t_goal_allocations indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_allocations') THEN
-        CREATE INDEX IF NOT EXISTS idx_goal_allocations_goal ON t_goal_allocations USING btree (goal_id);
-        CREATE INDEX IF NOT EXISTS idx_goal_allocations_portfolio ON t_goal_allocations USING btree (customer_id, scheme_code);
-        RAISE NOTICE '✓ Created indexes for t_goal_allocations';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_goal_allocations indexes - table does not exist';
-    END IF;
+-- JTBD Consolidation: Category-based indexes
+CREATE INDEX IF NOT EXISTS idx_jtbd_config_category
+ON t_jtbd_configurations(tenant_id, is_live, jtbd_category)
+WHERE is_active = true;
 
-    -- t_goal_progress_snapshots indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_progress_snapshots') THEN
-        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
-        CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);
-        RAISE NOTICE '✓ Created indexes for t_goal_progress_snapshots';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_goal_progress_snapshots indexes - table does not exist';
-    END IF;
+CREATE INDEX IF NOT EXISTS idx_jtbd_config_category_type
+ON t_jtbd_configurations(tenant_id, is_live, jtbd_category, jtbd_type)
+WHERE is_active = true;
 
-    -- t_goal_alerts indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_goal_alerts') THEN
-        CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
-        CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
-        RAISE NOTICE '✓ Created indexes for t_goal_alerts';
-    ELSE
-        RAISE NOTICE '⊘ Skipping t_goal_alerts indexes - table does not exist';
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_jtbd_config_customer
+ON t_jtbd_configurations(tenant_id, is_live, customer_id, jtbd_category);
+
+COMMENT ON INDEX idx_jtbd_config_category IS 'Fast category filtering for JTBD configs (JTBD Consolidation)';
+COMMENT ON INDEX idx_jtbd_config_category_type IS 'Combined category+type filtering (JTBD Consolidation)';
+
+-- JTBD Consolidation: t_jtbd_executions indexes
+CREATE INDEX IF NOT EXISTS idx_jtbd_exec_tenant_status_date
+ON t_jtbd_executions(tenant_id, is_live, execution_status, scheduled_date);
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_exec_customer
+ON t_jtbd_executions(tenant_id, is_live, customer_id, execution_status);
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_exec_type
+ON t_jtbd_executions(tenant_id, is_live, execution_type, scheduled_date);
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_exec_config
+ON t_jtbd_executions(config_id)
+WHERE config_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_exec_date_range
+ON t_jtbd_executions(tenant_id, is_live, scheduled_date)
+WHERE execution_status IN ('planned', 'due');
+
+COMMENT ON INDEX idx_jtbd_exec_tenant_status_date IS 'Primary query index for execution tracking (JTBD Consolidation)';
+COMMENT ON INDEX idx_jtbd_exec_date_range IS 'Optimized for timeline and calendar views (JTBD Consolidation)';
+
+-- Goal-related indexes
+CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
+CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
+
+CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_goal ON t_goal_scheme_allocations USING btree (goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_scheme ON t_goal_scheme_allocations USING btree (scheme_id);
 
 -- ============================================================================
 -- 2.8: MARKET DATA INDEXES
--- Note: Market data tables are GLOBAL (no tenant_id/is_live)
 -- ============================================================================
 CREATE INDEX idx_market_indices_active ON t_market_indices USING btree (is_active) WHERE (is_active = true);
 CREATE INDEX idx_market_indices_category ON t_market_indices USING btree (category);
@@ -474,86 +503,67 @@ CREATE INDEX idx_user_chart_prefs_user_index ON t_user_chart_preferences USING b
 
 -- ============================================================================
 -- 2.11: DUPLICATE DETECTION INDEXES (Migration 006)
--- Purpose: Optimize duplicate check queries for filename, customer, and transaction detection
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE 'Creating duplicate detection indexes...';
 END $$;
 
--- Filename duplicate check (tenant + filename + size + created_at)
+-- Filename duplicate check
 CREATE INDEX IF NOT EXISTS idx_file_uploads_duplicate_check 
 ON t_file_uploads(tenant_id, is_live, original_filename, file_size, created_at DESC);
 
 COMMENT ON INDEX idx_file_uploads_duplicate_check IS 'Optimizes filename duplicate check queries';
 
--- Customer PAN duplicate check (tenant-scoped, case-insensitive)
+-- Customer PAN duplicate check (case-insensitive)
 CREATE INDEX IF NOT EXISTS idx_customers_pan_upper 
 ON t_customers(tenant_id, is_live, UPPER(pan))
 WHERE pan IS NOT NULL AND is_active = true;
 
-COMMENT ON INDEX idx_customers_pan_upper IS 'Optimizes customer PAN duplicate checks (tenant-scoped, case-insensitive)';
+COMMENT ON INDEX idx_customers_pan_upper IS 'Case-insensitive PAN duplicate checks';
 
--- Email duplicate check (lowercase)
+-- Email duplicate check
 CREATE INDEX IF NOT EXISTS idx_contact_channels_email_lower 
 ON t_contact_channels(channel_type, LOWER(channel_value))
 WHERE channel_type = 'email' AND is_active = true;
-
-COMMENT ON INDEX idx_contact_channels_email_lower IS 'Optimizes email duplicate checks (case-insensitive)';
 
 -- Mobile duplicate check
 CREATE INDEX IF NOT EXISTS idx_contact_channels_mobile 
 ON t_contact_channels(channel_type, channel_value)
 WHERE channel_type = 'mobile' AND is_active = true;
 
-COMMENT ON INDEX idx_contact_channels_mobile IS 'Optimizes mobile duplicate checks';
-
--- Link contact_channels to contacts (for tenant filtering)
+-- Contact-to-channel link
 CREATE INDEX IF NOT EXISTS idx_contact_channels_contact_tenant 
 ON t_contact_channels(contact_id, channel_type, is_active);
 
-COMMENT ON INDEX idx_contact_channels_contact_tenant IS 'Optimizes join between contact_channels and contacts for duplicate checks';
-
--- Recent customers by tenant (for session duplicate check)
+-- Recent customers by tenant
 CREATE INDEX IF NOT EXISTS idx_customers_recent_by_tenant 
 ON t_customers(tenant_id, is_live, created_at DESC, is_active);
-
-COMMENT ON INDEX idx_customers_recent_by_tenant IS 'Optimizes session-level duplicate checks (ordered by creation date)';
 
 -- Customer contact_id lookup
 CREATE INDEX IF NOT EXISTS idx_customers_contact_id 
 ON t_customers(contact_id, tenant_id, is_live, is_active);
 
-COMMENT ON INDEX idx_customers_contact_id IS 'Optimizes customer lookup by contact_id for duplicate checks';
-
--- Transaction strict duplicate check (all match fields)
+-- Transaction strict duplicate check
 CREATE INDEX IF NOT EXISTS idx_transaction_strict_duplicate 
 ON t_transaction_table(tenant_id, is_live, customer_id, scheme_code, txn_date, total_amount, units, nav)
 WHERE is_active = true;
 
-COMMENT ON INDEX idx_transaction_strict_duplicate IS 'Optimizes strict transaction duplicate checks (tenant-scoped)';
-
--- Folio_no in transaction duplicate check
+-- Folio in transaction duplicate check
 CREATE INDEX IF NOT EXISTS idx_transaction_folio 
 ON t_transaction_table(tenant_id, is_live, folio_no, txn_date)
 WHERE folio_no IS NOT NULL AND is_active = true;
 
-COMMENT ON INDEX idx_transaction_folio IS 'Optimizes transaction duplicate checks that include folio number';
-
--- Transaction potential duplicate check (partial match fields)
+-- Transaction potential duplicate check
 CREATE INDEX IF NOT EXISTS idx_transaction_potential_duplicate 
 ON t_transaction_table(tenant_id, is_live, customer_id, scheme_code, txn_date, total_amount)
 WHERE is_active = true;
-
-COMMENT ON INDEX idx_transaction_potential_duplicate IS 'Optimizes potential transaction duplicate checks (tenant-scoped)';
 
 -- Staging data session lookup
 CREATE INDEX IF NOT EXISTS idx_staging_session_lookup 
 ON t_import_staging_data(session_id, id);
 
-COMMENT ON INDEX idx_staging_session_lookup IS 'Optimizes staging data lookups during duplicate checking';
-
--- GIN index for JSONB mapped_data (supports all JSONB operators)
+-- GIN index for JSONB mapped_data
 CREATE INDEX IF NOT EXISTS idx_staging_mapped_data_gin 
 ON t_import_staging_data USING GIN (mapped_data);
 
@@ -561,7 +571,7 @@ COMMENT ON INDEX idx_staging_mapped_data_gin IS 'GIN index for fast JSONB field 
 
 DO $$
 BEGIN
-    RAISE NOTICE '✓ Created 14 duplicate detection indexes (13 from migration 006 + 1 hash-based from migration 001)';
+    RAISE NOTICE '✓ Created 14 duplicate detection indexes';
 END $$;
 
 -- ============================================================================
@@ -631,12 +641,11 @@ END $$;
 
 -- ============================================================================
 -- SECTION 3: TIMESTAMP UPDATE TRIGGERS
--- Note: Trigger functions are created in Section 1.5 above
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE 'Creating updated_at timestamp triggers...';
-    RAISE NOTICE 'Total triggers to create: 26 (including t_customer_meetings)';
+    RAISE NOTICE 'Total triggers to create: 30+';
 END $$;
 
 -- Core entity triggers
@@ -658,7 +667,7 @@ CREATE TRIGGER update_customer_bookmarks_updated_at BEFORE UPDATE ON t_customer_
 CREATE TRIGGER update_bookmark_reasons_updated_at BEFORE UPDATE ON m_bookmark_reasons
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Customer meetings trigger (NEW - 2025-11-05)
+-- Customer meetings trigger
 CREATE TRIGGER update_customer_meetings_updated_at BEFORE UPDATE ON t_customer_meetings
     FOR EACH ROW EXECUTE FUNCTION update_customer_meetings_timestamp();
 
@@ -710,15 +719,16 @@ CREATE TRIGGER update_nav_jobs_updated_at BEFORE UPDATE ON t_nav_download_jobs
 CREATE TRIGGER update_scheduler_configs_updated_at BEFORE UPDATE ON t_nav_scheduler_configs
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- JTBD triggers (conditional - only if table exists)
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 't_jtbd_configurations') THEN
-        CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        RAISE NOTICE '✓ Created trigger for t_jtbd_configurations';
-    END IF;
-END $$;
+-- JTBD triggers
+CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- JTBD Consolidation: t_jtbd_executions trigger
+CREATE TRIGGER update_jtbd_executions_updated_at BEFORE UPDATE ON t_jtbd_executions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_goal_scheme_allocations_updated_at BEFORE UPDATE ON t_goal_scheme_allocations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Market data triggers
 CREATE TRIGGER trg_market_indices_updated_at BEFORE UPDATE ON t_market_indices
@@ -738,6 +748,48 @@ CREATE TRIGGER update_user_chart_preferences_updated_at BEFORE UPDATE ON t_user_
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
+-- CRITICAL: Migration 007 - Goal Allocation Auto-Sync Triggers
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Creating Migration 007 Triggers';
+    RAISE NOTICE 'Goal allocation auto-sync on JTBD changes';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS trg_update_allocation_after_goal_insert ON t_jtbd_configurations;
+DROP TRIGGER IF EXISTS trg_update_allocation_after_goal_update ON t_jtbd_configurations;
+DROP TRIGGER IF EXISTS trg_update_allocation_after_goal_delete ON t_jtbd_configurations;
+
+-- Insert trigger
+CREATE TRIGGER trg_update_allocation_after_goal_insert
+AFTER INSERT ON t_jtbd_configurations
+FOR EACH ROW
+WHEN (NEW.jtbd_type = 'goal_tracking')
+EXECUTE FUNCTION update_scheme_allocation();
+
+-- Update trigger
+CREATE TRIGGER trg_update_allocation_after_goal_update
+AFTER UPDATE ON t_jtbd_configurations
+FOR EACH ROW
+WHEN (NEW.jtbd_type = 'goal_tracking')
+EXECUTE FUNCTION update_scheme_allocation();
+
+-- Delete trigger
+CREATE TRIGGER trg_update_allocation_after_goal_delete
+AFTER DELETE ON t_jtbd_configurations
+FOR EACH ROW
+WHEN (OLD.jtbd_type = 'goal_tracking')
+EXECUTE FUNCTION update_scheme_allocation();
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Goal allocation auto-sync triggers created successfully';
+END $$;
+
+-- ============================================================================
 -- SECTION 4: VERIFICATION & COMPLETION
 -- ============================================================================
 DO $$
@@ -745,7 +797,7 @@ DECLARE
     v_trigger_count INTEGER;
     v_index_count INTEGER;
     v_duplicate_index_count INTEGER;
-    v_meeting_index_count INTEGER;
+    v_jtbd_index_count INTEGER;
 BEGIN
     -- Count triggers
     SELECT COUNT(*) INTO v_trigger_count
@@ -763,51 +815,41 @@ BEGIN
     SELECT COUNT(*) INTO v_duplicate_index_count
     FROM pg_indexes
     WHERE schemaname = 'public'
-    AND (
-        indexname LIKE '%duplicate%' 
-        OR indexname IN (
-            'idx_file_uploads_duplicate_check',
-            'idx_file_uploads_hash',
-            'idx_customers_pan_upper',
-            'idx_contact_channels_email_lower',
-            'idx_contact_channels_mobile',
-            'idx_contact_channels_contact_tenant',
-            'idx_customers_recent_by_tenant',
-            'idx_customers_contact_id',
-            'idx_transaction_strict_duplicate',
-            'idx_transaction_folio',
-            'idx_transaction_potential_duplicate',
-            'idx_staging_session_lookup',
-            'idx_staging_mapped_data_gin'
-        )
-    );
+    AND (indexname LIKE '%duplicate%' OR indexname LIKE '%hash%');
 
-    -- Count meeting indexes
-    SELECT COUNT(*) INTO v_meeting_index_count
+    -- Count JTBD-related indexes
+    SELECT COUNT(*) INTO v_jtbd_index_count
     FROM pg_indexes
     WHERE schemaname = 'public'
-    AND indexname LIKE 'idx_customer_meetings%';
+    AND (indexname LIKE '%jtbd%' OR indexname LIKE '%goal%');
 
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Indexes and Triggers Complete';
     RAISE NOTICE 'Triggers created: %', v_trigger_count;
     RAISE NOTICE 'Total indexes created: %', v_index_count;
     RAISE NOTICE 'Duplicate detection indexes: %', v_duplicate_index_count;
-    RAISE NOTICE 'Customer meetings indexes: %', v_meeting_index_count;
+    RAISE NOTICE 'JTBD & Goal indexes: %', v_jtbd_index_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'UPDATE NOTES (2025-11-05):';
-    RAISE NOTICE '  ✓ Added 6 indexes for t_customer_meetings';
-    RAISE NOTICE '    - idx_customer_meetings_customer (tenant + customer lookup)';
-    RAISE NOTICE '    - idx_customer_meetings_scheduled_date (date filtering)';
-    RAISE NOTICE '    - idx_customer_meetings_status (status filtering)';
-    RAISE NOTICE '    - idx_customer_meetings_upcoming (filtered index for upcoming meetings)';
-    RAISE NOTICE '    - idx_customer_meetings_tenant (tenant isolation)';
-    RAISE NOTICE '    - idx_customer_meetings_created_by (user tracking)';
-    RAISE NOTICE '  ✓ Added trigger: update_customer_meetings_updated_at';
-    RAISE NOTICE '  ✓ Migration Updates Included:';
+    RAISE NOTICE 'MIGRATION INTEGRATION SUMMARY:';
+    RAISE NOTICE '  ✓ Migration 006: Name normalization';
+    RAISE NOTICE '    - idx_contacts_normalized_name';
+    RAISE NOTICE '    - 3 staging review indexes';
     RAISE NOTICE '    - 14 duplicate detection indexes';
-    RAISE NOTICE '    - 14 job scheduler & execution indexes';
-    RAISE NOTICE '  ✓ All indexes are tenant-scoped and optimized';
+    RAISE NOTICE '  ✓ JTBD Consolidation Migration:';
+    RAISE NOTICE '    - 3 category-based config indexes';
+    RAISE NOTICE '    - 5 execution tracking indexes';
+    RAISE NOTICE '    - 1 updated_at trigger for executions';
+    RAISE NOTICE '  ✓ Migration 007: Scheme Allocation';
+    RAISE NOTICE '    - update_scheme_allocation() function';
+    RAISE NOTICE '    - 3 AFTER triggers on t_jtbd_configurations';
+    RAISE NOTICE '    - Auto-sync allocation on INSERT/UPDATE/DELETE';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'CRITICAL FEATURES ENABLED:';
+    RAISE NOTICE '  ✓ Goal allocation auto-calculation working';
+    RAISE NOTICE '  ✓ Customer name-based lookups optimized';
+    RAISE NOTICE '  ✓ JTBD execution tracking ready';
+    RAISE NOTICE '  ✓ Duplicate detection fully indexed';
+    RAISE NOTICE '  ✓ All timestamp triggers active';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Performance optimizations ready!';
     RAISE NOTICE 'Next: Run 04_functions_views_policies.sql';
