@@ -5,7 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-11-05 (Updated t_customer_meetings table with complete meeting management)
+-- Updated: 2025-11-08 (Integrated all migrations: 006, JTBD Consolidation, 007)
 -- ============================================================================
 
 -- ============================================================================
@@ -102,7 +102,7 @@ BEGIN
     RAISE NOTICE 'Creating Contact and Customer Tables...';
 END $$;
 
--- TABLE: t_contacts
+-- TABLE: t_contacts (UPDATED: Added normalized_name from Migration 006)
 CREATE TABLE t_contacts (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
@@ -111,6 +111,21 @@ CREATE TABLE t_contacts (
     is_customer BOOLEAN DEFAULT false,
     prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
     name VARCHAR(255) NOT NULL,
+    normalized_name TEXT GENERATED ALWAYS AS (
+        -- Normalize: Remove salutations, uppercase, remove special chars, normalize whitespace
+        UPPER(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(name, '^(MR|MRS|MS|DR|PROF|SRI|SMT)\.?\s+', '', 'i'),
+                        '[^A-Z0-9\s]', '', 'g'
+                    ),
+                    '\s+', ' ', 'g'
+                ),
+                '^\s+|\s+$', '', 'g'
+            )
+        )
+    ) STORED,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id)
@@ -119,6 +134,7 @@ CREATE TABLE t_contacts (
 COMMENT ON TABLE t_contacts IS 'Base contact information - extended by customers table';
 COMMENT ON COLUMN t_contacts.is_customer IS 'Flag to indicate if contact is also a customer';
 COMMENT ON COLUMN t_contacts.prefix IS 'Title: Mr, Mrs, Ms, Dr, Prof, Sri';
+COMMENT ON COLUMN t_contacts.normalized_name IS 'Auto-generated normalized name for matching: removes titles, special chars, uppercase';
 
 -- TABLE: t_contact_channels
 CREATE TABLE t_contact_channels (
@@ -207,7 +223,7 @@ CREATE TABLE t_customer_addresses (
 COMMENT ON TABLE t_customer_addresses IS 'Multiple addresses per customer with type classification';
 COMMENT ON COLUMN t_customer_addresses.is_primary IS 'Primary address for the customer';
 
--- TABLE: t_customer_meetings (UPDATED 2025-11-05)
+-- TABLE: t_customer_meetings
 CREATE TABLE t_customer_meetings (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -227,8 +243,8 @@ CREATE TABLE t_customer_meetings (
     status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')),
 
     -- Location/Link (based on meeting_mode)
-    meeting_location TEXT,  -- For in_person meetings
-    meeting_link TEXT,      -- For video_call meetings
+    meeting_location TEXT,
+    meeting_link TEXT,
 
     -- Meeting content
     agenda TEXT,
@@ -256,9 +272,6 @@ COMMENT ON COLUMN t_customer_meetings.status IS 'Status: scheduled, completed, c
 COMMENT ON COLUMN t_customer_meetings.meeting_location IS 'Physical location for in-person meetings';
 COMMENT ON COLUMN t_customer_meetings.meeting_link IS 'Video call URL for video_call meetings';
 COMMENT ON COLUMN t_customer_meetings.outcome IS 'Meeting outcome/summary after completion';
-COMMENT ON COLUMN t_customer_meetings.completed_at IS 'Timestamp when meeting was marked as completed';
-COMMENT ON COLUMN t_customer_meetings.cancelled_at IS 'Timestamp when meeting was cancelled';
-COMMENT ON COLUMN t_customer_meetings.cancellation_reason IS 'Reason for meeting cancellation';
 
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
@@ -281,7 +294,7 @@ CREATE TABLE t_file_uploads (
     folder_path VARCHAR(500),
     file_size BIGINT,
     mime_type VARCHAR(100),
-    file_hash VARCHAR(64), -- SHA256 hash for duplicate detection
+    file_hash VARCHAR(64),
     customer_id INTEGER REFERENCES t_customers(id),
     processing_status VARCHAR(50) DEFAULT 'pending' CHECK (
         processing_status IN ('pending', 'processing', 'completed', 'failed')
@@ -300,12 +313,8 @@ CREATE TABLE t_file_uploads (
 COMMENT ON TABLE t_file_uploads IS 'Track all uploaded files for import and document management';
 COMMENT ON COLUMN t_file_uploads.file_type IS 'Type: customer_import, transaction_import, customer_document, scheme_import';
 COMMENT ON COLUMN t_file_uploads.file_hash IS 'SHA256 hash of file content for duplicate detection';
-COMMENT ON COLUMN t_file_uploads.updated_at IS 'Timestamp of last update to this record';
 
--- Index for fast duplicate file lookups
-CREATE INDEX IF NOT EXISTS idx_file_uploads_hash ON t_file_uploads(file_hash, tenant_id, is_live) WHERE file_hash IS NOT NULL;
-
--- TABLE: t_import_sessions
+-- TABLE: t_import_sessions (UPDATED: Restart capability from Migration 006)
 CREATE TABLE t_import_sessions (
     id SERIAL PRIMARY KEY,
     session_name VARCHAR(255) NOT NULL,
@@ -337,12 +346,15 @@ CREATE TABLE t_import_sessions (
     current_batch INTEGER DEFAULT 0,
     total_batches INTEGER DEFAULT 0,
     last_processed_row INTEGER DEFAULT 0,
+    
+    -- Restart capability (Migration 006)
     restart_count INTEGER DEFAULT 0,
     last_restart_at TIMESTAMP WITH TIME ZONE,
     can_restart BOOLEAN DEFAULT true,
     last_processed_staging_id INTEGER,
     processing_checkpoint JSONB DEFAULT '{}',
     customer_lookup_method VARCHAR(50) DEFAULT 'iwell_code' CHECK (customer_lookup_method IN ('iwell_code', 'customer_name', 'both')),
+    
     processing_metadata JSONB,
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
@@ -354,17 +366,17 @@ CREATE TABLE t_import_sessions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress';
+COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress and restart capability';
 COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
-COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, processing, completed, completed_with_errors, failed, cancelled';
-COMMENT ON COLUMN t_import_sessions.current_stage IS 'Current processing stage within the import workflow';
-COMMENT ON COLUMN t_import_sessions.staging_total_rows IS 'Total rows inserted into staging table';
-COMMENT ON COLUMN t_import_sessions.duplicate_check_result IS 'JSON result of duplicate detection analysis';
-COMMENT ON COLUMN t_import_sessions.duplicate_classification IS 'Classification of duplicate status (exact, potential, none)';
-COMMENT ON COLUMN t_import_sessions.duplicate_user_decision_at IS 'Timestamp when user made decision about duplicates';
-COMMENT ON COLUMN t_import_sessions.filename_duplicate_check IS 'JSON result of filename-based duplicate detection';
+COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, pending_processing, processing, completed, completed_with_errors, failed, cancelled';
+COMMENT ON COLUMN t_import_sessions.restart_count IS 'Number of times this session has been restarted after timeout or failure';
+COMMENT ON COLUMN t_import_sessions.last_restart_at IS 'Timestamp of the last restart attempt';
+COMMENT ON COLUMN t_import_sessions.can_restart IS 'Whether this session can be restarted (false for cancelled/completed sessions)';
+COMMENT ON COLUMN t_import_sessions.last_processed_staging_id IS 'ID of last successfully processed staging record, used as checkpoint for restart';
+COMMENT ON COLUMN t_import_sessions.processing_checkpoint IS 'JSON object storing checkpoint data: {batch_number, records_in_batch, last_row_number, phase}';
+COMMENT ON COLUMN t_import_sessions.customer_lookup_method IS 'Method used for customer lookup in transaction imports: iwell_code (default), customer_name, or both';
 
--- TABLE: t_import_staging_data
+-- TABLE: t_import_staging_data (UPDATED: Match tracking from Migration 006)
 CREATE TABLE t_import_staging_data (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
@@ -375,7 +387,7 @@ CREATE TABLE t_import_staging_data (
     raw_data JSONB NOT NULL,
     mapped_data JSONB,
     processing_status VARCHAR(20) DEFAULT 'pending' CHECK (
-        processing_status IN ('pending', 'processing', 'success', 'failed', 'skipped', 'duplicate', 'orphan')
+        processing_status IN ('pending', 'pending_process', 'processing', 'success', 'failed', 'skipped', 'duplicate', 'orphan')
     ),
     error_messages TEXT[],
     warnings TEXT[],
@@ -385,13 +397,30 @@ CREATE TABLE t_import_staging_data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processing_metadata JSONB DEFAULT '{}'::jsonb,
+    
+    -- Match tracking (Migration 006)
+    match_type VARCHAR(50),
+    match_confidence VARCHAR(20),
+    ambiguous_matches JSONB,
+    requires_review BOOLEAN DEFAULT false,
+    edit_history JSONB DEFAULT '[]',
+    edited_at TIMESTAMP WITH TIME ZONE,
+    edited_by INTEGER REFERENCES t_users(id) ON DELETE SET NULL,
+    reprocess_count INTEGER DEFAULT 0,
+    last_reprocess_at TIMESTAMP WITH TIME ZONE,
+    
     CONSTRAINT idx_unique_session_row UNIQUE(session_id, row_number)
 );
 
-COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processing';
+COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processing with match tracking';
 COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as received from uploaded file';
 COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
-COMMENT ON COLUMN t_import_staging_data.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
+COMMENT ON COLUMN t_import_staging_data.match_type IS 'Type of match found: exact_iwell, exact_name, name_with_pan, scheme_alias, etc';
+COMMENT ON COLUMN t_import_staging_data.match_confidence IS 'Confidence level: high, medium, low, ambiguous, not_found';
+COMMENT ON COLUMN t_import_staging_data.ambiguous_matches IS 'JSON array of potential matches when multiple customers/schemes match';
+COMMENT ON COLUMN t_import_staging_data.requires_review IS 'Flag indicating this record needs manual review';
+COMMENT ON COLUMN t_import_staging_data.edit_history IS 'JSON array tracking all edits: [{edited_at, edited_by, field, old_value, new_value}, ...]';
+COMMENT ON COLUMN t_import_staging_data.reprocess_count IS 'Number of times this record has been reprocessed after edits';
 
 -- TABLE: t_import_field_mappings
 CREATE TABLE t_import_field_mappings (
@@ -413,7 +442,6 @@ CREATE TABLE t_import_field_mappings (
 
 COMMENT ON TABLE t_import_field_mappings IS 'Field mapping templates for different import types';
 COMMENT ON COLUMN t_import_field_mappings.field_mappings IS 'JSON structure defining source to target field mappings';
-COMMENT ON COLUMN t_import_field_mappings.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
 
 -- TABLE: t_import_record_results
 CREATE TABLE t_import_record_results (
@@ -476,7 +504,6 @@ CREATE TABLE t_scheme_masters (
 );
 
 COMMENT ON TABLE t_scheme_masters IS 'Master data for scheme types and categories';
-COMMENT ON COLUMN t_scheme_masters.master_type IS 'Type: scheme_type or scheme_category';
 
 -- TABLE: t_scheme_details
 CREATE TABLE t_scheme_details (
@@ -509,10 +536,6 @@ CREATE TABLE t_scheme_details (
 );
 
 COMMENT ON TABLE t_scheme_details IS 'Mutual fund scheme details and metadata';
-COMMENT ON COLUMN t_scheme_details.scheme_code IS 'Unique scheme identifier from AMFI';
-COMMENT ON COLUMN t_scheme_details.last_nav_download_date IS 'Last NAV download attempt date (global)';
-COMMENT ON COLUMN t_scheme_details.historical_data_available IS 'Whether historical NAV data has been downloaded';
-COMMENT ON COLUMN t_scheme_details.total_nav_records IS 'Count of NAV records in t_nav_data';
 
 -- TABLE: t_scheme_bookmarks
 CREATE TABLE t_scheme_bookmarks (
@@ -552,12 +575,9 @@ CREATE TABLE t_scheme_aliases (
     CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
 );
 
-COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports. Aliases are shared across all tenants.';
-COMMENT ON COLUMN t_scheme_aliases.alias_name IS 'The actual alias variation (e.g., "ICICI Pru MNC Fund Reg (G)")';
-COMMENT ON COLUMN t_scheme_aliases.alias_name_normalized IS 'Normalized version for matching: uppercase, trimmed, single spaces';
-COMMENT ON COLUMN t_scheme_aliases.source IS 'How this alias was created: auto (seeded), manual (user added), import (from CSV)';
+COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports';
 
--- TABLE: t_nav_data (NO tenant_id column)
+-- TABLE: t_nav_data
 CREATE TABLE t_nav_data (
     id SERIAL PRIMARY KEY,
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
@@ -570,7 +590,8 @@ CREATE TABLE t_nav_data (
     data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Performance metrics columns
+    
+    -- Performance metrics
     daily_return NUMERIC(10,4),
     return_1w NUMERIC(10,4),
     return_1m NUMERIC(10,4),
@@ -592,31 +613,11 @@ CREATE TABLE t_nav_data (
     total_risk NUMERIC(10,4),
     cagr NUMERIC(10,4),
     metrics_calculated_at TIMESTAMP,
+    
     CONSTRAINT unique_nav_record UNIQUE (scheme_id, nav_date, is_live)
 );
 
 COMMENT ON TABLE t_nav_data IS 'Historical NAV data for mutual fund schemes with performance metrics';
-COMMENT ON COLUMN t_nav_data.daily_return IS 'Daily return percentage (today vs yesterday)';
-COMMENT ON COLUMN t_nav_data.return_1w IS '1-week return percentage';
-COMMENT ON COLUMN t_nav_data.return_1m IS '1-month return percentage';
-COMMENT ON COLUMN t_nav_data.return_3m IS '3-month return percentage';
-COMMENT ON COLUMN t_nav_data.return_6m IS '6-month return percentage';
-COMMENT ON COLUMN t_nav_data.return_1y IS '1-year return percentage';
-COMMENT ON COLUMN t_nav_data.return_ytd IS 'Year-to-date return percentage';
-COMMENT ON COLUMN t_nav_data.return_all IS 'All-time return percentage (since inception)';
-COMMENT ON COLUMN t_nav_data.sd_7d IS '7-day rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.sd_14d IS '14-day rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.sd_21d IS '21-day rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.sd_42d IS '42-day rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.sd_3m IS '3-month rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.sd_6m IS '6-month rolling standard deviation (volatility)';
-COMMENT ON COLUMN t_nav_data.count_3m IS 'Number of data points available in 3-month period';
-COMMENT ON COLUMN t_nav_data.count_42d IS 'Number of data points available in 42-day period';
-COMMENT ON COLUMN t_nav_data.sharpe_ratio IS 'Sharpe ratio (risk-adjusted return metric)';
-COMMENT ON COLUMN t_nav_data.max_drawdown IS 'Maximum drawdown percentage (largest peak-to-trough decline)';
-COMMENT ON COLUMN t_nav_data.total_risk IS 'Total risk metric (composite volatility measure)';
-COMMENT ON COLUMN t_nav_data.cagr IS 'Compound Annual Growth Rate percentage';
-COMMENT ON COLUMN t_nav_data.metrics_calculated_at IS 'Timestamp when metrics were last calculated';
 
 -- TABLE: t_nav_download_jobs
 CREATE TABLE t_nav_download_jobs (
@@ -683,7 +684,7 @@ BEGIN
     RAISE NOTICE 'Creating Portfolio and Transaction Tables...';
 END $$;
 
--- TABLE: t_customer_master_portfolio
+-- TABLE: t_customer_master_portfolio (UPDATED: Added allocation from Migration 007)
 CREATE TABLE t_customer_master_portfolio (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES t_customers(id),
@@ -697,16 +698,17 @@ CREATE TABLE t_customer_master_portfolio (
     tenant_id INTEGER,
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
+    
+    -- Goal allocation tracking (Migration 007)
+    allocation DECIMAL(5,2) DEFAULT 0.00 CHECK (allocation >= 0 AND allocation <= 100),
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_portfolio_record UNIQUE(customer_id, scheme_code, tenant_id, is_live)
 );
 
-COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with categorization';
-COMMENT ON COLUMN t_customer_master_portfolio.category IS 'Fund category (e.g., Equity, Debt, Hybrid)';
-COMMENT ON COLUMN t_customer_master_portfolio.sub_category IS 'Fund sub-category (e.g., Large Cap, Mid Cap)';
-COMMENT ON COLUMN t_customer_master_portfolio.fund_name IS 'Full fund name';
-COMMENT ON COLUMN t_customer_master_portfolio.start_date IS 'Date of first transaction in this portfolio';
+COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with categorization and goal allocation';
+COMMENT ON COLUMN t_customer_master_portfolio.allocation IS 'Percentage of this scheme allocated to goals (0-100%). Auto-updated via trigger from t_jtbd_configurations.';
 
 -- TABLE: m_transaction_types
 CREATE TABLE m_transaction_types (
@@ -721,38 +723,18 @@ CREATE TABLE m_transaction_types (
 );
 
 COMMENT ON TABLE m_transaction_types IS 'Master data for transaction types (SIP, Purchase, Redemption, etc.)';
-COMMENT ON COLUMN m_transaction_types.txn_code IS 'Unique transaction code (e.g., SIP, PURCHASE)';
-COMMENT ON COLUMN m_transaction_types.txn_name IS 'Full name of transaction type';
-COMMENT ON COLUMN m_transaction_types.txn_type IS 'Addition or Deduction type for portfolio calculations';
 
--- Seed global transaction types (shared by all tenants)
+-- Seed transaction types
 INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, description) VALUES
-    ('SIP', 'Systematic Investment Plan', 'Addition', TRUE,
-     'Regular systematic investment contributions at fixed intervals'),
-
-    ('STP IN', 'Systematic Transfer Plan - In', 'Addition', TRUE,
-     'Systematic transfer of funds from another scheme (incoming)'),
-
-    ('PURCHASE', 'One-Time Purchase', 'Addition', TRUE,
-     'Lump sum purchase or investment transaction'),
-
-    ('SWITCH IN', 'Switch In', 'Addition', TRUE,
-     'Funds received from switching from another scheme'),
-
-    ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE,
-     'Systematic transfer of funds to another scheme (outgoing)'),
-
-    ('REDEMPTION', 'Redemption', 'Deduction', TRUE,
-     'Withdrawal or redemption of invested funds'),
-
-    ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE,
-     'Funds moved out by switching to another scheme'),
-
-    ('SELL', 'Sell', 'Deduction', TRUE,
-     'Funds moved out / encashed from the scheme'),
-
-    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE,
-     'Funds added to system portfolio to balance the transaction records')
+    ('SIP', 'Systematic Investment Plan', 'Addition', TRUE, 'Regular systematic investment contributions'),
+    ('STP IN', 'Systematic Transfer Plan - In', 'Addition', TRUE, 'Systematic transfer of funds from another scheme'),
+    ('PURCHASE', 'One-Time Purchase', 'Addition', TRUE, 'Lump sum purchase or investment transaction'),
+    ('SWITCH IN', 'Switch In', 'Addition', TRUE, 'Funds received from switching from another scheme'),
+    ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE, 'Systematic transfer of funds to another scheme'),
+    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 'Withdrawal or redemption of invested funds'),
+    ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE, 'Funds moved out by switching to another scheme'),
+    ('SELL', 'Sell', 'Deduction', TRUE, 'Funds moved out / encashed from the scheme'),
+    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE, 'Funds added to system portfolio to balance transaction records')
 ON CONFLICT (txn_code) DO NOTHING;
 
 -- TABLE: t_transaction_table
@@ -786,10 +768,6 @@ CREATE TABLE t_transaction_table (
 );
 
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
-COMMENT ON COLUMN t_transaction_table.portfolio_flag IS 'Include/exclude from portfolio totals';
-COMMENT ON COLUMN t_transaction_table.staging_record_id IS 'Reference to the staging record that created this transaction';
-COMMENT ON COLUMN t_transaction_table.import_session_id IS 'Reference to the import session that created this transaction';
-COMMENT ON COLUMN t_transaction_table.duplicate_reason IS 'Explanation if this transaction is marked as a potential duplicate';
 
 -- TABLE: t_monthly_portfolio_snapshots
 CREATE TABLE t_monthly_portfolio_snapshots (
@@ -808,12 +786,7 @@ CREATE TABLE t_monthly_portfolio_snapshots (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio snapshots for tracking performance over time';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.snapshot_month_end IS 'Last day of the month for this snapshot';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.total_invested IS 'Total amount invested as of this snapshot date';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.current_value IS 'Portfolio value as of this snapshot date';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.total_returns IS 'Total returns (gains/losses) as of this snapshot date';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.return_percentage IS 'Return percentage as of this snapshot date';
+COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio snapshots for tracking performance';
 
 -- TABLE: t_portfolio_snapshot_configs
 CREATE TABLE t_portfolio_snapshot_configs (
@@ -835,10 +808,7 @@ CREATE TABLE t_portfolio_snapshot_configs (
     CONSTRAINT valid_schedule_type CHECK (schedule_type IN ('weekly', 'monthly', 'custom'))
 );
 
-COMMENT ON TABLE t_portfolio_snapshot_configs IS 'Scheduler configurations for automated portfolio snapshot generation - tenant isolated';
-COMMENT ON COLUMN t_portfolio_snapshot_configs.schedule_type IS 'Type of schedule: weekly (default: Friday 9 PM), monthly, or custom cron';
-COMMENT ON COLUMN t_portfolio_snapshot_configs.cron_expression IS 'Cron expression for schedule. Default: 0 21 * * 5 (Friday 9 PM)';
-COMMENT ON COLUMN t_portfolio_snapshot_configs.max_retries IS 'Maximum retry attempts on failure. Default: 3';
+COMMENT ON TABLE t_portfolio_snapshot_configs IS 'Scheduler configurations for automated portfolio snapshot generation';
 
 -- TABLE: t_portfolio_snapshot_executions
 CREATE TABLE t_portfolio_snapshot_executions (
@@ -865,12 +835,9 @@ CREATE TABLE t_portfolio_snapshot_executions (
     CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
 );
 
-COMMENT ON TABLE t_portfolio_snapshot_executions IS 'Execution history and audit log for portfolio snapshot jobs';
-COMMENT ON COLUMN t_portfolio_snapshot_executions.snapshot_month_end IS 'The month-end date for which snapshots were generated';
-COMMENT ON COLUMN t_portfolio_snapshot_executions.retry_attempt IS 'Which retry attempt this is (0 = first attempt, 1-3 = retries)';
-COMMENT ON COLUMN t_portfolio_snapshot_executions.trigger_source IS 'Whether this was scheduled or manually triggered';
+COMMENT ON TABLE t_portfolio_snapshot_executions IS 'Execution history for portfolio snapshot jobs';
 
--- TABLE: m_job_types (Master Registry)
+-- TABLE: m_job_types
 CREATE TABLE m_job_types (
     code VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -883,10 +850,8 @@ CREATE TABLE m_job_types (
 );
 
 COMMENT ON TABLE m_job_types IS 'Registry of all available job types in the system';
-COMMENT ON COLUMN m_job_types.code IS 'Unique job type identifier (e.g., PORTFOLIO_SNAPSHOT)';
-COMMENT ON COLUMN m_job_types.default_cron_expression IS 'Default schedule for this job type';
 
--- TABLE: t_job_scheduler_configs (Generic Scheduler)
+-- TABLE: t_job_scheduler_configs
 CREATE TABLE t_job_scheduler_configs (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -908,11 +873,9 @@ CREATE TABLE t_job_scheduler_configs (
     CONSTRAINT valid_schedule_type CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'custom'))
 );
 
-COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types - tenant isolated';
-COMMENT ON COLUMN t_job_scheduler_configs.job_type IS 'Type of job (references m_job_types.code)';
-COMMENT ON COLUMN t_job_scheduler_configs.job_config IS 'Job-specific configuration as JSON (flexible per job type)';
+COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types';
 
--- TABLE: t_job_executions (Generic Execution History)
+-- TABLE: t_job_executions
 CREATE TABLE t_job_executions (
     id SERIAL PRIMARY KEY,
     scheduler_config_id INTEGER NOT NULL REFERENCES t_job_scheduler_configs(id) ON DELETE CASCADE,
@@ -934,8 +897,7 @@ CREATE TABLE t_job_executions (
     CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
 );
 
-COMMENT ON TABLE t_job_executions IS 'Execution history and audit log for all job types';
-COMMENT ON COLUMN t_job_executions.execution_data IS 'Job-specific execution results/metrics as JSON (flexible per job type)';
+COMMENT ON TABLE t_job_executions IS 'Execution history for all job types';
 
 -- ============================================================================
 -- SECTION 7: JTBD (JOBS TO BE DONE) TABLES
@@ -945,13 +907,14 @@ BEGIN
     RAISE NOTICE 'Creating JTBD Tables...';
 END $$;
 
--- TABLE: t_jtbd_configurations
+-- TABLE: t_jtbd_configurations (UPDATED: Added jtbd_category from JTBD Consolidation)
 CREATE TABLE t_jtbd_configurations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL DEFAULT true,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id),
     jtbd_type VARCHAR(50) NOT NULL,
+    jtbd_category VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
@@ -966,8 +929,61 @@ CREATE TABLE t_jtbd_configurations (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE t_jtbd_configurations IS 'Customer alert and reminder configurations';
-COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger';
+COMMENT ON TABLE t_jtbd_configurations IS 'Unified JTBD configurations - Goals, Alerts, and Meeting templates. Use jtbd_category to filter.';
+COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger, goal_tracking, etc.';
+COMMENT ON COLUMN t_jtbd_configurations.jtbd_category IS 'Category: transactional (goals), alert (reminders, SIPs), meeting (client meetings)';
+
+-- TABLE: t_jtbd_executions (NEW: From JTBD Consolidation migration)
+CREATE TABLE t_jtbd_executions (
+    id SERIAL PRIMARY KEY,
+
+    -- Multi-tenancy
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+
+    -- Link to configuration (optional)
+    config_id INTEGER REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+
+    -- Customer link
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+
+    -- Execution type
+    execution_type VARCHAR(50) NOT NULL,
+
+    -- Title and description
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+
+    -- Priority
+    priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+
+    -- Scheduling
+    scheduled_date DATE NOT NULL,
+    scheduled_time TIME,
+
+    -- Execution tracking
+    execution_status VARCHAR(50) NOT NULL DEFAULT 'planned',
+    execution_date DATE,
+    execution_time TIME,
+    deviation_days INTEGER,
+
+    -- Execution data (flexible JSON)
+    execution_data JSONB DEFAULT '{}'::jsonb,
+
+    -- Audit fields
+    created_by INTEGER NOT NULL REFERENCES t_users(id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_by INTEGER REFERENCES t_users(id),
+    completed_at TIMESTAMP
+);
+
+COMMENT ON TABLE t_jtbd_executions IS 'JTBD execution instances - Tracks meetings, SIP plans, and other execution records. Linked to configs via config_id.';
+COMMENT ON COLUMN t_jtbd_executions.config_id IS 'Optional link to parent configuration. NULL for standalone executions like one-time meetings.';
+COMMENT ON COLUMN t_jtbd_executions.execution_type IS 'Type: goal_sip_plan, client_meeting, portfolio_review, goal_review, etc.';
+COMMENT ON COLUMN t_jtbd_executions.execution_status IS 'Status: planned, due, completed, not_executed, delayed, failed, cancelled';
+COMMENT ON COLUMN t_jtbd_executions.deviation_days IS 'Days difference between scheduled and actual execution. Negative=early, Positive=late';
+COMMENT ON COLUMN t_jtbd_executions.execution_data IS 'Flexible JSONB for type-specific data: meeting notes, SIP details, transaction IDs, etc.';
 
 -- TABLE: t_goal_alerts
 CREATE TABLE t_goal_alerts (
@@ -1025,7 +1041,6 @@ CREATE TABLE t_goal_scheme_allocations (
 );
 
 COMMENT ON TABLE t_goal_scheme_allocations IS 'Goal scheme allocation tracking for portfolio recommendations';
-COMMENT ON COLUMN t_goal_scheme_allocations.allocation_percentage IS 'Recommended allocation percentage for this scheme in the goal';
 
 -- ============================================================================
 -- SECTION 8: BOOKMARK TABLES & REASON MASTERS
@@ -1049,10 +1064,7 @@ CREATE TABLE m_bookmark_reasons (
     CONSTRAINT unique_reason_per_tenant UNIQUE (tenant_id, is_live, reason_code)
 );
 
-COMMENT ON TABLE m_bookmark_reasons IS 'Tenant-specific bookmark reason master data - managed via backend';
-COMMENT ON COLUMN m_bookmark_reasons.reason_code IS 'Unique code within tenant (e.g., VIP, FOLLOW_UP)';
-COMMENT ON COLUMN m_bookmark_reasons.reason_label IS 'Display label for UI (e.g., VIP Customer)';
-COMMENT ON COLUMN m_bookmark_reasons.display_order IS 'Sort order in dropdown (lower = higher priority)';
+COMMENT ON TABLE m_bookmark_reasons IS 'Tenant-specific bookmark reason master data';
 
 -- TABLE: t_customer_bookmarks
 CREATE TABLE t_customer_bookmarks (
@@ -1072,9 +1084,6 @@ CREATE TABLE t_customer_bookmarks (
 );
 
 COMMENT ON TABLE t_customer_bookmarks IS 'User bookmarks for tracking important customers with reasons/tags';
-COMMENT ON COLUMN t_customer_bookmarks.reason_id IS 'FK to master reasons - preferred for predefined tags';
-COMMENT ON COLUMN t_customer_bookmarks.custom_reason IS 'Free text when user selects "Other" or custom tag';
-COMMENT ON COLUMN t_customer_bookmarks.notes IS 'Optional notes about why customer is bookmarked';
 
 -- ============================================================================
 -- SECTION 9: MARKET DATA TABLES
@@ -1095,7 +1104,7 @@ CREATE TABLE t_market_indices (
     is_active BOOLEAN DEFAULT true,
     priority INTEGER DEFAULT 0,
     
-    -- Download tracking fields
+    -- Download tracking
     total_records INTEGER DEFAULT 0,
     earliest_date DATE,
     latest_date DATE,
@@ -1114,29 +1123,16 @@ CREATE TABLE t_market_indices (
     provider_symbol VARCHAR(100),
     provider_enabled BOOLEAN DEFAULT false,
     
-    -- Timestamp fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Constraints
     CONSTRAINT chk_data_provider 
         CHECK (data_provider IN ('yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'))
 );
 
--- Table comments
 COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with multi-provider support';
-COMMENT ON COLUMN t_market_indices.yahoo_symbol IS 'Yahoo Finance symbol (e.g., ^NSEI for Nifty 50) - kept for backward compatibility';
-COMMENT ON COLUMN t_market_indices.eod_retry_count IS 'Current retry count for today EOD download (resets daily)';
-COMMENT ON COLUMN t_market_indices.data_provider IS 'Data source provider: yahoo_finance, nse_official, google_sheets, or not_configured';
-COMMENT ON COLUMN t_market_indices.provider_symbol IS 'Provider-specific symbol (e.g., ^NSEI for Yahoo, NIFTY 50 for NSE)';
-COMMENT ON COLUMN t_market_indices.provider_enabled IS 'Whether data provider is configured and enabled for this index';
 
--- Indexes
-CREATE INDEX idx_market_indices_code ON t_market_indices(index_code) WHERE is_active = true;
-CREATE INDEX idx_market_indices_category ON t_market_indices(category) WHERE is_active = true;
-CREATE INDEX idx_market_indices_provider ON t_market_indices(data_provider, provider_enabled) WHERE is_active = true;
-
--- Add foreign key constraint to t_tenants now that t_market_indices exists
+-- Add foreign key constraint to t_tenants
 ALTER TABLE t_tenants
 ADD CONSTRAINT fk_default_comparison_index
 FOREIGN KEY (default_comparison_index_id)
@@ -1157,6 +1153,8 @@ CREATE TABLE t_market_data_records (
     data_source VARCHAR(50) DEFAULT 'yahoo_finance',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Performance metrics
     daily_return NUMERIC(10,4),
     return_1w NUMERIC(10,4),
     return_1m NUMERIC(10,4),
@@ -1178,12 +1176,11 @@ CREATE TABLE t_market_data_records (
     total_risk NUMERIC(10,4),
     cagr NUMERIC(10,4),
     metrics_calculated_at TIMESTAMP,
+    
     CONSTRAINT unique_market_data UNIQUE (index_id, date)
 );
 
 COMMENT ON TABLE t_market_data_records IS 'Historical OHLCV data for market indices';
-COMMENT ON COLUMN t_market_data_records.adj_close IS 'Adjusted close price (for splits/dividends)';
-COMMENT ON COLUMN t_market_data_records.metrics_calculated_at IS 'Timestamp when metrics were last calculated';
 
 -- TABLE: t_market_download_jobs
 CREATE TABLE t_market_download_jobs (
@@ -1261,8 +1258,7 @@ CREATE TABLE t_user_chart_preferences (
     CONSTRAINT valid_hex_color CHECK (line_color ~ '^#[0-9A-Fa-f]{6}$')
 );
 
-COMMENT ON TABLE t_user_chart_preferences IS 'Stores user-specific chart visualization preferences per index';
-COMMENT ON COLUMN t_user_chart_preferences.line_color IS 'Hex color code for chart line. Falls back to theme default if not set.';
+COMMENT ON TABLE t_user_chart_preferences IS 'User-specific chart visualization preferences per index';
 
 -- ============================================================================
 -- SECTION 11: SYSTEM LOGS TABLE
@@ -1287,11 +1283,6 @@ CREATE TABLE t_system_logs (
 );
 
 COMMENT ON TABLE t_system_logs IS 'System-wide logs for errors, warnings, and info messages';
-COMMENT ON COLUMN t_system_logs.level IS 'Log level: error, warn, or info';
-COMMENT ON COLUMN t_system_logs.source IS 'Source of the log entry (e.g., backend, frontend, n8n)';
-COMMENT ON COLUMN t_system_logs.metadata IS 'Additional structured data in JSON format';
-COMMENT ON COLUMN t_system_logs.context IS 'Contextual information about where the log occurred';
-COMMENT ON COLUMN t_system_logs.stack_trace IS 'Stack trace for error-level logs';
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -1308,29 +1299,19 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Table creation completed!';
     RAISE NOTICE 'Total tables created: %', v_table_count;
-    RAISE NOTICE 'All tables include:';
-    RAISE NOTICE '  - Column definitions with types';
-    RAISE NOTICE '  - Constraints and checks';
-    RAISE NOTICE '  - Foreign key relationships';
-    RAISE NOTICE '  - Comments on tables/columns';
-    RAISE NOTICE '  - Proper sequences for auto-increment';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'UPDATE NOTES (2025-11-05):';
-    RAISE NOTICE '  ✓ UPDATED: t_customer_meetings table structure';
-    RAISE NOTICE '    - Changed from single meeting_date to scheduled_date + scheduled_time';
-    RAISE NOTICE '    - Added duration_minutes field';
-    RAISE NOTICE '    - Replaced follow_up fields with status-based tracking';
-    RAISE NOTICE '    - Added meeting_location and meeting_link (separate fields)';
-    RAISE NOTICE '    - Added outcome field for completion summary';
-    RAISE NOTICE '    - Added completed_at, cancelled_at, cancellation_reason';
-    RAISE NOTICE '    - Updated meeting_mode values (underscores: in_person, video_call, phone_call)';
-    RAISE NOTICE '    - Added status field (scheduled, completed, cancelled, rescheduled)';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE 'CRITICAL SCHEMA FEATURES:';
-    RAISE NOTICE '  - t_tenants.is_admin column present';
-    RAISE NOTICE '  - t_nav_data has NO tenant_id column (global NAV data)';
-    RAISE NOTICE '  - t_tenants.default_comparison_index_id for portfolio comparison';
-    RAISE NOTICE '  - Schema matches production requirements';
+    RAISE NOTICE 'MIGRATION INTEGRATION SUMMARY:';
+    RAISE NOTICE '  ✓ Migration 006: Name normalization & restart';
+    RAISE NOTICE '    - t_contacts.normalized_name (GENERATED)';
+    RAISE NOTICE '    - t_import_sessions restart columns';
+    RAISE NOTICE '    - t_import_staging_data match tracking';
+    RAISE NOTICE '  ✓ JTBD Consolidation Migration:';
+    RAISE NOTICE '    - t_jtbd_configurations.jtbd_category';
+    RAISE NOTICE '    - t_jtbd_executions (NEW TABLE)';
+    RAISE NOTICE '  ✓ Migration 007: Scheme allocation';
+    RAISE NOTICE '    - t_customer_master_portfolio.allocation';
+    RAISE NOTICE '  ✓ Default comparison index';
+    RAISE NOTICE '    - t_tenants.default_comparison_index_id';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';

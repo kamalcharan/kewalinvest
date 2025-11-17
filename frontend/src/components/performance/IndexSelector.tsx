@@ -1,6 +1,6 @@
 // frontend/src/components/performance/IndexSelector.tsx
-import React, { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MarketService } from '../../services/market.service';
 import type { MarketIndex } from '../../types/market.types';
@@ -22,9 +22,12 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [indices, setIndices] = useState<MarketIndex[]>([]);
+  const [filteredIndices, setFilteredIndices] = useState<MarketIndex[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<MarketIndex | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch indices on mount
   useEffect(() => {
@@ -41,6 +44,30 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
     }
   }, [selectedIndexId, indices]);
 
+  // Filter indices based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredIndices(indices);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = indices.filter(index =>
+        index.index_name.toLowerCase().includes(query) ||
+        index.index_code.toLowerCase().includes(query) ||
+        index.category.toLowerCase().includes(query)
+      );
+      setFilteredIndices(filtered);
+    }
+  }, [searchQuery, indices]);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    } else {
+      setSearchQuery('');
+    }
+  }, [isOpen]);
+
   const fetchIndices = async () => {
     setIsLoading(true);
     try {
@@ -52,6 +79,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
           return a.index_name.localeCompare(b.index_name);
         });
         setIndices(sorted);
+        setFilteredIndices(sorted);
       }
     } catch (error) {
       console.error('Failed to fetch indices:', error);
@@ -64,6 +92,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
     setSelectedIndex(index);
     onIndexSelect(index);
     setIsOpen(false);
+    setSearchQuery('');
   };
 
   const handleClear = (e: React.MouseEvent) => {
@@ -79,18 +108,20 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
         disabled={disabled || isLoading}
         style={{
           width: '100%',
-          padding: '8px 12px',
+          padding: '12px 14px',
           backgroundColor: colors.utility.secondaryBackground,
-          border: `1px solid ${colors.utility.primaryText}20`,
+          border: `2px solid ${isOpen ? colors.brand.primary : colors.utility.primaryText}20`,
           borderRadius: '8px',
           color: selectedIndex ? colors.utility.primaryText : colors.utility.secondaryText,
           cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
-          fontSize: '13px',
+          fontSize: '14px',
+          fontWeight: '500',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '8px',
-          opacity: disabled ? 0.6 : 1
+          opacity: disabled ? 0.6 : 1,
+          transition: 'all 0.2s ease'
         }}
       >
         <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -100,19 +131,24 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
           <span
             onClick={handleClear}
             style={{
-              padding: '2px 6px',
-              fontSize: '11px',
+              padding: '2px 8px',
+              fontSize: '12px',
               color: colors.utility.secondaryText,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: '600'
             }}
           >
             ✕
           </span>
         )}
-        <ChevronDown size={16} style={{ flexShrink: 0 }} />
+        {isOpen ? (
+          <ChevronUp size={18} style={{ flexShrink: 0, color: colors.brand.primary }} />
+        ) : (
+          <ChevronDown size={18} style={{ flexShrink: 0 }} />
+        )}
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu - Opens Upwards */}
       {isOpen && !disabled && (
         <>
           {/* Backdrop */}
@@ -132,66 +168,161 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
           <div
             style={{
               position: 'absolute',
-              top: 'calc(100% + 4px)',
+              bottom: 'calc(100% + 4px)', // Opens upwards
               left: 0,
               right: 0,
-              maxHeight: '300px',
-              overflowY: 'auto',
               backgroundColor: colors.utility.secondaryBackground,
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              zIndex: 1000
+              border: `2px solid ${colors.brand.primary}`,
+              borderRadius: '12px',
+              boxShadow: '0 -6px 20px rgba(0, 0, 0, 0.15)',
+              zIndex: 1000,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
             }}
           >
-            {indices.length === 0 ? (
+            {/* Search Box */}
+            <div
+              style={{
+                padding: '12px',
+                borderBottom: `1px solid ${colors.utility.primaryText}15`,
+                backgroundColor: colors.utility.primaryBackground
+              }}
+            >
               <div
                 style={{
-                  padding: '12px',
-                  textAlign: 'center',
-                  color: colors.utility.secondaryText,
-                  fontSize: '13px'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '6px',
+                  padding: '8px 12px'
                 }}
               >
-                No indices available
-              </div>
-            ) : (
-              indices.map(index => (
-                <button
-                  key={index.id}
-                  onClick={() => handleSelect(index)}
+                <Search size={16} style={{ color: colors.utility.secondaryText, flexShrink: 0 }} />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, code, or category..."
                   style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    backgroundColor: selectedIndex?.id === index.id
-                      ? colors.brand.primary + '15'
-                      : 'transparent',
+                    flex: 1,
                     border: 'none',
-                    borderBottom: `1px solid ${colors.utility.primaryText}10`,
+                    outline: 'none',
+                    backgroundColor: 'transparent',
                     color: colors.utility.primaryText,
-                    cursor: 'pointer',
                     fontSize: '13px',
-                    textAlign: 'left',
-                    transition: 'background-color 0.2s ease'
+                    fontFamily: 'inherit'
                   }}
-                  onMouseEnter={(e) => {
-                    if (selectedIndex?.id !== index.id) {
-                      e.currentTarget.style.backgroundColor = colors.utility.primaryText + '10';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedIndex?.id !== index.id) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '2px 6px',
+                      fontSize: '12px',
+                      color: colors.utility.secondaryText,
+                      fontWeight: '600'
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Results Count */}
+            {searchQuery && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '11px',
+                  color: colors.utility.secondaryText,
+                  backgroundColor: colors.utility.primaryBackground,
+                  borderBottom: `1px solid ${colors.utility.primaryText}10`
+                }}
+              >
+                {filteredIndices.length} result{filteredIndices.length !== 1 ? 's' : ''} found
+              </div>
+            )}
+
+            {/* Scrollable List */}
+            <div
+              style={{
+                maxHeight: '350px',
+                overflowY: 'auto',
+                overflowX: 'hidden'
+              }}
+            >
+              {filteredIndices.length === 0 ? (
+                <div
+                  style={{
+                    padding: '20px 12px',
+                    textAlign: 'center',
+                    color: colors.utility.secondaryText,
+                    fontSize: '13px'
                   }}
                 >
-                  <div style={{ fontWeight: '500' }}>{index.index_name}</div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '2px' }}>
-                    {index.index_code} • {index.category}
-                  </div>
-                </button>
-              ))
-            )}
+                  {searchQuery ? 'No matching indices found' : 'No indices available'}
+                </div>
+              ) : (
+                filteredIndices.map((index, idx) => (
+                  <button
+                    key={index.id}
+                    onClick={() => handleSelect(index)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      backgroundColor: selectedIndex?.id === index.id
+                        ? colors.brand.primary + '20'
+                        : 'transparent',
+                      border: 'none',
+                      borderBottom: idx < filteredIndices.length - 1
+                        ? `1px solid ${colors.utility.primaryText}10`
+                        : 'none',
+                      color: colors.utility.primaryText,
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      textAlign: 'left',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedIndex?.id !== index.id) {
+                        e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedIndex?.id !== index.id) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    <div style={{
+                      fontWeight: selectedIndex?.id === index.id ? '600' : '500',
+                      marginBottom: '3px'
+                    }}>
+                      {index.index_name}
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.utility.secondaryText,
+                      display: 'flex',
+                      gap: '8px',
+                      alignItems: 'center'
+                    }}>
+                      <span>{index.index_code}</span>
+                      <span>•</span>
+                      <span style={{ textTransform: 'capitalize' }}>{index.category}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </>
       )}
