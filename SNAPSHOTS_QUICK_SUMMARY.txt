@@ -1,0 +1,267 @@
+================================================================================
+NETWORTH & MONTHLY SNAPSHOTS - QUICK SUMMARY
+================================================================================
+
+LOCATION OF GENERATED DOCUMENTATION:
+  1. /home/user/kewalinvest/NETWORTH_SNAPSHOTS_ANALYSIS.md
+  2. /home/user/kewalinvest/SNAPSHOTS_KEY_FILES.md
+  3. /home/user/kewalinvest/SNAPSHOTS_QUICK_SUMMARY.txt (this file)
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. WHAT ARE SNAPSHOTS?
+   - Monthly portfolio value snapshots for historical tracking
+   - Stored in t_monthly_portfolio_snapshots table
+   - One record per customer per month-end
+   - Includes invested amount, current value, returns, metrics
+
+2. WHEN ARE THEY CREATED?
+   - Default: Every Friday at 9:00 PM (configurable)
+   - Manual: Can be triggered from dashboard anytime
+   - Backfill: Fill missing months from transaction history
+   - Automatic recalculation: Uses latest NAV data
+
+3. WHAT DATA IS STORED?
+   - snapshot_month_end: Date of month-end
+   - total_invested: NET invested (purchases - redemptions)
+   - current_value: Market value using latest NAV
+   - total_returns: Absolute returns (value - invested)
+   - return_percentage: Return percentage
+   - total_units: Total units held
+   - total_schemes: Count of schemes held
+
+4. HOW IS NETWORTH CALCULATED?
+   - Per Customer: SUM(units * NAV) for all schemes
+   - Per Tenant: SUM of all customer portfolio values
+   - Metric: Snapshots.current_value at month-end
+   - History: Full timeline from first transaction
+
+5. FRONTEND DISPLAY?
+   - Dashboard: /pages/cruiseControl/PortfolioSnapshotsTab
+     * Shows execution history, statistics, manual controls
+   - Table View: PortfolioSnapshotsTable component
+     * Expandable rows showing Units, NAV, Market Value, Performance
+     * Historical 12-month view with month-over-month changes
+
+6. PROJECTIONS?
+   - NOT for portfolio snapshots (historical only)
+   - YES for goals using GoalCalculatorService
+   - Uses: Future Value, Required SIP, Months to Target, Monte Carlo
+   - Stored: t_goal_progress_snapshots with probability_of_success
+
+7. ERROR HANDLING?
+   - Max retries: 3 (configurable)
+   - Backoff: 5min → 15min → 30min
+   - Status tracking: success, failed, running, retrying, skipped
+   - Execution log: Complete audit trail with timings and errors
+
+================================================================================
+CORE CALCULATION (Portfolio Snapshot)
+================================================================================
+
+INPUT:
+  - Customer transactions up to month-end date
+  - Latest NAV for each scheme (as of month-end)
+
+PROCESS:
+  1. Group transactions by scheme
+  2. Calculate net units: SUM(purchased) - SUM(redeemed)
+  3. Calculate net invested: SUM(cost of purchases) - SUM(redemption proceeds)
+  4. Fetch latest NAV for each scheme
+  5. Calculate current value: SUM(net_units * current_nav)
+  6. Calculate returns: current_value - net_invested
+  7. Count schemes and sum total units
+
+OUTPUT:
+  - Single snapshot record with all metrics
+  - Stored in t_monthly_portfolio_snapshots
+  - Indexed by customer_id + snapshot_month_end
+
+================================================================================
+OPERATIONS
+================================================================================
+
+GENERATE MISSING (SAFE)
+  - Creates snapshots for months without records
+  - Never overwrites existing snapshots
+  - Safe for backfilling
+  - Recommended for routine use
+
+UPDATE ALL
+  - Creates missing snapshots
+  - Recalculates existing with latest NAV
+  - Current default during scheduled runs
+  - May change historical values if NAV updated
+
+REGENERATE ALL (DANGEROUS)
+  - Deletes all snapshots
+  - Creates fresh from scratch
+  - Causes data loss
+  - Only for fixing corrupted data
+
+DROP ALL (VERY DANGEROUS)
+  - Deletes all snapshots
+  - No recovery
+  - Last resort only
+
+================================================================================
+ARCHITECTURE
+================================================================================
+
+BACKEND FLOW:
+  Cron (Friday 9 PM)
+    → PortfolioSnapshotSchedulerService.executeWithRetry()
+    → PortfolioSnapshotService.generateSnapshots()
+    → calculateSnapshotData() for each customer
+    → createSnapshot() or updateSnapshot()
+    → Log to t_portfolio_snapshot_executions
+    → Retry on failure with exponential backoff
+
+FRONTEND FLOW:
+  PortfolioSnapshotsTab (Management)
+    ↓ (Stats & History)
+  JobsService.getStatistics() / getExecutions()
+  
+  PortfolioSnapshotsTable (Visualization)
+    ↓ (Historical Data)
+  usePortfolioSnapshots() hook
+    ↓
+  PortfolioService.getMonthlySnapshots()
+    ↓
+  Display scheme-level breakdown with MoM changes
+
+================================================================================
+KEY FILES
+================================================================================
+
+BACKEND SERVICES:
+  - /backend/src/services/portfolioSnapshot.service.ts (Core logic)
+  - /backend/src/services/portfolioSnapshotScheduler.service.ts (Scheduling)
+  - /backend/src/services/goal.calculator.service.ts (Projections)
+
+FRONTEND COMPONENTS:
+  - /frontend/src/pages/cruiseControl/PortfolioSnapshotsTab.tsx (Dashboard)
+  - /frontend/src/components/portfolio/PortfolioSnapshotsTable.tsx (Table)
+
+DATABASE:
+  - /backend/db/migrations/002_portfolio_snapshot_scheduler.sql (Schema)
+  - Main table: t_monthly_portfolio_snapshots
+  - Config table: t_portfolio_snapshot_configs
+  - History table: t_portfolio_snapshot_executions
+
+TYPES:
+  - /backend/src/types/portfolioSnapshot.types.ts (Backend)
+  - /frontend/src/types/portfolioSnapshot.types.ts (Frontend)
+
+================================================================================
+GOAL PROJECTIONS (SEPARATE SYSTEM)
+================================================================================
+
+NOT RELATED TO PORTFOLIO SNAPSHOTS
+Instead used for Goal tracking:
+
+CALCULATIONS:
+  - Future Value: FV = PV*(1+r)^n + PMT*[((1+r)^n-1)/r]*(1+r)
+  - Required SIP: Solves FV equation backwards for SIP amount
+  - Months to Target: Numerically finds months needed
+  - Probability: Monte Carlo with 1000 simulations
+
+STORAGE:
+  - t_goal_progress_snapshots (separate table)
+  - Stores: projected_corpus, achievement_date, probability_of_success
+  - Linked to: t_jtbd_configurations (goals)
+
+INPUTS:
+  - Current portfolio value
+  - Monthly contribution (SIP)
+  - Expected return rate
+  - Target amount or date
+  - Return volatility (15% default)
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+1. NETWORTH = Current portfolio value, NOT historical average
+   Snapshots enable tracking changes over time
+
+2. RETURNS are calculated on NET INVESTED amount
+   Returns = Current_Value - (Purchased - Redeemed)
+
+3. SNAPSHOTS ARE MONTHLY, not daily
+   Last month-end is used for generation
+   Current month not included until month-end
+
+4. PROJECTIONS are for GOALS, not portfolios
+   Portfolios are historical snapshots
+   Goals use forward-looking calculations
+
+5. AUDITING is comprehensive
+   Every execution logged with timing, errors, counts
+   Full retry history available
+   Can trace exactly what happened when
+
+6. CUSTOMIZATION available
+   Schedule type (weekly/monthly/custom)
+   Cron expression (any valid cron)
+   Max retries (1-10)
+   Enable/disable per tenant
+
+================================================================================
+DASHBOARD LOCATIONS
+================================================================================
+
+Portfolio Snapshots Management:
+  URL: /pages/cruiseControl/PortfolioSnapshotsTab
+  Shows: Last run, next scheduled, success rate, execution history
+  Actions: Generate Missing, Update All, Regenerate, Drop All
+
+Portfolio Historical View:
+  Component: PortfolioSnapshotsTable
+  Shows: 12-month snapshots with scheme-level detail
+  Expand: Units, NAV, Market Value, Performance per scheme
+
+================================================================================
+DATABASE QUICK REFERENCE
+================================================================================
+
+t_monthly_portfolio_snapshots
+  - customer_id: Which customer
+  - snapshot_month_end: Which month
+  - total_invested: Net investment amount
+  - current_value: Market value
+  - total_returns: Absolute returns
+  - return_percentage: Return %
+  - total_units: Total units
+  - total_schemes: Scheme count
+  - created_at / updated_at: Timestamps
+  - tenant_id, is_live: Multi-tenancy
+
+t_portfolio_snapshot_configs
+  - tenant_id: Which tenant
+  - is_live: Live/test mode
+  - schedule_type: weekly/monthly/custom
+  - cron_expression: Cron schedule
+  - is_enabled: Active?
+  - next_execution_at: When next?
+  - max_retries: Retry count
+
+t_portfolio_snapshot_executions
+  - status: success/failed/running/retrying
+  - trigger_source: scheduled/manual
+  - customers_processed: How many customers?
+  - snapshots_created: New snapshots?
+  - snapshots_updated: Updated snapshots?
+  - execution_duration_ms: How long took?
+  - error_message: What went wrong?
+
+================================================================================
+END OF SUMMARY
+================================================================================
+
+For detailed analysis, see: NETWORTH_SNAPSHOTS_ANALYSIS.md
+For file references, see: SNAPSHOTS_KEY_FILES.md
+
+Generated: 2025-11-17
