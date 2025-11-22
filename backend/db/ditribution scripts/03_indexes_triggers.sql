@@ -824,6 +824,18 @@ WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_customer_assets_assigned_by
 ON t_customer_asset_assignments(assigned_by, assigned_at DESC);
 
+-- Investment plan specific indexes
+CREATE INDEX IF NOT EXISTS idx_customer_assets_scheme_code
+ON t_customer_asset_assignments(scheme_code)
+WHERE scheme_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_investment_type
+ON t_customer_asset_assignments(investment_type);
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_has_started
+ON t_customer_asset_assignments(has_started)
+WHERE is_active = true;
+
 -- ----------------------------------------------------------------------------
 -- TRIGGERS: Auto-update updated_at timestamps
 -- ----------------------------------------------------------------------------

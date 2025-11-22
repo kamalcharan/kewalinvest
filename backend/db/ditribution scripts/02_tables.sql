@@ -1316,7 +1316,7 @@ COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected ann
 COMMENT ON COLUMN m_asset_types.display_order IS 'Display order in UI (lower numbers first)';
 
 -- TABLE: t_customer_asset_assignments
--- Description: Tracks which asset types are assigned to each customer
+-- Description: Tracks detailed investment plans for each customer's asset assignments
 -- Note: Tenant-isolated table
 CREATE TABLE t_customer_asset_assignments (
     id SERIAL PRIMARY KEY,
@@ -1324,6 +1324,26 @@ CREATE TABLE t_customer_asset_assignments (
     is_live BOOLEAN NOT NULL DEFAULT true,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
     asset_type_id INTEGER NOT NULL REFERENCES m_asset_types(id),
+
+    -- Investment Plan Details
+    principal_amount DECIMAL(15,2),
+    start_date DATE,
+    has_started BOOLEAN DEFAULT false,
+    duration_months INTEGER,
+    duration_years INTEGER,
+
+    -- Investment Type & Frequency
+    investment_type VARCHAR(20) CHECK (investment_type IN ('one_time', 'sip', 'recurring')),
+    recurring_amount DECIMAL(15,2),
+    investment_frequency VARCHAR(20) CHECK (investment_frequency IS NULL OR investment_frequency IN ('monthly', 'quarterly', 'yearly')),
+
+    -- Growth & Returns
+    custom_assumption_rate DECIMAL(5,2),
+
+    -- MF Specific
+    scheme_code VARCHAR(50),
+
+    -- Metadata
     is_active BOOLEAN DEFAULT true,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     assigned_by INTEGER REFERENCES t_users(id),
@@ -1331,15 +1351,30 @@ CREATE TABLE t_customer_asset_assignments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT unique_customer_asset UNIQUE(tenant_id, is_live, customer_id, asset_type_id)
+    CONSTRAINT unique_customer_asset UNIQUE(tenant_id, is_live, customer_id, asset_type_id, scheme_code),
+    CONSTRAINT chk_duration CHECK (
+        (duration_months IS NOT NULL AND duration_years IS NULL) OR
+        (duration_months IS NULL AND duration_years IS NOT NULL) OR
+        (duration_months IS NULL AND duration_years IS NULL)
+    )
 );
 
-COMMENT ON TABLE t_customer_asset_assignments IS 'Tracks asset type assignments for each customer - tenant isolated';
+COMMENT ON TABLE t_customer_asset_assignments IS 'Tracks customer investment plans with detailed information including principal, duration, investment type, and growth assumptions';
 COMMENT ON COLUMN t_customer_asset_assignments.customer_id IS 'Reference to customer in t_customers';
 COMMENT ON COLUMN t_customer_asset_assignments.asset_type_id IS 'Reference to asset type in m_asset_types (master data)';
+COMMENT ON COLUMN t_customer_asset_assignments.principal_amount IS 'Initial investment amount or current principal value';
+COMMENT ON COLUMN t_customer_asset_assignments.start_date IS 'Date when the investment starts or started';
+COMMENT ON COLUMN t_customer_asset_assignments.has_started IS 'Whether the investment has actually started (vs planned)';
+COMMENT ON COLUMN t_customer_asset_assignments.duration_months IS 'Investment duration in months (use either months or years, not both)';
+COMMENT ON COLUMN t_customer_asset_assignments.duration_years IS 'Investment duration in years (use either months or years, not both)';
+COMMENT ON COLUMN t_customer_asset_assignments.investment_type IS 'Type of investment: one_time, sip, or recurring';
+COMMENT ON COLUMN t_customer_asset_assignments.recurring_amount IS 'For SIP/recurring: amount invested per period';
+COMMENT ON COLUMN t_customer_asset_assignments.investment_frequency IS 'For SIP/recurring: monthly, quarterly, or yearly';
+COMMENT ON COLUMN t_customer_asset_assignments.custom_assumption_rate IS 'Custom growth rate percentage (overrides asset type default)';
+COMMENT ON COLUMN t_customer_asset_assignments.scheme_code IS 'For MF: scheme code from bookmarked funds';
 COMMENT ON COLUMN t_customer_asset_assignments.is_active IS 'Whether this assignment is currently active';
 COMMENT ON COLUMN t_customer_asset_assignments.assigned_by IS 'User who made the assignment';
-COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about why this asset was assigned';
+COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about the investment plan';
 
 -- ============================================================================
 -- COMPLETION MESSAGE
