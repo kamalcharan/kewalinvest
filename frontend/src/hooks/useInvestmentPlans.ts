@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { InvestmentPlan, CreateInvestmentPlanRequest, UpdateInvestmentPlanRequest } from '../types/investmentPlan.types';
 import { investmentPlanService } from '../services/investmentPlan.service';
+import { useAuth } from '../contexts/AuthContext';
 
 export const useInvestmentPlans = (customerId: number | null) => {
   const [plans, setPlans] = useState<InvestmentPlan[]>([]);
@@ -83,25 +84,38 @@ export const useInvestmentPlans = (customerId: number | null) => {
  * Hook for getting bookmarked schemes (for MF investment plan creation)
  */
 export const useBookmarkedSchemes = () => {
+  const { tenantId, environment } = useAuth();
   const [schemes, setSchemes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSchemes();
-  }, []);
+    if (tenantId) {
+      loadSchemes();
+    }
+  }, [tenantId, environment]);
 
   const loadSchemes = async () => {
+    if (!tenantId) return;
+
     try {
       setLoading(true);
       setError(null);
       // Import the bookmark service
       const BookmarkService = (await import('../services/bookmark.service')).default;
-      const data = await BookmarkService.getBookmarks();
-      setSchemes(data);
+      const isLive = environment === 'live';
+      const response = await BookmarkService.getBookmarks(tenantId, isLive);
+
+      // Extract the data array from the API response
+      if (response.success && response.data) {
+        setSchemes(response.data);
+      } else {
+        setSchemes([]);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load bookmarked schemes');
       console.error('Error loading bookmarked schemes:', err);
+      setSchemes([]);
     } finally {
       setLoading(false);
     }
