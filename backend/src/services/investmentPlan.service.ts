@@ -141,7 +141,6 @@ export class InvestmentPlanService {
         at.display_order,
         at.description,
         sb.scheme_name,
-        sb.scheme_category,
         sb.alias_name as scheme_alias_name
       FROM t_customer_asset_assignments ca
       INNER JOIN m_asset_types at ON ca.asset_type_id = at.id
@@ -177,7 +176,6 @@ export class InvestmentPlanService {
         at.display_order,
         at.description,
         sb.scheme_name,
-        sb.scheme_category,
         sb.alias_name as scheme_alias_name
       FROM t_customer_asset_assignments ca
       INNER JOIN m_asset_types at ON ca.asset_type_id = at.id

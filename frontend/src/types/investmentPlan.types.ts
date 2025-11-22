@@ -46,7 +46,6 @@ export interface InvestmentPlan {
   category?: string;
   default_assumption_rate?: number;
   scheme_name?: string;
-  scheme_category?: string;
   scheme_alias_name?: string;
 }
 

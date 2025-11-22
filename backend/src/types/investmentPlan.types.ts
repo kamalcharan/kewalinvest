@@ -107,7 +107,6 @@ export interface SchemeBookmark {
   id: number;
   scheme_code: string;
   scheme_name: string;
-  scheme_category: string | null;
   alias_name: string | null;
 }
 
