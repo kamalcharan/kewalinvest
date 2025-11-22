@@ -2,19 +2,33 @@
 // Controller for Customer Asset Assignments (Release 1.1 - Phase 1)
 
 import { Request, Response } from 'express';
-import { customerAssetService } from '../services/customerAsset.service';
+import { CustomerAssetService } from '../services/customerAsset.service';
 import { AssignAssetRequest, BulkAssignAssetRequest, RemoveAssetRequest } from '../types/customerAsset.types';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    tenant_id: number;
+  };
+  environment?: 'live' | 'test';
+}
+
 export class CustomerAssetController {
+  private customerAssetService: CustomerAssetService;
+
+  constructor() {
+    this.customerAssetService = new CustomerAssetService();
+  }
+
   /**
    * GET /api/customers/:customerId/assets
    * Get customer's assigned assets
    */
-  async getCustomerAssets(req: Request, res: Response): Promise<void> {
+  getCustomerAssets = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const customerId = parseInt(req.params.customerId);
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
 
       if (isNaN(customerId)) {
         res.status(400).json({
@@ -24,7 +38,11 @@ export class CustomerAssetController {
         return;
       }
 
-      const result = await customerAssetService.getCustomerAssets(customerId, tenantId, isLive);
+      const result = await this.customerAssetService.getCustomerAssets(
+        customerId,
+        user!.tenant_id,
+        isLive
+      );
 
       res.json({
         success: true,
@@ -38,18 +56,17 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * POST /api/customers/:customerId/assets
    * Assign asset to customer
    */
-  async assignAsset(req: Request, res: Response): Promise<void> {
+  assignAsset = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const customerId = parseInt(req.params.customerId);
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
-      const userId = (req as any).userId || 1;
 
       if (isNaN(customerId)) {
         res.status(400).json({
@@ -75,7 +92,12 @@ export class CustomerAssetController {
         notes
       };
 
-      const assignment = await customerAssetService.assignAsset(data, tenantId, isLive, userId);
+      const assignment = await this.customerAssetService.assignAsset(
+        data,
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
 
       res.status(201).json({
         success: true,
@@ -90,18 +112,17 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * POST /api/customers/:customerId/assets/bulk
    * Bulk assign assets to customer
    */
-  async bulkAssignAssets(req: Request, res: Response): Promise<void> {
+  bulkAssignAssets = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const customerId = parseInt(req.params.customerId);
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
-      const userId = (req as any).userId || 1;
 
       if (isNaN(customerId)) {
         res.status(400).json({
@@ -127,7 +148,12 @@ export class CustomerAssetController {
         notes
       };
 
-      const assignments = await customerAssetService.bulkAssignAssets(data, tenantId, isLive, userId);
+      const assignments = await this.customerAssetService.bulkAssignAssets(
+        data,
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
 
       res.status(201).json({
         success: true,
@@ -142,18 +168,18 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * DELETE /api/customers/:customerId/assets/:assetTypeId
    * Remove asset assignment from customer
    */
-  async removeAsset(req: Request, res: Response): Promise<void> {
+  removeAsset = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const customerId = parseInt(req.params.customerId);
       const assetTypeId = parseInt(req.params.assetTypeId);
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
 
       if (isNaN(customerId) || isNaN(assetTypeId)) {
         res.status(400).json({
@@ -168,7 +194,7 @@ export class CustomerAssetController {
         asset_type_id: assetTypeId
       };
 
-      await customerAssetService.removeAsset(data, tenantId, isLive);
+      await this.customerAssetService.removeAsset(data, user!.tenant_id, isLive);
 
       res.json({
         success: true,
@@ -182,19 +208,23 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * GET /api/family/:familyHeadId/assets
    * Get family asset summary
    */
-  async getFamilyAssets(req: Request, res: Response): Promise<void> {
+  getFamilyAssets = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const familyHeadIwellCode = req.params.familyHeadId;
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
 
-      const result = await customerAssetService.getFamilyAssets(familyHeadIwellCode, tenantId, isLive);
+      const result = await this.customerAssetService.getFamilyAssets(
+        familyHeadIwellCode,
+        user!.tenant_id,
+        isLive
+      );
 
       res.json({
         success: true,
@@ -217,18 +247,17 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * POST /api/family/:familyHeadId/assets/bulk
    * Bulk assign assets to all family members
    */
-  async bulkAssignToFamily(req: Request, res: Response): Promise<void> {
+  bulkAssignToFamily = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
       const familyHeadIwellCode = req.params.familyHeadId;
-      const tenantId = (req as any).tenantId || 1;
-      const isLive = (req as any).isLive !== undefined ? (req as any).isLive : true;
-      const userId = (req as any).userId || 1;
 
       const { asset_type_ids, notes } = req.body;
 
@@ -240,12 +269,12 @@ export class CustomerAssetController {
         return;
       }
 
-      const result = await customerAssetService.bulkAssignToFamily(
+      const result = await this.customerAssetService.bulkAssignToFamily(
         familyHeadIwellCode,
         asset_type_ids,
-        tenantId,
+        user!.tenant_id,
         isLive,
-        userId,
+        user!.user_id,
         notes
       );
 
@@ -271,7 +300,7 @@ export class CustomerAssetController {
         message: error.message
       });
     }
-  }
+  };
 }
 
 export const customerAssetController = new CustomerAssetController();

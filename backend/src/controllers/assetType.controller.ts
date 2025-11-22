@@ -2,18 +2,32 @@
 // Controller for Asset Types (Release 1.1 - Phase 1)
 
 import { Request, Response } from 'express';
-import { assetTypeService } from '../services/assetType.service';
+import { AssetTypeService } from '../services/assetType.service';
 import { CreateAssetTypeRequest, UpdateAssetTypeRequest } from '../types/assetType.types';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    user_id: number;
+    tenant_id: number;
+  };
+  environment?: 'live' | 'test';
+}
+
 export class AssetTypeController {
+  private assetTypeService: AssetTypeService;
+
+  constructor() {
+    this.assetTypeService = new AssetTypeService();
+  }
+
   /**
    * GET /api/asset-types
    * Get all asset types
    */
-  async getAllAssetTypes(req: Request, res: Response): Promise<void> {
+  getAllAssetTypes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const activeOnly = req.query.active_only !== 'false';
-      const result = await assetTypeService.getAllAssetTypes(activeOnly);
+      const result = await this.assetTypeService.getAllAssetTypes(activeOnly);
 
       res.json({
         success: true,
@@ -27,13 +41,13 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * GET /api/asset-types/:id
    * Get single asset type by ID
    */
-  async getAssetTypeById(req: Request, res: Response): Promise<void> {
+  getAssetTypeById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const id = parseInt(req.params.id);
 
@@ -45,7 +59,7 @@ export class AssetTypeController {
         return;
       }
 
-      const assetType = await assetTypeService.getAssetTypeById(id);
+      const assetType = await this.assetTypeService.getAssetTypeById(id);
 
       if (!assetType) {
         res.status(404).json({
@@ -67,17 +81,17 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * GET /api/asset-types/code/:code
    * Get single asset type by code
    */
-  async getAssetTypeByCode(req: Request, res: Response): Promise<void> {
+  getAssetTypeByCode = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const code = req.params.code;
 
-      const assetType = await assetTypeService.getAssetTypeByCode(code);
+      const assetType = await this.assetTypeService.getAssetTypeByCode(code);
 
       if (!assetType) {
         res.status(404).json({
@@ -99,13 +113,13 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * POST /api/asset-types
    * Create new asset type (Admin only)
    */
-  async createAssetType(req: Request, res: Response): Promise<void> {
+  createAssetType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const data: CreateAssetTypeRequest = req.body;
 
@@ -118,7 +132,7 @@ export class AssetTypeController {
         return;
       }
 
-      const assetType = await assetTypeService.createAssetType(data);
+      const assetType = await this.assetTypeService.createAssetType(data);
 
       res.status(201).json({
         success: true,
@@ -142,13 +156,13 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * PUT /api/asset-types/:id
    * Update asset type (Admin only)
    */
-  async updateAssetType(req: Request, res: Response): Promise<void> {
+  updateAssetType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const id = parseInt(req.params.id);
       const data: UpdateAssetTypeRequest = req.body;
@@ -161,7 +175,7 @@ export class AssetTypeController {
         return;
       }
 
-      const assetType = await assetTypeService.updateAssetType(id, data);
+      const assetType = await this.assetTypeService.updateAssetType(id, data);
 
       res.json({
         success: true,
@@ -185,13 +199,13 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 
   /**
    * DELETE /api/asset-types/:id
    * Soft delete asset type (Admin only)
    */
-  async deleteAssetType(req: Request, res: Response): Promise<void> {
+  deleteAssetType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const id = parseInt(req.params.id);
 
@@ -203,7 +217,7 @@ export class AssetTypeController {
         return;
       }
 
-      await assetTypeService.deleteAssetType(id);
+      await this.assetTypeService.deleteAssetType(id);
 
       res.json({
         success: true,
@@ -217,7 +231,7 @@ export class AssetTypeController {
         message: error.message
       });
     }
-  }
+  };
 }
 
 export const assetTypeController = new AssetTypeController();
