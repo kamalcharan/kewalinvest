@@ -1285,6 +1285,63 @@ CREATE TABLE t_system_logs (
 COMMENT ON TABLE t_system_logs IS 'System-wide logs for errors, warnings, and info messages';
 
 -- ============================================================================
+-- SECTION 12: MULTI-ASSET PORTFOLIO TABLES (Release 1.1 - Phase 1)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Multi-Asset Portfolio Tables...';
+END $$;
+
+-- TABLE: m_asset_types
+-- Description: Global master data for all supported asset types
+-- Note: This is NOT tenant-isolated (master data shared across all tenants)
+CREATE TABLE m_asset_types (
+    id SERIAL PRIMARY KEY,
+    asset_type_code VARCHAR(50) NOT NULL UNIQUE,
+    asset_type_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50), -- equity, debt, commodity, real_estate, fixed_income
+    default_assumption_rate DECIMAL(5,2), -- Default expected growth rate (e.g., 8.00 for 8% per year)
+    is_active BOOLEAN DEFAULT true,
+    display_order INTEGER DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE m_asset_types IS 'Master data table for all supported asset types - global across all tenants';
+COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., MF, GOLD, EQUITY, FD)';
+COMMENT ON COLUMN m_asset_types.asset_type_name IS 'Display name for the asset type';
+COMMENT ON COLUMN m_asset_types.category IS 'Asset category: equity, debt, commodity, real_estate, fixed_income';
+COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected annual growth rate percentage (e.g., 8.00 for 8%)';
+COMMENT ON COLUMN m_asset_types.display_order IS 'Display order in UI (lower numbers first)';
+
+-- TABLE: t_customer_asset_assignments
+-- Description: Tracks which asset types are assigned to each customer
+-- Note: Tenant-isolated table
+CREATE TABLE t_customer_asset_assignments (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    asset_type_id INTEGER NOT NULL REFERENCES m_asset_types(id),
+    is_active BOOLEAN DEFAULT true,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_by INTEGER REFERENCES t_users(id),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT unique_customer_asset UNIQUE(tenant_id, is_live, customer_id, asset_type_id)
+);
+
+COMMENT ON TABLE t_customer_asset_assignments IS 'Tracks asset type assignments for each customer - tenant isolated';
+COMMENT ON COLUMN t_customer_asset_assignments.customer_id IS 'Reference to customer in t_customers';
+COMMENT ON COLUMN t_customer_asset_assignments.asset_type_id IS 'Reference to asset type in m_asset_types (master data)';
+COMMENT ON COLUMN t_customer_asset_assignments.is_active IS 'Whether this assignment is currently active';
+COMMENT ON COLUMN t_customer_asset_assignments.assigned_by IS 'User who made the assignment';
+COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about why this asset was assigned';
+
+-- ============================================================================
 -- COMPLETION MESSAGE
 -- ============================================================================
 DO $$
@@ -1312,6 +1369,9 @@ BEGIN
     RAISE NOTICE '    - t_customer_master_portfolio.allocation';
     RAISE NOTICE '  ✓ Default comparison index';
     RAISE NOTICE '    - t_tenants.default_comparison_index_id';
+    RAISE NOTICE '  ✓ Release 1.1 - Phase 1: Multi-Asset Portfolio';
+    RAISE NOTICE '    - m_asset_types (NEW TABLE - Master Data)';
+    RAISE NOTICE '    - t_customer_asset_assignments (NEW TABLE)';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';

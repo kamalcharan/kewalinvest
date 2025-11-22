@@ -593,7 +593,115 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- SECTION 7: VERIFICATION & SUMMARY
+-- SECTION 7: ASSET TYPES SEED DATA (Release 1.1 - Phase 1)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Loading Asset Types Master Data...';
+END $$;
+
+INSERT INTO m_asset_types (
+    asset_type_code,
+    asset_type_name,
+    category,
+    default_assumption_rate,
+    is_active,
+    display_order,
+    description
+) VALUES
+    (
+        'MF',
+        'Mutual Fund',
+        'equity/debt',
+        12.00,
+        true,
+        1,
+        'Equity and debt mutual funds managed by professional fund managers'
+    ),
+    (
+        'GOLD',
+        'Gold',
+        'commodity',
+        8.00,
+        true,
+        2,
+        'Physical gold, gold ETFs, sovereign gold bonds'
+    ),
+    (
+        'SILVER',
+        'Silver',
+        'commodity',
+        8.00,
+        true,
+        3,
+        'Physical silver, silver ETFs'
+    ),
+    (
+        'EQUITY',
+        'Equity/Stocks',
+        'equity',
+        15.00,
+        true,
+        4,
+        'Direct equity holdings in stocks and shares'
+    ),
+    (
+        'FD',
+        'Fixed Deposit',
+        'fixed_income',
+        7.00,
+        true,
+        5,
+        'Bank fixed deposits with guaranteed returns'
+    ),
+    (
+        'PPF',
+        'Public Provident Fund',
+        'fixed_income',
+        7.10,
+        true,
+        6,
+        'Government-backed long-term savings scheme with tax benefits'
+    ),
+    (
+        'NSC',
+        'National Savings Certificate',
+        'fixed_income',
+        7.70,
+        true,
+        7,
+        'Government-backed fixed income savings certificate'
+    ),
+    (
+        'RE',
+        'Real Estate',
+        'real_estate',
+        10.00,
+        true,
+        8,
+        'Residential and commercial property investments'
+    ),
+    (
+        'BONDS',
+        'Bonds',
+        'debt',
+        8.50,
+        true,
+        9,
+        'Corporate bonds, government bonds, and debentures'
+    )
+ON CONFLICT (asset_type_code) DO NOTHING;
+
+DO $$
+DECLARE
+    v_asset_types_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO v_asset_types_count FROM m_asset_types WHERE is_active = true;
+    RAISE NOTICE '✓ Asset Types loaded: % active types', v_asset_types_count;
+END $$;
+
+-- ============================================================================
+-- SECTION 8: VERIFICATION & SUMMARY
 -- ============================================================================
 DO $$
 DECLARE
@@ -606,9 +714,11 @@ DECLARE
     v_unique_reasons INTEGER;
     v_market_indices_count INTEGER;
     v_active_indices INTEGER;
+    v_asset_types_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO v_txn_count FROM m_transaction_types WHERE is_active = true;
     SELECT COUNT(*) INTO v_job_types_count FROM m_job_types WHERE is_active = true;
+    SELECT COUNT(*) INTO v_asset_types_count FROM m_asset_types WHERE is_active = true;
     
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_admin = true)
     INTO v_tenant_count, v_admin_tenant_count
@@ -629,9 +739,10 @@ BEGIN
     RAISE NOTICE 'Transaction Types: % active', v_txn_count;
     RAISE NOTICE 'Job Types: % active', v_job_types_count;
     RAISE NOTICE 'Admin Tenants: % total (% admin)', v_tenant_count, v_admin_tenant_count;
-    RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)', 
+    RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)',
         v_bookmark_count, v_unique_reasons, v_tenant_count;
     RAISE NOTICE 'Market Indices: % total (% active)', v_market_indices_count, v_active_indices;
+    RAISE NOTICE 'Asset Types: % active (Release 1.1)', v_asset_types_count;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
     RAISE NOTICE 'Client tenants (ID 4+) will auto-seed via /register';
