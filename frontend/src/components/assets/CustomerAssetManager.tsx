@@ -15,15 +15,28 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const { assetTypes, loading: loadingTypes } = useAssetTypes();
-  const { assignments, loading: loadingAssignments, assignAssets, removeAsset } = useCustomerAssets(customerId);
+  const { assetTypes, loading: loadingTypes, error: typesError } = useAssetTypes();
+  const { assignments, loading: loadingAssignments, error: assignmentsError, assignAssets, removeAsset } = useCustomerAssets(customerId);
   const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [showSelector, setShowSelector] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
 
+  // Debug logging
+  console.log('🔍 CustomerAssetManager Debug:', {
+    assetTypes,
+    assetTypesCount: assetTypes.length,
+    typesError,
+    assignments,
+    assignmentsCount: assignments.length,
+    assignmentsError,
+    customerId
+  });
+
   const assignedAssetIds = assignments.map(a => a.asset_type_id);
   const availableAssets = assetTypes.filter(at => !assignedAssetIds.includes(at.id));
+
+  console.log('🔍 Available assets:', availableAssets.length, availableAssets);
 
   const handleAssign = async () => {
     if (selectedAssets.length === 0) return;
@@ -69,6 +82,40 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
       }}>
         <Loader style={{ width: '24px', height: '24px', color: colors.semantic.info, animation: 'spin 1s linear infinite' }} />
         <span style={{ marginLeft: '12px', color: colors.utility.secondaryText }}>Loading assets...</span>
+      </div>
+    );
+  }
+
+  // Show errors if any
+  if (typesError || assignmentsError) {
+    return (
+      <div style={{
+        padding: '24px',
+        backgroundColor: colors.semantic.error + '10',
+        borderRadius: '12px',
+        border: `1px solid ${colors.semantic.error}30`
+      }}>
+        <h3 style={{
+          fontSize: '16px',
+          fontWeight: '600',
+          color: colors.semantic.error,
+          marginBottom: '12px'
+        }}>
+          Error Loading Assets
+        </h3>
+        {typesError && (
+          <p style={{ fontSize: '14px', color: colors.utility.primaryText, marginBottom: '8px' }}>
+            <strong>Asset Types Error:</strong> {typesError}
+          </p>
+        )}
+        {assignmentsError && (
+          <p style={{ fontSize: '14px', color: colors.utility.primaryText }}>
+            <strong>Assignments Error:</strong> {assignmentsError}
+          </p>
+        )}
+        <p style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '12px' }}>
+          Check the browser console for more details.
+        </p>
       </div>
     );
   }
