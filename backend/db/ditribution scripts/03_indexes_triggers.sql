@@ -790,6 +790,90 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- SECTION 3B: MULTI-ASSET PORTFOLIO INDEXES & TRIGGERS (Release 1.1 - Phase 1)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Multi-Asset Portfolio Indexes and Triggers...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: m_asset_types
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_asset_types_code
+ON m_asset_types(asset_type_code);
+
+CREATE INDEX IF NOT EXISTS idx_asset_types_active
+ON m_asset_types(is_active, display_order)
+WHERE is_active = true;
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: t_customer_asset_assignments
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_customer_assets_customer
+ON t_customer_asset_assignments(customer_id, is_active)
+WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_tenant
+ON t_customer_asset_assignments(tenant_id, is_live, customer_id);
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_asset_type
+ON t_customer_asset_assignments(asset_type_id, is_active)
+WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_assigned_by
+ON t_customer_asset_assignments(assigned_by, assigned_at DESC);
+
+-- Investment plan specific indexes
+CREATE INDEX IF NOT EXISTS idx_customer_assets_scheme_code
+ON t_customer_asset_assignments(scheme_code)
+WHERE scheme_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_investment_type
+ON t_customer_asset_assignments(investment_type);
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_has_started
+ON t_customer_asset_assignments(has_started)
+WHERE is_active = true;
+
+-- ----------------------------------------------------------------------------
+-- TRIGGERS: Auto-update updated_at timestamps
+-- ----------------------------------------------------------------------------
+
+-- Trigger for m_asset_types
+CREATE OR REPLACE FUNCTION update_asset_types_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_asset_types_updated_at
+    BEFORE UPDATE ON m_asset_types
+    FOR EACH ROW
+    EXECUTE FUNCTION update_asset_types_updated_at();
+
+-- Trigger for t_customer_asset_assignments
+CREATE OR REPLACE FUNCTION update_customer_assets_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_customer_assets_updated_at
+    BEFORE UPDATE ON t_customer_asset_assignments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_customer_assets_updated_at();
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Multi-Asset Portfolio indexes and triggers created';
+END $$;
+
+-- ============================================================================
 -- SECTION 4: VERIFICATION & COMPLETION
 -- ============================================================================
 DO $$

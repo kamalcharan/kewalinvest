@@ -34,6 +34,7 @@ import jobsRoutes from './routes/jobs.routes';
 import cruiseControlRoutes from './routes/cruiseControl.routes';
 import assetTypeRoutes from './routes/assetType.routes';
 import customerAssetRoutes from './routes/customerAsset.routes';
+import investmentPlanRoutes from './routes/investmentPlan.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -229,8 +230,8 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/family', familyRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/cruise-control', cruiseControlRoutes);
-app.use('/api/asset-types', assetTypeRoutes); // Release 1.1 - Phase 1
-app.use('/api', customerAssetRoutes); // Release 1.1 - Phase 1 (includes /customers/:id/assets and /family/:id/assets)
+app.use('/api/asset-types', assetTypeRoutes); // Release 1.1 - Phase 1: Asset Types (master data)
+app.use('/api', investmentPlanRoutes); // Release 1.1 - Phase 1: Investment Plans (full CRUD)
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
