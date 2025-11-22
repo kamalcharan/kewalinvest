@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign } from 'lucide-react';
+import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   toggleFullscreen,
@@ -41,6 +41,7 @@ import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
+import { CustomerAssetManager } from '../../components/assets/CustomerAssetManager';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -52,9 +53,9 @@ const CustomerViewPage: React.FC = () => {
 
   const customerId = id ? parseInt(id) : null;
   
-  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions') || 'overview';
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions') || 'overview';
   const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'jobs' | 'transactions'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
@@ -620,6 +621,7 @@ const CustomerViewPage: React.FC = () => {
             { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
             { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
             { key: 'goals', label: 'Goals Management', icon: Target },
+            { key: 'assets', label: 'Asset Types', icon: Package },
             { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare },
             { key: 'transactions', label: 'Transactions', icon: DollarSign }
           ].map(tab => {
@@ -1379,6 +1381,17 @@ comparisonData={comparisonIndexData}
         {/* Jobs to Do Tab */}
         {activeTab === 'jobs' && customerId && (
           <JTBDExecutionTimeline customerId={customerId} />
+        )}
+
+        {/* Assets Tab */}
+        {activeTab === 'assets' && customerId && (
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '12px',
+            padding: '24px'
+          }}>
+            <CustomerAssetManager customerId={customerId} />
+          </div>
         )}
 
         {/* Transactions Tab */}
