@@ -149,7 +149,7 @@ export const InvestmentPlanCard: React.FC<InvestmentPlanCardProps> = ({
             fontWeight: '600'
           }}
         >
-          {plan.investment_type === 'one_time' ? 'One-time' : plan.investment_type.toUpperCase()}
+          {plan.investment_type === 'one_time' ? 'One-time' : plan.investment_type?.toUpperCase() || 'N/A'}
         </span>
         {plan.investment_frequency && (
           <span
