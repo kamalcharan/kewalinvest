@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Package, Plus, X, Loader } from 'lucide-react';
 import { useAssetTypes, useCustomerAssets } from '../../hooks/useAssetTypes';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface CustomerAssetManagerProps {
   customerId: number;
@@ -15,6 +16,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
   const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [showSelector, setShowSelector] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
 
   const assignedAssetIds = assignments.map(a => a.asset_type_id);
   const availableAssets = assetTypes.filter(at => !assignedAssetIds.includes(at.id));
@@ -36,10 +38,9 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
   };
 
   const handleRemove = async (assetTypeId: number) => {
-    if (!confirm('Are you sure you want to remove this asset assignment?')) return;
-
     try {
       await removeAsset(assetTypeId);
+      setConfirmRemove(null);
     } catch (error) {
       console.error('Failed to remove asset:', error);
       alert('Failed to remove asset. Please try again.');
@@ -189,7 +190,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
                 </div>
 
                 <button
-                  onClick={() => handleRemove(assignment.asset_type_id)}
+                  onClick={() => setConfirmRemove(assignment.asset_type_id)}
                   className="text-red-500 hover:text-red-700 p-1"
                   title="Remove asset"
                 >
@@ -200,6 +201,18 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
           ))
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmRemove !== null}
+        onClose={() => setConfirmRemove(null)}
+        onConfirm={() => confirmRemove !== null && handleRemove(confirmRemove)}
+        title="Remove Asset Assignment"
+        description="Are you sure you want to remove this asset assignment? This action cannot be undone."
+        confirmText="Remove"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   );
 };
