@@ -96,8 +96,8 @@ export const useBookmarkedSchemes = () => {
       setLoading(true);
       setError(null);
       // Import the bookmark service
-      const { bookmarkService } = await import('../services/bookmark.service');
-      const data = await bookmarkService.getBookmarks();
+      const BookmarkService = (await import('../services/bookmark.service')).default;
+      const data = await BookmarkService.getBookmarks();
       setSchemes(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load bookmarked schemes');
