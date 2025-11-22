@@ -407,6 +407,27 @@ export const API_ENDPOINTS = {
     BACKFILL_CANCEL: `${API_BASE}/scheme-aliases/backfill/cancel`,
   },
 
+  // Asset Types endpoints (Release 1.1 - Phase 1)
+  ASSET_TYPES: {
+    LIST: `${API_BASE}/asset-types`,
+    CREATE: `${API_BASE}/asset-types`,
+    GET: (id: number) => `${API_BASE}/asset-types/${id}`,
+    GET_BY_CODE: (code: string) => `${API_BASE}/asset-types/code/${code}`,
+    UPDATE: (id: number) => `${API_BASE}/asset-types/${id}`,
+    DELETE: (id: number) => `${API_BASE}/asset-types/${id}`,
+
+    // Customer Asset Assignments
+    CUSTOMER_ASSETS: (customerId: number) => `${API_BASE}/customers/${customerId}/assets`,
+    ASSIGN_ASSET: (customerId: number) => `${API_BASE}/customers/${customerId}/assets`,
+    BULK_ASSIGN: (customerId: number) => `${API_BASE}/customers/${customerId}/assets/bulk`,
+    REMOVE_ASSET: (customerId: number, assetTypeId: number) =>
+      `${API_BASE}/customers/${customerId}/assets/${assetTypeId}`,
+
+    // Family Asset Assignments
+    FAMILY_ASSETS: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/assets`,
+    BULK_ASSIGN_FAMILY: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/assets/bulk`,
+  },
+
   // File management endpoints (for future sprints)
   FILES: {
     UPLOAD: `${API_BASE}/files/upload`,
@@ -464,6 +485,8 @@ export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
 export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
 export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS;
+export type SchemeAliasEndpoints = typeof API_ENDPOINTS.SCHEME_ALIASES;
+export type AssetTypesEndpoints = typeof API_ENDPOINTS.ASSET_TYPES;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -1034,15 +1057,56 @@ export const MARKET_ANALYSIS_URLS = {
 export const SCHEME_ANALYSIS_URLS = {
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
-  
+
   calculateMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.CALCULATE_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
-  
+
   getLatestMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.GET_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
-  
+
   batchCalculate: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
+// Asset Types-specific URL helpers (Release 1.1 - Phase 1)
+export const ASSET_TYPES_URLS = {
+  getAssetTypes: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.LIST}${buildQueryParams(params || {}, environment)}`,
+
+  getAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.GET(id)}${buildQueryParams({}, environment)}`,
+
+  getAssetTypeByCode: (code: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.GET_BY_CODE(code)}${buildQueryParams({}, environment)}`,
+
+  createAssetType: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.CREATE}${buildQueryParams({}, environment)}`,
+
+  updateAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.UPDATE(id)}${buildQueryParams({}, environment)}`,
+
+  deleteAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.DELETE(id)}${buildQueryParams({}, environment)}`,
+
+  // Customer Asset Assignments
+  getCustomerAssets: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.CUSTOMER_ASSETS(customerId)}${buildQueryParams({}, environment)}`,
+
+  assignAsset: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.ASSIGN_ASSET(customerId)}${buildQueryParams({}, environment)}`,
+
+  bulkAssignAssets: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.BULK_ASSIGN(customerId)}${buildQueryParams({}, environment)}`,
+
+  removeAsset: (customerId: number, assetTypeId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.REMOVE_ASSET(customerId, assetTypeId)}${buildQueryParams({}, environment)}`,
+
+  // Family Asset Assignments
+  getFamilyAssets: (familyHeadId: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.FAMILY_ASSETS(familyHeadId)}${buildQueryParams({}, environment)}`,
+
+  bulkAssignToFamily: (familyHeadId: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.BULK_ASSIGN_FAMILY(familyHeadId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Development logging
