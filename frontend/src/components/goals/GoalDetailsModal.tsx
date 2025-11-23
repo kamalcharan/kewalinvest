@@ -434,14 +434,14 @@ const GoalDetailsModal: React.FC<GoalDetailsModalProps> = ({
           {/* Schemes Tab */}
           {activeTab === 'schemes' && (
             <div>
-              {config.linked_schemes.length === 0 ? (
+              {!config.linked_schemes || config.linked_schemes.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
                   <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
                   <div style={{ fontSize: '13px' }}>No schemes linked</div>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                  {config.linked_schemes.map((scheme) => (
+                  {config.linked_schemes?.map((scheme) => (
                     <div
                       key={scheme.scheme_code}
                       style={{

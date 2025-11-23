@@ -138,9 +138,9 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
     <div style={{
       marginTop: '24px',
       padding: '20px',
-      border: `1px solid ${colors.utility.border}`,
+      border: `1px solid ${colors.utility.primaryText}20`,
       borderRadius: '8px',
-      backgroundColor: colors.utility.background
+      backgroundColor: colors.utility.secondaryBackground
     }}>
       <h3 style={{
         margin: '0 0 16px 0',
@@ -188,7 +188,7 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
                   alignItems: 'center',
                   padding: '12px',
                   marginBottom: '8px',
-                  border: `1px solid ${isSelected ? colors.brand.primary : colors.utility.border}`,
+                  border: `1px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
                   borderRadius: '6px',
                   backgroundColor: isSelected ? colors.brand.primary + '08' : 'transparent',
                   transition: 'all 0.2s ease'
@@ -235,11 +235,11 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
                       style={{
                         width: '80px',
                         padding: '6px 12px',
-                        border: `1px solid ${colors.utility.border}`,
+                        border: `1px solid ${colors.utility.primaryText}20`,
                         borderRadius: '4px',
                         fontSize: '14px',
                         textAlign: 'right',
-                        backgroundColor: colors.utility.background,
+                        backgroundColor: colors.utility.primaryBackground,
                         color: colors.utility.primaryText
                       }}
                     />
@@ -270,7 +270,7 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
           ? colors.semantic.error
           : totalAllocation === 100
             ? colors.semantic.success
-            : colors.utility.border
+            : colors.utility.secondaryText
           }`,
         borderRadius: '6px',
         display: 'flex',

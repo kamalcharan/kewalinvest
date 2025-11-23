@@ -126,10 +126,13 @@ const GoalCard: React.FC<GoalCardProps> = ({
   const getKeyMetrics = () => {
     // Phase 2: Use calculations from backend if available
     if (calculations) {
+      const targetAmount = (isPriceBasedGoal(config) || isTimeAndPriceGoal(config)) ? config.target_amount : 0;
+      const targetDate = (isTimeBasedGoal(config) || isTimeAndPriceGoal(config)) ? config.target_date : undefined;
+
       return {
-        primary: formatCurrency(config.target_amount || 0, true),
+        primary: formatCurrency(targetAmount, true),
         primaryLabel: 'Target Amount',
-        secondary: formatDate(config.target_date),
+        secondary: targetDate ? formatDate(targetDate) : 'N/A',
         secondaryLabel: 'Target Date',
         progress: calculations.progress_percentage,
         currentAmount: calculations.current_amount,
@@ -653,10 +656,10 @@ const GoalCard: React.FC<GoalCardProps> = ({
                       }}>
                         {/* Pie Chart SVG */}
                         <svg width="80" height="80">
-                          {config.linked_schemes.map((scheme, index) => {
+                          {config.linked_schemes?.map((scheme, index) => {
                             let startAngle = 0;
                             for (let i = 0; i < index; i++) {
-                              startAngle += (config.linked_schemes[i].allocation_percentage / 100) * 360;
+                              startAngle += (config.linked_schemes![i].allocation_percentage / 100) * 360;
                             }
                             const endAngle = startAngle + (scheme.allocation_percentage / 100) * 360;
                             const sliceColor = pieColors[index % pieColors.length];
@@ -722,7 +725,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
                           }}>
                             Fund Allocation
                           </div>
-                          {config.linked_schemes.map((scheme, index) => (
+                          {config.linked_schemes?.map((scheme, index) => (
                             <div
                               key={scheme.scheme_code}
                               style={{

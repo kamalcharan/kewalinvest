@@ -57,6 +57,7 @@ export interface GoalCalculationResult {
   time_remaining_months: number;
   projected_completion_date: string | null;
   shortfall_surplus: number;
+  asset_breakdown?: Record<string, number>; // Optional: breakdown by asset type
 }
 
 export interface GoalWithCalculations {

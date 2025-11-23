@@ -40,7 +40,7 @@ const GoalInvestmentSelector: React.FC<GoalInvestmentSelectorProps> = ({
 
   // Calculate total allocation
   const totalAllocation = useMemo(() => {
-    return selectedInvestments.reduce((sum, inv) => sum + inv.allocated_percentage, 0);
+    return selectedInvestments.reduce((sum, inv) => sum + inv.allocation_percentage, 0);
   }, [selectedInvestments]);
 
   // Check if investment is selected
@@ -51,7 +51,7 @@ const GoalInvestmentSelector: React.FC<GoalInvestmentSelectorProps> = ({
   // Get allocation for an investment
   const getInvestmentAllocation = (investmentId: number): number => {
     const investment = selectedInvestments.find(inv => inv.investment_plan_id === investmentId);
-    return investment ? investment.allocated_percentage : 0;
+    return investment ? investment.allocation_percentage : 0;
   };
 
   // Toggle investment selection
@@ -70,8 +70,7 @@ const GoalInvestmentSelector: React.FC<GoalInvestmentSelectorProps> = ({
         ...selectedInvestments,
         {
           investment_plan_id: investment.id,
-          asset_type_name: investment.asset_type_name || '',
-          allocated_percentage: defaultAllocation
+          allocation_percentage: defaultAllocation
         }
       ]);
     }
@@ -83,7 +82,7 @@ const GoalInvestmentSelector: React.FC<GoalInvestmentSelectorProps> = ({
 
     const newInvestments = selectedInvestments.map(inv =>
       inv.investment_plan_id === investmentId
-        ? { ...inv, allocated_percentage: Math.max(0, Math.min(100, allocation)) }
+        ? { ...inv, allocation_percentage: Math.max(0, Math.min(100, allocation)) }
         : inv
     );
     onChange(newInvestments);
@@ -96,13 +95,13 @@ const GoalInvestmentSelector: React.FC<GoalInvestmentSelectorProps> = ({
     const equalAllocation = 100 / selectedInvestments.length;
     const newInvestments = selectedInvestments.map(inv => ({
       ...inv,
-      allocated_percentage: Math.round(equalAllocation * 100) / 100
+      allocation_percentage: Math.round(equalAllocation * 100) / 100
     }));
 
     // Adjust last investment to ensure exact 100%
     if (newInvestments.length > 0) {
-      const total = newInvestments.slice(0, -1).reduce((sum, inv) => sum + inv.allocated_percentage, 0);
-      newInvestments[newInvestments.length - 1].allocated_percentage = Math.round((100 - total) * 100) / 100;
+      const total = newInvestments.slice(0, -1).reduce((sum, inv) => sum + inv.allocation_percentage, 0);
+      newInvestments[newInvestments.length - 1].allocation_percentage = Math.round((100 - total) * 100) / 100;
     }
 
     onChange(newInvestments);

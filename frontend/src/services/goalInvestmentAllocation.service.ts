@@ -42,7 +42,7 @@ export class GoalInvestmentAllocationService {
         API_ENDPOINTS.GOAL_ALLOCATIONS.CREATE(goalId),
         data
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error allocating investment:', error);
       return {
@@ -62,7 +62,7 @@ export class GoalInvestmentAllocationService {
       const response = await apiService.get<ApiResponse<GoalInvestmentAllocation[]>>(
         API_ENDPOINTS.GOAL_ALLOCATIONS.LIST(goalId)
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error fetching allocations:', error);
       return {
@@ -85,7 +85,7 @@ export class GoalInvestmentAllocationService {
         API_ENDPOINTS.GOAL_ALLOCATIONS.UPDATE(goalId, allocationId),
         data
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error updating allocation:', error);
       return {
@@ -106,7 +106,7 @@ export class GoalInvestmentAllocationService {
       const response = await apiService.delete<ApiResponse<void>>(
         API_ENDPOINTS.GOAL_ALLOCATIONS.DELETE(goalId, allocationId)
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error removing allocation:', error);
       return {
@@ -126,7 +126,7 @@ export class GoalInvestmentAllocationService {
       const response = await apiService.get<ApiResponse<GoalCalculationResult>>(
         API_ENDPOINTS.GOAL_CALCULATIONS.GET(goalId)
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error fetching calculations:', error);
       return {
@@ -146,7 +146,7 @@ export class GoalInvestmentAllocationService {
       const response = await apiService.get<ApiResponse<Record<string, number>>>(
         API_ENDPOINTS.GOAL_CALCULATIONS.ASSET_BREAKDOWN(goalId)
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error fetching asset breakdown:', error);
       return {
@@ -166,7 +166,7 @@ export class GoalInvestmentAllocationService {
       const response = await apiService.get<ApiResponse<Array<{ goal_id: number; goal_name: string; allocated_percentage: number }>>>(
         API_ENDPOINTS.INVESTMENT_GOALS.GET(investmentPlanId)
       );
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[GoalAllocationService] Error fetching investment goals:', error);
       return {
