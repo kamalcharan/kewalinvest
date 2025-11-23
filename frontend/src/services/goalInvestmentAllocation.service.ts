@@ -1,7 +1,7 @@
 // frontend/src/services/goalInvestmentAllocation.service.ts
 // Phase 2: Service for goal-investment allocation API calls
 
-import { apiService } from './apiService';
+import { apiService } from './api.service';
 import { API_ENDPOINTS } from './serviceURLs';
 import {
   GoalInvestmentAllocation,

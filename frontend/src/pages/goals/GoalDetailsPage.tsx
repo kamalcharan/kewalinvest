@@ -496,7 +496,7 @@ const GoalDetailsPage: React.FC = () => {
             }}>
               Linked Schemes
             </h3>
-            {config.linked_schemes.length === 0 ? (
+            {!config.linked_schemes || config.linked_schemes.length === 0 ? (
               <div style={{
                 textAlign: 'center',
                 padding: '60px 40px',
@@ -508,7 +508,7 @@ const GoalDetailsPage: React.FC = () => {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-                {config.linked_schemes.map((scheme) => (
+                {config.linked_schemes?.map((scheme) => (
                   <div
                     key={scheme.scheme_code}
                     style={{

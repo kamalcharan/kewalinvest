@@ -319,7 +319,7 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
           padding: '12px',
           border: 'none',
           borderRadius: '6px',
-          backgroundColor: loading || totalAllocation > 100 ? colors.utility.border : colors.brand.primary,
+          backgroundColor: loading || totalAllocation > 100 ? colors.utility.secondaryText : colors.brand.primary,
           color: '#FFFFFF',
           fontSize: '15px',
           fontWeight: '600',
