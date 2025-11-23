@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { GoalInvestmentAllocation, InvestmentPlan } from '../../types/goal.types';
+import { GoalInvestmentAllocation } from '../../types/goal.types';
+import { InvestmentPlan } from '../../types/investmentPlan.types';
 import GoalInvestmentAllocationService from '../../services/goalInvestmentAllocation.service';
 import { InvestmentPlanService } from '../../services/investmentPlan.service';
 
@@ -14,7 +15,7 @@ interface GoalInvestmentAllocatorProps {
   onAllocationChange?: () => void;
 }
 
-export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
+const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
   goalId,
   customerId,
   availableInvestments: providedInvestments,
