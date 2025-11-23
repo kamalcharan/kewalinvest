@@ -241,46 +241,126 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
                   Asset Type *
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  {assetTypes.slice(0, 9).map(at => (
-                    <label
-                      key={at.id}
-                      style={{
-                        position: 'relative',
-                        padding: '10px 8px',
-                        border: `2px solid ${formData.asset_type_id === at.id ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                        borderRadius: '8px',
-                        backgroundColor: formData.asset_type_id === at.id ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
-                        color: formData.asset_type_id === at.id ? colors.brand.primary : colors.utility.primaryText,
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        cursor: plan ? 'not-allowed' : 'pointer',
-                        opacity: plan ? 0.6 : 1,
-                        transition: 'all 0.2s',
-                        textAlign: 'center',
-                        display: 'block'
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="asset_type"
-                        value={at.id}
-                        checked={formData.asset_type_id === at.id}
-                        onChange={() => !plan && updateField('asset_type_id', at.id)}
-                        disabled={!!plan}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {assetTypes.slice(0, 9).map(at => {
+                    const isSelected = formData.asset_type_id === at.id;
+
+                    // Icon mapping for each asset type
+                    const getAssetIcon = (code: string) => {
+                      const icons: { [key: string]: string } = {
+                        'MF': '📊',
+                        'GOLD': '🪙',
+                        'EQUITY': '📈',
+                        'FD': '🏦',
+                        'PPF': '🏛️',
+                        'EPF': '💼',
+                        'NPS': '🎯',
+                        'REAL_ESTATE': '🏠',
+                        'INSURANCE': '🛡️'
+                      };
+                      return icons[code] || '💰';
+                    };
+
+                    return (
+                      <label
+                        key={at.id}
                         style={{
-                          position: 'absolute',
-                          opacity: 0,
-                          width: '100%',
-                          height: '100%',
+                          position: 'relative',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px',
+                          border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                          borderRadius: '8px',
+                          backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
                           cursor: plan ? 'not-allowed' : 'pointer',
-                          top: 0,
-                          left: 0
+                          opacity: plan ? 0.6 : 1,
+                          transition: 'all 0.2s'
                         }}
-                      />
-                      {at.asset_type_code}
-                    </label>
-                  ))}
+                      >
+                        <input
+                          type="radio"
+                          name="asset_type"
+                          value={at.id}
+                          checked={isSelected}
+                          onChange={() => !plan && updateField('asset_type_id', at.id)}
+                          disabled={!!plan}
+                          style={{
+                            position: 'absolute',
+                            opacity: 0,
+                            width: '100%',
+                            height: '100%',
+                            cursor: plan ? 'not-allowed' : 'pointer',
+                            top: 0,
+                            left: 0
+                          }}
+                        />
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                          {/* Radio Circle Indicator */}
+                          <div style={{
+                            width: '18px',
+                            height: '18px',
+                            minWidth: '18px',
+                            borderRadius: '50%',
+                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.secondaryText}`,
+                            backgroundColor: colors.utility.primaryBackground,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            {isSelected && (
+                              <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: colors.brand.primary
+                              }} />
+                            )}
+                          </div>
+
+                          {/* Icon */}
+                          <span style={{ fontSize: '20px', lineHeight: 1 }}>
+                            {getAssetIcon(at.asset_type_code)}
+                          </span>
+
+                          {/* Label and Description */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: '13px',
+                              fontWeight: '600',
+                              color: isSelected ? colors.brand.primary : colors.utility.primaryText,
+                              lineHeight: 1.2,
+                              marginBottom: '2px'
+                            }}>
+                              {at.asset_type_name}
+                            </div>
+                            <div style={{
+                              fontSize: '10px',
+                              color: colors.utility.secondaryText,
+                              lineHeight: 1.2,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {at.asset_type_code}
+                            </div>
+                          </div>
+
+                          {/* Checkmark when selected */}
+                          {isSelected && (
+                            <div style={{
+                              color: colors.brand.primary,
+                              fontSize: '16px',
+                              fontWeight: 'bold',
+                              lineHeight: 1
+                            }}>
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
