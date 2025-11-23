@@ -1026,7 +1026,13 @@ CREATE TABLE t_goal_progress_snapshots (
 
 COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement over time';
 
--- TABLE: t_goal_scheme_allocations
+-- ============================================================================
+-- DEPRECATED: t_goal_scheme_allocations (Replaced by t_goal_investment_allocations in Phase 2)
+-- ============================================================================
+-- TABLE: t_goal_scheme_allocations (OLD - Phase 1)
+-- DEPRECATED: This table is replaced by t_goal_investment_allocations in Release 1.1 Phase 2
+-- Kept commented for reference. Will be dropped after Phase 2 deployment.
+/*
 CREATE TABLE t_goal_scheme_allocations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -1041,6 +1047,47 @@ CREATE TABLE t_goal_scheme_allocations (
 );
 
 COMMENT ON TABLE t_goal_scheme_allocations IS 'Goal scheme allocation tracking for portfolio recommendations';
+*/
+
+-- ============================================================================
+-- TABLE: t_goal_investment_allocations (NEW - Phase 2)
+-- ============================================================================
+-- Links goals to investment plans (multi-asset support)
+-- Replaces t_goal_scheme_allocations to enable tracking goals across all asset types
+CREATE TABLE t_goal_investment_allocations (
+    id SERIAL PRIMARY KEY,
+
+    -- Multi-tenancy
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+
+    -- Goal reference (stored in t_jtbd_configurations)
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+
+    -- Investment Plan reference (from Phase 1 - t_customer_asset_assignments)
+    investment_plan_id INTEGER NOT NULL REFERENCES t_customer_asset_assignments(id) ON DELETE CASCADE,
+
+    -- Allocation details
+    allocated_percentage DECIMAL(5,2) CHECK (allocated_percentage >= 0 AND allocated_percentage <= 100),
+    allocated_amount DECIMAL(15,2),
+
+    -- Notes
+    notes TEXT,
+
+    -- Audit fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id),
+
+    -- Constraints
+    CONSTRAINT unique_goal_investment_allocation UNIQUE (goal_id, investment_plan_id)
+);
+
+COMMENT ON TABLE t_goal_investment_allocations IS 'Phase 2: Links goals to investment plans (multi-asset support). Replaces t_goal_scheme_allocations.';
+COMMENT ON COLUMN t_goal_investment_allocations.goal_id IS 'Reference to goal in t_jtbd_configurations (where jtbd_category = ''transactional'')';
+COMMENT ON COLUMN t_goal_investment_allocations.investment_plan_id IS 'Reference to investment plan in t_customer_asset_assignments (Phase 1)';
+COMMENT ON COLUMN t_goal_investment_allocations.allocated_percentage IS 'Percentage of this investment allocated to goal (0-100%). Allows partial allocations.';
+COMMENT ON COLUMN t_goal_investment_allocations.allocated_amount IS 'Fixed amount allocated (alternative to percentage). Usually NULL if percentage is used.';
 
 -- ============================================================================
 -- SECTION 8: BOOKMARK TABLES & REASON MASTERS
