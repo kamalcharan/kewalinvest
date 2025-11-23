@@ -185,7 +185,26 @@ export const API_ENDPOINTS = {
     REMOVE_FROM_WATCHLIST: (id: number) => `${API_BASE}/goals/${id}/watchlist`,
     GET_WATCHLIST: (customerId: number) => `${API_BASE}/goals/customer/${customerId}/watchlist`,
   },
-  
+
+  // Phase 2: Goal-Investment Allocation endpoints
+  GOAL_ALLOCATIONS: {
+    CREATE: (goalId: number) => `${API_BASE}/goals/${goalId}/allocations`,
+    LIST: (goalId: number) => `${API_BASE}/goals/${goalId}/allocations`,
+    UPDATE: (goalId: number, allocationId: number) => `${API_BASE}/goals/${goalId}/allocations/${allocationId}`,
+    DELETE: (goalId: number, allocationId: number) => `${API_BASE}/goals/${goalId}/allocations/${allocationId}`,
+  },
+
+  // Phase 2: Goal Calculations endpoints
+  GOAL_CALCULATIONS: {
+    GET: (goalId: number) => `${API_BASE}/goals/${goalId}/calculations`,
+    ASSET_BREAKDOWN: (goalId: number) => `${API_BASE}/goals/${goalId}/asset-breakdown`,
+  },
+
+  // Phase 2: Investment to Goals lookup
+  INVESTMENT_GOALS: {
+    GET: (investmentPlanId: number) => `${API_BASE}/investments/${investmentPlanId}/goals`,
+  },
+
   // User Preferences endpoints
   USER_PREFERENCES: {
     // Chart preferences
