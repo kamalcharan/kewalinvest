@@ -1,5 +1,7 @@
 // frontend/src/types/goal.types.ts
 
+import { InvestmentPlan } from './investmentPlan.types';
+
 /**
  * GOAL TRACKING TYPES
  * Matches backend goal.types.ts
@@ -26,25 +28,8 @@ export interface GoalInvestmentAllocation {
   current_value?: number;
 }
 
-export interface InvestmentPlan {
-  id: number;
-  customer_id: number;
-  asset_type_id: number;
-  asset_type_code: string;
-  asset_type_name: string;
-  principal_amount: number;
-  start_date: string;
-  has_started: boolean;
-  duration_months: number | null;
-  duration_years: number | null;
-  investment_type: 'one_time' | 'sip' | 'recurring';
-  recurring_amount: number | null;
-  investment_frequency: 'monthly' | 'quarterly' | 'yearly' | null;
-  custom_assumption_rate: number | null;
-  default_assumption_rate: number;
-  scheme_code: string | null;
-  current_value?: number;
-}
+// Re-export InvestmentPlan for convenience
+export type { InvestmentPlan };
 
 export interface GoalCalculationResult {
   goal_id: number;
