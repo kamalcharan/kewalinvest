@@ -1,8 +1,8 @@
 // frontend/src/components/assets/InvestmentPlanForm.tsx
 // Form component for creating/editing investment plans (Release 1.1 - Phase 1)
 
-import React, { useState, useEffect } from 'react';
-import { X, Loader, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Loader, AlertCircle, Search } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAssetTypes } from '../../hooks/useAssetTypes';
 import { useBookmarkedSchemes } from '../../hooks/useInvestmentPlans';
@@ -15,7 +15,7 @@ import {
 
 interface InvestmentPlanFormProps {
   customerId: number;
-  plan?: InvestmentPlan; // For edit mode
+  plan?: InvestmentPlan;
   onSubmit: (data: CreateInvestmentPlanRequest) => Promise<void>;
   onCancel: () => void;
 }
@@ -46,24 +46,57 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
     notes: plan?.notes || undefined
   });
 
+  const [investmentName, setInvestmentName] = useState(plan?.notes || '');
   const [durationUnit, setDurationUnit] = useState<'months' | 'years'>(
     plan?.duration_months ? 'months' : 'years'
   );
+  const [schemeSearch, setSchemeSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get selected asset type details
   const selectedAssetType = assetTypes.find(at => at.id === formData.asset_type_id);
   const isMFAsset = selectedAssetType?.asset_type_code === 'MF';
   const needsRecurringFields = formData.investment_type === 'sip' || formData.investment_type === 'recurring';
+
+  // Filter schemes based on search
+  const filteredSchemes = useMemo(() => {
+    if (!schemeSearch) return schemes;
+    const search = schemeSearch.toLowerCase();
+    return schemes.filter(s =>
+      (s.alias_name || s.scheme_name).toLowerCase().includes(search) ||
+      s.scheme_code.toLowerCase().includes(search)
+    );
+  }, [schemes, schemeSearch]);
+
+  // Calculate end date
+  const calculatedEndDate = useMemo(() => {
+    if (!formData.start_date) return null;
+    const startDate = new Date(formData.start_date);
+    if (isNaN(startDate.getTime())) return null;
+
+    const duration = durationUnit === 'months' ? formData.duration_months : formData.duration_years;
+    if (!duration) return null;
+
+    const endDate = new Date(startDate);
+    if (durationUnit === 'months') {
+      endDate.setMonth(endDate.getMonth() + duration);
+    } else {
+      endDate.setFullYear(endDate.getFullYear() + duration);
+    }
+
+    return endDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  }, [formData.start_date, formData.duration_months, formData.duration_years, durationUnit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validation
     if (!formData.asset_type_id) {
       setError('Please select an asset type');
+      return;
+    }
+    if (!investmentName.trim()) {
+      setError('Please provide a name for this investment');
       return;
     }
     if (!formData.principal_amount || formData.principal_amount <= 0) {
@@ -89,11 +122,11 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
       }
     }
 
-    // Prepare data based on duration unit
     const submitData: CreateInvestmentPlanRequest = {
       ...formData,
       duration_months: durationUnit === 'months' ? formData.duration_months : undefined,
-      duration_years: durationUnit === 'years' ? formData.duration_years : undefined
+      duration_years: durationUnit === 'years' ? formData.duration_years : undefined,
+      notes: investmentName
     };
 
     try {
@@ -112,390 +145,516 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
 
   if (loadingTypes || loadingSchemes) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <Loader style={{ width: '24px', height: '24px', color: colors.semantic.info, animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-        <p style={{ marginTop: '12px', color: colors.utility.secondaryText }}>Loading...</p>
+      <div style={{ padding: '60px', textAlign: 'center', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div>
+          <Loader style={{ width: '32px', height: '32px', color: colors.semantic.info, animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+          <p style={{ marginTop: '16px', color: colors.utility.secondaryText, fontSize: '14px' }}>Loading form data...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
+    <div style={{
+      width: '900px',
+      maxWidth: '95vw',
+      backgroundColor: colors.utility.primaryBackground,
+      borderRadius: '12px',
+      overflow: 'hidden'
+    }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-          {plan ? 'Edit Investment Plan' : 'Create Investment Plan'}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '20px 24px',
+        borderBottom: `1px solid ${colors.utility.primaryText}10`
+      }}>
+        <h3 style={{ fontSize: '20px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
+          {plan ? 'Edit Investment Plan' : 'Create New Investment Plan'}
         </h3>
         <button
           type="button"
           onClick={onCancel}
-          style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}
+          style={{
+            padding: '6px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: colors.utility.secondaryText,
+            display: 'flex',
+            alignItems: 'center'
+          }}
         >
           <X style={{ width: '20px', height: '20px' }} />
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
+      <form onSubmit={handleSubmit}>
+        <div style={{ padding: '24px', maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 16px',
+              backgroundColor: colors.semantic.error + '10',
+              border: `1px solid ${colors.semantic.error}30`,
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
+              <AlertCircle style={{ width: '18px', height: '18px', color: colors.semantic.error, flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', color: colors.semantic.error }}>{error}</span>
+            </div>
+          )}
+
+          {/* Two Column Layout */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            {/* LEFT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Investment Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Investment Name *
+                </label>
+                <input
+                  type="text"
+                  value={investmentName}
+                  onChange={(e) => setInvestmentName(e.target.value)}
+                  placeholder="e.g., My SIP in Large Cap Fund"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Asset Type Selection - Radio Buttons */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Asset Type *
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {assetTypes.slice(0, 9).map(at => (
+                    <button
+                      key={at.id}
+                      type="button"
+                      disabled={!!plan}
+                      onClick={() => updateField('asset_type_id', at.id)}
+                      style={{
+                        padding: '10px 8px',
+                        border: `2px solid ${formData.asset_type_id === at.id ? colors.semantic.info : colors.utility.primaryText + '20'}`,
+                        borderRadius: '8px',
+                        backgroundColor: formData.asset_type_id === at.id ? colors.semantic.info + '15' : colors.utility.secondaryBackground,
+                        color: formData.asset_type_id === at.id ? colors.semantic.info : colors.utility.primaryText,
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: plan ? 'not-allowed' : 'pointer',
+                        opacity: plan ? 0.6 : 1,
+                        transition: 'all 0.2s',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {at.asset_type_code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* MF Scheme Selection - Searchable */}
+              {isMFAsset && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                    Select Mutual Fund Scheme *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Search style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '16px',
+                      height: '16px',
+                      color: colors.utility.secondaryText
+                    }} />
+                    <input
+                      type="text"
+                      value={schemeSearch}
+                      onChange={(e) => setSchemeSearch(e.target.value)}
+                      placeholder="Search schemes..."
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 36px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        borderRadius: '8px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText,
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div style={{
+                    marginTop: '8px',
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    backgroundColor: colors.utility.secondaryBackground
+                  }}>
+                    {filteredSchemes.length === 0 ? (
+                      <div style={{ padding: '16px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
+                        No schemes found
+                      </div>
+                    ) : (
+                      filteredSchemes.map(s => (
+                        <button
+                          key={s.scheme_code}
+                          type="button"
+                          onClick={() => {
+                            updateField('scheme_code', s.scheme_code);
+                            setSchemeSearch(s.alias_name || s.scheme_name);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            border: 'none',
+                            borderBottom: `1px solid ${colors.utility.primaryText}05`,
+                            backgroundColor: formData.scheme_code === s.scheme_code ? colors.semantic.info + '10' : 'transparent',
+                            color: colors.utility.primaryText,
+                            fontSize: '13px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (formData.scheme_code !== s.scheme_code) {
+                              e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (formData.scheme_code !== s.scheme_code) {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
+                        >
+                          <div style={{ fontWeight: '500', marginBottom: '2px' }}>
+                            {s.alias_name || s.scheme_name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                            {s.scheme_code}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Principal Amount */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Principal Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.principal_amount || ''}
+                  onChange={(e) => updateField('principal_amount', parseFloat(e.target.value))}
+                  min="0"
+                  step="0.01"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Investment Type - Radio Buttons */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Investment Type *
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  {(['one_time', 'sip', 'recurring'] as InvestmentType[]).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => updateField('investment_type', type)}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        border: `2px solid ${formData.investment_type === type ? colors.semantic.info : colors.utility.primaryText + '20'}`,
+                        borderRadius: '8px',
+                        backgroundColor: formData.investment_type === type ? colors.semantic.info + '15' : colors.utility.secondaryBackground,
+                        color: formData.investment_type === type ? colors.semantic.info : colors.utility.primaryText,
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {type === 'one_time' ? 'One-time' : type.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recurring Fields */}
+              {needsRecurringFields && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                      Recurring Amount (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.recurring_amount || ''}
+                      onChange={(e) => updateField('recurring_amount', parseFloat(e.target.value))}
+                      min="0"
+                      step="0.01"
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        borderRadius: '8px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText,
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                      Frequency *
+                    </label>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      {(['monthly', 'quarterly', 'yearly'] as InvestmentFrequency[]).map(freq => (
+                        <button
+                          key={freq}
+                          type="button"
+                          onClick={() => updateField('investment_frequency', freq)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            border: `2px solid ${formData.investment_frequency === freq ? colors.semantic.info : colors.utility.primaryText + '20'}`,
+                            borderRadius: '8px',
+                            backgroundColor: formData.investment_frequency === freq ? colors.semantic.info + '15' : colors.utility.secondaryBackground,
+                            color: formData.investment_frequency === freq ? colors.semantic.info : colors.utility.primaryText,
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textTransform: 'capitalize'
+                          }}
+                        >
+                          {freq}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Start Date */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Start Date *
+                </label>
+                <input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => updateField('start_date', e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Has Started Checkbox */}
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '10px', backgroundColor: colors.utility.secondaryBackground, borderRadius: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.has_started}
+                    onChange={(e) => updateField('has_started', e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: colors.semantic.info, cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '14px', color: colors.utility.primaryText, fontWeight: '500' }}>
+                    Investment has started
+                  </span>
+                </label>
+              </div>
+
+              {/* Duration with End Date */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Duration
+                </label>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    value={durationUnit === 'months' ? (formData.duration_months || '') : (formData.duration_years || '')}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (durationUnit === 'months') {
+                        updateField('duration_months', value);
+                        updateField('duration_years', undefined);
+                      } else {
+                        updateField('duration_years', value);
+                        updateField('duration_months', undefined);
+                      }
+                    }}
+                    min="0"
+                    placeholder="Duration"
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      border: `1px solid ${colors.utility.primaryText}20`,
+                      borderRadius: '8px',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      fontSize: '14px'
+                    }}
+                  />
+                  <select
+                    value={durationUnit}
+                    onChange={(e) => setDurationUnit(e.target.value as 'months' | 'years')}
+                    style={{
+                      padding: '10px 12px',
+                      border: `1px solid ${colors.utility.primaryText}20`,
+                      borderRadius: '8px',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+                {calculatedEndDate && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: colors.semantic.success + '10',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: colors.semantic.success,
+                    fontWeight: '500'
+                  }}>
+                    Expected End Date: {calculatedEndDate}
+                  </div>
+                )}
+              </div>
+
+              {/* Expected Growth Rate */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                  Expected Growth Rate (% per year)
+                </label>
+                <input
+                  type="number"
+                  value={formData.custom_assumption_rate || selectedAssetType?.default_assumption_rate || ''}
+                  onChange={(e) => updateField('custom_assumption_rate', parseFloat(e.target.value))}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  placeholder={selectedAssetType?.default_assumption_rate ? `Default: ${selectedAssetType.default_assumption_rate}%` : 'Enter rate'}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '14px'
+                  }}
+                />
+                {selectedAssetType?.default_assumption_rate && (
+                  <p style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '6px', marginBottom: 0 }}>
+                    Default rate for {selectedAssetType.asset_type_name}: {selectedAssetType.default_assumption_rate}%
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
         <div style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '12px',
-          backgroundColor: colors.semantic.error + '10',
-          border: `1px solid ${colors.semantic.error}30`,
-          borderRadius: '8px',
-          marginBottom: '20px'
+          justifyContent: 'flex-end',
+          gap: '12px',
+          padding: '16px 24px',
+          borderTop: `1px solid ${colors.utility.primaryText}10`,
+          backgroundColor: colors.utility.secondaryBackground
         }}>
-          <AlertCircle style={{ width: '16px', height: '16px', color: colors.semantic.error }} />
-          <span style={{ fontSize: '14px', color: colors.semantic.error }}>{error}</span>
-        </div>
-      )}
-
-      {/* Asset Type Selection */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Asset Type *
-        </label>
-        <select
-          value={formData.asset_type_id}
-          onChange={(e) => updateField('asset_type_id', parseInt(e.target.value))}
-          disabled={!!plan}
-          required
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '8px',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText,
-            fontSize: '14px'
-          }}
-        >
-          <option value={0}>Select Asset Type</option>
-          {assetTypes.map(at => (
-            <option key={at.id} value={at.id}>
-              {at.asset_type_name} ({at.asset_type_code})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* MF Scheme Selection (only if MF asset type) */}
-      {isMFAsset && (
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-            Mutual Fund Scheme *
-          </label>
-          <select
-            value={formData.scheme_code || ''}
-            onChange={(e) => updateField('scheme_code', e.target.value)}
-            required={isMFAsset}
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
             style={{
-              width: '100%',
-              padding: '10px',
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '8px',
-              backgroundColor: colors.utility.secondaryBackground,
+              padding: '10px 24px',
+              backgroundColor: colors.utility.primaryText + '10',
               color: colors.utility.primaryText,
-              fontSize: '14px'
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.5 : 1
             }}
           >
-            <option value="">Select Scheme</option>
-            {schemes.map(s => (
-              <option key={s.scheme_code} value={s.scheme_code}>
-                {s.alias_name || s.scheme_name}
-              </option>
-            ))}
-          </select>
-          <p style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-            Only bookmarked schemes are available
-          </p>
-        </div>
-      )}
-
-      {/* Principal Amount */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Principal Amount (₹) *
-        </label>
-        <input
-          type="number"
-          value={formData.principal_amount}
-          onChange={(e) => updateField('principal_amount', parseFloat(e.target.value))}
-          min="0"
-          step="0.01"
-          required
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '8px',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText,
-            fontSize: '14px'
-          }}
-        />
-      </div>
-
-      {/* Investment Type */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Investment Type *
-        </label>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          {(['one_time', 'sip', 'recurring'] as InvestmentType[]).map(type => (
-            <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="investment_type"
-                value={type}
-                checked={formData.investment_type === type}
-                onChange={(e) => updateField('investment_type', e.target.value as InvestmentType)}
-                style={{ accentColor: colors.semantic.info }}
-              />
-              <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-                {type === 'one_time' ? 'One-time' : type.toUpperCase()}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Recurring Fields (if SIP or Recurring) */}
-      {needsRecurringFields && (
-        <>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-              Recurring Amount (₹) *
-            </label>
-            <input
-              type="number"
-              value={formData.recurring_amount || ''}
-              onChange={(e) => updateField('recurring_amount', parseFloat(e.target.value))}
-              min="0"
-              step="0.01"
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '8px',
-                backgroundColor: colors.utility.secondaryBackground,
-                color: colors.utility.primaryText,
-                fontSize: '14px'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-              Frequency *
-            </label>
-            <select
-              value={formData.investment_frequency || ''}
-              onChange={(e) => updateField('investment_frequency', e.target.value as InvestmentFrequency)}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                borderRadius: '8px',
-                backgroundColor: colors.utility.secondaryBackground,
-                color: colors.utility.primaryText,
-                fontSize: '14px'
-              }}
-            >
-              <option value="">Select Frequency</option>
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="yearly">Yearly</option>
-            </select>
-          </div>
-        </>
-      )}
-
-      {/* Start Date */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Start Date *
-        </label>
-        <input
-          type="date"
-          value={formData.start_date}
-          onChange={(e) => updateField('start_date', e.target.value)}
-          required
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '8px',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText,
-            fontSize: '14px'
-          }}
-        />
-      </div>
-
-      {/* Has Started Checkbox */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={formData.has_started}
-            onChange={(e) => updateField('has_started', e.target.checked)}
-            style={{ width: '16px', height: '16px', accentColor: colors.semantic.info }}
-          />
-          <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-            Investment has started
-          </span>
-        </label>
-      </div>
-
-      {/* Duration */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Duration
-        </label>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <input
-            type="number"
-            value={durationUnit === 'months' ? (formData.duration_months || '') : (formData.duration_years || '')}
-            onChange={(e) => {
-              const value = parseInt(e.target.value);
-              if (durationUnit === 'months') {
-                updateField('duration_months', value);
-                updateField('duration_years', undefined);
-              } else {
-                updateField('duration_years', value);
-                updateField('duration_months', undefined);
-              }
-            }}
-            min="0"
-            placeholder="Duration"
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
             style={{
-              flex: 1,
-              padding: '10px',
-              border: `1px solid ${colors.utility.primaryText}20`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 24px',
+              backgroundColor: colors.semantic.info,
+              color: 'white',
+              border: 'none',
               borderRadius: '8px',
-              backgroundColor: colors.utility.secondaryBackground,
-              color: colors.utility.primaryText,
-              fontSize: '14px'
-            }}
-          />
-          <select
-            value={durationUnit}
-            onChange={(e) => setDurationUnit(e.target.value as 'months' | 'years')}
-            style={{
-              padding: '10px',
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '8px',
-              backgroundColor: colors.utility.secondaryBackground,
-              color: colors.utility.primaryText,
-              fontSize: '14px'
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.7 : 1
             }}
           >
-            <option value="months">Months</option>
-            <option value="years">Years</option>
-          </select>
+            {submitting && <Loader style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />}
+            <span>{plan ? 'Update' : 'Create'} Investment</span>
+          </button>
         </div>
-      </div>
-
-      {/* Custom Growth Rate */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Expected Growth Rate (% per year)
-        </label>
-        <input
-          type="number"
-          value={formData.custom_assumption_rate || selectedAssetType?.default_assumption_rate || ''}
-          onChange={(e) => updateField('custom_assumption_rate', parseFloat(e.target.value))}
-          min="0"
-          max="100"
-          step="0.01"
-          placeholder={`Default: ${selectedAssetType?.default_assumption_rate || 0}%`}
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '8px',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText,
-            fontSize: '14px'
-          }}
-        />
-        {selectedAssetType?.default_assumption_rate && (
-          <p style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-            Default rate for {selectedAssetType.asset_type_name}: {selectedAssetType.default_assumption_rate}%
-          </p>
-        )}
-      </div>
-
-      {/* Notes */}
-      <div style={{ marginBottom: '24px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-          Notes
-        </label>
-        <textarea
-          value={formData.notes || ''}
-          onChange={(e) => updateField('notes', e.target.value)}
-          rows={3}
-          placeholder="Add any notes about this investment plan..."
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: `1px solid ${colors.utility.primaryText}20`,
-            borderRadius: '8px',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText,
-            fontSize: '14px',
-            resize: 'vertical'
-          }}
-        />
-      </div>
-
-      {/* Form Actions */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={submitting}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: colors.utility.primaryText + '10',
-            color: colors.utility.primaryText,
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: submitting ? 0.5 : 1
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 20px',
-            backgroundColor: colors.semantic.info,
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: submitting ? 0.7 : 1
-          }}
-        >
-          {submitting && <Loader style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />}
-          <span>{plan ? 'Update' : 'Create'} Investment Plan</span>
-        </button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 };
