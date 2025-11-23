@@ -407,6 +407,30 @@ export const API_ENDPOINTS = {
     BACKFILL_CANCEL: `${API_BASE}/scheme-aliases/backfill/cancel`,
   },
 
+  // Asset Types endpoints (Release 1.1 - Phase 1: Master Data)
+  ASSET_TYPES: {
+    LIST: `${API_BASE}/asset-types`,
+    CREATE: `${API_BASE}/asset-types`,
+    GET: (id: number) => `${API_BASE}/asset-types/${id}`,
+    GET_BY_CODE: (code: string) => `${API_BASE}/asset-types/code/${code}`,
+    UPDATE: (id: number) => `${API_BASE}/asset-types/${id}`,
+    DELETE: (id: number) => `${API_BASE}/asset-types/${id}`,
+  },
+
+  // Investment Plans endpoints (Release 1.1 - Phase 1: Full CRUD)
+  INVESTMENT_PLANS: {
+    // Customer Investment Plans
+    LIST: (customerId: number) => `${API_BASE}/customers/${customerId}/investments`,
+    CREATE: (customerId: number) => `${API_BASE}/customers/${customerId}/investments`,
+    GET: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
+    UPDATE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
+    DELETE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
+
+    // Family Investment Plans
+    FAMILY_SUMMARY: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/investments`,
+    FAMILY_BULK_ASSIGN: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/investments/bulk`,
+  },
+
   // File management endpoints (for future sprints)
   FILES: {
     UPLOAD: `${API_BASE}/files/upload`,
@@ -464,6 +488,8 @@ export type NavEndpoints = typeof API_ENDPOINTS.NAV;
 export type MarketEndpoints = typeof API_ENDPOINTS.MARKET;
 export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
 export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS;
+export type SchemeAliasEndpoints = typeof API_ENDPOINTS.SCHEME_ALIASES;
+export type AssetTypesEndpoints = typeof API_ENDPOINTS.ASSET_TYPES;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -1034,15 +1060,62 @@ export const MARKET_ANALYSIS_URLS = {
 export const SCHEME_ANALYSIS_URLS = {
   getHealth: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.HEALTH}${buildQueryParams({}, environment)}`,
-  
+
   calculateMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.CALCULATE_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
-  
+
   getLatestMetrics: (schemeId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.GET_METRICS(schemeId)}${buildQueryParams(params || {}, environment)}`,
-  
+
   batchCalculate: (params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE}${buildQueryParams(params || {}, environment)}`,
+} as const;
+
+// Asset Types-specific URL helpers (Release 1.1 - Phase 1: Master Data)
+export const ASSET_TYPES_URLS = {
+  getAssetTypes: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.LIST}${buildQueryParams(params || {}, environment)}`,
+
+  getAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.GET(id)}${buildQueryParams({}, environment)}`,
+
+  getAssetTypeByCode: (code: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.GET_BY_CODE(code)}${buildQueryParams({}, environment)}`,
+
+  createAssetType: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.CREATE}${buildQueryParams({}, environment)}`,
+
+  updateAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.UPDATE(id)}${buildQueryParams({}, environment)}`,
+
+  deleteAssetType: (id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.ASSET_TYPES.DELETE(id)}${buildQueryParams({}, environment)}`,
+} as const;
+
+// Investment Plans-specific URL helpers (Release 1.1 - Phase 1: Full CRUD)
+export const INVESTMENT_PLANS_URLS = {
+  // Customer Investment Plans
+  getInvestmentPlans: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.LIST(customerId)}${buildQueryParams(params || {}, environment)}`,
+
+  createInvestmentPlan: (customerId: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.CREATE(customerId)}${buildQueryParams({}, environment)}`,
+
+  getInvestmentPlan: (customerId: number, id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.GET(customerId, id)}${buildQueryParams({}, environment)}`,
+
+  updateInvestmentPlan: (customerId: number, id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.UPDATE(customerId, id)}${buildQueryParams({}, environment)}`,
+
+  deleteInvestmentPlan: (customerId: number, id: number, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.DELETE(customerId, id)}${buildQueryParams({}, environment)}`,
+
+  // Family Investment Plans
+  getFamilyInvestmentSummary: (familyHeadId: string, params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.FAMILY_SUMMARY(familyHeadId)}${buildQueryParams(params || {}, environment)}`,
+
+  bulkAssignToFamily: (familyHeadId: string, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.INVESTMENT_PLANS.FAMILY_BULK_ASSIGN(familyHeadId)}${buildQueryParams({}, environment)}`,
 } as const;
 
 // Development logging

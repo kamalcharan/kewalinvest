@@ -32,6 +32,9 @@ import schemeAliasRoutes from './routes/schemeAlias.routes';
 import bookmarkRoutes from './routes/bookmark.routes';
 import jobsRoutes from './routes/jobs.routes';
 import cruiseControlRoutes from './routes/cruiseControl.routes';
+import assetTypeRoutes from './routes/assetType.routes';
+import customerAssetRoutes from './routes/customerAsset.routes';
+import investmentPlanRoutes from './routes/investmentPlan.routes';
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -154,7 +157,11 @@ app.get('/health', (_req: Request, res: Response) => {
       jobs_scheduler: true,
       cruise_control_snapshots: true,
       cruise_control_snapshot_operations: true, // NEW: Snapshot operations (drop, generate, update, regenerate)
-      n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL
+      n8n: !!process.env.N8N_BASE_URL || !!process.env.N8N_WEBHOOK_URL,
+      // Release 1.1 - Phase 1: Multi-Asset Portfolio
+      asset_types: true,
+      customer_asset_assignments: true,
+      family_asset_aggregation: true
     }
   });
 });
@@ -223,6 +230,8 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/family', familyRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/cruise-control', cruiseControlRoutes);
+app.use('/api/asset-types', assetTypeRoutes); // Release 1.1 - Phase 1: Asset Types (master data)
+app.use('/api', investmentPlanRoutes); // Release 1.1 - Phase 1: Investment Plans (full CRUD)
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
