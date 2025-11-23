@@ -4,14 +4,14 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GoalInvestmentAllocation } from '../../types/goal.types';
-import { InvestmentPlan } from '../../types/investmentPlan.types';
+import { InvestmentPlan as InvestmentPlanType } from '../../types/investmentPlan.types';
 import GoalInvestmentAllocationService from '../../services/goalInvestmentAllocation.service';
 import { InvestmentPlanService } from '../../services/investmentPlan.service';
 
 interface GoalInvestmentAllocatorProps {
   goalId: number;
   customerId: number;
-  availableInvestments?: InvestmentPlan[]; // Optional - will fetch if not provided
+  availableInvestments?: InvestmentPlanType[]; // Optional - will fetch if not provided
   onAllocationChange?: () => void;
 }
 
@@ -25,7 +25,7 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [allocations, setAllocations] = useState<GoalInvestmentAllocation[]>([]);
-  const [availableInvestments, setAvailableInvestments] = useState<InvestmentPlan[]>(providedInvestments || []);
+  const [availableInvestments, setAvailableInvestments] = useState<InvestmentPlanType[]>(providedInvestments || []);
   const [selectedInvestments, setSelectedInvestments] = useState<{
     [key: number]: { selected: boolean; percentage: number };
   }>({});

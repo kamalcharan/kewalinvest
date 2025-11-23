@@ -142,7 +142,18 @@ const Dashboard: React.FC = () => {
     }
   ];
 
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number, compact: boolean = false): string => {
+    if (compact) {
+      if (value >= 10000000) {
+        return `₹${(value / 10000000).toFixed(2)}Cr`;
+      } else if (value >= 100000) {
+        return `₹${(value / 100000).toFixed(1)}L`;
+      } else if (value >= 1000) {
+        return `₹${(value / 1000).toFixed(1)}K`;
+      }
+      return `₹${Math.round(value)}`;
+    }
+
     if (value >= 10000000) {
       return `₹${(value / 10000000).toFixed(2)}Cr`;
     } else if (value >= 100000) {
