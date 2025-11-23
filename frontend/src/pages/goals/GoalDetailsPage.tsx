@@ -592,7 +592,7 @@ const GoalDetailsPage: React.FC = () => {
                 Allocate your investment plans to this goal. Total allocation must equal 100%.
               </p>
             </div>
-            <GoalInvestmentAllocator goalId={goalIdNum} />
+            <GoalInvestmentAllocator goalId={goalIdNum} customerId={customerIdNum} />
           </div>
         )}
 

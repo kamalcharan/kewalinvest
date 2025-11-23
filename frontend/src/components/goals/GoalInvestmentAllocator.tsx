@@ -5,34 +5,57 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GoalInvestmentAllocation, InvestmentPlan } from '../../types/goal.types';
 import GoalInvestmentAllocationService from '../../services/goalInvestmentAllocation.service';
+import { InvestmentPlanService } from '../../services/investmentPlan.service';
 
 interface GoalInvestmentAllocatorProps {
   goalId: number;
   customerId: number;
-  availableInvestments: InvestmentPlan[];
+  availableInvestments?: InvestmentPlan[]; // Optional - will fetch if not provided
   onAllocationChange?: () => void;
 }
 
 export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
   goalId,
   customerId,
-  availableInvestments,
+  availableInvestments: providedInvestments,
   onAllocationChange
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [allocations, setAllocations] = useState<GoalInvestmentAllocation[]>([]);
+  const [availableInvestments, setAvailableInvestments] = useState<InvestmentPlan[]>(providedInvestments || []);
   const [selectedInvestments, setSelectedInvestments] = useState<{
     [key: number]: { selected: boolean; percentage: number };
   }>({});
   const [loading, setLoading] = useState(false);
+  const [loadingInvestments, setLoadingInvestments] = useState(!providedInvestments);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch investment plans if not provided
+  useEffect(() => {
+    if (!providedInvestments && customerId) {
+      fetchInvestmentPlans();
+    }
+  }, [customerId, providedInvestments]);
 
   // Fetch existing allocations
   useEffect(() => {
     fetchAllocations();
   }, [goalId]);
+
+  const fetchInvestmentPlans = async () => {
+    setLoadingInvestments(true);
+    try {
+      const plans = await InvestmentPlanService.getCustomerInvestmentPlans(customerId);
+      setAvailableInvestments(plans);
+    } catch (err: any) {
+      console.error('Failed to fetch investment plans:', err);
+      setError('Failed to load investment plans');
+    } finally {
+      setLoadingInvestments(false);
+    }
+  };
 
   const fetchAllocations = async () => {
     setLoading(true);
@@ -133,6 +156,43 @@ export const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = (
   };
 
   const totalAllocation = getTotalAllocation();
+
+  // Show loading state while fetching investment plans
+  if (loadingInvestments) {
+    return (
+      <div style={{
+        marginTop: '24px',
+        padding: '40px',
+        textAlign: 'center',
+        color: colors.utility.secondaryText
+      }}>
+        <div style={{ marginBottom: '12px', fontSize: '24px' }}>⏳</div>
+        <div>Loading investment plans...</div>
+      </div>
+    );
+  }
+
+  // Show message if no investment plans available
+  if (availableInvestments.length === 0) {
+    return (
+      <div style={{
+        marginTop: '24px',
+        padding: '40px',
+        textAlign: 'center',
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '8px',
+        border: `1px solid ${colors.utility.primaryText}20`
+      }}>
+        <div style={{ marginBottom: '12px', fontSize: '48px' }}>💼</div>
+        <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
+          No Investment Plans Found
+        </div>
+        <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+          Create investment plans first to allocate them to this goal.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
