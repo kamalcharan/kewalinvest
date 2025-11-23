@@ -1,6 +1,7 @@
 // frontend/src/pages/Dashboard.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
   Line,
@@ -13,6 +14,10 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
+import apiService from '../services/api.service';
+import { API_ENDPOINTS } from '../services/serviceURLs';
+import GoalInvestmentAllocationService from '../services/goalInvestmentAllocation.service';
+import { GoalCalculationResult } from '../types/goal.types';
 
 type TabType = 'dashboard' | 'rebalancing' | 'reports' | 'notifications';
 type PeriodType = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -40,13 +45,26 @@ interface HoldingData {
   returnPct: number;
 }
 
+interface GoalWithCalculation {
+  id: number;
+  title: string;
+  config_data: any;
+  calculation?: GoalCalculationResult | null;
+  loadingCalculation?: boolean;
+}
+
 const Dashboard: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedCustomer, setSelectedCustomer] = useState('101');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('1Y');
+
+  // Phase 2: Goals state
+  const [goals, setGoals] = useState<GoalWithCalculation[]>([]);
+  const [loadingGoals, setLoadingGoals] = useState<boolean>(false);
 
   // Sample data - replace with API calls
   const performanceData: PerformanceData[] = [
@@ -135,6 +153,54 @@ const Dashboard: React.FC = () => {
 
   const formatChartValue = (value: number): string => {
     return `₹${(value / 100000).toFixed(1)}L`;
+  };
+
+  // Phase 2: Fetch goals and calculations for selected customer
+  useEffect(() => {
+    fetchGoals();
+  }, [selectedCustomer]);
+
+  const fetchGoals = async () => {
+    setLoadingGoals(true);
+    try {
+      const response = await apiService.get<any>(
+        API_ENDPOINTS.GOALS.GET_CUSTOMER_GOALS(parseInt(selectedCustomer))
+      );
+
+      if (response.success && response.data) {
+        const goalsData: GoalWithCalculation[] = response.data.map((goal: any) => ({
+          id: goal.id,
+          title: goal.title,
+          config_data: goal.config_data,
+          calculation: null,
+          loadingCalculation: true
+        }));
+
+        setGoals(goalsData);
+
+        // Fetch calculations for each goal
+        goalsData.forEach(async (goal) => {
+          const calcResponse = await GoalInvestmentAllocationService.getGoalCalculations(goal.id);
+          if (calcResponse.success && calcResponse.data) {
+            setGoals(prev => prev.map(g =>
+              g.id === goal.id
+                ? { ...g, calculation: calcResponse.data, loadingCalculation: false }
+                : g
+            ));
+          } else {
+            setGoals(prev => prev.map(g =>
+              g.id === goal.id
+                ? { ...g, calculation: null, loadingCalculation: false }
+                : g
+            ));
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch goals:', error);
+    } finally {
+      setLoadingGoals(false);
+    }
   };
 
   // Icons
@@ -525,11 +591,11 @@ const Dashboard: React.FC = () => {
                             borderRadius: '12px',
                             fontSize: '13px',
                             fontWeight: '600',
-                            backgroundColor: holding.returnPct >= 0 
-                              ? colors.semantic.success + '20' 
+                            backgroundColor: holding.returnPct >= 0
+                              ? colors.semantic.success + '20'
                               : colors.semantic.error + '20',
-                            color: holding.returnPct >= 0 
-                              ? colors.semantic.success 
+                            color: holding.returnPct >= 0
+                              ? colors.semantic.success
                               : colors.semantic.error
                           }}>
                             {holding.returnPct >= 0 ? '+' : ''}{holding.returnPct.toFixed(1)}%
@@ -540,6 +606,268 @@ const Dashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Goals Overview (Phase 2) */}
+            <div style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              padding: '20px'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  margin: 0
+                }}>
+                  Goals Tracking (Phase 2)
+                </h2>
+                <button
+                  onClick={() => navigate('/goals')}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: colors.brand.primary,
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.brand.primary}`,
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  View All Goals →
+                </button>
+              </div>
+
+              {loadingGoals ? (
+                <div style={{
+                  padding: '40px',
+                  textAlign: 'center',
+                  color: colors.utility.secondaryText
+                }}>
+                  Loading goals...
+                </div>
+              ) : goals.length === 0 ? (
+                <div style={{
+                  padding: '40px',
+                  textAlign: 'center',
+                  color: colors.utility.secondaryText
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎯</div>
+                  <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+                    No Goals Found
+                  </div>
+                  <div style={{ fontSize: '14px' }}>
+                    Create goals to start tracking investment progress
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {/* Goal Summary Stats */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: '12px',
+                    marginBottom: '20px'
+                  }}>
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: colors.brand.primary + '10',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
+                        Total Goals
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: colors.brand.primary }}>
+                        {goals.length}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: colors.semantic.success + '10',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
+                        On Track
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: colors.semantic.success }}>
+                        {goals.filter(g => g.calculation?.is_on_track).length}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: colors.semantic.error + '10',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
+                        High Risk
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: colors.semantic.error }}>
+                        {goals.filter(g => g.calculation?.risk_level === 'high').length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Goals Grid */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {goals.map((goal) => (
+                      <div
+                        key={goal.id}
+                        onClick={() => navigate(`/goals/${goal.id}`)}
+                        style={{
+                          padding: '16px',
+                          backgroundColor: colors.utility.primaryBackground,
+                          border: `1px solid ${colors.utility.primaryText}20`,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.brand.primary;
+                          e.currentTarget.style.boxShadow = `0 2px 8px ${colors.brand.primary}20`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        {/* Goal Header */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          marginBottom: '12px'
+                        }}>
+                          <h3 style={{
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: colors.utility.primaryText,
+                            margin: 0,
+                            flex: 1
+                          }}>
+                            {goal.title}
+                          </h3>
+                          {goal.calculation && (
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              backgroundColor:
+                                goal.calculation.risk_level === 'high' ? colors.semantic.error + '20' :
+                                goal.calculation.risk_level === 'medium' ? colors.semantic.warning + '20' :
+                                colors.semantic.success + '20',
+                              color:
+                                goal.calculation.risk_level === 'high' ? colors.semantic.error :
+                                goal.calculation.risk_level === 'medium' ? colors.semantic.warning :
+                                colors.semantic.success
+                            }}>
+                              {goal.calculation.risk_level.toUpperCase()} RISK
+                            </span>
+                          )}
+                        </div>
+
+                        {goal.loadingCalculation ? (
+                          <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText, fontSize: '12px' }}>
+                            Loading...
+                          </div>
+                        ) : goal.calculation ? (
+                          <>
+                            {/* Progress Bar */}
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: '4px'
+                              }}>
+                                <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                                  Progress
+                                </span>
+                                <span style={{ fontSize: '12px', fontWeight: '600', color: colors.brand.primary }}>
+                                  {goal.calculation.progress_percentage.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div style={{
+                                width: '100%',
+                                height: '6px',
+                                backgroundColor: colors.utility.primaryText + '10',
+                                borderRadius: '3px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{
+                                  width: `${Math.min(100, goal.calculation.progress_percentage)}%`,
+                                  height: '100%',
+                                  backgroundColor: goal.calculation.is_on_track ? colors.semantic.success : colors.semantic.warning,
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                            </div>
+
+                            {/* Metrics Grid */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr',
+                              gap: '8px',
+                              marginBottom: '8px'
+                            }}>
+                              <div>
+                                <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>Current</div>
+                                <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                                  {formatCurrency(goal.calculation.current_amount, true)}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>Projected</div>
+                                <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                                  {formatCurrency(goal.calculation.projected_amount, true)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px',
+                              backgroundColor: goal.calculation.is_on_track ? colors.semantic.success + '10' : colors.semantic.warning + '10',
+                              borderRadius: '6px',
+                              fontSize: '11px'
+                            }}>
+                              <span>{goal.calculation.is_on_track ? '✓' : '⚠️'}</span>
+                              <span style={{
+                                fontWeight: '600',
+                                color: goal.calculation.is_on_track ? colors.semantic.success : colors.semantic.warning
+                              }}>
+                                {goal.calculation.is_on_track ? 'On Track' : `SIP Required: ${formatCurrency(goal.calculation.monthly_sip_required, true)}/mo`}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{
+                            padding: '20px',
+                            textAlign: 'center',
+                            color: colors.utility.secondaryText,
+                            fontSize: '12px'
+                          }}>
+                            No allocations configured
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
