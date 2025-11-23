@@ -13,10 +13,11 @@ import GoalActionCard from '../../components/goals/GoalActionCard';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import JTBDExecutionCard from '../../components/jtbd/JTBDExecutionCard';
 import GoalMetricsCard from '../../components/goals/GoalMetricsCard';
+import GoalInvestmentAllocator from '../../components/goals/GoalInvestmentAllocator';
 import { GoalActionItem } from '../../types/goal.types';
 import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 
-type TabType = 'overview' | 'history' | 'schemes' | 'actions';
+type TabType = 'overview' | 'history' | 'schemes' | 'actions' | 'allocations';
 
 const GoalDetailsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -179,7 +180,8 @@ const GoalDetailsPage: React.FC = () => {
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'history', label: 'History', icon: '📈' },
-    { id: 'schemes', label: 'Schemes', icon: '📋' },
+    { id: 'schemes', label: 'Schemes (Phase 1)', icon: '📋' },
+    { id: 'allocations', label: 'Allocations (Phase 2)', icon: '🎯' },
     { id: 'actions', label: 'Actions', icon: '💡' }
   ];
 
@@ -559,6 +561,38 @@ const GoalDetailsPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Allocations Tab (Phase 2) */}
+        {activeTab === 'allocations' && (
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '12px',
+            padding: '24px'
+          }}>
+            <div style={{
+              marginBottom: '20px',
+              paddingBottom: '16px',
+              borderBottom: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                margin: '0 0 8px 0'
+              }}>
+                🎯 Investment Allocations (Phase 2)
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: colors.utility.secondaryText,
+                margin: 0
+              }}>
+                Allocate your investment plans to this goal. Total allocation must equal 100%.
+              </p>
+            </div>
+            <GoalInvestmentAllocator goalId={goalIdNum} />
           </div>
         )}
 
