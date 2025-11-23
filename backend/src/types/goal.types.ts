@@ -2,20 +2,94 @@
 
 export type GoalTrackingType = 'time_based_goal' | 'price_based_goal' | 'time_and_price_goal';
 
+// ==================== PHASE 2: INVESTMENT PLAN ALLOCATION ====================
+export interface GoalInvestmentAllocation {
+  id: number;
+  tenant_id: number;
+  is_live: boolean;
+  goal_id: number;
+  investment_plan_id: number;
+  allocated_percentage: number;
+  allocated_amount: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: number | null;
+
+  // Joined data (optional)
+  investment_plan?: InvestmentPlan;
+  current_value?: number;
+}
+
+export interface InvestmentPlan {
+  id: number;
+  customer_id: number;
+  asset_type_id: number;
+  asset_type_code: string;
+  asset_type_name: string;
+  principal_amount: number;
+  start_date: string;
+  has_started: boolean;
+  duration_months: number | null;
+  duration_years: number | null;
+  investment_type: 'one_time' | 'sip' | 'recurring';
+  recurring_amount: number | null;
+  investment_frequency: 'monthly' | 'quarterly' | 'yearly' | null;
+  custom_assumption_rate: number | null;
+  default_assumption_rate: number;
+  scheme_code: string | null;
+  current_value?: number;
+}
+
+export interface GoalCalculationResult {
+  goal_id: number;
+  current_amount: number;
+  progress_percentage: number;
+  projected_amount: number;
+  monthly_sip_required: number;
+  is_on_track: boolean;
+  risk_level: 'low' | 'medium' | 'high';
+  time_remaining_months: number;
+  projected_completion_date: string | null;
+  shortfall_surplus: number;
+}
+
+export interface GoalWithCalculations {
+  goal_id: number;
+  goal_name: string;
+  target_amount: number;
+  target_date: string;
+  current_amount: number;
+  progress_percentage: number;
+  projected_amount: number;
+  monthly_sip_required: number;
+  is_on_track: boolean;
+  risk_level: 'low' | 'medium' | 'high';
+  investment_allocations: GoalInvestmentAllocation[];
+  asset_breakdown: Record<string, number>;
+}
+
 // ==================== BASE GOAL CONFIG ====================
 export interface BaseGoalConfig {
   goal_name: string;
   goal_type: GoalTrackingType;
   expected_return_rate: number; // Annual percentage: 12 = 12% p.a.
   inflation_rate?: number; // Optional: default 6%
-  
-  // Portfolio mapping
-  linked_schemes: {
+
+  // DEPRECATED: Portfolio mapping via schemes (Phase 1)
+  // Use GoalInvestmentAllocation table instead (Phase 2)
+  linked_schemes?: {
     scheme_code: string;
     scheme_name: string;
     allocation_percentage: number; // What % of this scheme is for this goal
   }[];
-  
+
+  // NEW Phase 2: Investment plan mapping
+  linked_investments?: {
+    investment_plan_id: number;
+    allocation_percentage: number;
+  }[];
+
   // Investment tracking
   current_value: number; // Auto-calculated from portfolio
   monthly_contribution: number; // Current SIP amount
@@ -198,10 +272,30 @@ export interface GoalTrackingStatus {
 }
 
 // ==================== ASSET ALLOCATION UTILIZATION ====================
+// DEPRECATED: Scheme-based allocation (Phase 1)
 export interface SchemeAllocationUtilization {
   scheme_code: string;
   scheme_name: string;
   total_portfolio_value: number;
+  allocated_value: number;
+  allocated_percentage: number;
+  available_value: number;
+  available_percentage: number;
+  is_fully_allocated: boolean;
+  allocation_breakdown: {
+    goal_id: number;
+    goal_name: string;
+    allocation_percentage: number;
+    allocation_value: number;
+  }[];
+}
+
+// NEW Phase 2: Investment plan allocation utilization
+export interface InvestmentAllocationUtilization {
+  investment_plan_id: number;
+  asset_type_code: string;
+  asset_type_name: string;
+  current_value: number;
   allocated_value: number;
   allocated_percentage: number;
   available_value: number;
