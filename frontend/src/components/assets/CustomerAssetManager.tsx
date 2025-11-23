@@ -160,10 +160,9 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
           <div style={{
             backgroundColor: colors.utility.primaryBackground,
             borderRadius: '12px',
-            maxWidth: '600px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto'
+            minWidth: '800px',
+            maxWidth: '1100px',
+            width: 'auto'
           }}>
             <InvestmentPlanForm
               customerId={customerId}
@@ -192,10 +191,9 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
           <div style={{
             backgroundColor: colors.utility.primaryBackground,
             borderRadius: '12px',
-            maxWidth: '600px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto'
+            minWidth: '800px',
+            maxWidth: '1100px',
+            width: 'auto'
           }}>
             <InvestmentPlanForm
               customerId={customerId}
