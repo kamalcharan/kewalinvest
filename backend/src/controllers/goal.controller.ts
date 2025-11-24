@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { GoalService } from '../services/goal.service';
-import { CreateGoalRequest, UpdateGoalRequest } from '../types/goal.types';
+import { CreateGoalRequest, UpdateGoalRequest, validateWithdrawals } from '../types/goal.types';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -60,6 +60,27 @@ export class GoalController {
           error: 'config_data is required'
         });
         return;
+      }
+
+      // Validate withdrawals if present
+      if (data.config_data.has_withdrawals && data.config_data.withdrawals) {
+        const targetAmount = 'target_amount' in data.config_data ? data.config_data.target_amount : undefined;
+        const targetDate = 'target_date' in data.config_data ? data.config_data.target_date : undefined;
+
+        const withdrawalValidation = validateWithdrawals(
+          data.config_data.withdrawals,
+          targetAmount,
+          targetDate
+        );
+
+        if (!withdrawalValidation.isValid) {
+          res.status(400).json({
+            success: false,
+            error: 'Withdrawal validation failed',
+            validation_errors: withdrawalValidation.errors
+          });
+          return;
+        }
       }
 
       const goal = await this.goalService.createGoal(

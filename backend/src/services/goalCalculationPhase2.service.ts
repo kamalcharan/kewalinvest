@@ -6,7 +6,8 @@ import { pool } from '../config/database';
 import {
   GoalCalculationResult,
   GoalInvestmentAllocation,
-  GoalWithCalculations
+  GoalWithCalculations,
+  GoalWithdrawal
 } from '../types/goal.types';
 import { GoalInvestmentAllocationService } from './goalInvestmentAllocation.service';
 
@@ -169,12 +170,20 @@ export class GoalCalculationPhase2Service {
     // Determine if on track
     const isOnTrack = projectedAmount >= targetAmount;
 
-    // Calculate monthly SIP required to reach target
-    const monthlyRequired = this.calculateRequiredMonthlySIP(
+    // Calculate weighted average return rate from asset allocations
+    const weightedReturnRate = this.calculateWeightedReturnRate(allocations);
+
+    // Extract withdrawals from config
+    const withdrawals = configData.withdrawals || [];
+
+    // Calculate monthly SIP required to reach target (with withdrawals)
+    const monthlyRequired = this.calculateRequiredMonthlySIPWithWithdrawals(
       currentAmount,
       targetAmount,
       timeRemainingMonths,
-      8 // Assumed return rate
+      weightedReturnRate,
+      withdrawals,
+      targetDate
     );
 
     // Calculate risk level based on asset allocation
@@ -334,5 +343,86 @@ export class GoalCalculationPhase2Service {
     }
 
     return assetBreakdown;
+  }
+
+  /**
+   * Calculate weighted average return rate from asset allocations
+   */
+  private calculateWeightedReturnRate(allocations: GoalInvestmentAllocation[]): number {
+    if (allocations.length === 0) {
+      return 8; // Default fallback rate
+    }
+
+    let totalValue = 0;
+    let weightedSum = 0;
+
+    for (const allocation of allocations) {
+      if (allocation.investment_plan) {
+        const investmentValue = this.calculateInvestmentCurrentValue(allocation.investment_plan);
+        const allocatedValue = investmentValue * (allocation.allocated_percentage / 100);
+
+        // Use custom rate if available, otherwise default
+        const rate = allocation.investment_plan.custom_assumption_rate ||
+                    allocation.investment_plan.default_assumption_rate;
+
+        totalValue += allocatedValue;
+        weightedSum += allocatedValue * rate;
+      }
+    }
+
+    if (totalValue === 0) {
+      return 8; // Default fallback rate
+    }
+
+    return weightedSum / totalValue;
+  }
+
+  /**
+   * Calculate required monthly SIP with withdrawals factored in
+   */
+  private calculateRequiredMonthlySIPWithWithdrawals(
+    currentAmount: number,
+    targetAmount: number,
+    timeRemainingMonths: number,
+    annualReturnRate: number,
+    withdrawals: GoalWithdrawal[],
+    targetDate: Date
+  ): number {
+    if (timeRemainingMonths <= 0) {
+      return 0;
+    }
+
+    const monthlyRate = annualReturnRate / 100 / 12;
+
+    // Calculate total amount needed considering withdrawals
+    let adjustedTarget = targetAmount;
+    const now = new Date();
+
+    // For each withdrawal, calculate its present value and add to target
+    for (const withdrawal of withdrawals) {
+      const withdrawalDate = new Date(withdrawal.withdrawal_date);
+      const monthsToWithdrawal = this.getMonthsDifference(now, withdrawalDate);
+
+      if (monthsToWithdrawal > 0) {
+        // Discount withdrawal amount to present value and add to target
+        // We need more money to account for withdrawals
+        const monthsAfterWithdrawal = this.getMonthsDifference(withdrawalDate, targetDate);
+
+        // The withdrawal amount needs to grow after being withdrawn
+        // So we need to have accumulated it by the withdrawal date
+        adjustedTarget += withdrawal.amount / Math.pow(1 + monthlyRate, monthsAfterWithdrawal);
+      }
+    }
+
+    // Standard SIP calculation with adjusted target
+    const futureValueFactor = Math.pow(1 + monthlyRate, timeRemainingMonths);
+    const numerator = (adjustedTarget - currentAmount * futureValueFactor) * monthlyRate;
+    const denominator = futureValueFactor - 1;
+
+    if (denominator === 0) {
+      return 0;
+    }
+
+    return Math.max(0, numerator / denominator);
   }
 }

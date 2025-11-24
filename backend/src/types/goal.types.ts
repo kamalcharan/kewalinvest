@@ -69,22 +69,146 @@ export interface GoalWithCalculations {
   asset_breakdown: Record<string, number>;
 }
 
+// ==================== WITHDRAWAL ====================
+export interface GoalWithdrawal {
+  id: string; // Client-generated ID (e.g., "w1", "w2")
+  amount: number;
+  withdrawal_date: string; // ISO date
+  reason: string;
+  sequence: number; // Order of withdrawal (1, 2, 3...)
+}
+
+export interface WithdrawalValidationError {
+  field: string;
+  message: string;
+  withdrawalId?: string;
+}
+
+export interface WithdrawalValidationResult {
+  isValid: boolean;
+  errors: WithdrawalValidationError[];
+}
+
+// ==================== VALIDATION FUNCTIONS ====================
+export function validateWithdrawals(
+  withdrawals: GoalWithdrawal[] | undefined,
+  targetAmount: number | undefined,
+  targetDate: string | undefined
+): WithdrawalValidationResult {
+  const errors: WithdrawalValidationError[] = [];
+
+  if (!withdrawals || withdrawals.length === 0) {
+    return { isValid: true, errors: [] };
+  }
+
+  // Validate target amount exists for withdrawal validation
+  if (!targetAmount) {
+    errors.push({
+      field: 'target_amount',
+      message: 'Target amount is required when withdrawals are specified'
+    });
+  }
+
+  // Validate target date exists for withdrawal validation
+  if (!targetDate) {
+    errors.push({
+      field: 'target_date',
+      message: 'Target date is required when withdrawals are specified'
+    });
+  }
+
+  const targetDateObj = targetDate ? new Date(targetDate) : null;
+  let totalWithdrawalAmount = 0;
+
+  for (const withdrawal of withdrawals) {
+    // Validate withdrawal amount
+    if (!withdrawal.amount || withdrawal.amount <= 0) {
+      errors.push({
+        field: 'withdrawal_amount',
+        message: 'Withdrawal amount must be greater than 0',
+        withdrawalId: withdrawal.id
+      });
+    }
+
+    // Validate withdrawal date
+    if (!withdrawal.withdrawal_date) {
+      errors.push({
+        field: 'withdrawal_date',
+        message: 'Withdrawal date is required',
+        withdrawalId: withdrawal.id
+      });
+    } else {
+      const withdrawalDate = new Date(withdrawal.withdrawal_date);
+
+      // Check if withdrawal date is before target date
+      if (targetDateObj && withdrawalDate >= targetDateObj) {
+        errors.push({
+          field: 'withdrawal_date',
+          message: 'Withdrawal date must be before target date',
+          withdrawalId: withdrawal.id
+        });
+      }
+
+      // Check if withdrawal date is in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (withdrawalDate < today) {
+        errors.push({
+          field: 'withdrawal_date',
+          message: 'Withdrawal date cannot be in the past',
+          withdrawalId: withdrawal.id
+        });
+      }
+    }
+
+    // Validate reason
+    if (!withdrawal.reason || withdrawal.reason.trim().length === 0) {
+      errors.push({
+        field: 'withdrawal_reason',
+        message: 'Withdrawal reason is required',
+        withdrawalId: withdrawal.id
+      });
+    }
+
+    totalWithdrawalAmount += withdrawal.amount;
+  }
+
+  // Validate total withdrawal amount < target amount
+  if (targetAmount && totalWithdrawalAmount >= targetAmount) {
+    errors.push({
+      field: 'total_withdrawals',
+      message: `Total withdrawals (${totalWithdrawalAmount}) must be less than target amount (${targetAmount})`
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
 // ==================== BASE GOAL CONFIG ====================
 export interface BaseGoalConfig {
   goal_name: string;
   goal_type: GoalTrackingType;
-  expected_return_rate: number; // Annual percentage: 12 = 12% p.a.
-  inflation_rate?: number; // Optional: default 6%
+
+  // Start date (can be future)
+  start_date?: string; // ISO date - defaults to today if not provided
+
+  // REMOVED: Assumptions now come from asset types
+  // expected_return_rate moved to asset level
+  // inflation_rate moved to asset level
 
   // DEPRECATED: Portfolio mapping via schemes (Phase 1)
   // Use GoalInvestmentAllocation table instead (Phase 2)
   linked_schemes?: {
     scheme_code: string;
     scheme_name: string;
-    allocation_percentage: number; // What % of this scheme is for this goal
+    allocation_percentage: number;
   }[];
 
-  // NEW Phase 2: Investment plan mapping
+  // DEPRECATED: Investment plan mapping (Phase 2)
+  // Use t_goal_investment_allocations table with asset types
   linked_investments?: {
     investment_plan_id: number;
     allocation_percentage: number;
@@ -93,6 +217,10 @@ export interface BaseGoalConfig {
   // Investment tracking
   current_value: number; // Auto-calculated from portfolio
   monthly_contribution: number; // Current SIP amount
+
+  // NEW: Withdrawal support
+  has_withdrawals?: boolean; // Does this goal have intermediate withdrawals?
+  withdrawals?: GoalWithdrawal[]; // Array of planned withdrawals
 }
 
 // ==================== TIME-BASED GOAL ====================
