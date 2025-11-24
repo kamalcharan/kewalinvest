@@ -41,7 +41,7 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
-    "@types/node": "^20.19.24",
+    "@types/node": "^20.19.25",
     "@types/node-fetch": "^2.6.13",
     "@types/pg": "^8.15.5",
     "@types/xlsx": "^0.0.35",

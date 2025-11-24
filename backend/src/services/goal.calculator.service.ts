@@ -147,15 +147,18 @@ export class GoalCalculatorService {
         inflation_adjusted_corpus: currentPortfolioValue
       };
     }
-    
+
+    // DEPRECATED: Assumptions moved to asset types - using defaults
+    const expectedReturnRate = 12; // Default return rate
+    const inflationRate = 6; // Default inflation rate
+
     const projectedCorpus = this.calculateFutureValue(
       currentPortfolioValue,
       config.monthly_contribution,
-      config.expected_return_rate,
+      expectedReturnRate,
       monthsRemaining
     );
-    
-    const inflationRate = config.inflation_rate || 6;
+
     const inflationAdjusted = projectedCorpus / Math.pow(1 + inflationRate / 100, monthsRemaining / 12);
     
     return {
@@ -181,12 +184,15 @@ export class GoalCalculatorService {
         pace_variance_months: 0
       };
     }
-    
+
+    // DEPRECATED: Assumptions moved to asset types - using defaults
+    const expectedReturnRate = 12; // Default return rate
+
     const monthsToTarget = this.calculateMonthsToTarget(
       config.target_amount,
       currentPortfolioValue,
       config.monthly_contribution,
-      config.expected_return_rate
+      expectedReturnRate
     );
     
     const achievementDate = new Date();
@@ -226,20 +232,23 @@ export class GoalCalculatorService {
         action_required: 'none'
       };
     }
-    
+
+    // DEPRECATED: Assumptions moved to asset types - using defaults
+    const expectedReturnRate = 12; // Default return rate
+
     // Calculate required SIP
     const requiredSIP = this.calculateRequiredSIP(
       config.target_amount,
       currentPortfolioValue,
       monthsRemaining,
-      config.expected_return_rate
+      expectedReturnRate
     );
-    
+
     // Calculate projected corpus with current SIP
     const projectedCorpus = this.calculateFutureValue(
       currentPortfolioValue,
       config.current_monthly_sip,
-      config.expected_return_rate,
+      expectedReturnRate,
       monthsRemaining
     );
     
@@ -253,7 +262,7 @@ export class GoalCalculatorService {
       config.current_monthly_sip,
       config.target_amount,
       monthsRemaining,
-      config.expected_return_rate
+      expectedReturnRate
     );
     
     // Determine confidence level
