@@ -549,67 +549,63 @@ const GoalWizardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Withdrawal Radio Buttons */}
-            <div style={{
-              marginBottom: '24px',
-              padding: '16px',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '8px',
-              border: `1px solid ${colors.utility.primaryText}10`
-            }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '12px' }}>
+            {/* Withdrawal Radio Buttons - 2 columns */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
                 Intermediate Withdrawals
               </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '10px',
                   padding: '12px',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   border: `2px solid ${!formData.has_withdrawals ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                  backgroundColor: !formData.has_withdrawals ? colors.brand.primary + '10' : 'transparent',
-                  cursor: 'pointer'
+                  backgroundColor: !formData.has_withdrawals ? colors.brand.primary + '10' : colors.utility.secondaryBackground,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
                 }}>
                   <input
                     type="radio"
                     name="withdrawals"
                     checked={!formData.has_withdrawals}
                     onChange={() => setFormData(prev => ({ ...prev, has_withdrawals: false, withdrawals: [] }))}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
                   />
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-                      This goal does not have any planned withdrawals
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      No Withdrawals
                     </div>
-                    <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                      The full corpus will be available at goal completion
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '2px' }}>
+                      Full corpus at completion
                     </div>
                   </div>
                 </label>
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '10px',
                   padding: '12px',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   border: `2px solid ${formData.has_withdrawals ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                  backgroundColor: formData.has_withdrawals ? colors.brand.primary + '10' : 'transparent',
-                  cursor: 'pointer'
+                  backgroundColor: formData.has_withdrawals ? colors.brand.primary + '10' : colors.utility.secondaryBackground,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
                 }}>
                   <input
                     type="radio"
                     name="withdrawals"
                     checked={formData.has_withdrawals}
                     onChange={() => setFormData(prev => ({ ...prev, has_withdrawals: true }))}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
                   />
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-                      This goal has intermediate withdrawals
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      Has Withdrawals
                     </div>
-                    <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                      Define withdrawal amounts and dates before goal completion
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '2px' }}>
+                      Define amounts & dates
                     </div>
                   </div>
                 </label>

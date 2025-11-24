@@ -101,13 +101,14 @@ export function validateWithdrawals(
     return { isValid: true, errors: [] };
   }
 
-  // Validate target amount exists for withdrawal validation
-  if (!targetAmount) {
-    errors.push({
-      field: 'target_amount',
-      message: 'Target amount is required when withdrawals are specified'
-    });
-  }
+  // REMOVED: Target amount validation - not required for time-based goals
+  // Time-based goals only have target_date, not target_amount
+  // if (!targetAmount) {
+  //   errors.push({
+  //     field: 'target_amount',
+  //     message: 'Target amount is required when withdrawals are specified'
+  //   });
+  // }
 
   // Validate target date exists for withdrawal validation
   if (!targetDate) {
