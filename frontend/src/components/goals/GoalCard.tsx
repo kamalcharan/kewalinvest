@@ -51,6 +51,9 @@ const GoalCard: React.FC<GoalCardProps> = ({
   // Phase 2: Use goal calculations hook
   const { calculations, loading: calcLoading, error: calcError } = useGoalCalculations(goal.id);
 
+  // Get config early for use in effects
+  const config = goal.config_data;
+
   // Color palette for pie chart segments
   const pieColors = [
     '#3B82F6', // Blue
@@ -73,8 +76,8 @@ const GoalCard: React.FC<GoalCardProps> = ({
       // Fallback: Use asset_allocations from config_data (for new goals)
       else if (config.asset_allocations && config.asset_allocations.length > 0) {
         // Create breakdown from percentage allocations
-        // Use target_amount or current_value as base
-        const baseAmount = config.target_amount || config.current_value || 100;
+        // Use target_amount (if exists) or current_value as base
+        const baseAmount = ('target_amount' in config ? config.target_amount : null) || config.current_value || 100;
         const breakdown: Record<string, number> = {};
         config.asset_allocations.forEach((allocation: any) => {
           breakdown[allocation.asset_type_name] = (allocation.allocation_percentage / 100) * baseAmount;
@@ -99,7 +102,6 @@ const GoalCard: React.FC<GoalCardProps> = ({
     }
   }, [showAllocations, goal.customer_id, calculations]);
 
-  const config = goal.config_data;
   const status = getGoalStatus(goal);
   const actions = getGoalActions(goal);
   const priorityDisplay = getPriorityDisplay(goal.priority);
