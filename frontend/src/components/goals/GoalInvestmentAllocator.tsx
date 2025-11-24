@@ -184,12 +184,30 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
         borderRadius: '8px',
         border: `1px solid ${colors.utility.primaryText}20`
       }}>
-        <div style={{ marginBottom: '12px', fontSize: '48px' }}>💼</div>
-        <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
+        <div style={{ marginBottom: '16px', fontSize: '48px' }}>💼</div>
+        <div style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '12px' }}>
           No Investment Plans Found
         </div>
-        <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
-          Create investment plans first to allocate them to this goal.
+        <div style={{ fontSize: '14px', color: colors.utility.secondaryText, marginBottom: '20px', lineHeight: '1.6' }}>
+          Before allocating investments to this goal, you need to create investment plans from the customer dashboard.
+        </div>
+        <div style={{
+          fontSize: '13px',
+          color: colors.utility.secondaryText,
+          backgroundColor: colors.utility.primaryBackground,
+          padding: '16px',
+          borderRadius: '6px',
+          textAlign: 'left',
+          maxWidth: '500px',
+          margin: '0 auto'
+        }}>
+          <div style={{ fontWeight: '600', marginBottom: '8px', color: colors.utility.primaryText }}>How to create Investment Plans:</div>
+          <ol style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.8' }}>
+            <li>Go to Customer Dashboard</li>
+            <li>Navigate to "Investments" tab</li>
+            <li>Add MF SIPs, FDs, Gold, or other investments</li>
+            <li>Return here to allocate them to this goal</li>
+          </ol>
         </div>
       </div>
     );
