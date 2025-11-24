@@ -34,7 +34,7 @@ interface FormData {
   target_date?: string;
   target_amount?: number;
   current_value: number;
-  monthly_contribution: number;
+  // REMOVED: monthly_contribution - Phase 2: This belongs to investment plans, not goals
   priority: 'critical' | 'high' | 'medium' | 'low';
 
   // Step 3 - Withdrawals
@@ -59,7 +59,6 @@ const GoalWizardPage: React.FC = () => {
     goal_name: '',
     start_date: new Date().toISOString().split('T')[0],
     current_value: 0,
-    monthly_contribution: 0,
     priority: 'high',
     has_withdrawals: false,
     withdrawals: [],
@@ -83,9 +82,18 @@ const GoalWizardPage: React.FC = () => {
   // Navigation
   const goToNextStep = () => {
     if (validateCurrentStep()) {
-      // Skip withdrawal step if not needed
+      // Phase 2: Skip Step 5 (asset allocation) - will be done via investment plan linking
       if (currentStep === 3 && !formData.has_withdrawals) {
-        setCurrentStep(5 as WizardStep); // Skip to asset allocation
+        // No withdrawals: Step 3 is final, submit directly
+        handleSubmit();
+        return;
+      } else if (currentStep === 3 && formData.has_withdrawals) {
+        // Has withdrawals: Go to Step 4
+        setCurrentStep(4 as WizardStep);
+      } else if (currentStep === 4) {
+        // After withdrawals: Submit directly
+        handleSubmit();
+        return;
       } else {
         setCurrentStep((prev) => Math.min(5, prev + 1) as WizardStep);
       }
@@ -129,10 +137,7 @@ const GoalWizardPage: React.FC = () => {
           showValidationError('Goal Description Required', 'Please enter a goal description');
           return false;
         }
-        if (formData.monthly_contribution <= 0) {
-          showValidationError('Monthly SIP Required', 'Please enter a monthly SIP amount');
-          return false;
-        }
+        // REMOVED: monthly_contribution validation - Phase 2: This belongs to investment plans
         if ((formData.goalType === 'price_based_goal' || formData.goalType === 'time_and_price_goal') && !formData.target_amount) {
           showValidationError('Target Amount Required', 'Please enter a target amount');
           return false;
@@ -214,7 +219,7 @@ const GoalWizardPage: React.FC = () => {
           ...(formData.target_date && { target_date: formData.target_date }),
           ...(formData.target_amount && { target_amount: formData.target_amount }),
           current_value: formData.current_value,
-          monthly_contribution: formData.monthly_contribution,
+          monthly_contribution: 0, // Phase 2: Placeholder for backward compatibility
           has_withdrawals: formData.has_withdrawals,
           withdrawals: formData.has_withdrawals ? formData.withdrawals : []
         }
@@ -296,13 +301,17 @@ const GoalWizardPage: React.FC = () => {
     </svg>
   );
 
-  const stepTitles = [
+  // Phase 2: Removed Step 5 (Asset Allocation) - will be done via investment plan linking
+  const allSteps = [
     { number: 1, label: 'Goal Type' },
     { number: 2, label: 'Goal Status' },
     { number: 3, label: 'Configuration' },
-    { number: 4, label: 'Withdrawals' },
-    { number: 5, label: 'Asset Allocation' }
+    { number: 4, label: 'Withdrawals' }
   ];
+
+  const stepTitles = formData.has_withdrawals
+    ? allSteps
+    : allSteps.filter(s => s.number !== 4); // Hide withdrawal step if not needed
 
   const totalAllocation = formData.asset_allocations.reduce((sum, a) => sum + a.allocation_percentage, 0);
   const weightedReturnRate = formData.asset_allocations.length > 0
@@ -339,7 +348,7 @@ const GoalWizardPage: React.FC = () => {
               Create Financial Goal
             </h1>
             <p style={{ fontSize: '13px', color: colors.utility.secondaryText, margin: '4px 0 0 0' }}>
-              Step {currentStep} of 5: {stepTitles[currentStep - 1].label}
+              Step {currentStep} of {formData.has_withdrawals ? '4' : '3'}: {stepTitles.find(s => s.number === currentStep)?.label || 'Configuration'}
             </p>
           </div>
         </div>
@@ -760,37 +769,7 @@ const GoalWizardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Monthly SIP Amount */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-                Monthly SIP Amount <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <div style={{ position: 'relative' }}>
-                <span style={{
-                  position: 'absolute',
-                  left: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: colors.utility.secondaryText,
-                  fontWeight: '600'
-                }}>₹</span>
-                <input
-                  type="number"
-                  value={formData.monthly_contribution || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, monthly_contribution: parseFloat(e.target.value) || 0 }))}
-                  placeholder="15000"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px 12px 36px',
-                    borderRadius: '8px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    fontSize: '14px',
-                    backgroundColor: colors.utility.secondaryBackground,
-                    color: colors.utility.primaryText
-                  }}
-                />
-              </div>
-            </div>
+            {/* REMOVED: Monthly SIP Amount - Phase 2: This belongs to investment plans */}
 
             {/* Priority Level */}
             <div style={{ marginBottom: '20px' }}>
@@ -1144,7 +1123,28 @@ const GoalWizardPage: React.FC = () => {
             ← Previous
           </button>
 
-          {currentStep < 5 ? (
+          {/* Phase 2: Show appropriate button based on step */}
+          {(currentStep === 3 && !formData.has_withdrawals) || currentStep === 4 ? (
+            // Final step: Show Create Goal button
+            <button
+              onClick={goToNextStep}
+              disabled={createGoalMutation.isPending}
+              style={{
+                padding: '10px 24px',
+                borderRadius: '8px',
+                border: 'none',
+                background: `linear-gradient(135deg, ${colors.semantic.success} 0%, ${colors.semantic.success}dd 100%)`,
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
+                opacity: createGoalMutation.isPending ? 0.5 : 1
+              }}
+            >
+              {createGoalMutation.isPending ? 'Creating...' : 'Create Goal ✓'}
+            </button>
+          ) : (
+            // Non-final steps: Show Next button
             <button
               onClick={goToNextStep}
               disabled={createGoalMutation.isPending}
@@ -1161,24 +1161,6 @@ const GoalWizardPage: React.FC = () => {
               }}
             >
               Next →
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={createGoalMutation.isPending}
-              style={{
-                padding: '10px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                background: `linear-gradient(135deg, ${colors.semantic.success} 0%, ${colors.semantic.success}dd 100%)`,
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
-                opacity: createGoalMutation.isPending ? 0.5 : 1
-              }}
-            >
-              {createGoalMutation.isPending ? 'Creating...' : 'Create Goal ✓'}
             </button>
           )}
         </div>

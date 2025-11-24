@@ -680,17 +680,22 @@ export class GoalService {
     // if (!config.expected_return_rate || config.expected_return_rate <= 0) {
     //   errors.push('expected_return_rate must be positive');
     // }
-    if (!config.linked_schemes || config.linked_schemes.length === 0) {
-      errors.push('At least one linked scheme is required');
-    } else {
-      const totalAllocation = config.linked_schemes.reduce((sum, s) => sum + s.allocation_percentage, 0);
-      if (Math.abs(totalAllocation - 100) > 0.01) {
-        errors.push('Scheme allocation must sum to 100%');
-      }
-    }
-    if (config.monthly_contribution === undefined || config.monthly_contribution < 0) {
-      errors.push('monthly_contribution must be non-negative');
-    }
+
+    // DEPRECATED: Phase 2 - Scheme allocation moved to investment plan linking
+    // Goals no longer have direct scheme allocations
+    // if (!config.linked_schemes || config.linked_schemes.length === 0) {
+    //   errors.push('At least one linked scheme is required');
+    // } else {
+    //   const totalAllocation = config.linked_schemes.reduce((sum, s) => sum + s.allocation_percentage, 0);
+    //   if (Math.abs(totalAllocation - 100) > 0.01) {
+    //     errors.push('Scheme allocation must sum to 100%');
+    //   }
+    // }
+
+    // DEPRECATED: Phase 2 - Monthly contribution is part of investment plans, not goals
+    // if (config.monthly_contribution === undefined || config.monthly_contribution < 0) {
+    //   errors.push('monthly_contribution must be non-negative');
+    // }
 
     // Type-specific validations using type assertions
     if (goalType === 'time_based_goal') {
