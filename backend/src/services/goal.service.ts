@@ -63,26 +63,8 @@ export class GoalService {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // DEPRECATED: Phase 2 - Scheme validation removed
-      // Goals no longer have direct scheme allocations
-      // await this.validateLinkedSchemes(
-      //   client,
-      //   tenantId,
-      //   isLive,
-      //   data.customer_id,
-      //   data.config_data.linked_schemes
-      // );
-
-      // DEPRECATED: Phase 2 - Portfolio value comes from investment plan allocations
-      // Calculate initial values
+      // Phase 2: Use current_value directly (no scheme validation or portfolio calculation)
       const currentValue = data.config_data.current_value || 0;
-      // const currentValue = await this.getGoalPortfolioValue(
-      //   client,
-      //   tenantId,
-      //   isLive,
-      //   data.customer_id,
-      //   data.config_data.linked_schemes
-      // );
 
       // Perform initial calculation based on goal type
       const finalConfig = await this.performInitialCalculation(
