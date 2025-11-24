@@ -110,13 +110,15 @@ export function validateWithdrawals(
   //   });
   // }
 
-  // Validate target date exists for withdrawal validation
-  if (!targetDate) {
-    errors.push({
-      field: 'target_date',
-      message: 'Target date is required when withdrawals are specified'
-    });
-  }
+  // REMOVED: Target date validation - not required for price-based goals
+  // Price-based goals only have target_amount, not target_date
+  // Date validation will be skipped if target_date is not provided
+  // if (!targetDate) {
+  //   errors.push({
+  //     field: 'target_date',
+  //     message: 'Target date is required when withdrawals are specified'
+  //   });
+  // }
 
   const targetDateObj = targetDate ? new Date(targetDate) : null;
   let totalWithdrawalAmount = 0;
