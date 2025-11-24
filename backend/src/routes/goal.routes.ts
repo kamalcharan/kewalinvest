@@ -31,9 +31,6 @@ router.get('/:id/history', goalController.getGoalHistory);
 router.get('/:id/tracking-status', goalController.getGoalTrackingStatus);
 router.get('/customer/:customerId/tracking-status', goalController.getCustomerGoalTrackingStatus);
 
-// Asset Allocation Utilization
-router.get('/customer/:customerId/allocation-utilization', goalController.getAssetAllocationUtilization);
-
 // Watchlist
 router.post('/:id/watchlist', goalController.addToWatchlist);
 router.delete('/:id/watchlist', goalController.removeFromWatchlist);
