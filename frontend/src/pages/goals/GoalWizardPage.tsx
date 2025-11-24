@@ -82,18 +82,9 @@ const GoalWizardPage: React.FC = () => {
   // Navigation
   const goToNextStep = () => {
     if (validateCurrentStep()) {
-      // Phase 2: Skip Step 5 (asset allocation) - will be done via investment plan linking
+      // Skip withdrawal step if not needed
       if (currentStep === 3 && !formData.has_withdrawals) {
-        // No withdrawals: Step 3 is final, submit directly
-        handleSubmit();
-        return;
-      } else if (currentStep === 3 && formData.has_withdrawals) {
-        // Has withdrawals: Go to Step 4
-        setCurrentStep(4 as WizardStep);
-      } else if (currentStep === 4) {
-        // After withdrawals: Submit directly
-        handleSubmit();
-        return;
+        setCurrentStep(5 as WizardStep); // Skip to asset allocation
       } else {
         setCurrentStep((prev) => Math.min(5, prev + 1) as WizardStep);
       }
@@ -184,17 +175,14 @@ const GoalWizardPage: React.FC = () => {
         }
         return true;
       case 5:
-        // Asset allocation validation
+        // Phase 2: Asset allocation is OPTIONAL - can skip for now
+        // Will be linked via investment plans later
         const total = formData.asset_allocations.reduce((sum, a) => sum + a.allocation_percentage, 0);
-        if (formData.asset_allocations.length === 0) {
-          showValidationError('Asset Allocation Required', 'Please select at least one asset type');
+        if (formData.asset_allocations.length > 0 && Math.abs(total - 100) > 0.01) {
+          showValidationError('Invalid Allocation', `If allocating assets, total must equal 100% (currently ${total.toFixed(1)}%)`);
           return false;
         }
-        if (Math.abs(total - 100) > 0.01) {
-          showValidationError('Invalid Allocation', `Total allocation must equal 100% (currently ${total.toFixed(1)}%)`);
-          return false;
-        }
-        return true;
+        return true; // Allow proceeding even without allocations
       default:
         return true;
     }
@@ -301,17 +289,13 @@ const GoalWizardPage: React.FC = () => {
     </svg>
   );
 
-  // Phase 2: Removed Step 5 (Asset Allocation) - will be done via investment plan linking
-  const allSteps = [
+  const stepTitles = [
     { number: 1, label: 'Goal Type' },
     { number: 2, label: 'Goal Status' },
     { number: 3, label: 'Configuration' },
-    { number: 4, label: 'Withdrawals' }
+    { number: 4, label: 'Withdrawals' },
+    { number: 5, label: 'Asset Allocation' }
   ];
-
-  const stepTitles = formData.has_withdrawals
-    ? allSteps
-    : allSteps.filter(s => s.number !== 4); // Hide withdrawal step if not needed
 
   const totalAllocation = formData.asset_allocations.reduce((sum, a) => sum + a.allocation_percentage, 0);
   const weightedReturnRate = formData.asset_allocations.length > 0
@@ -348,7 +332,7 @@ const GoalWizardPage: React.FC = () => {
               Create Financial Goal
             </h1>
             <p style={{ fontSize: '13px', color: colors.utility.secondaryText, margin: '4px 0 0 0' }}>
-              Step {currentStep} of {formData.has_withdrawals ? '4' : '3'}: {stepTitles.find(s => s.number === currentStep)?.label || 'Configuration'}
+              Step {currentStep} of 5: {stepTitles[currentStep - 1].label}
             </p>
           </div>
         </div>
@@ -1123,28 +1107,7 @@ const GoalWizardPage: React.FC = () => {
             ← Previous
           </button>
 
-          {/* Phase 2: Show appropriate button based on step */}
-          {(currentStep === 3 && !formData.has_withdrawals) || currentStep === 4 ? (
-            // Final step: Show Create Goal button
-            <button
-              onClick={goToNextStep}
-              disabled={createGoalMutation.isPending}
-              style={{
-                padding: '10px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                background: `linear-gradient(135deg, ${colors.semantic.success} 0%, ${colors.semantic.success}dd 100%)`,
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
-                opacity: createGoalMutation.isPending ? 0.5 : 1
-              }}
-            >
-              {createGoalMutation.isPending ? 'Creating...' : 'Create Goal ✓'}
-            </button>
-          ) : (
-            // Non-final steps: Show Next button
+          {currentStep < 5 ? (
             <button
               onClick={goToNextStep}
               disabled={createGoalMutation.isPending}
@@ -1161,6 +1124,24 @@ const GoalWizardPage: React.FC = () => {
               }}
             >
               Next →
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={createGoalMutation.isPending}
+              style={{
+                padding: '10px 24px',
+                borderRadius: '8px',
+                border: 'none',
+                background: `linear-gradient(135deg, ${colors.semantic.success} 0%, ${colors.semantic.success}dd 100%)`,
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: createGoalMutation.isPending ? 'not-allowed' : 'pointer',
+                opacity: createGoalMutation.isPending ? 0.5 : 1
+              }}
+            >
+              {createGoalMutation.isPending ? 'Creating...' : 'Create Goal ✓'}
             </button>
           )}
         </div>
