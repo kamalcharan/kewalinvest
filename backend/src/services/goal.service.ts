@@ -676,9 +676,10 @@ export class GoalService {
 
     // Common validations
     if (!config.goal_name) errors.push('goal_name is required');
-    if (!config.expected_return_rate || config.expected_return_rate <= 0) {
-      errors.push('expected_return_rate must be positive');
-    }
+    // DEPRECATED: Assumptions moved to asset types
+    // if (!config.expected_return_rate || config.expected_return_rate <= 0) {
+    //   errors.push('expected_return_rate must be positive');
+    // }
     if (!config.linked_schemes || config.linked_schemes.length === 0) {
       errors.push('At least one linked scheme is required');
     } else {
@@ -1154,7 +1155,8 @@ private async getGoalPortfolioValue(
     }
 
     const monthlyContribution = config.monthly_contribution || 0;
-    const annualRate = config.expected_return_rate || 12;
+    // DEPRECATED: Assumptions moved to asset types - using default for backward compatibility
+    const annualRate = 12; // Default return rate
     const monthlyRate = annualRate / 12 / 100;
 
     // Future Value of Series calculation
