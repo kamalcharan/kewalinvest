@@ -42,6 +42,7 @@ import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import { CustomerAssetManager } from '../../components/assets/CustomerAssetManager';
+import GoalWizardModal from '../../components/goals/GoalWizardModal';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -61,6 +62,7 @@ const CustomerViewPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
 
   // Goal modal states
+  const [showGoalWizard, setShowGoalWizard] = useState(false);
   const [showGoalRecalculationModal, setShowGoalRecalculationModal] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
@@ -598,7 +600,7 @@ const CustomerViewPage: React.FC = () => {
         customerId={customer.id}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onNewGoal={() => navigate(`/customers/${customer.id}/goals/new`)}
+        onNewGoal={() => setShowGoalWizard(true)}
         onMeeting={() => setShowMeetingModal(true)}
       />
 
@@ -1213,7 +1215,7 @@ comparisonData={comparisonIndexData}
                       Create your first investment goal to start tracking progress
                     </p>
                     <button
-                      onClick={() => navigate(`/customers/${customerId}/goals/new`)}
+                      onClick={() => setShowGoalWizard(true)}
                       style={{
                         padding: '12px 24px',
                         backgroundColor: colors.brand.primary,
@@ -1372,7 +1374,7 @@ comparisonData={comparisonIndexData}
                 )}
 
                 {/* Quick Actions */}
-                <GoalQuickActions onCreateGoal={() => navigate(`/customers/${customerId}/goals/new`)} />
+                <GoalQuickActions onCreateGoal={() => setShowGoalWizard(true)} />
               </div>
             </div>
           </div>
@@ -1516,6 +1518,19 @@ comparisonData={comparisonIndexData}
           previousCorpus={recalculationResult?.previousCorpus}
           newCorpus={recalculationResult?.newCorpus}
           error={recalculationResult?.error}
+        />
+      )}
+
+      {/* Goal Wizard Modal */}
+      {showGoalWizard && customerId && (
+        <GoalWizardModal
+          customerId={customerId}
+          isOpen={showGoalWizard}
+          onClose={() => setShowGoalWizard(false)}
+          onSuccess={() => {
+            setShowGoalWizard(false);
+            refetchGoals();
+          }}
         />
       )}
 
