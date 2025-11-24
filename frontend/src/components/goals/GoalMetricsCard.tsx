@@ -30,7 +30,8 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
     const projectedCorpus = 'projected_corpus' in config ? config.projected_corpus || 0 : 0;
     const targetAmount = 'target_amount' in config ? config.target_amount : projectedCorpus;
     const monthlyContribution = config.monthly_contribution || 0;
-    const expectedReturn = config.expected_return_rate || 12;
+    // Note: expected_return_rate removed - now comes from asset allocations
+    const expectedReturn = 12; // Default for display purposes
 
     // Factor 1: Value Gap Analysis
     let valueGap = 0;
@@ -187,15 +188,16 @@ const GoalMetricsCard: React.FC<GoalMetricsCardProps> = ({ goal, totalSIPs = 0, 
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Expected ROI:</span>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: colors.brand.primary }}>
-              {formatPercentage(config.expected_return_rate || 12, 1)}
+            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Note:</span>
+            <span style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+              ROI based on asset allocation
             </span>
           </div>
+          {/* Assumptions removed - now come from asset types */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Inflation:</span>
+            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Default Inflation:</span>
             <span style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
-              {formatPercentage(config.inflation_rate || 6, 1)}
+              {formatPercentage(6, 1)}
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

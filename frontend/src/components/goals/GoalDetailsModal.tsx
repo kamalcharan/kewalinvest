@@ -15,7 +15,7 @@ interface GoalDetailsModalProps {
   onClose: () => void;
 }
 
-type TabType = 'overview' | 'history' | 'schemes' | 'actions';
+type TabType = 'overview' | 'history' | 'actions';
 
 const GoalDetailsModal: React.FC<GoalDetailsModalProps> = ({
   goalId,
@@ -147,7 +147,6 @@ const GoalDetailsModal: React.FC<GoalDetailsModalProps> = ({
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'history', label: 'History', icon: '📈' },
-    { id: 'schemes', label: 'Schemes', icon: '📋' },
     { id: 'actions', label: 'Actions', icon: '💡' }
   ];
 
@@ -426,67 +425,6 @@ const GoalDetailsModal: React.FC<GoalDetailsModalProps> = ({
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Schemes Tab */}
-          {activeTab === 'schemes' && (
-            <div>
-              {config.linked_schemes.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
-                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
-                  <div style={{ fontSize: '13px' }}>No schemes linked</div>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                  {config.linked_schemes.map((scheme) => (
-                    <div
-                      key={scheme.scheme_code}
-                      style={{
-                        padding: '16px',
-                        backgroundColor: colors.utility.secondaryBackground,
-                        borderRadius: '8px',
-                        border: `1px solid ${colors.utility.primaryText}10`
-                      }}
-                    >
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: colors.utility.primaryText,
-                        marginBottom: '4px'
-                      }}>
-                        {scheme.scheme_name}
-                      </div>
-                      <div style={{
-                        fontSize: '10px',
-                        color: colors.utility.secondaryText,
-                        marginBottom: '8px'
-                      }}>
-                        {scheme.scheme_code}
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px',
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderRadius: '6px'
-                      }}>
-                        <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                          Allocation
-                        </div>
-                        <div style={{
-                          fontSize: '13px',
-                          fontWeight: '700',
-                          color: colors.brand.primary
-                        }}>
-                          {formatPercentage(scheme.allocation_percentage, 1)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

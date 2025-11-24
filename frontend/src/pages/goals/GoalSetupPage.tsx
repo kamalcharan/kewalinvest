@@ -79,8 +79,9 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
       setNotes(config.notes || '');
       setSelectedType(config.goal_type);
       setGoalName(config.goal_name);
-      setExpectedReturnRate(config.expected_return_rate || DEFAULT_RETURN_RATE);
-      setInflationRate(config.inflation_rate || DEFAULT_INFLATION_RATE);
+      // DEPRECATED: Assumptions moved to asset types
+      setExpectedReturnRate(DEFAULT_RETURN_RATE);
+      setInflationRate(DEFAULT_INFLATION_RATE);
       setMonthlyContribution(config.monthly_contribution || 0);
       setLinkedSchemes(config.linked_schemes || []);
 
@@ -287,8 +288,9 @@ const GoalSetupPage: React.FC<GoalSetupPageProps> = () => {
     const configData: any = {
       goal_name: goalName.trim(),
       goal_type: selectedType,
-      expected_return_rate: expectedReturnRate,
-      inflation_rate: inflationRate,
+      // DEPRECATED: Assumptions moved to asset types
+      // expected_return_rate: expectedReturnRate,
+      // inflation_rate: inflationRate,
       monthly_contribution: monthlyContribution,
       linked_schemes: linkedSchemes,
       current_value: currentValue,

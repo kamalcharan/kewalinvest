@@ -45,6 +45,7 @@ import CustomerFormPage from './pages/customers/CustomerFormPage';
 import CustomerViewPage from './pages/customers/CustomerViewPage';
 
 // Goal pages
+import GoalWizardPage from './pages/goals/GoalWizardPage';
 import GoalSetupPage from './pages/goals/GoalSetupPage';
 import GoalDetailsPage from './pages/goals/GoalDetailsPage';
 
@@ -92,7 +93,7 @@ function App() {
                 <Route path="customers/:customerId" element={<CustomerViewPage />} />
 
                 {/* Goal Routes */}
-                <Route path="customers/:customerId/goals/new" element={<GoalSetupPage />} />
+                <Route path="customers/:customerId/goals/new" element={<GoalWizardPage />} />
                 <Route path="customers/:customerId/goals/:goalId" element={<GoalDetailsPage />} />
                 <Route path="customers/:customerId/goals/:goalId/edit" element={<GoalSetupPage />} />
                 <Route path="customers/:customerId/goals/:goalId/rebalance" element={<GoalSetupPage />} />

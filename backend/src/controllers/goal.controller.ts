@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { GoalService } from '../services/goal.service';
-import { CreateGoalRequest, UpdateGoalRequest } from '../types/goal.types';
+import { CreateGoalRequest, UpdateGoalRequest, validateWithdrawals } from '../types/goal.types';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -60,6 +60,27 @@ export class GoalController {
           error: 'config_data is required'
         });
         return;
+      }
+
+      // Validate withdrawals if present
+      if (data.config_data.has_withdrawals && data.config_data.withdrawals) {
+        const targetAmount = 'target_amount' in data.config_data ? data.config_data.target_amount : undefined;
+        const targetDate = 'target_date' in data.config_data ? data.config_data.target_date : undefined;
+
+        const withdrawalValidation = validateWithdrawals(
+          data.config_data.withdrawals,
+          targetAmount,
+          targetDate
+        );
+
+        if (!withdrawalValidation.isValid) {
+          res.status(400).json({
+            success: false,
+            error: 'Withdrawal validation failed',
+            validation_errors: withdrawalValidation.errors
+          });
+          return;
+        }
       }
 
       const goal = await this.goalService.createGoal(
@@ -483,45 +504,6 @@ export class GoalController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get customer goal tracking status'
-      });
-    }
-  };
-
-  // ==================== ASSET ALLOCATION UTILIZATION ====================
-
-  /**
-   * Get asset allocation utilization for a customer
-   * GET /api/goals/customer/:customerId/allocation-utilization
-   */
-  getAssetAllocationUtilization = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      const { user, environment } = req;
-      const isLive = environment === 'live';
-      const customerId = parseInt(req.params.customerId);
-
-      if (isNaN(customerId)) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid customer ID'
-        });
-        return;
-      }
-
-      const utilization = await this.goalService.getAssetAllocationUtilization(
-        user!.tenant_id,
-        isLive,
-        customerId
-      );
-
-      res.json({
-        success: true,
-        data: utilization
-      });
-    } catch (error: any) {
-      console.error('Error getting asset allocation utilization:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to get asset allocation utilization'
       });
     }
   };

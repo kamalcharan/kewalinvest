@@ -461,8 +461,23 @@ CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshot
 CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
 CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
 
+-- DEPRECATED: Old goal-scheme allocation indexes (Phase 1)
+-- Commented out as table is replaced by t_goal_investment_allocations in Phase 2
+/*
 CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_goal ON t_goal_scheme_allocations USING btree (goal_id);
 CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_scheme ON t_goal_scheme_allocations USING btree (scheme_id);
+*/
+
+-- NEW Phase 2: Goal-Investment allocation indexes
+CREATE INDEX IF NOT EXISTS idx_goal_investments_goal ON t_goal_investment_allocations USING btree (goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_plan ON t_goal_investment_allocations USING btree (investment_plan_id);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_tenant ON t_goal_investment_allocations USING btree (tenant_id, is_live);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_composite ON t_goal_investment_allocations USING btree (tenant_id, is_live, goal_id);
+
+COMMENT ON INDEX idx_goal_investments_goal IS 'Phase 2: Find all investment plans allocated to a specific goal';
+COMMENT ON INDEX idx_goal_investments_plan IS 'Phase 2: Find all goals that a specific investment plan is allocated to';
+COMMENT ON INDEX idx_goal_investments_tenant IS 'Phase 2: Tenant isolation and environment filtering';
+COMMENT ON INDEX idx_goal_investments_composite IS 'Phase 2: Optimized composite index for goal queries';
 
 -- ============================================================================
 -- 2.8: MARKET DATA INDEXES
@@ -727,7 +742,15 @@ CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
 CREATE TRIGGER update_jtbd_executions_updated_at BEFORE UPDATE ON t_jtbd_executions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- DEPRECATED: Old goal-scheme allocations trigger (Phase 1)
+-- Commented out as table is replaced by t_goal_investment_allocations in Phase 2
+/*
 CREATE TRIGGER update_goal_scheme_allocations_updated_at BEFORE UPDATE ON t_goal_scheme_allocations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+*/
+
+-- NEW Phase 2: Goal-Investment allocations trigger
+CREATE TRIGGER trigger_update_goal_investments_updated_at BEFORE UPDATE ON t_goal_investment_allocations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Market data triggers

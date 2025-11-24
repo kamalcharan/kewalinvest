@@ -63,23 +63,8 @@ export class GoalService {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Validate linked schemes exist in customer's portfolio
-      await this.validateLinkedSchemes(
-        client,
-        tenantId,
-        isLive,
-        data.customer_id,
-        data.config_data.linked_schemes
-      );
-
-      // Calculate initial values
-      const currentValue = await this.getGoalPortfolioValue(
-        client,
-        tenantId,
-        isLive,
-        data.customer_id,
-        data.config_data.linked_schemes
-      );
+      // Phase 2: Use current_value directly (no scheme validation or portfolio calculation)
+      const currentValue = data.config_data.current_value || 0;
 
       // Perform initial calculation based on goal type
       const finalConfig = await this.performInitialCalculation(
@@ -676,20 +661,26 @@ export class GoalService {
 
     // Common validations
     if (!config.goal_name) errors.push('goal_name is required');
-    if (!config.expected_return_rate || config.expected_return_rate <= 0) {
-      errors.push('expected_return_rate must be positive');
-    }
-    if (!config.linked_schemes || config.linked_schemes.length === 0) {
-      errors.push('At least one linked scheme is required');
-    } else {
-      const totalAllocation = config.linked_schemes.reduce((sum, s) => sum + s.allocation_percentage, 0);
-      if (Math.abs(totalAllocation - 100) > 0.01) {
-        errors.push('Scheme allocation must sum to 100%');
-      }
-    }
-    if (config.monthly_contribution === undefined || config.monthly_contribution < 0) {
-      errors.push('monthly_contribution must be non-negative');
-    }
+    // DEPRECATED: Assumptions moved to asset types
+    // if (!config.expected_return_rate || config.expected_return_rate <= 0) {
+    //   errors.push('expected_return_rate must be positive');
+    // }
+
+    // DEPRECATED: Phase 2 - Scheme allocation moved to investment plan linking
+    // Goals no longer have direct scheme allocations
+    // if (!config.linked_schemes || config.linked_schemes.length === 0) {
+    //   errors.push('At least one linked scheme is required');
+    // } else {
+    //   const totalAllocation = config.linked_schemes.reduce((sum, s) => sum + s.allocation_percentage, 0);
+    //   if (Math.abs(totalAllocation - 100) > 0.01) {
+    //     errors.push('Scheme allocation must sum to 100%');
+    //   }
+    // }
+
+    // DEPRECATED: Phase 2 - Monthly contribution is part of investment plans, not goals
+    // if (config.monthly_contribution === undefined || config.monthly_contribution < 0) {
+    //   errors.push('monthly_contribution must be non-negative');
+    // }
 
     // Type-specific validations using type assertions
     if (goalType === 'time_based_goal') {
@@ -1154,7 +1145,8 @@ private async getGoalPortfolioValue(
     }
 
     const monthlyContribution = config.monthly_contribution || 0;
-    const annualRate = config.expected_return_rate || 12;
+    // DEPRECATED: Assumptions moved to asset types - using default for backward compatibility
+    const annualRate = 12; // Default return rate
     const monthlyRate = annualRate / 12 / 100;
 
     // Future Value of Series calculation
@@ -1181,93 +1173,6 @@ private async getGoalPortfolioValue(
     const years = endDate.getFullYear() - startDate.getFullYear();
     const months = endDate.getMonth() - startDate.getMonth();
     return years * 12 + months;
-  }
-
-  // ==================== ASSET ALLOCATION UTILIZATION ====================
-
-  /**
-   * Get asset allocation utilization for a customer
-   * Shows how much of each scheme is allocated to goals
-   */
-  async getAssetAllocationUtilization(
-    tenantId: number,
-    isLive: boolean,
-    customerId: number
-  ): Promise<any[]> {
-    const client = await this.db.connect();
-    try {
-      // Get all customer's goals
-      const goalsQuery = `
-        SELECT id, title, config_data
-        FROM t_jtbd_configurations
-        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
-          AND jtbd_type = 'goal_tracking' AND is_active = true
-      `;
-      const goalsResult = await client.query(goalsQuery, [tenantId, isLive, customerId]);
-
-      // Get customer's portfolio holdings
-      const portfolioQuery = `
-        SELECT scheme_code, scheme_name, current_value
-        FROM t_portfolio_holdings
-        WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
-      `;
-      const portfolioResult = await client.query(portfolioQuery, [tenantId, isLive, customerId]);
-
-      // Build scheme map
-      const schemeMap = new Map<string, any>();
-      for (const holding of portfolioResult.rows) {
-        schemeMap.set(holding.scheme_code, {
-          scheme_code: holding.scheme_code,
-          scheme_name: holding.scheme_name,
-          total_portfolio_value: holding.current_value,
-          allocated_value: 0,
-          allocated_percentage: 0,
-          available_value: holding.current_value,
-          available_percentage: 100,
-          is_fully_allocated: false,
-          allocation_breakdown: []
-        });
-      }
-
-      // Calculate allocations from goals
-      for (const goal of goalsResult.rows) {
-        const config = goal.config_data as any;
-        const linkedSchemes = config.linked_schemes || [];
-
-        for (const linkedScheme of linkedSchemes) {
-          const scheme = schemeMap.get(linkedScheme.scheme_code);
-          if (scheme) {
-            const allocationValue =
-              (scheme.total_portfolio_value * linkedScheme.allocation_percentage) / 100;
-
-            scheme.allocated_value += allocationValue;
-            scheme.allocation_breakdown.push({
-              goal_id: goal.id,
-              goal_name: config.goal_name,
-              allocation_percentage: linkedScheme.allocation_percentage,
-              allocation_value: allocationValue
-            });
-          }
-        }
-      }
-
-      // Calculate final percentages
-      const utilization = [];
-      for (const scheme of schemeMap.values()) {
-        scheme.allocated_percentage =
-          (scheme.allocated_value / scheme.total_portfolio_value) * 100;
-        scheme.available_value =
-          scheme.total_portfolio_value - scheme.allocated_value;
-        scheme.available_percentage = 100 - scheme.allocated_percentage;
-        scheme.is_fully_allocated = scheme.allocated_percentage >= 100;
-
-        utilization.push(scheme);
-      }
-
-      return utilization;
-    } finally {
-      client.release();
-    }
   }
 
   // ==================== WATCHLIST MANAGEMENT ====================

@@ -598,7 +598,7 @@ const CustomerViewPage: React.FC = () => {
         customerId={customer.id}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onNewGoal={() => navigate(`/customers/${customer.id}/goals/new`)}
+        onNewGoal={() => navigate(`/customers/${customerId}/goals/new`)}
         onMeeting={() => setShowMeetingModal(true)}
       />
 
