@@ -109,6 +109,14 @@ export interface BaseGoalConfig {
   has_withdrawals?: boolean; // Does this goal have intermediate withdrawals?
   withdrawals?: GoalWithdrawal[]; // Array of planned withdrawals
 
+  // NEW: Asset type allocations (for planning/pie chart display)
+  asset_allocations?: Array<{
+    asset_type_code: string;
+    asset_type_name: string;
+    allocation_percentage: number;
+    default_assumption_rate: number;
+  }>;
+
   // Optional notes
   notes?: string;
 }
