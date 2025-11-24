@@ -87,20 +87,8 @@ const GoalCard: React.FC<GoalCardProps> = ({
     }
   }, [showAllocations, goal.id, calculations, config]);
 
-  // Fallback: Fetch allocation utilization data (Phase 1 compatibility)
-  useEffect(() => {
-    if (showAllocations && goal.customer_id && !calculations) {
-      GoalService.getAssetAllocationUtilization(goal.customer_id)
-        .then(response => {
-          if (response.success && response.data) {
-            setAllocationData(response.data);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load allocation data:', error);
-        });
-    }
-  }, [showAllocations, goal.customer_id, calculations]);
+  // Phase 2: Removed Phase 1 fallback (getAssetAllocationUtilization)
+  // Asset breakdown now comes from Phase 2 calculations or config_data only
 
   const status = getGoalStatus(goal);
   const actions = getGoalActions(goal);
