@@ -48,7 +48,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
   const [assetBreakdown, setAssetBreakdown] = useState<Record<string, number>>({});
   const deleteMutation = useDeleteGoal();
 
-  // Phase 2: Use goal calculations hook
+  // Use goal calculations hook
   const { calculations, loading: calcLoading, error: calcError } = useGoalCalculations(goal.id);
 
   // Get config early for use in effects
@@ -66,10 +66,10 @@ const GoalCard: React.FC<GoalCardProps> = ({
     '#84CC16'  // Lime
   ];
 
-  // Phase 2: Fetch asset breakdown when showing allocations
+  // Fetch asset breakdown when showing allocations
   useEffect(() => {
     if (showAllocations && goal.id) {
-      // Use Phase 2 asset breakdown if available from calculations
+      // Use asset breakdown from calculations if available
       if (calculations?.asset_breakdown) {
         setAssetBreakdown(calculations.asset_breakdown);
       }
@@ -87,8 +87,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
     }
   }, [showAllocations, goal.id, calculations, config]);
 
-  // Phase 2: Removed Phase 1 fallback (getAssetAllocationUtilization)
-  // Asset breakdown now comes from Phase 2 calculations or config_data only
+  // Asset breakdown comes from calculations or config_data
 
   const status = getGoalStatus(goal);
   const actions = getGoalActions(goal);
@@ -123,9 +122,9 @@ const GoalCard: React.FC<GoalCardProps> = ({
     return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
   };
 
-  // Get key metrics based on goal type (Phase 2: Use calculations if available)
+  // Get key metrics based on goal type (use calculations if available)
   const getKeyMetrics = () => {
-    // Phase 2: Use calculations from backend if available
+    // Use calculations from backend if available
     if (calculations) {
       const targetAmount = (isPriceBasedGoal(config) || isTimeAndPriceGoal(config)) ? config.target_amount : 0;
       const targetDate = (isTimeBasedGoal(config) || isTimeAndPriceGoal(config)) ? config.target_date : undefined;
@@ -145,7 +144,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
       };
     }
 
-    // Phase 1 Fallback
+    // Fallback for goals without calculations
     if (isTimeBasedGoal(config)) {
       return {
         primary: formatCurrency(config.projected_corpus || 0, true),
@@ -459,19 +458,19 @@ const GoalCard: React.FC<GoalCardProps> = ({
                 <div style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText }}>
                   {metrics.primary}
                 </div>
-                {/* Phase 2: Current amount and projected amount */}
+                {/* Current amount and projected amount */}
                 {metrics.currentAmount !== undefined && (
                   <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
                     Current: {formatCurrency(metrics.currentAmount, true)} ({formatPercentage(metrics.progress, 1)})
                   </div>
                 )}
-                {/* Phase 1 Fallback: Current value */}
+                {/* Fallback: Current value from config */}
                 {metrics.currentAmount === undefined && metrics.progress !== null && config.current_value !== undefined && (
                   <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
                     Current: {formatCurrency(config.current_value, true)} ({formatPercentage(metrics.progress, 1)})
                   </div>
                 )}
-                {/* Phase 2: Risk Level & Monthly SIP Required */}
+                {/* Risk Level & Monthly SIP Required */}
                 {metrics.riskLevel && metrics.monthlyRequired !== undefined && (
                   <div style={{
                     display: 'flex',
@@ -503,10 +502,10 @@ const GoalCard: React.FC<GoalCardProps> = ({
                 )}
               </div>
 
-              {/* Center: Pie Chart with Asset Allocation (Phase 2) or Fund Allocation (Phase 1) */}
+              {/* Center: Pie Chart with Asset Allocation */}
               {!compact && showAllocations && (
                 <>
-                  {/* Phase 2: Asset Breakdown */}
+                  {/* Asset Breakdown */}
                   {Object.keys(assetBreakdown).length > 0 && (() => {
                     const total = Object.values(assetBreakdown).reduce((sum, val) => sum + val, 0);
                     const assetEntries = Object.entries(assetBreakdown).map(([name, value]) => ({
@@ -641,133 +640,6 @@ const GoalCard: React.FC<GoalCardProps> = ({
                       </div>
                     );
                   })()}
-
-                  {/* Phase 1 Fallback: Scheme Allocation */}
-                  {Object.keys(assetBreakdown).length === 0 && config.linked_schemes && config.linked_schemes.length > 0 && (
-                    <div
-                      style={{ position: 'relative', flexShrink: 0 }}
-                      onMouseEnter={() => setShowTooltip(true)}
-                      onMouseLeave={() => setShowTooltip(false)}
-                    >
-                      <div style={{
-                        position: 'relative',
-                        width: '80px',
-                        height: '80px',
-                        cursor: 'pointer'
-                      }}>
-                        {/* Pie Chart SVG */}
-                        <svg width="80" height="80">
-                          {config.linked_schemes?.map((scheme, index) => {
-                            let startAngle = 0;
-                            for (let i = 0; i < index; i++) {
-                              startAngle += (config.linked_schemes![i].allocation_percentage / 100) * 360;
-                            }
-                            const endAngle = startAngle + (scheme.allocation_percentage / 100) * 360;
-                            const sliceColor = pieColors[index % pieColors.length];
-
-                            return (
-                              <path
-                                key={scheme.scheme_code}
-                                d={createPieSlice(startAngle, endAngle, 32, 40, 40)}
-                                fill={sliceColor}
-                                opacity={0.9}
-                              />
-                            );
-                          })}
-                          {/* Center white circle to create donut effect */}
-                          <circle cx="40" cy="40" r="20" fill={colors.utility.secondaryBackground} />
-                        </svg>
-
-                        {/* Center percentage (goal progress) */}
-                        {metrics?.progress != null && (
-                          <div style={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{
-                              fontSize: '14px',
-                              fontWeight: '700',
-                              color: colors.utility.primaryText,
-                              lineHeight: '1'
-                            }}>
-                              {Math.round(metrics.progress)}%
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Tooltip with Scheme Breakdown */}
-                      {showTooltip && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          marginTop: '8px',
-                          backgroundColor: colors.utility.primaryBackground,
-                          border: `1px solid ${colors.utility.primaryText}20`,
-                          borderRadius: '8px',
-                          padding: '12px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                          zIndex: 1000,
-                          minWidth: '200px',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          <div style={{
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            color: colors.utility.primaryText,
-                            marginBottom: '8px',
-                            paddingBottom: '6px',
-                            borderBottom: `1px solid ${colors.utility.primaryText}15`
-                          }}>
-                            Fund Allocation
-                          </div>
-                          {config.linked_schemes?.map((scheme, index) => (
-                            <div
-                              key={scheme.scheme_code}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                marginBottom: '6px'
-                              }}
-                            >
-                              {/* Color Legend Box */}
-                              <div style={{
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '2px',
-                                backgroundColor: pieColors[index % pieColors.length],
-                                flexShrink: 0
-                              }} />
-                              {/* Scheme Name */}
-                              <div style={{
-                                flex: 1,
-                                fontSize: '11px',
-                                color: colors.utility.primaryText,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}>
-                                {scheme.scheme_name}
-                              </div>
-                              {/* Percentage */}
-                              <div style={{
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                color: colors.utility.primaryText
-                              }}>
-                                {scheme.allocation_percentage}%
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
 
