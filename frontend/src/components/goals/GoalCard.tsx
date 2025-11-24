@@ -66,12 +66,23 @@ const GoalCard: React.FC<GoalCardProps> = ({
   // Phase 2: Fetch asset breakdown when showing allocations
   useEffect(() => {
     if (showAllocations && goal.id) {
-      // Use Phase 2 asset breakdown if available
+      // Use Phase 2 asset breakdown if available from calculations
       if (calculations?.asset_breakdown) {
         setAssetBreakdown(calculations.asset_breakdown);
       }
+      // Fallback: Use asset_allocations from config_data (for new goals)
+      else if (config.asset_allocations && config.asset_allocations.length > 0) {
+        // Create breakdown from percentage allocations
+        // Use target_amount or current_value as base
+        const baseAmount = config.target_amount || config.current_value || 100;
+        const breakdown: Record<string, number> = {};
+        config.asset_allocations.forEach((allocation: any) => {
+          breakdown[allocation.asset_type_name] = (allocation.allocation_percentage / 100) * baseAmount;
+        });
+        setAssetBreakdown(breakdown);
+      }
     }
-  }, [showAllocations, goal.id, calculations]);
+  }, [showAllocations, goal.id, calculations, config]);
 
   // Fallback: Fetch allocation utilization data (Phase 1 compatibility)
   useEffect(() => {
