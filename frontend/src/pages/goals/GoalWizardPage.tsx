@@ -502,51 +502,51 @@ const GoalWizardPage: React.FC = () => {
 
         {/* STEP 3: Goal Configuration */}
         {currentStep === 3 && (
-          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText, margin: '0 0 20px 0' }}>📝 Goal Configuration</h3>
+          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText, margin: '0 0 16px 0' }}>📝 Goal Configuration</h3>
 
-            {/* Goal Name */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-                Goal Name <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="e.g., Aarav's Higher Education, Dream Home, Europe Trip"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  fontSize: '14px',
-                  backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.utility.primaryText
-                }}
-              />
-            </div>
-
-            {/* Goal Description */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-                Goal Description <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.goal_name}
-                onChange={(e) => setFormData(prev => ({ ...prev, goal_name: e.target.value }))}
-                placeholder="Brief description of the goal"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  fontSize: '14px',
-                  backgroundColor: colors.utility.secondaryBackground,
-                  color: colors.utility.primaryText
-                }}
-              />
+            {/* Goal Name & Description - 2 columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                  Goal Name <span style={{ color: colors.semantic.error }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="e.g., Higher Education"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    fontSize: '14px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                  Goal Description <span style={{ color: colors.semantic.error }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.goal_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, goal_name: e.target.value }))}
+                  placeholder="Brief description"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    fontSize: '14px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText
+                  }}
+                />
+              </div>
             </div>
 
             {/* Withdrawal Radio Buttons */}
@@ -695,30 +695,53 @@ const GoalWizardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Target Amount (for price-based goals) */}
-            {(formData.goalType === 'price_based_goal' || formData.goalType === 'time_and_price_goal') && (
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-                  Target Amount <span style={{ color: colors.semantic.error }}>*</span>
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{
-                    position: 'absolute',
-                    left: '16px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: colors.utility.secondaryText,
-                    fontWeight: '600'
-                  }}>₹</span>
+            {/* Target Amount & Date - Compact 2-column layout */}
+            {formData.goalType === 'time_and_price_goal' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                    Target Amount <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: colors.utility.secondaryText,
+                      fontSize: '13px',
+                      fontWeight: '600'
+                    }}>₹</span>
+                    <input
+                      type="number"
+                      value={formData.target_amount || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, target_amount: parseFloat(e.target.value) || undefined }))}
+                      placeholder="2500000"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 32px',
+                        borderRadius: '6px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        fontSize: '14px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                    Target Date <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
                   <input
-                    type="number"
-                    value={formData.target_amount || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, target_amount: parseFloat(e.target.value) || undefined }))}
-                    placeholder="2500000"
+                    type="date"
+                    value={formData.target_date || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
+                    min={formData.start_date}
                     style={{
                       width: '100%',
-                      padding: '12px 16px 12px 36px',
-                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
                       border: `1px solid ${colors.utility.primaryText}20`,
                       fontSize: '14px',
                       backgroundColor: colors.utility.secondaryBackground,
@@ -727,30 +750,64 @@ const GoalWizardPage: React.FC = () => {
                   />
                 </div>
               </div>
-            )}
-
-            {/* Target Date (for time-based goals) */}
-            {(formData.goalType === 'time_based_goal' || formData.goalType === 'time_and_price_goal') && (
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
-                  Target Date <span style={{ color: colors.semantic.error }}>*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.target_date || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
-                  min={formData.start_date}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    fontSize: '14px',
-                    backgroundColor: colors.utility.secondaryBackground,
-                    color: colors.utility.primaryText
-                  }}
-                />
-              </div>
+            ) : (
+              <>
+                {formData.goalType === 'price_based_goal' && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                      Target Amount <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute',
+                        left: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: colors.utility.secondaryText,
+                        fontSize: '13px',
+                        fontWeight: '600'
+                      }}>₹</span>
+                      <input
+                        type="number"
+                        value={formData.target_amount || ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, target_amount: parseFloat(e.target.value) || undefined }))}
+                        placeholder="2500000"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px 10px 32px',
+                          borderRadius: '6px',
+                          border: `1px solid ${colors.utility.primaryText}20`,
+                          fontSize: '14px',
+                          backgroundColor: colors.utility.secondaryBackground,
+                          color: colors.utility.primaryText
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {formData.goalType === 'time_based_goal' && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                      Target Date <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.target_date || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
+                      min={formData.start_date}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        fontSize: '14px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText
+                      }}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {/* REMOVED: Monthly SIP Amount - Phase 2: This belongs to investment plans */}
