@@ -60,6 +60,15 @@ export interface GoalWithCalculations {
   asset_breakdown: Record<string, number>;
 }
 
+// ==================== WITHDRAWAL ====================
+export interface GoalWithdrawal {
+  id: string; // Client-generated ID (e.g., "w1", "w2")
+  amount: number;
+  withdrawal_date: string; // ISO date
+  reason: string;
+  sequence: number; // Order of withdrawal (1, 2, 3...)
+}
+
 // ==================== SCHEME LINKING (DEPRECATED - Phase 1) ====================
 // DEPRECATED: Use GoalInvestmentAllocation instead
 export interface LinkedScheme {
@@ -78,18 +87,27 @@ export interface LinkedInvestment {
 export interface BaseGoalConfig {
   goal_name: string;
   goal_type: GoalTrackingType;
-  expected_return_rate: number; // Annual percentage: 12 = 12% p.a.
-  inflation_rate?: number; // Optional: default 6%
+
+  // Start date (can be future)
+  start_date?: string; // ISO date - defaults to today if not provided
+
+  // REMOVED: Assumptions now come from asset types
+  // expected_return_rate moved to asset level
+  // inflation_rate moved to asset level
 
   // DEPRECATED: Portfolio mapping via schemes (Phase 1)
   linked_schemes?: LinkedScheme[];
 
-  // NEW Phase 2: Investment plan mapping
+  // DEPRECATED: Investment plan mapping (Phase 2)
   linked_investments?: LinkedInvestment[];
 
   // Investment tracking
   current_value: number; // Auto-calculated from portfolio
   monthly_contribution: number; // Current SIP amount
+
+  // NEW: Withdrawal support
+  has_withdrawals?: boolean; // Does this goal have intermediate withdrawals?
+  withdrawals?: GoalWithdrawal[]; // Array of planned withdrawals
 
   // Optional notes
   notes?: string;

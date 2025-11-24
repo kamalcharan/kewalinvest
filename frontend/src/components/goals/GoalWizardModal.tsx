@@ -39,8 +39,9 @@ interface FormData {
   target_amount?: number;
   current_value: number;
   monthly_contribution: number;
-  expected_return_rate: number;
-  inflation_rate: number;
+  // DEPRECATED: Assumptions moved to asset types
+  // expected_return_rate: number;
+  // inflation_rate: number;
   priority: 'high' | 'medium' | 'low';
 
   // Step 4
@@ -65,8 +66,9 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
     start_date: new Date().toISOString().split('T')[0],
     current_value: 0,
     monthly_contribution: 0,
-    expected_return_rate: 12,
-    inflation_rate: 6,
+    // DEPRECATED: Assumptions moved to asset types
+    // expected_return_rate: 12,
+    // inflation_rate: 6,
     priority: 'high',
     linked_schemes: []
   });
@@ -183,8 +185,9 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
           ...(formData.target_amount && { target_amount: formData.target_amount }),
           current_value: formData.current_value,
           monthly_contribution: formData.monthly_contribution,
-          expected_return_rate: formData.expected_return_rate,
-          inflation_rate: formData.inflation_rate,
+          // DEPRECATED: Assumptions moved to asset types
+          // expected_return_rate: formData.expected_return_rate,
+          // inflation_rate: formData.inflation_rate,
           linked_schemes: formData.linked_schemes.map(s => ({
             scheme_code: s.scheme_code,
             scheme_name: s.scheme_name,
@@ -213,8 +216,9 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
       start_date: getTodayDate(),
       current_value: 0,
       monthly_contribution: 0,
-      expected_return_rate: 12,
-      inflation_rate: 6,
+      // DEPRECATED: Assumptions moved to asset types
+      // expected_return_rate: 12,
+      // inflation_rate: 6,
       priority: 'high',
       linked_schemes: []
     });
@@ -1016,7 +1020,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                   📊 Assumptions
                 </h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  <div>
+                  {/* DEPRECATED: Assumptions moved to asset types */}
+                  {/* <div>
                     <label style={{
                       display: 'block',
                       fontSize: '13px',
@@ -1029,11 +1034,11 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                     <div style={{ position: 'relative' }}>
                       <input
                         type="number"
-                        value={formData.expected_return_rate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expected_return_rate: parseFloat(e.target.value) || 12 }))}
+                        value={12}
                         step="0.5"
                         min="0"
                         max="30"
+                        disabled
                         style={{
                           width: '100%',
                           padding: '10px 32px 10px 14px',
@@ -1053,8 +1058,8 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         fontSize: '13px'
                       }}>%</span>
                     </div>
-                  </div>
-                  <div>
+                  </div> */}
+                  {/* <div>
                     <label style={{
                       display: 'block',
                       fontSize: '13px',
@@ -1067,11 +1072,11 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                     <div style={{ position: 'relative' }}>
                       <input
                         type="number"
-                        value={formData.inflation_rate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, inflation_rate: parseFloat(e.target.value) || 6 }))}
+                        value={6}
                         step="0.5"
                         min="0"
                         max="20"
+                        disabled
                         style={{
                           width: '100%',
                           padding: '10px 32px 10px 14px',
@@ -1091,7 +1096,7 @@ const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         fontSize: '13px'
                       }}>%</span>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
