@@ -17,7 +17,7 @@ import GoalInvestmentAllocator from '../../components/goals/GoalInvestmentAlloca
 import { GoalActionItem } from '../../types/goal.types';
 import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 
-type TabType = 'overview' | 'history' | 'schemes' | 'actions' | 'allocations';
+type TabType = 'overview' | 'history' | 'actions' | 'allocations';
 
 const GoalDetailsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -180,8 +180,7 @@ const GoalDetailsPage: React.FC = () => {
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'history', label: 'History', icon: '📈' },
-    { id: 'schemes', label: 'Schemes (Phase 1)', icon: '📋' },
-    { id: 'allocations', label: 'Allocations (Phase 2)', icon: '🎯' },
+    { id: 'allocations', label: 'Allocations', icon: '🎯' },
     { id: 'actions', label: 'Actions', icon: '💡' }
   ];
 
@@ -483,88 +482,7 @@ const GoalDetailsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Schemes Tab */}
-        {activeTab === 'schemes' && (
-          <div style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '12px',
-            padding: '24px'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              margin: '0 0 20px 0'
-            }}>
-              Linked Schemes
-            </h3>
-            {!config.linked_schemes || config.linked_schemes.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '60px 40px',
-                color: colors.utility.secondaryText
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>No Schemes Linked</div>
-                <div style={{ fontSize: '13px' }}>Add schemes to track this goal's performance</div>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-                {config.linked_schemes?.map((scheme) => (
-                  <div
-                    key={scheme.scheme_code}
-                    style={{
-                      padding: '20px',
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderRadius: '10px',
-                      border: `1px solid ${colors.utility.primaryText}10`,
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <div style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: colors.utility.primaryText,
-                      marginBottom: '6px',
-                      lineHeight: '1.4'
-                    }}>
-                      {scheme.scheme_name}
-                    </div>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.utility.secondaryText,
-                      marginBottom: '12px',
-                      fontFamily: 'monospace'
-                    }}>
-                      {scheme.scheme_code}
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px',
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '8px'
-                    }}>
-                      <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                        Allocation
-                      </div>
-                      <div style={{
-                        fontSize: '18px',
-                        fontWeight: '700',
-                        color: colors.brand.primary
-                      }}>
-                        {formatPercentage(scheme.allocation_percentage, 1)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Allocations Tab (Phase 2) */}
+        {/* Allocations Tab */}
         {activeTab === 'allocations' && (
           <div style={{
             backgroundColor: colors.utility.secondaryBackground,
@@ -582,7 +500,7 @@ const GoalDetailsPage: React.FC = () => {
                 color: colors.utility.primaryText,
                 margin: '0 0 8px 0'
               }}>
-                🎯 Investment Allocations (Phase 2)
+                🎯 Investment Allocations
               </h3>
               <p style={{
                 fontSize: '14px',
