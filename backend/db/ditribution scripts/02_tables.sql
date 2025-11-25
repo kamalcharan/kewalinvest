@@ -1398,7 +1398,8 @@ CREATE TABLE t_customer_asset_assignments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT unique_customer_asset UNIQUE(tenant_id, is_live, customer_id, asset_type_id, scheme_code),
+    -- Note: unique_customer_asset constraint removed in migration 019 to allow multiple same asset types
+    -- Duplicate investment name validation is handled in application layer (notes field)
     CONSTRAINT chk_duration CHECK (
         (duration_months IS NOT NULL AND duration_years IS NULL) OR
         (duration_months IS NULL AND duration_years IS NOT NULL) OR

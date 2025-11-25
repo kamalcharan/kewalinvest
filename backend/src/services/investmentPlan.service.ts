@@ -69,6 +69,34 @@ export class InvestmentPlanService {
   }
 
   /**
+   * Check if investment name already exists for this customer
+   */
+  async checkDuplicateName(
+    customerId: number,
+    name: string,
+    tenantId: number,
+    isLive: boolean,
+    excludeId?: number
+  ): Promise<boolean> {
+    const query = `
+      SELECT id FROM t_customer_asset_assignments
+      WHERE customer_id = $1
+        AND tenant_id = $2
+        AND is_live = $3
+        AND is_active = true
+        AND LOWER(TRIM(notes)) = LOWER(TRIM($4))
+        ${excludeId ? `AND id != $5` : ''}
+    `;
+
+    const values = excludeId
+      ? [customerId, tenantId, isLive, name, excludeId]
+      : [customerId, tenantId, isLive, name];
+
+    const result = await pool.query(query, values);
+    return result.rows.length > 0;
+  }
+
+  /**
    * Create new investment plan
    */
   async createInvestmentPlan(
@@ -81,6 +109,19 @@ export class InvestmentPlanService {
     const validation = this.validateInvestmentPlan(data);
     if (!validation.valid) {
       throw new Error(`Validation failed: ${validation.errors.map(e => e.message).join(', ')}`);
+    }
+
+    // Check for duplicate investment name
+    if (data.notes) {
+      const isDuplicate = await this.checkDuplicateName(
+        data.customer_id,
+        data.notes,
+        tenantId,
+        isLive
+      );
+      if (isDuplicate) {
+        throw new Error(`An investment plan with the name "${data.notes}" already exists for this customer`);
+      }
     }
 
     // If MF asset type, verify scheme_code is bookmarked

@@ -1,19 +1,56 @@
 // frontend/src/components/goals/GoalInvestmentAllocator.tsx
 // Phase 2: Component for allocating investment plans to goals
+// Updated: Radio button style, 3x3 grid, 100% default, assigned/unassigned display
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Plus, Loader, Check } from 'lucide-react';
 import { GoalInvestmentAllocation } from '../../types/goal.types';
 import { InvestmentPlan as InvestmentPlanType } from '../../types/investmentPlan.types';
 import GoalInvestmentAllocationService from '../../services/goalInvestmentAllocation.service';
 import { InvestmentPlanService } from '../../services/investmentPlan.service';
+import toastService from '../../services/toast.service';
 
 interface GoalInvestmentAllocatorProps {
   goalId: number;
   customerId: number;
-  availableInvestments?: InvestmentPlanType[]; // Optional - will fetch if not provided
+  availableInvestments?: InvestmentPlanType[];
   onAllocationChange?: () => void;
 }
+
+// Asset type icon mapping
+const getAssetIcon = (code: string): string => {
+  const icons: { [key: string]: string } = {
+    'MF': '📊',
+    'GOLD': '🪙',
+    'EQUITY': '📈',
+    'FD': '🏦',
+    'PPF': '🏛️',
+    'EPF': '💼',
+    'NPS': '🎯',
+    'REAL_ESTATE': '🏠',
+    'INSURANCE': '🛡️'
+  };
+  return icons[code] || '💰';
+};
+
+// Format currency
+const formatCurrency = (amount: number): string => {
+  if (amount >= 10000000) {
+    return `₹${(amount / 10000000).toFixed(2)} Cr`;
+  } else if (amount >= 100000) {
+    return `₹${(amount / 100000).toFixed(2)} L`;
+  } else if (amount >= 1000) {
+    return `₹${(amount / 1000).toFixed(1)} K`;
+  }
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
+
+// Format date
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+};
 
 const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
   goalId,
@@ -26,12 +63,9 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
 
   const [allocations, setAllocations] = useState<GoalInvestmentAllocation[]>([]);
   const [availableInvestments, setAvailableInvestments] = useState<InvestmentPlanType[]>(providedInvestments || []);
-  const [selectedInvestments, setSelectedInvestments] = useState<{
-    [key: number]: { selected: boolean; percentage: number };
-  }>({});
   const [loading, setLoading] = useState(false);
   const [loadingInvestments, setLoadingInvestments] = useState(!providedInvestments);
-  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Fetch investment plans if not provided
   useEffect(() => {
@@ -52,7 +86,7 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
       setAvailableInvestments(plans);
     } catch (err: any) {
       console.error('Failed to fetch investment plans:', err);
-      setError('Failed to load investment plans');
+      toastService.error('Failed to load investment plans');
     } finally {
       setLoadingInvestments(false);
     }
@@ -64,351 +98,441 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
       const response = await GoalInvestmentAllocationService.getGoalAllocations(goalId);
       if (response.success && response.data) {
         setAllocations(response.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch allocations:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Pre-populate selected investments
-        const selected: typeof selectedInvestments = {};
-        response.data.forEach(allocation => {
-          selected[allocation.investment_plan_id] = {
-            selected: true,
-            percentage: allocation.allocated_percentage
-          };
+  // Check if investment is allocated to current goal
+  const isAllocatedToThisGoal = (investmentId: number): boolean => {
+    return allocations.some(a => a.investment_plan_id === investmentId);
+  };
+
+  // Handle investment selection (add allocation)
+  const handleSelectInvestment = async (investmentId: number) => {
+    if (isAllocatedToThisGoal(investmentId)) {
+      // Already allocated, remove it
+      await handleRemoveAllocation(investmentId);
+    } else {
+      // Add new allocation with 100%
+      setSaving(true);
+      try {
+        await GoalInvestmentAllocationService.allocateInvestmentToGoal(goalId, {
+          investment_plan_id: investmentId,
+          allocated_percentage: 100
         });
-        setSelectedInvestments(selected);
+        toastService.success('Investment allocated to goal');
+        await fetchAllocations();
+        if (onAllocationChange) onAllocationChange();
+      } catch (err: any) {
+        toastService.error(err.message || 'Failed to allocate investment');
+      } finally {
+        setSaving(false);
       }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleInvestmentToggle = (investmentId: number) => {
-    setSelectedInvestments(prev => ({
-      ...prev,
-      [investmentId]: {
-        selected: !prev[investmentId]?.selected,
-        percentage: prev[investmentId]?.percentage || 0
-      }
-    }));
-  };
+  // Handle remove allocation
+  const handleRemoveAllocation = async (investmentId: number) => {
+    const allocation = allocations.find(a => a.investment_plan_id === investmentId);
+    if (!allocation) return;
 
-  const handlePercentageChange = (investmentId: number, percentage: number) => {
-    setSelectedInvestments(prev => ({
-      ...prev,
-      [investmentId]: {
-        ...prev[investmentId],
-        percentage: Math.min(100, Math.max(0, percentage))
-      }
-    }));
-  };
-
-  const handleSave = async () => {
-    setLoading(true);
-    setError(null);
-
+    setSaving(true);
     try {
-      // Get existing allocation IDs
-      const existingMap = new Map(allocations.map(a => [a.investment_plan_id, a.id]));
-
-      // Process each selected investment
-      for (const investment of availableInvestments) {
-        const selection = selectedInvestments[investment.id];
-        const existingAllocationId = existingMap.get(investment.id);
-
-        if (selection?.selected) {
-          // Add or update allocation
-          if (existingAllocationId) {
-            // Update existing
-            await GoalInvestmentAllocationService.updateAllocation(
-              goalId,
-              existingAllocationId,
-              { allocated_percentage: selection.percentage }
-            );
-          } else {
-            // Create new
-            await GoalInvestmentAllocationService.allocateInvestmentToGoal(goalId, {
-              investment_plan_id: investment.id,
-              allocated_percentage: selection.percentage
-            });
-          }
-        } else if (existingAllocationId) {
-          // Remove allocation
-          await GoalInvestmentAllocationService.removeAllocation(goalId, existingAllocationId);
-        }
-      }
-
-      // Refresh allocations
+      await GoalInvestmentAllocationService.removeAllocation(goalId, allocation.id);
+      toastService.success('Allocation removed');
       await fetchAllocations();
-
-      if (onAllocationChange) {
-        onAllocationChange();
-      }
+      if (onAllocationChange) onAllocationChange();
     } catch (err: any) {
-      setError(err.message || 'Failed to save allocations');
+      toastService.error(err.message || 'Failed to remove allocation');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const getTotalAllocation = (): number => {
-    return Object.values(selectedInvestments)
-      .filter(s => s.selected)
-      .reduce((sum, s) => sum + (s.percentage || 0), 0);
+  // Get investment display name
+  const getInvestmentDisplayName = (investment: InvestmentPlanType): string => {
+    if (investment.notes) {
+      return investment.notes;
+    }
+    // Fallback: asset type + principal + date
+    return `${investment.asset_type_name} - ${formatCurrency(investment.principal_amount)}`;
   };
 
-  const totalAllocation = getTotalAllocation();
+  // Get investment subtitle
+  const getInvestmentSubtitle = (investment: InvestmentPlanType): string => {
+    const parts: string[] = [];
+
+    if (investment.investment_type === 'sip' && investment.recurring_amount) {
+      parts.push(`SIP: ${formatCurrency(investment.recurring_amount)}/mo`);
+    } else if (investment.investment_type === 'recurring' && investment.recurring_amount) {
+      parts.push(`Recurring: ${formatCurrency(investment.recurring_amount)}`);
+    } else {
+      parts.push(`Principal: ${formatCurrency(investment.principal_amount)}`);
+    }
+
+    if (investment.start_date) {
+      parts.push(formatDate(investment.start_date));
+    }
+
+    return parts.join(' | ');
+  };
 
   // Show loading state while fetching investment plans
-  if (loadingInvestments) {
+  if (loadingInvestments || loading) {
     return (
       <div style={{
-        marginTop: '24px',
-        padding: '40px',
+        padding: '60px 40px',
         textAlign: 'center',
         color: colors.utility.secondaryText
       }}>
-        <div style={{ marginBottom: '12px', fontSize: '24px' }}>⏳</div>
-        <div>Loading investment plans...</div>
+        <Loader
+          style={{
+            width: '32px',
+            height: '32px',
+            color: colors.brand.primary,
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }}
+        />
+        <div style={{ fontSize: '14px' }}>Loading investment plans...</div>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
 
-  // Show message if no investment plans available
+  // Empty state - no investment plans
   if (availableInvestments.length === 0) {
     return (
       <div style={{
-        marginTop: '24px',
-        padding: '40px',
+        padding: '60px 40px',
         textAlign: 'center',
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '8px',
-        border: `1px solid ${colors.utility.primaryText}20`
+        backgroundColor: colors.utility.primaryBackground,
+        borderRadius: '12px',
+        border: `2px dashed ${colors.utility.primaryText}20`
       }}>
-        <div style={{ marginBottom: '16px', fontSize: '48px' }}>💼</div>
-        <div style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '12px' }}>
-          No Investment Plans Found
-        </div>
-        <div style={{ fontSize: '14px', color: colors.utility.secondaryText, marginBottom: '20px', lineHeight: '1.6' }}>
-          Before allocating investments to this goal, you need to create investment plans from the customer dashboard.
-        </div>
-        <div style={{
-          fontSize: '13px',
-          color: colors.utility.secondaryText,
-          backgroundColor: colors.utility.primaryBackground,
-          padding: '16px',
-          borderRadius: '6px',
-          textAlign: 'left',
-          maxWidth: '500px',
-          margin: '0 auto'
+        <div style={{ fontSize: '56px', marginBottom: '16px' }}>💼</div>
+        <h3 style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          color: colors.utility.primaryText,
+          marginBottom: '12px'
         }}>
-          <div style={{ fontWeight: '600', marginBottom: '8px', color: colors.utility.primaryText }}>How to create Investment Plans:</div>
-          <ol style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.8' }}>
-            <li>Go to Customer Dashboard</li>
-            <li>Navigate to "Investments" tab</li>
-            <li>Add MF SIPs, FDs, Gold, or other investments</li>
-            <li>Return here to allocate them to this goal</li>
-          </ol>
+          No Investment Plans Found
+        </h3>
+        <p style={{
+          fontSize: '14px',
+          color: colors.utility.secondaryText,
+          marginBottom: '24px',
+          maxWidth: '400px',
+          margin: '0 auto 24px',
+          lineHeight: '1.6'
+        }}>
+          Create investment plans first, then allocate them to this goal.
+        </p>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '12px 20px',
+          backgroundColor: colors.brand.primary + '15',
+          borderRadius: '8px',
+          color: colors.brand.primary,
+          fontSize: '13px',
+          fontWeight: '500'
+        }}>
+          <Plus size={16} />
+          Go to Investments tab to add plans
         </div>
       </div>
     );
   }
 
-  return (
-    <div style={{
-      marginTop: '24px',
-      padding: '20px',
-      border: `1px solid ${colors.utility.primaryText}20`,
-      borderRadius: '8px',
-      backgroundColor: colors.utility.secondaryBackground
-    }}>
-      <h3 style={{
-        margin: '0 0 16px 0',
-        fontSize: '16px',
-        fontWeight: '600',
-        color: colors.utility.primaryText
-      }}>
-        Allocate Investment Plans to Goal
-      </h3>
+  // Separate investments into unassigned and assigned to this goal
+  const allocatedInvestments = availableInvestments.filter(inv => isAllocatedToThisGoal(inv.id));
+  const unallocatedInvestments = availableInvestments.filter(inv => !isAllocatedToThisGoal(inv.id));
 
-      {error && (
+  return (
+    <div>
+      {/* Saving overlay */}
+      {saving && (
         <div style={{
-          padding: '12px',
-          marginBottom: '16px',
-          backgroundColor: colors.semantic.error + '15',
-          border: `1px solid ${colors.semantic.error}`,
-          borderRadius: '6px',
-          color: colors.semantic.error,
-          fontSize: '14px'
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
         }}>
-          {error}
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            padding: '24px 32px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <Loader style={{ width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} />
+            <span style={{ color: colors.utility.primaryText }}>Saving...</span>
+          </div>
         </div>
       )}
 
-      <div style={{ marginBottom: '16px' }}>
-        {availableInvestments.length === 0 ? (
-          <div style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: colors.utility.secondaryText,
-            fontSize: '14px'
+      {/* Allocated Investments Section */}
+      {allocatedInvestments.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <h4 style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: colors.semantic.success,
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            No investment plans available for this customer.
-          </div>
-        ) : (
-          availableInvestments.map(investment => {
-            const selection = selectedInvestments[investment.id];
-            const isSelected = selection?.selected || false;
-
-            return (
+            <Check size={16} />
+            Allocated to This Goal ({allocatedInvestments.length})
+          </h4>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px'
+          }}>
+            {allocatedInvestments.map(investment => (
               <div
                 key={investment.id}
+                onClick={() => handleSelectInvestment(investment.id)}
                 style={{
+                  position: 'relative',
                   display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  marginBottom: '8px',
-                  border: `1px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                  borderRadius: '6px',
-                  backgroundColor: isSelected ? colors.brand.primary + '08' : 'transparent',
-                  transition: 'all 0.2s ease'
+                  alignItems: 'flex-start',
+                  padding: '14px',
+                  border: `2px solid ${colors.semantic.success}`,
+                  borderRadius: '10px',
+                  backgroundColor: colors.semantic.success + '10',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => handleInvestmentToggle(investment.id)}
-                  style={{
-                    width: '18px',
-                    height: '18px',
-                    cursor: 'pointer',
-                    accentColor: colors.brand.primary
-                  }}
-                />
+                {/* Radio indicator */}
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  minWidth: '20px',
+                  borderRadius: '50%',
+                  border: `2px solid ${colors.semantic.success}`,
+                  backgroundColor: colors.semantic.success,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: '12px',
+                  marginTop: '2px'
+                }}>
+                  <Check size={12} color="white" strokeWidth={3} />
+                </div>
 
-                <div style={{ flex: 1, marginLeft: '12px' }}>
+                {/* Icon */}
+                <span style={{ fontSize: '24px', marginRight: '12px', lineHeight: 1 }}>
+                  {getAssetIcon(investment.asset_type_code)}
+                </span>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
+                    fontSize: '13px',
                     fontWeight: '600',
                     color: colors.utility.primaryText,
-                    marginBottom: '4px'
+                    marginBottom: '4px',
+                    lineHeight: 1.3
+                  }}>
+                    {getInvestmentDisplayName(investment)}
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText,
+                    lineHeight: 1.3
                   }}>
                     {investment.asset_type_name}
                   </div>
                   <div style={{
-                    fontSize: '12px',
-                    color: colors.utility.secondaryText
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText,
+                    marginTop: '4px'
                   }}>
-                    {investment.investment_type === 'sip' && `SIP: ₹${investment.recurring_amount?.toLocaleString()}`}
-                    {investment.investment_type === 'one_time' && `Principal: ₹${investment.principal_amount.toLocaleString()}`}
-                    {investment.investment_type === 'recurring' && `Recurring: ₹${investment.recurring_amount?.toLocaleString()}`}
+                    {getInvestmentSubtitle(investment)}
                   </div>
                 </div>
 
-                {isSelected && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={selection.percentage || 0}
-                      onChange={(e) => handlePercentageChange(investment.id, parseFloat(e.target.value) || 0)}
-                      style={{
-                        width: '80px',
-                        padding: '6px 12px',
-                        border: `1px solid ${colors.utility.primaryText}20`,
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                        textAlign: 'right',
-                        backgroundColor: colors.utility.primaryBackground,
-                        color: colors.utility.primaryText
-                      }}
-                    />
-                    <span style={{
-                      fontSize: '14px',
-                      color: colors.utility.secondaryText
-                    }}>
-                      %
-                    </span>
-                  </div>
-                )}
+                {/* 100% badge */}
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  color: colors.semantic.success,
+                  backgroundColor: colors.semantic.success + '20',
+                  padding: '2px 6px',
+                  borderRadius: '4px'
+                }}>
+                  100%
+                </div>
               </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Total allocation indicator */}
-      <div style={{
-        padding: '12px',
-        marginBottom: '16px',
-        backgroundColor: totalAllocation > 100
-          ? colors.semantic.error + '15'
-          : totalAllocation === 100
-            ? colors.semantic.success + '15'
-            : colors.utility.secondaryBackground,
-        border: `1px solid ${totalAllocation > 100
-          ? colors.semantic.error
-          : totalAllocation === 100
-            ? colors.semantic.success
-            : colors.utility.secondaryText
-          }`,
-        borderRadius: '6px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span style={{
-          fontWeight: '600',
-          color: colors.utility.primaryText
-        }}>
-          Total Allocation:
-        </span>
-        <span style={{
-          fontSize: '18px',
-          fontWeight: '700',
-          color: totalAllocation > 100
-            ? colors.semantic.error
-            : totalAllocation === 100
-              ? colors.semantic.success
-              : colors.utility.primaryText
-        }}>
-          {totalAllocation.toFixed(1)}%
-        </span>
-      </div>
-
-      {totalAllocation > 100 && (
-        <div style={{
-          padding: '8px 12px',
-          marginBottom: '16px',
-          backgroundColor: colors.semantic.error + '15',
-          border: `1px solid ${colors.semantic.error}`,
-          borderRadius: '4px',
-          fontSize: '13px',
-          color: colors.semantic.error
-        }}>
-          ⚠️ Total allocation cannot exceed 100%
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Save button */}
-      <button
-        onClick={handleSave}
-        disabled={loading || totalAllocation > 100}
-        style={{
-          width: '100%',
-          padding: '12px',
-          border: 'none',
-          borderRadius: '6px',
-          backgroundColor: loading || totalAllocation > 100 ? colors.utility.secondaryText : colors.brand.primary,
-          color: '#FFFFFF',
-          fontSize: '15px',
-          fontWeight: '600',
-          cursor: loading || totalAllocation > 100 ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease',
-          opacity: loading || totalAllocation > 100 ? 0.6 : 1
-        }}
-      >
-        {loading ? 'Saving...' : 'Save Allocations'}
-      </button>
+      {/* Available Investments Section */}
+      {unallocatedInvestments.length > 0 && (
+        <div>
+          <h4 style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: colors.utility.primaryText,
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <Plus size={16} />
+            Available to Allocate ({unallocatedInvestments.length})
+          </h4>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px'
+          }}>
+            {unallocatedInvestments.map(investment => (
+              <div
+                key={investment.id}
+                onClick={() => handleSelectInvestment(investment.id)}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  padding: '14px',
+                  border: `2px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '10px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = colors.brand.primary;
+                  e.currentTarget.style.backgroundColor = colors.brand.primary + '08';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = colors.utility.primaryText + '20';
+                  e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                }}
+              >
+                {/* Radio indicator */}
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  minWidth: '20px',
+                  borderRadius: '50%',
+                  border: `2px solid ${colors.utility.secondaryText}`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  marginRight: '12px',
+                  marginTop: '2px'
+                }} />
+
+                {/* Icon */}
+                <span style={{ fontSize: '24px', marginRight: '12px', lineHeight: 1 }}>
+                  {getAssetIcon(investment.asset_type_code)}
+                </span>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    marginBottom: '4px',
+                    lineHeight: 1.3
+                  }}>
+                    {getInvestmentDisplayName(investment)}
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText,
+                    lineHeight: 1.3
+                  }}>
+                    {investment.asset_type_name}
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText,
+                    marginTop: '4px'
+                  }}>
+                    {getInvestmentSubtitle(investment)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Summary */}
+      {allocatedInvestments.length > 0 && (
+        <div style={{
+          marginTop: '24px',
+          padding: '16px',
+          backgroundColor: colors.semantic.success + '10',
+          borderRadius: '10px',
+          border: `1px solid ${colors.semantic.success}30`
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: colors.utility.primaryText
+            }}>
+              Total Investments Allocated:
+            </span>
+            <span style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: colors.semantic.success
+            }}>
+              {allocatedInvestments.length}
+            </span>
+          </div>
+          <div style={{
+            fontSize: '12px',
+            color: colors.utility.secondaryText,
+            marginTop: '8px'
+          }}>
+            Each investment is allocated at 100% to this goal
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
