@@ -31,6 +31,7 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
+import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import { PortfolioAllocationSummary } from '../../components/portfolio/PortfolioAllocationSummary';
 import { SchemeCard } from '../../components/common/SchemeCard';
 import GoalCard from '../../components/goals/GoalCard';
@@ -868,6 +869,14 @@ comparisonData={comparisonIndexData}
                       )}
                     </div>
                   </div>
+
+                  {/* Networth Projection Chart */}
+                  {customerId && (
+                    <NetworthProjectionChart
+                      customerId={customerId}
+                      height={280}
+                    />
+                  )}
 
                   {/* Fund-wise Performance */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
