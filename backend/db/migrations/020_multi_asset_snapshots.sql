@@ -84,15 +84,10 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 5: Update unique constraint
+-- STEP 5: Create unique index for multi-asset support
 -- ============================================================================
 
--- Drop old unique constraint (tenant, is_live, customer, month_end)
--- This allowed only ONE snapshot per customer per month
-ALTER TABLE t_monthly_portfolio_snapshots
-DROP CONSTRAINT IF EXISTS t_monthly_portfolio_snapshots_tenant_id_is_live_customer_id_key;
-
--- Add new unique constraint including asset_type_code and investment_plan_id
+-- Create unique index to enforce one snapshot per customer/month/asset_type/plan
 -- This allows MULTIPLE snapshots per customer per month (one per asset type/plan)
 --
 -- For MF: (tenant, is_live, customer, month_end, 'MF', NULL) - aggregated MF
@@ -100,10 +95,7 @@ DROP CONSTRAINT IF EXISTS t_monthly_portfolio_snapshots_tenant_id_is_live_custom
 -- For Gold: (tenant, is_live, customer, month_end, 'GOLD', plan_id) - per plan
 --
 -- Using COALESCE to handle NULL investment_plan_id in unique constraint
-ALTER TABLE t_monthly_portfolio_snapshots
-DROP CONSTRAINT IF EXISTS t_monthly_portfolio_snapshots_unique_v2;
-
--- Create unique index instead of constraint (handles NULL better)
+-- (PostgreSQL treats NULL != NULL, so we convert NULL to 0 for uniqueness check)
 DROP INDEX IF EXISTS idx_monthly_portfolio_snapshots_unique;
 CREATE UNIQUE INDEX idx_monthly_portfolio_snapshots_unique
 ON t_monthly_portfolio_snapshots (
@@ -195,7 +187,7 @@ CHECK (calculation_method IN ('NAV', 'ASSUMPTION'));
 -- DROP INDEX IF EXISTS idx_snapshots_investment_plan;
 -- DROP INDEX IF EXISTS idx_snapshots_networth;
 --
--- -- Remove constraint
+-- -- Remove constraints
 -- ALTER TABLE t_monthly_portfolio_snapshots DROP CONSTRAINT IF EXISTS chk_calculation_method;
 -- ALTER TABLE t_monthly_portfolio_snapshots DROP CONSTRAINT IF EXISTS fk_snapshot_investment_plan;
 --
@@ -205,8 +197,3 @@ CHECK (calculation_method IN ('NAV', 'ASSUMPTION'));
 -- ALTER TABLE t_monthly_portfolio_snapshots DROP COLUMN IF EXISTS calculation_method;
 -- ALTER TABLE t_monthly_portfolio_snapshots DROP COLUMN IF EXISTS investment_plan_id;
 -- ALTER TABLE t_monthly_portfolio_snapshots DROP COLUMN IF EXISTS asset_type_code;
---
--- -- Restore original unique constraint
--- ALTER TABLE t_monthly_portfolio_snapshots
--- ADD CONSTRAINT t_monthly_portfolio_snapshots_tenant_id_is_live_customer_id_key
--- UNIQUE (tenant_id, is_live, customer_id, snapshot_month_end);
