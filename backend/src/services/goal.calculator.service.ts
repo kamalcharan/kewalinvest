@@ -221,7 +221,10 @@ export class GoalCalculatorService {
     const targetDate = new Date(config.target_date);
     const today = new Date();
     const monthsRemaining = this.getMonthsDifference(today, targetDate);
-    
+
+    // Safely get current monthly SIP (default to 0 if not set)
+    const currentMonthlySIP = config.current_monthly_sip || config.monthly_contribution || 0;
+
     if (monthsRemaining <= 0) {
       // Goal date passed
       return {
@@ -247,19 +250,19 @@ export class GoalCalculatorService {
     // Calculate projected corpus with current SIP
     const projectedCorpus = this.calculateFutureValue(
       currentPortfolioValue,
-      config.current_monthly_sip,
+      currentMonthlySIP,
       expectedReturnRate,
       monthsRemaining
     );
-    
+
     const corpusGap = projectedCorpus - config.target_amount;
     const progressPercentage = Math.min(100, (currentPortfolioValue / config.target_amount) * 100);
     const deviationPercentage = ((projectedCorpus - config.target_amount) / config.target_amount) * 100;
-    
+
     // Monte Carlo for probability
     const probability = this.monteCarloSimulation(
       currentPortfolioValue,
-      config.current_monthly_sip,
+      currentMonthlySIP,
       config.target_amount,
       monthsRemaining,
       expectedReturnRate
@@ -276,20 +279,20 @@ export class GoalCalculatorService {
     // Determine action required
     let actionRequired: TimeAndPriceGoalConfig['action_required'] = 'none';
     let recommendedSIPIncrease: number | undefined;
-    
+
     if (corpusGap < 0) {
-      const sipGap = requiredSIP - config.current_monthly_sip;
+      const sipGap = requiredSIP - currentMonthlySIP;
       if (sipGap > 0) {
         actionRequired = 'increase_sip';
         recommendedSIPIncrease = Math.ceil(sipGap);
       }
     }
-    
+
     return {
       current_value: currentPortfolioValue,
       required_monthly_sip: Math.round(requiredSIP),
-      current_monthly_sip: config.current_monthly_sip,
-      monthly_sip_gap: Math.round(requiredSIP - config.current_monthly_sip),
+      current_monthly_sip: currentMonthlySIP,
+      monthly_sip_gap: Math.round(requiredSIP - currentMonthlySIP),
       projected_corpus: Math.round(projectedCorpus),
       corpus_gap: Math.round(corpusGap),
       progress_percentage: Math.round(progressPercentage * 10) / 10,
