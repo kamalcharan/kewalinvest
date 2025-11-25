@@ -809,6 +809,7 @@ private async getGoalPortfolioValue(
   /**
    * Get goal value from investment plan allocations (Phase 2)
    * Uses t_goal_investment_allocations table
+   * Note: Uses pool query (not transaction) to avoid transaction abort on table not found
    */
   private async getGoalValueFromInvestmentPlans(
     client: PoolClient,
@@ -817,8 +818,21 @@ private async getGoalPortfolioValue(
     goalId: number
   ): Promise<number> {
     try {
-      // Get all investment plan allocations for this goal
-      const result = await client.query(
+      // First check if the table exists (using pool to avoid transaction issues)
+      const tableCheck = await this.db.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 't_goal_investment_allocations'
+        ) as exists`
+      );
+
+      if (!tableCheck.rows[0]?.exists) {
+        console.log('t_goal_investment_allocations table does not exist yet - using default value');
+        return 0;
+      }
+
+      // Get all investment plan allocations for this goal (using pool to avoid transaction issues)
+      const result = await this.db.query(
         `SELECT
            gia.investment_plan_id,
            gia.allocated_percentage,
