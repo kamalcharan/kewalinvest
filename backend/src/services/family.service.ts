@@ -174,19 +174,19 @@ export class FamilyService {
     }
 
     // Get asset allocation by asset_type_code for entire family from snapshots
+    // Using asset_type_code directly (no t_asset_types table dependency)
     const categoryQuery = `
       SELECT
-        COALESCE(at.asset_type_name, mps.asset_type_code, 'Other') as category,
+        COALESCE(mps.asset_type_code, 'Other') as category,
         SUM(mps.current_value) as value,
         COUNT(DISTINCT mps.investment_plan_id) as scheme_count
       FROM t_monthly_portfolio_snapshots mps
-      LEFT JOIN t_asset_types at ON mps.asset_type_code = at.asset_type_code
       WHERE mps.tenant_id = $1
         AND mps.is_live = $2
         AND mps.customer_id = ANY($3)
         AND mps.snapshot_month_end = $4
         AND mps.current_value > 0
-      GROUP BY COALESCE(at.asset_type_name, mps.asset_type_code, 'Other')
+      GROUP BY COALESCE(mps.asset_type_code, 'Other')
       ORDER BY value DESC
     `;
 
@@ -202,23 +202,23 @@ export class FamilyService {
     }));
 
     // Get allocation by member from snapshots
+    // Using asset_type_code directly (no t_asset_types table dependency)
     const memberAllocationQuery = `
       SELECT
         mps.customer_id,
         ct.name,
         c.iwell_code,
-        COALESCE(at.asset_type_name, mps.asset_type_code, 'Other') as category,
+        COALESCE(mps.asset_type_code, 'Other') as category,
         SUM(mps.current_value) as value
       FROM t_monthly_portfolio_snapshots mps
       JOIN t_customers c ON mps.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
-      LEFT JOIN t_asset_types at ON mps.asset_type_code = at.asset_type_code
       WHERE mps.tenant_id = $1
         AND mps.is_live = $2
         AND mps.customer_id = ANY($3)
         AND mps.snapshot_month_end = $4
         AND mps.current_value > 0
-      GROUP BY mps.customer_id, ct.name, c.iwell_code, COALESCE(at.asset_type_name, mps.asset_type_code, 'Other')
+      GROUP BY mps.customer_id, ct.name, c.iwell_code, COALESCE(mps.asset_type_code, 'Other')
       ORDER BY ct.name, value DESC
     `;
 
