@@ -345,7 +345,7 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
 
                 {/* Icon */}
                 <span style={{ fontSize: '24px', marginRight: '12px', lineHeight: 1 }}>
-                  {getAssetIcon(investment.asset_type_code)}
+                  {getAssetIcon(investment.asset_type_code || '')}
                 </span>
 
                 {/* Content */}
@@ -453,7 +453,7 @@ const GoalInvestmentAllocator: React.FC<GoalInvestmentAllocatorProps> = ({
 
                 {/* Icon */}
                 <span style={{ fontSize: '24px', marginRight: '12px', lineHeight: 1 }}>
-                  {getAssetIcon(investment.asset_type_code)}
+                  {getAssetIcon(investment.asset_type_code || '')}
                 </span>
 
                 {/* Content */}
