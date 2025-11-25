@@ -1,5 +1,5 @@
 // frontend/src/components/portfolio/NetworthProjectionChart.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TrendingUp, Calendar, Target, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNetworthHistory, useNetworthSummary } from '../../hooks/usePortfolioData';
@@ -28,6 +28,21 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  // Responsive chart width
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(600);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (chartContainerRef.current) {
+        setChartWidth(chartContainerRef.current.offsetWidth - 48); // Account for padding
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   // State
   const [timeframePeriod, setTimeframePeriod] = useState<TimeframePeriod>('1Y');
@@ -169,6 +184,19 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
   const isLoading = summaryLoading || historyLoading;
 
+  // Debug: Always log to help diagnose issues
+  console.log('[NetworthProjectionChart] Render state:', {
+    customerId,
+    isLoading,
+    summaryLoading,
+    historyLoading,
+    hasSummaryData: !!summaryData?.data,
+    summaryError: summaryData?.error,
+    hasHistoryData: !!historyData?.data,
+    historyError: historyData?.error,
+    historicalValuesLength: historicalValues.length
+  });
+
   if (isLoading) {
     return (
       <div style={{
@@ -178,9 +206,10 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        height: height + 100
+        height: height + 100,
+        border: '2px dashed #666'  // Visible border for debugging
       }}>
-        <div style={{ color: colors.utility.secondaryText }}>Loading networth data...</div>
+        <div style={{ color: colors.utility.secondaryText }}>Loading networth data... (customerId: {customerId})</div>
       </div>
     );
   }
@@ -196,10 +225,16 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         justifyContent: 'center',
         height: height + 100,
         flexDirection: 'column',
-        gap: '8px'
+        gap: '8px',
+        border: '2px dashed #999'  // Visible border for debugging
       }}>
         <TrendingUp size={32} style={{ color: colors.utility.secondaryText, opacity: 0.5 }} />
-        <div style={{ color: colors.utility.secondaryText }}>No networth history available</div>
+        <div style={{ color: colors.utility.secondaryText }}>
+          No networth history available (customerId: {customerId})
+        </div>
+        <div style={{ fontSize: '11px', color: colors.utility.secondaryText, opacity: 0.7 }}>
+          Summary: {summaryData?.data ? 'OK' : 'No data'} | History: {historicalValues.length} points
+        </div>
       </div>
     );
   }
@@ -209,11 +244,14 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const projectedGrowth = ((projectedNetworth - currentNetworth) / currentNetworth) * 100;
 
   return (
-    <div style={{
-      backgroundColor: colors.utility.secondaryBackground,
-      borderRadius: '12px',
-      padding: '24px'
-    }}>
+    <div
+      ref={chartContainerRef}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        padding: '24px'
+      }}
+    >
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -405,12 +443,12 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       </div>
 
       {/* Chart */}
-      <div style={{ height }}>
+      <div style={{ height, width: '100%' }}>
         <PerformanceSparkline
           data={historicalValues}
           projectionData={projectionValues}
           showProjection={true}
-          width={600}
+          width={chartWidth}
           height={height - 20}
           showArea={true}
           showDots={true}
