@@ -143,6 +143,7 @@ export class FamilyService {
 
   /**
    * Get family-wide asset allocation
+   * Uses t_monthly_portfolio_snapshots with asset_type_code for multi-asset breakdown
    */
   async getFamilyAssetAllocation(
     tenantId: number,
@@ -153,59 +154,79 @@ export class FamilyService {
     const members = await this.getFamilyMembers(tenantId, isLive, familyHeadIwellCode);
     const customerIds = members.map((m) => m.customer_id);
 
-    // Get asset allocation by category for entire family
+    // First, get the latest snapshot date for these customers
+    const latestDateQuery = `
+      SELECT MAX(snapshot_month_end) as latest_date
+      FROM t_monthly_portfolio_snapshots
+      WHERE tenant_id = $1 AND is_live = $2 AND customer_id = ANY($3)
+    `;
+    const latestDateResult = await pool.query(latestDateQuery, [tenantId, isLive, customerIds]);
+    const latestDate = latestDateResult.rows[0]?.latest_date;
+
+    if (!latestDate) {
+      // No snapshot data, return empty allocation
+      return {
+        family_head_iwell_code: familyHeadIwellCode,
+        total_value: 0,
+        allocations: [],
+        by_member: []
+      };
+    }
+
+    // Get asset allocation by asset_type_code for entire family from snapshots
     const categoryQuery = `
       SELECT
-        COALESCE(sm.name, 'Other') as category,
-        SUM(cmp.current_value) as value,
-        COUNT(DISTINCT cmp.scheme_code) as scheme_count
-      FROM t_customer_master_portfolio cmp
-      JOIN t_scheme_details sd ON cmp.scheme_code = sd.scheme_code
-      LEFT JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id AND sm.master_type = 'scheme_category'
-      WHERE cmp.tenant_id = $1
-        AND cmp.is_live = $2
-        AND cmp.customer_id = ANY($3)
-        AND cmp.current_value > 0
-      GROUP BY sm.name
+        COALESCE(at.asset_type_name, mps.asset_type_code, 'Other') as category,
+        SUM(mps.current_value) as value,
+        COUNT(DISTINCT mps.investment_plan_id) as scheme_count
+      FROM t_monthly_portfolio_snapshots mps
+      LEFT JOIN t_asset_types at ON mps.asset_type_code = at.asset_type_code
+      WHERE mps.tenant_id = $1
+        AND mps.is_live = $2
+        AND mps.customer_id = ANY($3)
+        AND mps.snapshot_month_end = $4
+        AND mps.current_value > 0
+      GROUP BY COALESCE(at.asset_type_name, mps.asset_type_code, 'Other')
       ORDER BY value DESC
     `;
 
-    const categoryResult = await pool.query(categoryQuery, [tenantId, isLive, customerIds]);
+    const categoryResult = await pool.query(categoryQuery, [tenantId, isLive, customerIds, latestDate]);
 
-    const totalValue = categoryResult.rows.reduce((sum, row) => sum + parseFloat(row.value), 0);
+    const totalValue = categoryResult.rows.reduce((sum, row) => sum + parseFloat(row.value || 0), 0);
 
     const allocations: FamilyAssetCategory[] = categoryResult.rows.map((row) => ({
       category: row.category || 'Other',
-      value: parseFloat(row.value),
-      percentage: totalValue > 0 ? (parseFloat(row.value) / totalValue) * 100 : 0,
-      scheme_count: parseInt(row.scheme_count)
+      value: parseFloat(row.value || 0),
+      percentage: totalValue > 0 ? (parseFloat(row.value || 0) / totalValue) * 100 : 0,
+      scheme_count: parseInt(row.scheme_count || 0)
     }));
 
-    // Get allocation by member
+    // Get allocation by member from snapshots
     const memberAllocationQuery = `
       SELECT
-        cmp.customer_id,
+        mps.customer_id,
         ct.name,
         c.iwell_code,
-        COALESCE(sm.name, 'Other') as category,
-        SUM(cmp.current_value) as value
-      FROM t_customer_master_portfolio cmp
-      JOIN t_customers c ON cmp.customer_id = c.id
+        COALESCE(at.asset_type_name, mps.asset_type_code, 'Other') as category,
+        SUM(mps.current_value) as value
+      FROM t_monthly_portfolio_snapshots mps
+      JOIN t_customers c ON mps.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
-      JOIN t_scheme_details sd ON cmp.scheme_code = sd.scheme_code
-      LEFT JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id AND sm.master_type = 'scheme_category'
-      WHERE cmp.tenant_id = $1
-        AND cmp.is_live = $2
-        AND cmp.customer_id = ANY($3)
-        AND cmp.current_value > 0
-      GROUP BY cmp.customer_id, ct.name, c.iwell_code, sm.name
+      LEFT JOIN t_asset_types at ON mps.asset_type_code = at.asset_type_code
+      WHERE mps.tenant_id = $1
+        AND mps.is_live = $2
+        AND mps.customer_id = ANY($3)
+        AND mps.snapshot_month_end = $4
+        AND mps.current_value > 0
+      GROUP BY mps.customer_id, ct.name, c.iwell_code, COALESCE(at.asset_type_name, mps.asset_type_code, 'Other')
       ORDER BY ct.name, value DESC
     `;
 
     const memberAllocationResult = await pool.query(memberAllocationQuery, [
       tenantId,
       isLive,
-      customerIds
+      customerIds,
+      latestDate
     ]);
 
     // Group by member
@@ -224,12 +245,12 @@ export class FamilyService {
       const member = byMemberMap.get(row.customer_id)!;
       const memberTotal = memberAllocationResult.rows
         .filter((r) => r.customer_id === row.customer_id)
-        .reduce((sum, r) => sum + parseFloat(r.value), 0);
+        .reduce((sum, r) => sum + parseFloat(r.value || 0), 0);
 
       member.allocations.push({
         category: row.category || 'Other',
-        value: parseFloat(row.value),
-        percentage: memberTotal > 0 ? (parseFloat(row.value) / memberTotal) * 100 : 0
+        value: parseFloat(row.value || 0),
+        percentage: memberTotal > 0 ? (parseFloat(row.value || 0) / memberTotal) * 100 : 0
       });
     });
 

@@ -871,13 +871,13 @@ export class NetworthService {
       SELECT
         cu.id as customer_id,
         c.name as customer_name,
-        CASE WHEN cu.iwellcode = $3 THEN true ELSE false END as is_family_head
+        CASE WHEN cu.iwell_code = $3 THEN true ELSE false END as is_family_head
       FROM t_customers cu
       JOIN t_contacts c ON cu.contact_id = c.id
       WHERE cu.tenant_id = $1
         AND cu.is_live = $2
         AND cu.is_active = true
-        AND (cu.iwellcode = $3 OR cu.family_head_iwellcode = $3)
+        AND (cu.iwell_code = $3 OR cu.family_head_iwell_code = $3)
       ORDER BY is_family_head DESC, c.name ASC
     `;
 

@@ -149,9 +149,9 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
           </button>
 
           {/* Individual Member Tabs - using chartMembers (no duplicates) */}
-          {chartMembers.map((member) => (
+          {chartMembers.map((member, index) => (
             <button
-              key={member.id}
+              key={`chart-tab-${member.id}-${index}`}
               onClick={() => setActiveChartTab(member.id)}
               style={{
                 padding: '10px 20px',
@@ -245,8 +245,8 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                 <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '8px', textTransform: 'uppercase' }}>
                   Goals by Member
                 </div>
-                {goals.goals_by_member.map((memberGoal) => (
-                  <div key={memberGoal.customer_id} style={{
+                {goals.goals_by_member.map((memberGoal, index) => (
+                  <div key={`goal-member-${memberGoal.customer_id}-${index}`} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     fontSize: '13px',
@@ -356,9 +356,9 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
           Family Members Portfolio
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
-          {portfolioMembers.map((member: FamilyMemberPortfolio) => (
+          {portfolioMembers.map((member: FamilyMemberPortfolio, index: number) => (
             <div
-              key={member.customer_id}
+              key={`portfolio-member-${member.customer_id}-${index}`}
               onClick={() => onMemberClick?.(member.customer_id)}
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
