@@ -36,6 +36,7 @@ import assetTypeRoutes from './routes/assetType.routes';
 import customerAssetRoutes from './routes/customerAsset.routes';
 import investmentPlanRoutes from './routes/investmentPlan.routes';
 import goalInvestmentAllocationRoutes from './routes/goalInvestmentAllocation.routes'; // Release 1.1 - Phase 2
+import networthRoutes from './routes/networth.routes'; // Release 1.1 - Cycle 2: NetworthViewer
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -162,7 +163,13 @@ app.get('/health', (_req: Request, res: Response) => {
       // Release 1.1 - Phase 1: Multi-Asset Portfolio
       asset_types: true,
       customer_asset_assignments: true,
-      family_asset_aggregation: true
+      family_asset_aggregation: true,
+      // Release 1.1 - Cycle 2: NetworthViewer
+      networth_viewer: true,
+      networth_summary: true,
+      networth_history: true,
+      networth_breakdown: true,
+      networth_goals: true
     }
   });
 });
@@ -204,7 +211,8 @@ app.get('/api', (_req: Request, res: Response) => {
       meetings: '/api/meetings',
       jobs: '/api/jobs',
       cruise_control: '/api/cruise-control',
-      cruise_control_operations: '/api/cruise-control/snapshots/operations'
+      cruise_control_operations: '/api/cruise-control/snapshots/operations',
+      networth: '/api/networth'
     }
   });
 });
@@ -234,6 +242,7 @@ app.use('/api/cruise-control', cruiseControlRoutes);
 app.use('/api/asset-types', assetTypeRoutes); // Release 1.1 - Phase 1: Asset Types (master data)
 app.use('/api', investmentPlanRoutes); // Release 1.1 - Phase 1: Investment Plans (full CRUD)
 app.use('/api', goalInvestmentAllocationRoutes); // Release 1.1 - Phase 2: Goal-Investment Allocations
+app.use('/api/networth', networthRoutes); // Release 1.1 - Cycle 2: NetworthViewer APIs
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
@@ -478,6 +487,13 @@ app.use((_req: Request, res: Response) => {
       'POST /api/cruise-control/snapshots/operations/update-all',
       'POST /api/cruise-control/snapshots/operations/regenerate-all',
       
+      // NetworthViewer endpoints (Release 1.1 - Cycle 2)
+      'GET /api/networth/summary',
+      'GET /api/networth/history',
+      'GET /api/networth/breakdown',
+      'GET /api/networth/goals',
+      'GET /api/networth/health',
+
       // System logs endpoints
       'GET /api/logs',
       'GET /api/logs/stats',
