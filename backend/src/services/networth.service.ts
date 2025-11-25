@@ -240,6 +240,7 @@ export class NetworthService {
   /**
    * GET /api/networth/history
    * Get historical timeline aggregated by month
+   * Now includes current real-time MF values as the latest data point
    */
   async getNetworthHistory(
     tenantId: number,
@@ -287,7 +288,7 @@ export class NetworthService {
         paramIndex++;
       }
 
-      // Query for aggregated history by month
+      // Query for aggregated history by month from snapshots
       const historyQuery = `
         SELECT
           mps.snapshot_month_end,
@@ -335,7 +336,7 @@ export class NetworthService {
         allAssetTypes.add(row.asset_type_code);
       });
 
-      // Build history points
+      // Build history points from snapshots
       const history: NetworthHistoryPoint[] = historyResult.rows.map(row => {
         const dateKey = row.snapshot_month_end.toISOString().split('T')[0];
         const invested = parseFloat(row.total_invested) || 0;
@@ -361,6 +362,87 @@ export class NetworthService {
           by_asset_type: byAssetType
         };
       });
+
+      // ================================================================
+      // IMPORTANT: Add current real-time data as the latest point
+      // This ensures imported MF transactions are reflected immediately
+      // ================================================================
+      const currentSummary = await this.getNetworthSummary(tenantId, isLive, {
+        customer_id: request.customer_id,
+        family_head_iwellcode: request.family_head_iwellcode
+      });
+
+      if (currentSummary.total_networth > 0) {
+        const now = new Date();
+        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const currentDateKey = currentMonthEnd.toISOString().split('T')[0];
+
+        // Check if we already have data for the current month
+        const lastHistoryDate = history.length > 0 ? history[history.length - 1].date : null;
+        const shouldAddCurrentPoint = !lastHistoryDate ||
+          new Date(lastHistoryDate) < new Date(currentMonthEnd.getFullYear(), currentMonthEnd.getMonth(), 1);
+
+        if (shouldAddCurrentPoint) {
+          // Add current point with real-time values
+          const currentBreakdown = currentSummary.by_asset_type.map(at => ({
+            asset_type_code: at.asset_type_code,
+            current_value: at.current_value
+          }));
+
+          history.push({
+            date: currentDateKey,
+            snapshot_month_end: currentMonthEnd,
+            total_networth: currentSummary.total_networth,
+            total_invested: currentSummary.total_invested,
+            total_returns: currentSummary.total_returns,
+            return_percentage: currentSummary.overall_return_percentage,
+            by_asset_type: currentBreakdown
+          });
+
+          // Update breakdown map for chart
+          const currentBreakdownMap = new Map<string, number>();
+          currentSummary.by_asset_type.forEach(at => {
+            currentBreakdownMap.set(at.asset_type_code, at.current_value);
+            allAssetTypes.add(at.asset_type_code);
+          });
+          breakdownMap.set(currentDateKey, currentBreakdownMap);
+        } else {
+          // Update the last point with real-time MF values (in case MF was imported)
+          const lastPoint = history[history.length - 1];
+
+          // Replace MF value in last point with real-time value
+          const mfSummary = currentSummary.by_asset_type.find(at => at.asset_type_code === 'MF');
+          if (mfSummary) {
+            // Find and update MF in by_asset_type
+            const mfIndex = lastPoint.by_asset_type.findIndex(at => at.asset_type_code === 'MF');
+            const oldMfValue = mfIndex >= 0 ? lastPoint.by_asset_type[mfIndex].current_value : 0;
+
+            if (mfIndex >= 0) {
+              lastPoint.by_asset_type[mfIndex].current_value = mfSummary.current_value;
+            } else {
+              lastPoint.by_asset_type.push({
+                asset_type_code: 'MF',
+                current_value: mfSummary.current_value
+              });
+            }
+
+            // Update totals
+            lastPoint.total_networth = lastPoint.total_networth - oldMfValue + mfSummary.current_value;
+            lastPoint.total_invested = lastPoint.total_invested - (oldMfValue > 0 ? oldMfValue : 0) + mfSummary.total_invested;
+            lastPoint.total_returns = lastPoint.total_networth - lastPoint.total_invested;
+            lastPoint.return_percentage = lastPoint.total_invested > 0
+              ? (lastPoint.total_returns / lastPoint.total_invested) * 100
+              : 0;
+
+            // Update breakdown map
+            const lastDateKey = lastPoint.date;
+            if (breakdownMap.has(lastDateKey)) {
+              breakdownMap.get(lastDateKey)!.set('MF', mfSummary.current_value);
+            }
+            allAssetTypes.add('MF');
+          }
+        }
+      }
 
       // Calculate growth metrics
       const startingNetworth = history.length > 0 ? history[0].total_networth : 0;
