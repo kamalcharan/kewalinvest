@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package, Wallet } from 'lucide-react';
+import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   toggleFullscreen,
@@ -42,7 +42,6 @@ import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
 import { CustomerAssetManager } from '../../components/assets/CustomerAssetManager';
-import { NetworthViewer } from '../../components/networth';
 import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
@@ -54,9 +53,9 @@ const CustomerViewPage: React.FC = () => {
 
   const customerId = id ? parseInt(id) : null;
   
-  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions' | 'networth') || 'overview';
+  const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions') || 'overview';
   const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
-  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions' | 'networth'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
@@ -620,7 +619,6 @@ const CustomerViewPage: React.FC = () => {
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', padding: '0 24px' }}>
           {[
             { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
-            { key: 'networth', label: 'Networth', icon: Wallet },
             { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
             { key: 'goals', label: 'Goals Management', icon: Target },
             { key: 'assets', label: 'Asset Types', icon: Package },
@@ -1122,21 +1120,6 @@ comparisonData={comparisonIndexData}
               </div>
             )}
           </>
-        )}
-
-        {/* Networth Tab */}
-        {activeTab === 'networth' && (
-          <div style={{
-            maxWidth: '1400px',
-            margin: '0 auto',
-            padding: '24px'
-          }}>
-            <NetworthViewer
-              customerId={customerId || undefined}
-              showTabs={true}
-              defaultTab="summary"
-            />
-          </div>
         )}
 
         {/* Portfolio Tab */}

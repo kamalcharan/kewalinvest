@@ -69,77 +69,126 @@ export class NetworthService {
         throw new Error('No customers found for the given criteria');
       }
 
-      // Get the as_of_date (default to latest available snapshot)
+      // Get asset type master data for names
+      const assetTypes = await this.getAssetTypeMaster();
+
+      // Build byAssetType array
+      const byAssetType: AssetTypeSummary[] = [];
+      let totalNetworth = 0;
+      let totalInvested = 0;
+      let totalReturns = 0;
+      let totalPlans = 0;
+
+      // ================================================================
+      // 1. GET REAL-TIME MF DATA (from t_customer_portfolio_totals)
+      // This ensures MF values are always current (based on latest NAV)
+      // ================================================================
+      const mfQuery = `
+        SELECT
+          SUM(cpt.total_invested) as total_invested,
+          SUM(cpt.current_value) as current_value,
+          SUM(cpt.total_returns) as total_returns,
+          COUNT(DISTINCT cpt.scheme_code) as scheme_count
+        FROM t_customer_portfolio_totals cpt
+        WHERE cpt.tenant_id = $1
+          AND cpt.is_live = $2
+          AND cpt.customer_id = ANY($3)
+      `;
+
+      const mfResult = await this.db.query(mfQuery, [tenantId, isLive, customerIds]);
+
+      if (mfResult.rows.length > 0 && mfResult.rows[0].current_value) {
+        const mfInvested = parseFloat(mfResult.rows[0].total_invested) || 0;
+        const mfValue = parseFloat(mfResult.rows[0].current_value) || 0;
+        const mfReturns = parseFloat(mfResult.rows[0].total_returns) || 0;
+        const mfSchemes = parseInt(mfResult.rows[0].scheme_count) || 0;
+
+        if (mfValue > 0) {
+          const mfAssetType = assetTypes.find(at => at.asset_type_code === 'MF');
+          byAssetType.push({
+            asset_type_code: 'MF',
+            asset_type_name: mfAssetType?.asset_type_name || 'Mutual Funds',
+            total_invested: mfInvested,
+            current_value: mfValue,
+            total_returns: mfReturns,
+            return_percentage: mfInvested > 0 ? (mfReturns / mfInvested) * 100 : 0,
+            allocation_percentage: 0, // Will calculate after we have total
+            plan_count: mfSchemes,
+            calculation_method: 'NAV' as const
+          });
+
+          totalNetworth += mfValue;
+          totalInvested += mfInvested;
+          totalReturns += mfReturns;
+          totalPlans += mfSchemes;
+        }
+      }
+
+      // ================================================================
+      // 2. GET NON-MF DATA (from t_monthly_portfolio_snapshots)
+      // These are assumption-based values from investment plans
+      // ================================================================
       const asOfDate = request.as_of_date || await this.getLatestSnapshotDate(
         tenantId,
         isLive,
         customerIds
       );
 
-      if (!asOfDate) {
-        // No snapshots exist - return empty response
-        return this.buildEmptySummaryResponse(request, customerName);
+      if (asOfDate) {
+        const nonMfQuery = `
+          SELECT
+            mps.asset_type_code,
+            SUM(mps.total_invested) as total_invested,
+            SUM(mps.current_value) as current_value,
+            SUM(mps.total_returns) as total_returns,
+            COUNT(DISTINCT mps.investment_plan_id) as plan_count,
+            MAX(mps.calculation_method) as calculation_method
+          FROM t_monthly_portfolio_snapshots mps
+          WHERE mps.tenant_id = $1
+            AND mps.is_live = $2
+            AND mps.customer_id = ANY($3)
+            AND mps.snapshot_month_end = $4
+            AND mps.asset_type_code != 'MF'
+          GROUP BY mps.asset_type_code
+          ORDER BY SUM(mps.current_value) DESC
+        `;
+
+        const nonMfResult = await this.db.query(nonMfQuery, [
+          tenantId,
+          isLive,
+          customerIds,
+          asOfDate
+        ]);
+
+        for (const row of nonMfResult.rows) {
+          const invested = parseFloat(row.total_invested) || 0;
+          const value = parseFloat(row.current_value) || 0;
+          const returns = parseFloat(row.total_returns) || 0;
+          const planCount = parseInt(row.plan_count) || 0;
+
+          totalNetworth += value;
+          totalInvested += invested;
+          totalReturns += returns;
+          totalPlans += planCount;
+
+          const assetType = assetTypes.find(at => at.asset_type_code === row.asset_type_code);
+
+          byAssetType.push({
+            asset_type_code: row.asset_type_code,
+            asset_type_name: assetType?.asset_type_name || row.asset_type_code,
+            total_invested: invested,
+            current_value: value,
+            total_returns: returns,
+            return_percentage: invested > 0 ? (returns / invested) * 100 : 0,
+            allocation_percentage: 0, // Will calculate after we have total
+            plan_count: planCount,
+            calculation_method: row.calculation_method as 'NAV' | 'ASSUMPTION' | 'MIXED'
+          });
+        }
       }
 
-      // Get asset type master data for names
-      const assetTypes = await this.getAssetTypeMaster();
-
-      // Aggregate snapshots by asset type
-      const aggregationQuery = `
-        SELECT
-          mps.asset_type_code,
-          SUM(mps.total_invested) as total_invested,
-          SUM(mps.current_value) as current_value,
-          SUM(mps.total_returns) as total_returns,
-          COUNT(DISTINCT mps.investment_plan_id) as plan_count,
-          MAX(mps.calculation_method) as calculation_method
-        FROM t_monthly_portfolio_snapshots mps
-        WHERE mps.tenant_id = $1
-          AND mps.is_live = $2
-          AND mps.customer_id = ANY($3)
-          AND mps.snapshot_month_end = $4
-        GROUP BY mps.asset_type_code
-        ORDER BY SUM(mps.current_value) DESC
-      `;
-
-      const result = await this.db.query(aggregationQuery, [
-        tenantId,
-        isLive,
-        customerIds,
-        asOfDate
-      ]);
-
-      // Calculate totals
-      let totalNetworth = 0;
-      let totalInvested = 0;
-      let totalReturns = 0;
-      let totalPlans = 0;
-
-      const byAssetType: AssetTypeSummary[] = result.rows.map(row => {
-        const invested = parseFloat(row.total_invested) || 0;
-        const value = parseFloat(row.current_value) || 0;
-        const returns = parseFloat(row.total_returns) || 0;
-        const planCount = parseInt(row.plan_count) || 0;
-
-        totalNetworth += value;
-        totalInvested += invested;
-        totalReturns += returns;
-        totalPlans += planCount;
-
-        const assetType = assetTypes.find(at => at.asset_type_code === row.asset_type_code);
-
-        return {
-          asset_type_code: row.asset_type_code,
-          asset_type_name: assetType?.asset_type_name || row.asset_type_code,
-          total_invested: invested,
-          current_value: value,
-          total_returns: returns,
-          return_percentage: invested > 0 ? (returns / invested) * 100 : 0,
-          allocation_percentage: 0, // Will calculate after we have total
-          plan_count: planCount,
-          calculation_method: row.calculation_method as 'NAV' | 'ASSUMPTION' | 'MIXED'
-        };
-      });
+      // Sort by current value descending
+      byAssetType.sort((a, b) => b.current_value - a.current_value);
 
       // Calculate allocation percentages
       byAssetType.forEach(asset => {
@@ -159,12 +208,17 @@ export class NetworthService {
         ? (totalReturns / totalInvested) * 100
         : 0;
 
+      // Return empty response if no data at all
+      if (byAssetType.length === 0) {
+        return this.buildEmptySummaryResponse(request, customerName);
+      }
+
       return {
         customer_id: request.customer_id,
         customer_name: customerName,
         family_head_iwellcode: request.family_head_iwellcode,
         family_member_count: familyMemberCount,
-        as_of_date: asOfDate,
+        as_of_date: asOfDate || new Date(),
         total_networth: Math.round(totalNetworth * 100) / 100,
         total_invested: Math.round(totalInvested * 100) / 100,
         total_returns: Math.round(totalReturns * 100) / 100,
