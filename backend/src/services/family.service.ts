@@ -253,28 +253,35 @@ export class FamilyService {
     const members = await this.getFamilyMembers(tenantId, isLive, familyHeadIwellCode);
     const customerIds = members.map((m) => m.customer_id);
 
+    // Goal status is stored differently based on goal type:
+    // - time_and_price: on_track (boolean)
+    // - price_based: pace_status ('ahead'|'on_track'|'behind')
+    // - time_based: on_track (boolean) or calculated dynamically
     const goalsQuery = `
       SELECT
         jc.customer_id,
         ct.name,
         COUNT(*) as goal_count,
-        SUM(COALESCE((jc.config_data->>'target_corpus')::numeric, 0)) as total_target,
+        SUM(COALESCE((jc.config_data->>'target_corpus')::numeric, COALESCE((jc.config_data->>'target_amount')::numeric, 0))) as total_target,
         SUM(COALESCE((jc.config_data->>'current_value')::numeric, 0)) as current_value,
         SUM(
           CASE
-            WHEN (jc.config_data->>'status') = 'on_track' THEN 1
+            WHEN (jc.config_data->>'on_track')::boolean = true THEN 1
+            WHEN (jc.config_data->>'pace_status') = 'on_track' THEN 1
+            WHEN (jc.config_data->>'pace_status') = 'ahead' THEN 1
             ELSE 0
           END
         ) as on_track_count,
         SUM(
           CASE
-            WHEN (jc.config_data->>'status') = 'behind' THEN 1
+            WHEN (jc.config_data->>'on_track')::boolean = false THEN 1
+            WHEN (jc.config_data->>'pace_status') = 'behind' THEN 1
             ELSE 0
           END
         ) as behind_count,
         SUM(
           CASE
-            WHEN (jc.config_data->>'status') = 'ahead' THEN 1
+            WHEN (jc.config_data->>'pace_status') = 'ahead' THEN 1
             ELSE 0
           END
         ) as ahead_count
