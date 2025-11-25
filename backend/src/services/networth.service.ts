@@ -438,12 +438,14 @@ export class NetworthService {
           mps.return_percentage,
           mps.calculation_method,
           mps.growth_rate_applied,
-          caa.investment_name as plan_name,
+          caa.notes as plan_name,
           caa.start_date,
           caa.investment_type,
-          caa.principal_amount
+          caa.principal_amount,
+          at.asset_type_name
         FROM t_monthly_portfolio_snapshots mps
         LEFT JOIN t_customer_asset_assignments caa ON mps.investment_plan_id = caa.id
+        LEFT JOIN m_asset_types at ON caa.asset_type_id = at.id
         WHERE mps.tenant_id = $1
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
@@ -493,9 +495,9 @@ export class NetworthService {
           const assetType = assetTypes.find(at => at.asset_type_code === code);
           assetData.plans.push({
             investment_plan_id: row.investment_plan_id,
-            plan_name: row.plan_name || `${code} Investment`,
+            plan_name: row.plan_name || row.asset_type_name || `${code} Investment`,
             asset_type_code: code,
-            asset_type_name: assetType?.asset_type_name || code,
+            asset_type_name: assetType?.asset_type_name || row.asset_type_name || code,
             principal_amount: parseFloat(row.principal_amount) || invested,
             current_value: value,
             total_returns: returns,
@@ -597,21 +599,24 @@ export class NetworthService {
       const currentNetworth = currentSummary.total_networth;
 
       // Get goals for these customers
+      // Goals are stored in t_jtbd_configurations with jtbd_type = 'goal_tracking'
+      // Goal data is in config_data JSONB column
       const goalsQuery = `
         SELECT
           g.id as goal_id,
-          g.goal_name,
-          g.target_amount,
-          g.target_date,
-          g.current_value as allocated_value,
-          g.assumption_rate,
+          g.title as goal_name,
+          (g.config_data->>'target_corpus')::numeric as target_amount,
+          (g.config_data->>'target_date')::date as target_date,
+          (g.config_data->>'current_value')::numeric as allocated_value,
+          COALESCE((g.config_data->>'assumption_rate')::numeric, 8) as assumption_rate,
           g.customer_id
-        FROM t_goals g
+        FROM t_jtbd_configurations g
         WHERE g.tenant_id = $1
           AND g.is_live = $2
           AND g.customer_id = ANY($3)
+          AND g.jtbd_type = 'goal_tracking'
           AND g.is_active = true
-        ORDER BY g.target_date ASC
+        ORDER BY (g.config_data->>'target_date')::date ASC NULLS LAST
       `;
 
       const goalsResult = await this.db.query(goalsQuery, [tenantId, isLive, customerIds]);
