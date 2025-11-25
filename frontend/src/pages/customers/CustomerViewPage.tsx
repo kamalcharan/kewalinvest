@@ -695,14 +695,47 @@ const CustomerViewPage: React.FC = () => {
             ) : (
               <>
                 {/* Networth Projection Chart - FULL WIDTH AT TOP */}
-                {customerId && customerId > 0 && (
-                  <div style={{ marginBottom: '24px' }}>
-                    <NetworthProjectionChart
-                      customerId={customerId}
-                      height={320}
-                    />
-                  </div>
-                )}
+                {customerId && customerId > 0 && (() => {
+                  // Map goals to GoalMarker format
+                  const goalMarkers = (goals || [])
+                    .filter(g => g.is_active && g.config_data)
+                    .filter(g => {
+                      const cfg = g.config_data;
+                      // Only include goals with target_date and target_amount
+                      return ('target_date' in cfg && cfg.target_date) &&
+                             ('target_amount' in cfg && cfg.target_amount);
+                    })
+                    .map(g => ({
+                      id: g.id,
+                      name: g.title,
+                      targetAmount: (g.config_data as any).target_amount || 0,
+                      targetDate: (g.config_data as any).target_date || ''
+                    }));
+
+                  // Extract all withdrawals from goals
+                  const withdrawalMarkers = (goals || [])
+                    .filter(g => g.is_active && g.config_data?.withdrawals?.length > 0)
+                    .flatMap(g => {
+                      const withdrawals = g.config_data.withdrawals || [];
+                      return withdrawals.map((w: any, idx: number) => ({
+                        id: parseInt(String(w.id).replace(/\D/g, '')) || (g.id * 100 + idx),
+                        name: w.reason || `Withdrawal from ${g.title}`,
+                        amount: w.amount || 0,
+                        date: w.withdrawal_date || ''
+                      }));
+                    });
+
+                  return (
+                    <div style={{ marginBottom: '24px' }}>
+                      <NetworthProjectionChart
+                        customerId={customerId}
+                        height={320}
+                        goals={goalMarkers}
+                        withdrawals={withdrawalMarkers}
+                      />
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
