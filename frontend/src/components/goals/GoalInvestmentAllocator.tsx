@@ -35,7 +35,10 @@ const getAssetIcon = (code: string): string => {
 };
 
 // Format currency
-const formatCurrency = (amount: number): string => {
+const formatCurrency = (amount: number | null | undefined): string => {
+  if (amount === null || amount === undefined) {
+    return '₹0';
+  }
   if (amount >= 10000000) {
     return `₹${(amount / 10000000).toFixed(2)} Cr`;
   } else if (amount >= 100000) {
