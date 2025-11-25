@@ -425,7 +425,55 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const xScale = (index: number) => padding.left + (index / (allValues.length - 1)) * chartInnerWidth;
   const yScale = (value: number) => padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
 
-  // Generate paths
+  // Generate paths - with segments for RED when decreasing
+  // Build historical path with segments (green for growth, RED for ANY decrease)
+  const historicalSegments: { path: string; color: string }[] = [];
+
+  if (historicalValues.length > 1) {
+    let prevValue = historicalValues[0];
+    let currentSegmentPath = `M ${xScale(0)},${yScale(historicalValues[0])}`;
+    let currentSegmentIsDecreasing = false;
+
+    for (let i = 1; i < historicalValues.length; i++) {
+      const v = historicalValues[i];
+      const x = xScale(i);
+      const y = yScale(v);
+      const isDecreasing = v < prevValue;
+
+      if (i === 1) {
+        currentSegmentIsDecreasing = isDecreasing;
+        currentSegmentPath += ` L ${x},${y}`;
+      } else {
+        if (isDecreasing !== currentSegmentIsDecreasing) {
+          // Direction changed - save current segment
+          historicalSegments.push({
+            path: currentSegmentPath,
+            color: currentSegmentIsDecreasing ? '#EF4444' : '#10B981'
+          });
+          // Start new segment from previous point
+          const prevX = xScale(i - 1);
+          const prevY = yScale(historicalValues[i - 1]);
+          currentSegmentPath = `M ${prevX},${prevY} L ${x},${y}`;
+          currentSegmentIsDecreasing = isDecreasing;
+        } else {
+          currentSegmentPath += ` L ${x},${y}`;
+        }
+      }
+      prevValue = v;
+    }
+
+    // Add final segment
+    if (currentSegmentPath.includes('L')) {
+      historicalSegments.push({
+        path: currentSegmentPath,
+        color: currentSegmentIsDecreasing ? '#EF4444' : '#10B981'
+      });
+    }
+  } else if (historicalValues.length === 1) {
+    // Single point - no line needed, just the dot
+  }
+
+  // Legacy single path for fallback (keeping for reference)
   const historicalPath = historicalValues
     .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i)},${yScale(v)}`)
     .join(' ');
@@ -820,15 +868,18 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             />
           )}
 
-          {/* Historical line (solid green) */}
-          <path
-            d={historicalPath}
-            fill="none"
-            stroke="#10B981"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          {/* Historical line segments (green for growth, RED for decrease) */}
+          {historicalSegments.map((segment, i) => (
+            <path
+              key={`hist-seg-${i}`}
+              d={segment.path}
+              fill="none"
+              stroke={segment.color}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
 
           {/* Projection segments (green for growth, red for withdrawal drops) */}
           {projectionSegments.map((segment, i) => (
@@ -953,7 +1004,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             );
           })}
 
-          {/* Withdrawal markers */}
+          {/* Withdrawal markers - INVERTED TRIANGLE */}
           {withdrawals.map(withdrawal => {
             const wDate = new Date(withdrawal.date);
             const now = new Date();
@@ -968,26 +1019,51 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             const x = xScale(index);
             const y = yScale(projectionValues[monthsFromNow - 1] || 0);
 
+            // Inverted triangle (pointing down) - size 16px
+            const triangleSize = 16;
+            const trianglePath = `M ${x - triangleSize/2},${y - triangleSize/3} L ${x + triangleSize/2},${y - triangleSize/3} L ${x},${y + triangleSize*2/3} Z`;
+
             return (
               <g key={`withdrawal-${withdrawal.id}`}>
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={10}
+                {/* Vertical line from top to withdrawal point */}
+                <line
+                  x1={x}
+                  y1={padding.top}
+                  x2={x}
+                  y2={y - triangleSize/2}
+                  stroke="#EF4444"
+                  strokeWidth="1.5"
+                  strokeDasharray="3,3"
+                  opacity="0.6"
+                />
+                {/* Inverted triangle marker */}
+                <path
+                  d={trianglePath}
                   fill="#EF4444"
                   stroke="white"
                   strokeWidth="2"
                 />
-                <ArrowDown size={12} x={x - 6} y={y - 6} color="white" />
+                {/* Withdrawal label */}
                 <text
                   x={x}
-                  y={y + 22}
+                  y={y + triangleSize + 12}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="10"
                   fill="#EF4444"
                   fontWeight="600"
                 >
                   -{formatCurrency(withdrawal.amount)}
+                </text>
+                {/* Withdrawal name */}
+                <text
+                  x={x}
+                  y={y - triangleSize - 5}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fill="#EF4444"
+                  fontWeight="500"
+                >
+                  {withdrawal.name.length > 15 ? withdrawal.name.slice(0, 12) + '...' : withdrawal.name}
                 </text>
               </g>
             );
@@ -1084,10 +1160,11 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       <div style={{
         display: 'flex',
         justifyContent: 'center',
-        gap: '24px',
+        gap: '20px',
         marginTop: '16px',
         fontSize: '12px',
-        color: colors.utility.secondaryText
+        color: colors.utility.secondaryText,
+        flexWrap: 'wrap'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{
@@ -1096,7 +1173,16 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             backgroundColor: '#10B981',
             borderRadius: '2px'
           }} />
-          <span>Historical</span>
+          <span>Growth</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{
+            width: '24px',
+            height: '3px',
+            backgroundColor: '#EF4444',
+            borderRadius: '2px'
+          }} />
+          <span>Decrease</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{
@@ -1106,17 +1192,31 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             borderRadius: '2px',
             backgroundImage: 'repeating-linear-gradient(90deg, #10B981 0px, #10B981 6px, transparent 6px, transparent 10px)'
           }} />
-          <span>Projected @ {assumptionRate}% p.a.</span>
+          <span>Projected</span>
         </div>
         {withdrawals.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {/* Inverted triangle icon */}
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <path d="M2,4 L14,4 L8,14 Z" fill="#EF4444" stroke="white" strokeWidth="1" />
+            </svg>
+            <span>Withdrawal</span>
+          </div>
+        )}
+        {goals.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <div style={{
-              width: '24px',
-              height: '3px',
-              backgroundColor: '#EF4444',
-              borderRadius: '2px'
-            }} />
-            <span>Withdrawal Impact</span>
+              width: '14px',
+              height: '14px',
+              borderRadius: '50%',
+              backgroundColor: '#F59E0B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Target size={10} color="white" />
+            </div>
+            <span>Goal Target</span>
           </div>
         )}
       </div>

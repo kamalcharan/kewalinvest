@@ -696,27 +696,33 @@ const CustomerViewPage: React.FC = () => {
               <>
                 {/* Networth Projection Chart - FULL WIDTH AT TOP */}
                 {customerId && customerId > 0 && (() => {
-                  // Map goals to GoalMarker format
+                  // Map goals to GoalMarker format - support ALL goal types
                   const goalMarkers = (goals || [])
                     .filter(g => g.is_active && g.config_data)
-                    .filter(g => {
-                      const cfg = g.config_data;
-                      // Only include goals with target_date and target_amount
-                      return ('target_date' in cfg && cfg.target_date) &&
-                             ('target_amount' in cfg && cfg.target_amount);
+                    .map(g => {
+                      const cfg = g.config_data as any;
+                      // Get target date: from target_date or projected_achievement_date
+                      const targetDate = cfg.target_date || cfg.projected_achievement_date || '';
+                      // Get target amount: from target_amount or projected_corpus
+                      const targetAmount = cfg.target_amount || cfg.projected_corpus || 0;
+
+                      // Only include if we have both a date and an amount
+                      if (!targetDate || !targetAmount) return null;
+
+                      return {
+                        id: g.id,
+                        name: g.title,
+                        targetAmount: targetAmount,
+                        targetDate: targetDate
+                      };
                     })
-                    .map(g => ({
-                      id: g.id,
-                      name: g.title,
-                      targetAmount: (g.config_data as any).target_amount || 0,
-                      targetDate: (g.config_data as any).target_date || ''
-                    }));
+                    .filter((g): g is NonNullable<typeof g> => g !== null);
 
                   // Extract all withdrawals from goals
                   const withdrawalMarkers = (goals || [])
                     .filter(g => g.is_active && g.config_data?.withdrawals && g.config_data.withdrawals.length > 0)
                     .flatMap(g => {
-                      const withdrawals = g.config_data.withdrawals || [];
+                      const withdrawals = (g.config_data as any).withdrawals || [];
                       return withdrawals.map((w: any, idx: number) => ({
                         id: parseInt(String(w.id).replace(/\D/g, '')) || (g.id * 100 + idx),
                         name: w.reason || `Withdrawal from ${g.title}`,
