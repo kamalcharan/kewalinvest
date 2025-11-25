@@ -100,12 +100,14 @@ export class PortfolioSnapshotService {
 
           // ==================== NON-MF SNAPSHOTS (Assumption-based) ====================
           // Generate snapshots for all non-MF investment plans
+          console.log(`[SnapshotService] 📍 About to call generateAssetSnapshots for customer ${customer.customer_id}`);
           const assetResult = await this.generateAssetSnapshots(
             customer.customer_id,
             snapshotMonthEnd,
             request.tenant_id,
             request.is_live
           );
+          console.log(`[SnapshotService] 📍 generateAssetSnapshots result: created=${assetResult.created}, updated=${assetResult.updated}, errors=${assetResult.errors.length}`);
 
           snapshotsCreated += assetResult.created;
           snapshotsUpdated += assetResult.updated;
@@ -1052,7 +1054,39 @@ export class PortfolioSnapshotService {
       ORDER BY at.display_order, caa.id
     `;
 
+    console.log(`[SnapshotService] 🔍 getCustomerInvestmentPlans called:`);
+    console.log(`[SnapshotService]    - customerId: ${customerId}`);
+    console.log(`[SnapshotService]    - tenantId: ${tenantId}`);
+    console.log(`[SnapshotService]    - isLive: ${isLive}`);
+
     const result = await this.db.query(query, [customerId, tenantId, isLive]);
+
+    console.log(`[SnapshotService]    - Plans found: ${result.rows.length}`);
+    if (result.rows.length > 0) {
+      result.rows.forEach((row, i) => {
+        console.log(`[SnapshotService]    - Plan ${i+1}: id=${row.id}, asset=${row.asset_type_code}, principal=${row.principal_amount}, started=${row.has_started}`);
+      });
+    } else {
+      // Debug query to check what exists for this customer
+      console.log(`[SnapshotService]    ⚠️ No plans found! Running debug query...`);
+      try {
+        const debugQuery = `
+          SELECT caa.id, caa.customer_id, caa.tenant_id, caa.is_live, caa.is_active,
+                 at.asset_type_code, caa.principal_amount
+          FROM t_customer_asset_assignments caa
+          INNER JOIN m_asset_types at ON caa.asset_type_id = at.id
+          WHERE caa.customer_id = $1
+        `;
+        const debugResult = await this.db.query(debugQuery, [customerId]);
+        console.log(`[SnapshotService]    📋 All assignments for customer ${customerId}:`);
+        debugResult.rows.forEach((row, i) => {
+          console.log(`[SnapshotService]       ${i+1}. id=${row.id}, asset=${row.asset_type_code}, tenant=${row.tenant_id}, is_live=${row.is_live}, is_active=${row.is_active}, principal=${row.principal_amount}`);
+        });
+      } catch (debugErr) {
+        console.log(`[SnapshotService]    ❌ Debug query failed: ${debugErr}`);
+      }
+    }
+
     return result.rows;
   }
 
@@ -1162,16 +1196,20 @@ export class PortfolioSnapshotService {
   ): Promise<{ created: number; updated: number; errors: string[] }> {
     const result = { created: 0, updated: 0, errors: [] as string[] };
 
+    console.log(`[SnapshotService] 🚀 generateAssetSnapshots called for customer ${customerId}`);
+    console.log(`[SnapshotService]    - snapshotMonthEnd: ${snapshotMonthEnd}`);
+    console.log(`[SnapshotService]    - tenantId: ${tenantId}, isLive: ${isLive}`);
+
     try {
       // Get customer's non-MF investment plans
       const plans = await this.getCustomerInvestmentPlans(customerId, tenantId, isLive);
 
       if (plans.length === 0) {
-        console.log(`[SnapshotService] No non-MF investment plans for customer ${customerId}`);
+        console.log(`[SnapshotService] ⚠️ No non-MF investment plans for customer ${customerId}`);
         return result;
       }
 
-      console.log(`[SnapshotService] Processing ${plans.length} non-MF plans for customer ${customerId}`);
+      console.log(`[SnapshotService] ✅ Processing ${plans.length} non-MF plans for customer ${customerId}`);
 
       for (const plan of plans) {
         try {
