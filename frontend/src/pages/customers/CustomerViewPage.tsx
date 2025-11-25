@@ -1386,7 +1386,7 @@ comparisonData={comparisonIndexData}
         {/* Assets Tab */}
         {activeTab === 'assets' && customerId && (
           <div style={{
-            backgroundColor: colors.utility.secondaryBackground,
+            backgroundColor: colors.utility.primaryText + '08',
             borderRadius: '12px',
             padding: '24px'
           }}>
@@ -1428,7 +1428,7 @@ comparisonData={comparisonIndexData}
               />
             ) : (
               <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
+                backgroundColor: colors.utility.primaryText + '08',
                 borderRadius: '12px',
                 padding: '24px'
               }}>

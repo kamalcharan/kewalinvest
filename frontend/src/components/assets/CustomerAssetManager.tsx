@@ -1,7 +1,7 @@
 // frontend/src/components/assets/CustomerAssetManager.tsx
 // Component to manage customer investment plans (Release 1.1 - Phase 1)
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package, Plus, Loader } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInvestmentPlans } from '../../hooks/useInvestmentPlans';
@@ -9,6 +9,14 @@ import { InvestmentPlan, CreateInvestmentPlanRequest } from '../../types/investm
 import { InvestmentPlanForm } from './InvestmentPlanForm';
 import { InvestmentPlanCard } from './InvestmentPlanCard';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
+import { GoalInvestmentAllocationService } from '../../services/goalInvestmentAllocation.service';
+
+// Type for goal allocation info
+interface GoalAllocationInfo {
+  goal_id: number;
+  goal_name: string;
+  allocated_percentage: number;
+}
 
 interface CustomerAssetManagerProps {
   customerId: number;
@@ -22,6 +30,35 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
   const [deletingPlan, setDeletingPlan] = useState<InvestmentPlan | null>(null);
+
+  // Goal allocations map: investment_plan_id -> array of goal allocations
+  const [goalAllocations, setGoalAllocations] = useState<Record<number, GoalAllocationInfo[]>>({});
+
+  // Fetch goal allocations for all plans
+  useEffect(() => {
+    const fetchAllocations = async () => {
+      if (plans.length === 0) return;
+
+      const allocationsMap: Record<number, GoalAllocationInfo[]> = {};
+
+      await Promise.all(
+        plans.map(async (plan) => {
+          try {
+            const response = await GoalInvestmentAllocationService.getInvestmentGoals(plan.id);
+            if (response.success && response.data) {
+              allocationsMap[plan.id] = response.data;
+            }
+          } catch (err) {
+            console.error(`Error fetching allocations for plan ${plan.id}:`, err);
+          }
+        })
+      );
+
+      setGoalAllocations(allocationsMap);
+    };
+
+    fetchAllocations();
+  }, [plans]);
 
   const handleCreatePlan = async (data: CreateInvestmentPlanRequest) => {
     await createPlan(data);
@@ -243,6 +280,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
               plan={plan}
               onEdit={openEditForm}
               onDelete={setDeletingPlan}
+              goalAllocations={goalAllocations[plan.id] || []}
             />
           ))
         )}

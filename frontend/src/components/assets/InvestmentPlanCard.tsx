@@ -2,20 +2,29 @@
 // Card component for displaying investment plans with calculations (Release 1.1 - Phase 1)
 
 import React from 'react';
-import { Edit2, Trash2, TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
+import { Edit2, Trash2, TrendingUp, TrendingDown, Calendar, DollarSign, Target } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { InvestmentPlan, calculateInvestmentValue } from '../../types/investmentPlan.types';
+
+// Type for goal allocation info
+interface GoalAllocationInfo {
+  goal_id: number;
+  goal_name: string;
+  allocated_percentage: number;
+}
 
 interface InvestmentPlanCardProps {
   plan: InvestmentPlan;
   onEdit: (plan: InvestmentPlan) => void;
   onDelete: (plan: InvestmentPlan) => void;
+  goalAllocations?: GoalAllocationInfo[];
 }
 
 export const InvestmentPlanCard: React.FC<InvestmentPlanCardProps> = ({
   plan,
   onEdit,
-  onDelete
+  onDelete,
+  goalAllocations = []
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -165,6 +174,54 @@ export const InvestmentPlanCard: React.FC<InvestmentPlanCardProps> = ({
           </span>
         )}
       </div>
+
+      {/* Goal Allocations */}
+      {goalAllocations.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          marginBottom: '16px',
+          padding: '10px 12px',
+          backgroundColor: colors.brand.primary + '08',
+          borderRadius: '8px',
+          border: `1px solid ${colors.brand.primary}20`
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '11px',
+            fontWeight: '600',
+            color: colors.brand.primary,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            <Target style={{ width: '12px', height: '12px' }} />
+            Assigned to Goals
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {goalAllocations.map((allocation) => (
+              <span
+                key={allocation.goal_id}
+                style={{
+                  fontSize: '12px',
+                  color: colors.brand.primary,
+                  backgroundColor: colors.brand.primary + '15',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontWeight: '500'
+                }}
+              >
+                🎯 {allocation.goal_name}
+                {allocation.allocated_percentage < 100 && (
+                  <span style={{ opacity: 0.7 }}> ({allocation.allocated_percentage}%)</span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Investment Details Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
