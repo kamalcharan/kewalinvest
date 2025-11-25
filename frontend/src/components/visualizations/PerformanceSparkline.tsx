@@ -22,9 +22,14 @@ interface PerformanceSparklineProps {
   showTimelineMarkers?: boolean;
   timelineMarkerSize?: number;
   // Comparison props
-comparisonData?: Array<{date: string, value: number}>; 
+  comparisonData?: Array<{date: string, value: number}>;
   comparisonIndexName?: string;                    // Name of comparison index
   showComparison?: boolean;                        // Enable/disable comparison overlay
+  // Projection props (for networth viewer)
+  projectionData?: number[];                       // Projected future values
+  projectionStartIndex?: number;                   // Index where projection starts (defaults to data.length)
+  showProjection?: boolean;                        // Enable projection display
+  projectionColor?: string;                        // Color for projection line (defaults to same color, slightly faded)
 }
 
 const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
@@ -44,7 +49,11 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   timelineMarkerSize = 5,
   comparisonData,
   comparisonIndexName,
-  showComparison = false
+  showComparison = false,
+  projectionData,
+  projectionStartIndex,
+  showProjection = false,
+  projectionColor
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -123,38 +132,78 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
   // ============================================
   // CHART RENDERING LOGIC
   // ============================================
+
+  // Combine historical data with projection data
+  const combinedData = useMemo(() => {
+    if (!showProjection || !projectionData || projectionData.length === 0) {
+      return data;
+    }
+    return [...data, ...projectionData];
+  }, [data, projectionData, showProjection]);
+
+  // Determine where projection starts
+  const actualProjectionStartIndex = useMemo(() => {
+    if (!showProjection || !projectionData || projectionData.length === 0) {
+      return combinedData.length; // No projection
+    }
+    return projectionStartIndex ?? data.length;
+  }, [projectionStartIndex, data.length, showProjection, projectionData, combinedData.length]);
+
   const isPositive = useMemo(() => {
-    if (data.length < 2) return true;
-    return data[data.length - 1] >= data[0];
-  }, [data]);
+    if (combinedData.length < 2) return true;
+    return combinedData[combinedData.length - 1] >= combinedData[0];
+  }, [combinedData]);
 
   const lineColor = color || (isPositive ? '#10B981' : '#EF4444');
   const areaGradientColor = gradientColor || lineColor;
+  const actualProjectionColor = projectionColor || lineColor;
 
   const points = useMemo(() => {
-    if (!data || data.length === 0) return [];
+    if (!combinedData || combinedData.length === 0) return [];
 
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+    const min = Math.min(...combinedData);
+    const max = Math.max(...combinedData);
     const rawRange = max - min;
 
     // FIX: If range is too small (flat line), use 5% of average value as minimum range
     // This prevents the graph from appearing as a straight line when values don't vary much
-    const avgValue = data.reduce((sum, val) => sum + val, 0) / data.length;
+    const avgValue = combinedData.reduce((sum, val) => sum + val, 0) / combinedData.length;
     const minRange = avgValue * 0.05; // 5% of average
     const range = Math.max(rawRange, minRange) || 1;
 
     const padding = 2;
 
-    return data.map((value, index) => ({
-      x: (index / (Math.max(data.length - 1, 1))) * (width - padding * 2) + padding,
+    return combinedData.map((value, index) => ({
+      x: (index / (Math.max(combinedData.length - 1, 1))) * (width - padding * 2) + padding,
       y: height - ((value - min) / range * (height - padding * 2) + padding),
       value,
       index,
-      percentage: ((value - data[0]) / data[0] * 100).toFixed(1)
+      percentage: ((value - combinedData[0]) / combinedData[0] * 100).toFixed(1),
+      isProjection: index >= actualProjectionStartIndex
     }));
-  }, [data, width, height]);
+  }, [combinedData, width, height, actualProjectionStartIndex]);
 
+  // Historical path (solid line) - up to projection start
+  const historicalPath = useMemo(() => {
+    const historicalPoints = points.filter(p => !p.isProjection);
+    if (historicalPoints.length === 0) return '';
+    return historicalPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+  }, [points]);
+
+  // Projection path (dashed line) - from projection start
+  // Include the last historical point for seamless connection
+  const projectionPath = useMemo(() => {
+    if (!showProjection || actualProjectionStartIndex >= points.length) return '';
+
+    // Start from the last historical point for seamless connection
+    const startIndex = Math.max(0, actualProjectionStartIndex - 1);
+    const projectionPoints = points.slice(startIndex);
+    if (projectionPoints.length < 2) return '';
+
+    return projectionPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+  }, [points, showProjection, actualProjectionStartIndex]);
+
+  // Full line path (for backward compatibility with showArea)
   const linePath = useMemo(() => {
     if (points.length === 0) return '';
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
@@ -262,49 +311,84 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
           />
         )}
 
-        {/* Main line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke={lineColor}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ 
-            transition: 'all 0.3s ease',
-            filter: hoveredIndex !== null ? 'drop-shadow(0 0 4px rgba(0,0,0,0.2))' : 'none'
-          }}
-        />
+        {/* Historical line (solid) - when projection is enabled */}
+        {showProjection && projectionPath ? (
+          <>
+            <path
+              d={historicalPath}
+              fill="none"
+              stroke={lineColor}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transition: 'all 0.3s ease',
+                filter: hoveredIndex !== null ? 'drop-shadow(0 0 4px rgba(0,0,0,0.2))' : 'none'
+              }}
+            />
+            {/* Projection line (dashed) */}
+            <path
+              d={projectionPath}
+              fill="none"
+              stroke={actualProjectionColor}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="6,4"
+              opacity="0.8"
+              style={{
+                transition: 'all 0.3s ease',
+                filter: hoveredIndex !== null ? 'drop-shadow(0 0 4px rgba(0,0,0,0.2))' : 'none'
+              }}
+            />
+          </>
+        ) : (
+          /* Main line (solid) - default when no projection */
+          <path
+            d={linePath}
+            fill="none"
+            stroke={lineColor}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transition: 'all 0.3s ease',
+              filter: hoveredIndex !== null ? 'drop-shadow(0 0 4px rgba(0,0,0,0.2))' : 'none'
+            }}
+          />
+        )}
 
-        {/* Dots - with timeline marker logic */}
+        {/* Dots - with timeline marker logic and projection styling */}
         {(showDots || hoveredIndex !== null) && points.map((point, index) => {
           const isTimelineMarker = getTimelineMarkers.includes(index);
-          const dotRadius = hoveredIndex === index 
-            ? 5 
+          const isProjectionPoint = point.isProjection;
+          const dotRadius = hoveredIndex === index
+            ? 5
             : (isTimelineMarker ? timelineMarkerSize : (showDots ? 2 : 0));
-          
-          let dotColor = lineColor;
+
+          let dotColor = isProjectionPoint ? actualProjectionColor : lineColor;
           if (isTimelineMarker && performanceData && performanceData[index]) {
             const momChange = performanceData[index].mom_change_percentage;
             if (momChange !== null && momChange !== undefined) {
               dotColor = momChange >= 0 ? '#10B981' : '#EF4444';
             }
           }
-          
+
           return (
             <circle
               key={index}
               cx={point.x}
               cy={point.y}
               r={dotRadius}
-              fill={dotColor}
-              stroke="white"
-              strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : 0)}
+              fill={isProjectionPoint ? 'white' : dotColor}
+              stroke={isProjectionPoint ? actualProjectionColor : 'white'}
+              strokeWidth={hoveredIndex === index ? 2 : (isTimelineMarker ? 1.5 : (isProjectionPoint ? 2 : 0))}
+              strokeDasharray={isProjectionPoint ? '2,2' : 'none'}
               style={{
                 transition: 'all 0.2s ease',
-                opacity: hoveredIndex === index 
-                  ? 1 
-                  : (isTimelineMarker ? 1 : (showDots ? 0.7 : 0)),
+                opacity: hoveredIndex === index
+                  ? 1
+                  : (isTimelineMarker ? 1 : (isProjectionPoint ? 0.8 : (showDots ? 0.7 : 0))),
                 filter: isTimelineMarker ? 'drop-shadow(0 0 2px rgba(0,0,0,0.1))' : 'none'
               }}
             />
@@ -338,7 +422,7 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
       )}
 
       {/* Tooltip */}
-      {showTooltip && interactive && hoveredIndex !== null && points[hoveredIndex] && performanceData && performanceData[hoveredIndex] && (
+      {showTooltip && interactive && hoveredIndex !== null && points[hoveredIndex] && (
         <div
           style={{
             position: 'fixed',
@@ -355,6 +439,23 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
             minWidth: '160px'
           }}
         >
+          {/* Projection Badge */}
+          {points[hoveredIndex].isProjection && (
+            <div style={{
+              display: 'inline-block',
+              backgroundColor: actualProjectionColor + '20',
+              color: actualProjectionColor,
+              fontSize: '9px',
+              fontWeight: '600',
+              textTransform: 'uppercase',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              marginBottom: '6px'
+            }}>
+              Projected
+            </div>
+          )}
+
           {/* Date */}
           <div style={{
             color: colors.utility.secondaryText,
@@ -362,15 +463,17 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
             fontSize: '10px',
             fontWeight: '500'
           }}>
-            {performanceData[hoveredIndex].date 
-              ? new Date(performanceData[hoveredIndex].date).toLocaleDateString('en-IN', { 
-                  month: 'short', 
-                  year: 'numeric' 
+            {performanceData && performanceData[hoveredIndex]?.date
+              ? new Date(performanceData[hoveredIndex].date).toLocaleDateString('en-IN', {
+                  month: 'short',
+                  year: 'numeric'
                 })
-              : getMonthName(hoveredIndex)
+              : points[hoveredIndex].isProjection
+                ? `+${hoveredIndex - (actualProjectionStartIndex - 1)} months`
+                : getMonthName(hoveredIndex)
             }
           </div>
-          
+
           {/* Portfolio Value */}
           <div style={{
             color: colors.utility.primaryText,
@@ -407,9 +510,12 @@ const PerformanceSparkline: React.FC<PerformanceSparklineProps> = ({
             </div>
           )}
           
-          {/* Month-over-Month Change */}
-          {hoveredIndex > 0 && 
-           performanceData[hoveredIndex].mom_change_percentage !== null && 
+          {/* Month-over-Month Change - only for historical data */}
+          {hoveredIndex > 0 &&
+           !points[hoveredIndex].isProjection &&
+           performanceData &&
+           performanceData[hoveredIndex] &&
+           performanceData[hoveredIndex].mom_change_percentage !== null &&
            performanceData[hoveredIndex].mom_change_percentage !== undefined && (
             <>
               <div style={{
