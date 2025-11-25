@@ -222,7 +222,8 @@ export class PortfolioSnapshotService {
           // Generate/update snapshot for each month
           for (const monthEnd of months) {
             try {
-              // Calculate snapshot data
+              // ==================== MF SNAPSHOT ====================
+              // Calculate MF snapshot data
               const snapshotData = await this.calculateSnapshotData(
                 customer.customer_id,
                 monthEnd,
@@ -230,23 +231,37 @@ export class PortfolioSnapshotService {
                 params.is_live
               );
 
-              // Check if snapshot already exists
+              // Check if MF snapshot already exists
               const existing = await this.getExistingSnapshot(
+                customer.customer_id,
+                monthEnd,
+                params.tenant_id,
+                params.is_live,
+                'MF',  // asset_type_code
+                null   // investment_plan_id
+              );
+
+              if (existing) {
+                // Update existing MF snapshot
+                await this.updateSnapshot(existing.id, snapshotData);
+                snapshotsUpdated++;
+              } else {
+                // Create new MF snapshot
+                await this.createSnapshot(snapshotData);
+                snapshotsCreated++;
+              }
+
+              // ==================== NON-MF ASSET SNAPSHOTS ====================
+              // Generate snapshots for all non-MF investment plans for this month
+              const assetResult = await this.generateAssetSnapshots(
                 customer.customer_id,
                 monthEnd,
                 params.tenant_id,
                 params.is_live
               );
 
-              if (existing) {
-                // Update existing snapshot
-                await this.updateSnapshot(existing.id, snapshotData);
-                snapshotsUpdated++;
-              } else {
-                // Create new snapshot
-                await this.createSnapshot(snapshotData);
-                snapshotsCreated++;
-              }
+              snapshotsCreated += assetResult.created;
+              snapshotsUpdated += assetResult.updated;
 
             } catch (error: any) {
               console.error(`[SnapshotService] Error processing month ${monthEnd.toISOString()} for customer ${customer.customer_id}:`, error);
@@ -343,7 +358,8 @@ export class PortfolioSnapshotService {
         try {
           for (const monthEnd of months) {
             try {
-              // Calculate snapshot data
+              // ==================== MF SNAPSHOT ====================
+              // Calculate MF snapshot data
               const snapshotData = await this.calculateSnapshotData(
                 customer.customer_id,
                 monthEnd,
@@ -351,12 +367,14 @@ export class PortfolioSnapshotService {
                 request.is_live
               );
 
-              // Check if snapshot already exists
+              // Check if MF snapshot already exists
               const existing = await this.getExistingSnapshot(
                 customer.customer_id,
                 monthEnd,
                 request.tenant_id,
-                request.is_live
+                request.is_live,
+                'MF',  // asset_type_code
+                null   // investment_plan_id
               );
 
               if (existing) {
@@ -366,6 +384,18 @@ export class PortfolioSnapshotService {
                 await this.createSnapshot(snapshotData);
                 snapshotsCreated++;
               }
+
+              // ==================== NON-MF ASSET SNAPSHOTS ====================
+              // Generate snapshots for all non-MF investment plans for this month
+              const assetResult = await this.generateAssetSnapshots(
+                customer.customer_id,
+                monthEnd,
+                request.tenant_id,
+                request.is_live
+              );
+
+              snapshotsCreated += assetResult.created;
+              snapshotsUpdated += assetResult.updated;
 
               monthsProcessed++;
 
@@ -541,30 +571,49 @@ export class PortfolioSnapshotService {
           monthsProcessed += months.length;
 
           for (const monthEnd of months) {
-            // Check if snapshot already exists
-            const existing = await this.getExistingSnapshot(customer.customer_id, monthEnd, params.tenant_id, params.is_live);
+            // ==================== MF SNAPSHOT ====================
+            // Check if MF snapshot already exists
+            const existing = await this.getExistingSnapshot(
+              customer.customer_id, monthEnd, params.tenant_id, params.is_live,
+              'MF', null  // asset_type_code='MF', investment_plan_id=null
+            );
 
             if (existing) {
-              console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: SKIPPED (exists)`);
+              console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: MF SKIPPED (exists)`);
               snapshotsSkipped++;
-              continue;
+            } else {
+              console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: MF CREATING...`);
+
+              // CREATE new MF snapshot
+              const snapshotData = await this.calculateSnapshotData(
+                customer.customer_id,
+                monthEnd,
+                params.tenant_id,
+                params.is_live
+              );
+
+              console.log(`[SnapshotService]     → MF Invested: ${snapshotData.total_invested}, Value: ${snapshotData.current_value}, Schemes: ${snapshotData.total_schemes}`);
+
+              await this.createSnapshot(snapshotData);
+              snapshotsCreated++;
+              console.log(`[SnapshotService]     ✓ MF Created`);
             }
 
-            console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: CREATING...`);
-
-            // CREATE new snapshot
-            const snapshotData = await this.calculateSnapshotData(
+            // ==================== NON-MF ASSET SNAPSHOTS ====================
+            // Generate snapshots for all non-MF investment plans for this month
+            const assetResult = await this.generateAssetSnapshots(
               customer.customer_id,
               monthEnd,
               params.tenant_id,
               params.is_live
             );
 
-            console.log(`[SnapshotService]     → Invested: ${snapshotData.total_invested}, Value: ${snapshotData.current_value}, Schemes: ${snapshotData.total_schemes}`);
+            snapshotsCreated += assetResult.created;
+            snapshotsSkipped += assetResult.updated; // For generateMissing, updated counts as skipped
 
-            await this.createSnapshot(snapshotData);
-            snapshotsCreated++;
-            console.log(`[SnapshotService]     ✓ Created`);
+            if (assetResult.created > 0 || assetResult.updated > 0) {
+              console.log(`[SnapshotService]     → Assets: ${assetResult.created} created, ${assetResult.updated} updated`);
+            }
           }
 
           customersProcessed++;
