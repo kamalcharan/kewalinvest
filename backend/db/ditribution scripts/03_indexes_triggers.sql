@@ -327,8 +327,42 @@ CREATE INDEX idx_txn_types_active ON m_transaction_types USING btree (is_active)
 CREATE INDEX idx_txn_types_code ON m_transaction_types USING btree (txn_code);
 CREATE INDEX idx_txn_types_type ON m_transaction_types USING btree (txn_type);
 
--- Monthly portfolio snapshots indexes
+-- Monthly portfolio snapshots indexes (extended for multi-asset support)
+-- Primary index for querying snapshots
 CREATE INDEX idx_monthly_snapshots ON t_monthly_portfolio_snapshots USING btree (tenant_id, is_live, customer_id, snapshot_month_end);
+
+-- Unique index to enforce one snapshot per customer/month/asset_type/plan combination
+-- Uses COALESCE to handle NULL investment_plan_id (for MF aggregated snapshots)
+CREATE UNIQUE INDEX idx_monthly_portfolio_snapshots_unique
+ON t_monthly_portfolio_snapshots (
+    tenant_id,
+    is_live,
+    customer_id,
+    snapshot_month_end,
+    asset_type_code,
+    COALESCE(investment_plan_id, 0)
+);
+
+-- Index for querying by asset type (for filtered views)
+CREATE INDEX idx_snapshots_asset_type
+ON t_monthly_portfolio_snapshots (tenant_id, is_live, customer_id, asset_type_code);
+
+-- Index for querying by investment plan (for plan-specific history)
+CREATE INDEX idx_snapshots_investment_plan
+ON t_monthly_portfolio_snapshots (investment_plan_id)
+WHERE investment_plan_id IS NOT NULL;
+
+-- Index for networth aggregation queries (all assets for a customer)
+CREATE INDEX idx_snapshots_networth
+ON t_monthly_portfolio_snapshots (tenant_id, is_live, customer_id, snapshot_month_end)
+INCLUDE (asset_type_code, current_value, actual_amount);
+
+-- Foreign key constraint for investment_plan_id
+ALTER TABLE t_monthly_portfolio_snapshots
+ADD CONSTRAINT fk_snapshot_investment_plan
+FOREIGN KEY (investment_plan_id)
+REFERENCES t_customer_asset_assignments(id)
+ON DELETE SET NULL;
 
 -- ============================================================================
 -- 2.5: IMPORT & STAGING INDEXES
