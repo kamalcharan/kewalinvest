@@ -68,6 +68,10 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>(['ALL']);
   const [assumptionRate, setAssumptionRate] = useState(8); // Default 8% annual growth
 
+  // Tooltip state
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
   // Calculate date range based on timeframe
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -277,6 +281,46 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       return `${(value / 1000).toFixed(0)}K`;
     }
     return value.toString();
+  };
+
+  // Format date for tooltip (e.g., "November 2024" or "Jan 2025")
+  const formatTooltipDate = (index: number): string => {
+    const allDates = [...historicalDates, ...projectionDates];
+    if (index >= 0 && index < allDates.length) {
+      const dateStr = allDates[index];
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    return '';
+  };
+
+  // Get tooltip info for an index
+  const getTooltipInfo = (index: number) => {
+    const isProjection = index >= historicalValues.length;
+    const value = isProjection
+      ? projectionValues[index - historicalValues.length]
+      : historicalValues[index];
+    const isWithdrawal = withdrawalIndices.includes(index);
+
+    // Calculate change from previous month
+    let changePercent = 0;
+    let changeAmount = 0;
+    if (index > 0) {
+      const prevValue = index >= historicalValues.length
+        ? (index === historicalValues.length ? historicalValues[historicalValues.length - 1] : projectionValues[index - historicalValues.length - 1])
+        : historicalValues[index - 1];
+      changeAmount = value - prevValue;
+      changePercent = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0;
+    }
+
+    return {
+      date: formatTooltipDate(index),
+      value,
+      isProjection,
+      isWithdrawal,
+      changePercent,
+      changeAmount
+    };
   };
 
   const isLoading = summaryLoading || historyLoading;
@@ -757,35 +801,54 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             />
           ))}
 
-          {/* Historical dots - DOUBLED SIZE */}
+          {/* Historical dots - DOUBLED SIZE with hover */}
           {historicalValues.map((value, i) => (
             <circle
               key={`hist-${i}`}
               cx={xScale(i)}
               cy={yScale(value)}
-              r={dotSize / 2}
+              r={hoveredIndex === i ? dotSize / 2 + 2 : dotSize / 2}
               fill="#10B981"
               stroke="white"
-              strokeWidth="2"
+              strokeWidth={hoveredIndex === i ? 3 : 2}
+              style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+              onMouseEnter={(e) => {
+                setHoveredIndex(i);
+                setMousePosition({ x: e.clientX, y: e.clientY });
+              }}
+              onMouseMove={(e) => {
+                setMousePosition({ x: e.clientX, y: e.clientY });
+              }}
+              onMouseLeave={() => setHoveredIndex(null)}
             />
           ))}
 
-          {/* Projection dots - DOUBLED SIZE */}
+          {/* Projection dots - DOUBLED SIZE with hover */}
           {projectionValues.map((value, i) => {
             const pointIndex = historicalValues.length + i;
             const isWithdrawal = withdrawalIndices.includes(pointIndex);
             const dotColor = isWithdrawal ? '#EF4444' : '#10B981';
+            const isHovered = hoveredIndex === pointIndex;
 
             return (
               <circle
                 key={`proj-${i}`}
                 cx={xScale(pointIndex)}
                 cy={yScale(value)}
-                r={dotSize / 2}
+                r={isHovered ? dotSize / 2 + 2 : dotSize / 2}
                 fill="white"
                 stroke={dotColor}
-                strokeWidth="2.5"
+                strokeWidth={isHovered ? 3.5 : 2.5}
                 strokeDasharray={isWithdrawal ? "0" : "2,2"}
+                style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+                onMouseEnter={(e) => {
+                  setHoveredIndex(pointIndex);
+                  setMousePosition({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseMove={(e) => {
+                  setMousePosition({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseLeave={() => setHoveredIndex(null)}
               />
             );
           })}
@@ -880,6 +943,89 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             );
           })}
         </svg>
+
+        {/* Tooltip */}
+        {hoveredIndex !== null && (() => {
+          const info = getTooltipInfo(hoveredIndex);
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                left: mousePosition.x + 15,
+                top: mousePosition.y - 80,
+                backgroundColor: colors.utility.secondaryBackground,
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '10px',
+                padding: '12px 16px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                zIndex: 9999,
+                pointerEvents: 'none',
+                minWidth: '180px'
+              }}
+            >
+              {/* Badge for projection/historical */}
+              <div style={{
+                display: 'inline-block',
+                backgroundColor: info.isProjection
+                  ? (info.isWithdrawal ? '#EF444420' : '#10B98120')
+                  : colors.brand.primary + '20',
+                color: info.isProjection
+                  ? (info.isWithdrawal ? '#EF4444' : '#10B981')
+                  : colors.brand.primary,
+                fontSize: '9px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
+                {info.isProjection ? (info.isWithdrawal ? 'Withdrawal Month' : 'Projected') : 'Historical'}
+              </div>
+
+              {/* Date/Month */}
+              <div style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                marginBottom: '4px'
+              }}>
+                {info.date}
+              </div>
+
+              {/* Value */}
+              <div style={{
+                fontSize: '20px',
+                fontWeight: '700',
+                color: info.isWithdrawal ? '#EF4444' : '#10B981',
+                marginBottom: '6px'
+              }}>
+                {formatCurrency(info.value)}
+              </div>
+
+              {/* Change from previous month */}
+              {hoveredIndex > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  color: info.changeAmount >= 0 ? '#10B981' : '#EF4444',
+                  paddingTop: '6px',
+                  borderTop: `1px solid ${colors.utility.primaryText}15`
+                }}>
+                  {info.changeAmount >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  <span>
+                    {info.changeAmount >= 0 ? '+' : ''}{formatCurrency(info.changeAmount)}
+                  </span>
+                  <span style={{ color: colors.utility.secondaryText }}>
+                    ({info.changePercent >= 0 ? '+' : ''}{info.changePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Legend */}
