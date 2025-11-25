@@ -14,7 +14,9 @@ import {
   BackfillMonthError,
   DropAllSnapshotsResult,
   GenerateMissingResult,
-  RegenerateAllResult
+  RegenerateAllResult,
+  AssetSnapshotData,
+  InvestmentPlanForSnapshot
 } from '../types/portfolioSnapshot.types';
 
 interface CustomerInfo {
@@ -67,7 +69,8 @@ export class PortfolioSnapshotService {
       // Process each customer
       for (const customer of customers) {
         try {
-          // Calculate snapshot data
+          // ==================== MF SNAPSHOT (NAV-based) ====================
+          // Calculate MF snapshot data
           const snapshotData = await this.calculateSnapshotData(
             customer.customer_id,
             snapshotMonthEnd,
@@ -75,22 +78,45 @@ export class PortfolioSnapshotService {
             request.is_live
           );
 
-          // Check if snapshot already exists
+          // Check if MF snapshot already exists
           const existing = await this.getExistingSnapshot(
+            customer.customer_id,
+            snapshotMonthEnd,
+            request.tenant_id,
+            request.is_live,
+            'MF',  // asset_type_code
+            null   // investment_plan_id (null for aggregated MF)
+          );
+
+          if (existing) {
+            // Update existing MF snapshot
+            await this.updateSnapshot(existing.id, snapshotData);
+            snapshotsUpdated++;
+          } else {
+            // Create new MF snapshot
+            await this.createSnapshot(snapshotData);
+            snapshotsCreated++;
+          }
+
+          // ==================== NON-MF SNAPSHOTS (Assumption-based) ====================
+          // Generate snapshots for all non-MF investment plans
+          const assetResult = await this.generateAssetSnapshots(
             customer.customer_id,
             snapshotMonthEnd,
             request.tenant_id,
             request.is_live
           );
 
-          if (existing) {
-            // Update existing snapshot
-            await this.updateSnapshot(existing.id, snapshotData);
-            snapshotsUpdated++;
-          } else {
-            // Create new snapshot
-            await this.createSnapshot(snapshotData);
-            snapshotsCreated++;
+          snapshotsCreated += assetResult.created;
+          snapshotsUpdated += assetResult.updated;
+
+          // Add any asset errors to the main error list
+          if (assetResult.errors.length > 0) {
+            errors.push({
+              customer_id: customer.customer_id,
+              customer_name: customer.customer_name,
+              error_message: `Asset errors: ${assetResult.errors.join('; ')}`
+            });
           }
 
           customersProcessed++;
@@ -756,15 +782,21 @@ export class PortfolioSnapshotService {
       total_returns: totalReturns,
       return_percentage: returnPercentage,
       total_units: parseFloat(row.total_units) || 0,
-      total_schemes: parseInt(row.total_schemes) || 0
+      total_schemes: parseInt(row.total_schemes) || 0,
+      // Multi-asset support fields
+      asset_type_code: 'MF',
+      investment_plan_id: null,
+      calculation_method: 'NAV' as const,
+      growth_rate_applied: null,
+      actual_amount: null
     };
   }
 
   /**
    * Create a new snapshot record
-   * FIXED: Using tenant_id and is_live from customer table via id column
+   * UPDATED: Now includes multi-asset support columns
    */
-  private async createSnapshot(data: PortfolioSnapshotData): Promise<void> {
+  private async createSnapshot(data: PortfolioSnapshotData | AssetSnapshotData): Promise<void> {
     const query = `
       INSERT INTO t_monthly_portfolio_snapshots (
         customer_id,
@@ -775,11 +807,16 @@ export class PortfolioSnapshotService {
         return_percentage,
         total_units,
         total_schemes,
+        asset_type_code,
+        investment_plan_id,
+        calculation_method,
+        growth_rate_applied,
+        actual_amount,
         tenant_id,
         is_live,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
         (SELECT tenant_id FROM t_customers WHERE id = $1),
         (SELECT is_live FROM t_customers WHERE id = $1),
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -793,25 +830,32 @@ export class PortfolioSnapshotService {
       data.total_returns,
       data.return_percentage,
       data.total_units,
-      data.total_schemes
+      data.total_schemes,
+      data.asset_type_code || 'MF',
+      data.investment_plan_id || null,
+      data.calculation_method || 'NAV',
+      data.growth_rate_applied || null,
+      data.actual_amount || null
     ]);
   }
 
   /**
    * Update an existing snapshot record
+   * UPDATED: Now includes multi-asset support columns
    */
-  private async updateSnapshot(snapshotId: number, data: PortfolioSnapshotData): Promise<void> {
+  private async updateSnapshot(snapshotId: number, data: PortfolioSnapshotData | AssetSnapshotData): Promise<void> {
     const query = `
       UPDATE t_monthly_portfolio_snapshots
-      SET 
+      SET
         total_invested = $1,
         current_value = $2,
         total_returns = $3,
         return_percentage = $4,
         total_units = $5,
         total_schemes = $6,
+        growth_rate_applied = $7,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $7
+      WHERE id = $8
     `;
 
     await this.db.query(query, [
@@ -821,29 +865,37 @@ export class PortfolioSnapshotService {
       data.return_percentage,
       data.total_units,
       data.total_schemes,
+      data.growth_rate_applied || null,
       snapshotId
     ]);
   }
 
   /**
    * Check if a snapshot already exists
+   * UPDATED: Now filters by asset_type_code and investment_plan_id for multi-asset support
    */
   private async getExistingSnapshot(
     customerId: number,
     monthEnd: Date,
     tenantId: number,
-    isLive: boolean
+    isLive: boolean,
+    assetTypeCode: string = 'MF',
+    investmentPlanId: number | null = null
   ): Promise<any | null> {
     const query = `
-      SELECT id, snapshot_month_end, created_at
+      SELECT id, snapshot_month_end, asset_type_code, investment_plan_id, created_at
       FROM t_monthly_portfolio_snapshots
-      WHERE customer_id = $1 
+      WHERE customer_id = $1
         AND snapshot_month_end = $2
         AND tenant_id = $3
         AND is_live = $4
+        AND asset_type_code = $5
+        AND COALESCE(investment_plan_id, 0) = COALESCE($6, 0)
     `;
 
-    const result = await this.db.query(query, [customerId, monthEnd, tenantId, isLive]);
+    const result = await this.db.query(query, [
+      customerId, monthEnd, tenantId, isLive, assetTypeCode, investmentPlanId
+    ]);
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
@@ -960,5 +1012,203 @@ export class PortfolioSnapshotService {
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     return lastMonth;
+  }
+
+  // ==================== MULTI-ASSET SNAPSHOT METHODS ====================
+
+  /**
+   * Get customer's investment plans (non-MF assets)
+   * Returns plans from t_customer_asset_assignments for assumption-based calculation
+   */
+  private async getCustomerInvestmentPlans(
+    customerId: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<InvestmentPlanForSnapshot[]> {
+    const query = `
+      SELECT
+        caa.id,
+        caa.customer_id,
+        caa.asset_type_id,
+        at.asset_type_code,
+        caa.principal_amount,
+        caa.start_date,
+        caa.has_started,
+        caa.duration_months,
+        caa.duration_years,
+        caa.investment_type,
+        caa.recurring_amount,
+        caa.investment_frequency,
+        caa.custom_assumption_rate,
+        at.default_assumption_rate,
+        caa.notes
+      FROM t_customer_asset_assignments caa
+      INNER JOIN m_asset_types at ON caa.asset_type_id = at.id
+      WHERE caa.customer_id = $1
+        AND caa.tenant_id = $2
+        AND caa.is_live = $3
+        AND caa.is_active = true
+        AND at.asset_type_code != 'MF'  -- Exclude MF (handled separately via NAV)
+      ORDER BY at.display_order, caa.id
+    `;
+
+    const result = await this.db.query(query, [customerId, tenantId, isLive]);
+    return result.rows;
+  }
+
+  /**
+   * Calculate snapshot data for a non-MF asset (assumption-based)
+   * Uses growth rate to calculate current value based on elapsed time
+   */
+  private calculateAssetSnapshotData(
+    plan: InvestmentPlanForSnapshot,
+    asOfDate: Date
+  ): AssetSnapshotData {
+    // Determine the growth rate to use
+    const annualRate = (plan.custom_assumption_rate || plan.default_assumption_rate || 0) / 100;
+
+    // Calculate elapsed time
+    const startDate = new Date(plan.start_date);
+    const yearsElapsed = (asOfDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+
+    // If plan hasn't started or start date is in the future, return principal only
+    if (!plan.has_started || yearsElapsed <= 0) {
+      const principal = plan.principal_amount || 0;
+      return {
+        customer_id: plan.customer_id,
+        snapshot_month_end: asOfDate,
+        investment_plan_id: plan.id,
+        asset_type_code: plan.asset_type_code,
+        total_invested: principal,
+        current_value: principal,
+        total_returns: 0,
+        return_percentage: 0,
+        calculation_method: 'ASSUMPTION',
+        growth_rate_applied: plan.custom_assumption_rate || plan.default_assumption_rate || 0,
+        actual_amount: null,
+        total_units: null,
+        total_schemes: null
+      };
+    }
+
+    let totalInvested = plan.principal_amount || 0;
+    let currentValue = 0;
+
+    if (plan.investment_type === 'one_time') {
+      // Compound interest: FV = PV * (1 + r)^t
+      currentValue = totalInvested * Math.pow(1 + annualRate, yearsElapsed);
+    } else if (plan.investment_type === 'sip' || plan.investment_type === 'recurring') {
+      // SIP/Recurring: Principal + periodic contributions
+      const recurringAmount = plan.recurring_amount || 0;
+      const principal = plan.principal_amount || 0;
+
+      // Calculate number of payments based on frequency
+      let paymentsPerYear = 12; // monthly by default
+      if (plan.investment_frequency === 'quarterly') paymentsPerYear = 4;
+      if (plan.investment_frequency === 'yearly') paymentsPerYear = 1;
+
+      const periodicRate = annualRate / paymentsPerYear;
+      const totalPayments = Math.floor(yearsElapsed * paymentsPerYear);
+
+      // Total invested = principal + (recurring × number of payments)
+      totalInvested = principal + (recurringAmount * totalPayments);
+
+      // Future value of lump sum principal
+      const principalFV = principal * Math.pow(1 + annualRate, yearsElapsed);
+
+      // Future value of SIP payments (FV of annuity)
+      let sipFV = 0;
+      if (totalPayments > 0 && periodicRate > 0) {
+        sipFV = recurringAmount * ((Math.pow(1 + periodicRate, totalPayments) - 1) / periodicRate) * (1 + periodicRate);
+      } else {
+        sipFV = recurringAmount * totalPayments;
+      }
+
+      currentValue = principalFV + sipFV;
+    } else {
+      // Default: just compound interest on principal
+      currentValue = totalInvested * Math.pow(1 + annualRate, yearsElapsed);
+    }
+
+    const totalReturns = currentValue - totalInvested;
+    const returnPercentage = totalInvested > 0 ? (totalReturns / totalInvested) * 100 : 0;
+
+    return {
+      customer_id: plan.customer_id,
+      snapshot_month_end: asOfDate,
+      investment_plan_id: plan.id,
+      asset_type_code: plan.asset_type_code,
+      total_invested: Math.round(totalInvested * 100) / 100,
+      current_value: Math.round(currentValue * 100) / 100,
+      total_returns: Math.round(totalReturns * 100) / 100,
+      return_percentage: Math.round(returnPercentage * 100) / 100,
+      calculation_method: 'ASSUMPTION',
+      growth_rate_applied: plan.custom_assumption_rate || plan.default_assumption_rate || 0,
+      actual_amount: null,
+      total_units: null,
+      total_schemes: null
+    };
+  }
+
+  /**
+   * Generate snapshots for all non-MF assets for a customer
+   * Called after MF snapshot generation in generateSnapshots()
+   */
+  async generateAssetSnapshots(
+    customerId: number,
+    snapshotMonthEnd: Date,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ created: number; updated: number; errors: string[] }> {
+    const result = { created: 0, updated: 0, errors: [] as string[] };
+
+    try {
+      // Get customer's non-MF investment plans
+      const plans = await this.getCustomerInvestmentPlans(customerId, tenantId, isLive);
+
+      if (plans.length === 0) {
+        console.log(`[SnapshotService] No non-MF investment plans for customer ${customerId}`);
+        return result;
+      }
+
+      console.log(`[SnapshotService] Processing ${plans.length} non-MF plans for customer ${customerId}`);
+
+      for (const plan of plans) {
+        try {
+          // Calculate snapshot data for this plan
+          const snapshotData = this.calculateAssetSnapshotData(plan, snapshotMonthEnd);
+
+          // Check if snapshot already exists for this plan
+          const existing = await this.getExistingSnapshot(
+            customerId,
+            snapshotMonthEnd,
+            tenantId,
+            isLive,
+            plan.asset_type_code,
+            plan.id
+          );
+
+          if (existing) {
+            await this.updateSnapshot(existing.id, snapshotData);
+            result.updated++;
+            console.log(`[SnapshotService]   Updated ${plan.asset_type_code} plan ${plan.id}: ₹${snapshotData.current_value}`);
+          } else {
+            await this.createSnapshot(snapshotData);
+            result.created++;
+            console.log(`[SnapshotService]   Created ${plan.asset_type_code} plan ${plan.id}: ₹${snapshotData.current_value}`);
+          }
+        } catch (error: any) {
+          const errorMsg = `Plan ${plan.id} (${plan.asset_type_code}): ${error.message}`;
+          result.errors.push(errorMsg);
+          console.error(`[SnapshotService]   Error: ${errorMsg}`);
+        }
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error(`[SnapshotService] Error generating asset snapshots for customer ${customerId}:`, error);
+      result.errors.push(error.message);
+      return result;
+    }
   }
 }
