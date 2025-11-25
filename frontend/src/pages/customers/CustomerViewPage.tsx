@@ -714,7 +714,7 @@ const CustomerViewPage: React.FC = () => {
 
                   // Extract all withdrawals from goals
                   const withdrawalMarkers = (goals || [])
-                    .filter(g => g.is_active && g.config_data?.withdrawals?.length > 0)
+                    .filter(g => g.is_active && g.config_data?.withdrawals && g.config_data.withdrawals.length > 0)
                     .flatMap(g => {
                       const withdrawals = g.config_data.withdrawals || [];
                       return withdrawals.map((w: any, idx: number) => ({
