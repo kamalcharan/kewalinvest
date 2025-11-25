@@ -271,6 +271,7 @@ export const useNetworthSummary = (
     enabled: options?.enabled !== false && !!(params.customerId || params.familyHeadIwellcode),
     staleTime: 2 * 60 * 1000, // 2 minutes - more frequent for real-time data
     gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Prevent recalculation on alt+tab
   });
 };
 
@@ -292,6 +293,7 @@ export const useNetworthHistory = (
     enabled: options?.enabled !== false && !!(params.customerId || params.familyHeadIwellcode),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false, // Prevent recalculation on alt+tab
   });
 };
 

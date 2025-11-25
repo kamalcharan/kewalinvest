@@ -609,6 +609,11 @@ const CustomerViewPage: React.FC = () => {
           portfolio={portfolio}
           jtbds={jtbds}
           customerId={customerId || undefined}
+          viewMode={viewMode}
+          familyHeadIwellcode={viewMode === 'family' && customer?.family_code
+            ? (customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)
+            : undefined
+          }
         />
       )}
 
@@ -679,6 +684,7 @@ const CustomerViewPage: React.FC = () => {
         {viewMode === 'family' && customer.family_code ? (
           <FamilyPortfolioView
             familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
+            familyCode={customer.family_code}
             onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
           />
         ) : (

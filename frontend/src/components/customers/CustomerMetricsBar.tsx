@@ -1,6 +1,6 @@
 // frontend/src/components/customers/CustomerMetricsBar.tsx
 import React from 'react';
-import { TrendingUp as TrendUpIcon, TrendingDown as TrendDownIcon, Wallet, PieChart } from 'lucide-react';
+import { TrendingUp as TrendUpIcon, TrendingDown as TrendDownIcon, Wallet, PieChart, Users } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNetworthSummary } from '../../hooks/usePortfolioData';
 import type { CustomerPortfolioResponse } from '../../types/portfolio.types';
@@ -9,7 +9,9 @@ import type { JTBDConfiguration } from '../../types/jtbd.types';
 interface CustomerMetricsBarProps {
   portfolio: CustomerPortfolioResponse;
   jtbds?: JTBDConfiguration[];
-  customerId?: number;  // Optional: If provided, will fetch and show networth
+  customerId?: number;  // For individual view
+  familyHeadIwellcode?: string;  // For family view
+  viewMode?: 'individual' | 'family';
   showNetworth?: boolean;  // Enable networth display (default: true if customerId provided)
 }
 
@@ -17,15 +19,20 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
   portfolio,
   jtbds,
   customerId,
+  familyHeadIwellcode,
+  viewMode = 'individual',
   showNetworth = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Fetch networth data if customerId is provided
+  // Fetch networth data based on view mode
+  const isFamilyMode = viewMode === 'family' && !!familyHeadIwellcode;
   const { data: networthData } = useNetworthSummary(
-    { customerId },
-    { enabled: showNetworth && !!customerId }
+    isFamilyMode
+      ? { familyHeadIwellcode }
+      : { customerId },
+    { enabled: showNetworth && (isFamilyMode || !!customerId) }
   );
 
   // Use networth data if available, otherwise fall back to portfolio
@@ -96,8 +103,8 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
             letterSpacing: '0.5px',
             marginBottom: '8px'
           }}>
-            {hasNetworth ? <Wallet size={14} /> : <PieChart size={14} />}
-            {hasNetworth ? 'Total Networth' : 'Total Portfolio'}
+            {isFamilyMode ? <Users size={14} /> : (hasNetworth ? <Wallet size={14} /> : <PieChart size={14} />)}
+            {isFamilyMode ? 'Family Networth' : (hasNetworth ? 'Total Networth' : 'Total Portfolio')}
           </div>
           <div style={{
             fontSize: '28px',
@@ -113,10 +120,14 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
             {hasNetworth ? (
               <>
                 Across {assetTypeCount} asset type{assetTypeCount !== 1 ? 's' : ''}
-                {' • '}
-                <span style={{ opacity: 0.9 }}>
-                  MF: {formatCurrency(portfolio.summary.current_value)}
-                </span>
+                {!isFamilyMode && (
+                  <>
+                    {' • '}
+                    <span style={{ opacity: 0.9 }}>
+                      MF: {formatCurrency(portfolio.summary.current_value)}
+                    </span>
+                  </>
+                )}
               </>
             ) : (
               `Across ${portfolio.holdings?.length || portfolio.summary.total_schemes || 0} schemes`

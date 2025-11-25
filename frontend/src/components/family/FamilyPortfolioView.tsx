@@ -1,22 +1,25 @@
 // frontend/src/components/family/FamilyPortfolioView.tsx
-// Enhanced Family View with Networth Charts and complete data from all asset types
+// Enhanced Family View with Networth Charts
+// NOTE: Main summary cards are now in CustomerMetricsBar - this component shows chart and details
 
 import React, { useState } from 'react';
-import { Users, TrendingUp, TrendingDown, Target, Calendar, PieChart, ExternalLink, Wallet } from 'lucide-react';
+import { Users, Target, Calendar, PieChart, ExternalLink } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFamilyPortfolio, useFamilyAssetAllocation, useFamilyGoals, useFamilyMeetings } from '../../hooks/useFamily';
-import { useNetworthSummary } from '../../hooks/usePortfolioData';
+import { useFamilyMembers } from '../../hooks/useCustomers';
 import { NetworthProjectionChart } from '../portfolio/NetworthProjectionChart';
 import { formatPrice } from '../../utils/formatters';
 import type { FamilyMemberPortfolio, FamilyAssetCategory } from '../../types/family.types';
 
 interface FamilyPortfolioViewProps {
   familyHeadIwellCode: string;
+  familyCode: string;  // Added: family_code for correct member fetching
   onMemberClick?: (customerId: number) => void;
 }
 
 export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
   familyHeadIwellCode,
+  familyCode,
   onMemberClick
 }) => {
   const { theme, isDarkMode } = useTheme();
@@ -25,19 +28,16 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
   // Tab state for networth charts: 'family' or member's customer_id
   const [activeChartTab, setActiveChartTab] = useState<'family' | number>('family');
 
-  // Fetch family data
+  // Fetch family members using the same logic as FamilyMembersPopover - no duplicates
+  const { data: familyMembersData, isLoading: membersLoading } = useFamilyMembers(familyCode, true);
+
+  // Fetch family portfolio data for summary cards
   const { data: portfolio, isLoading: portfolioLoading, error: portfolioError } = useFamilyPortfolio(familyHeadIwellCode);
   const { data: assetAllocation, isLoading: allocationLoading } = useFamilyAssetAllocation(familyHeadIwellCode);
   const { data: goals, isLoading: goalsLoading } = useFamilyGoals(familyHeadIwellCode);
   const { data: meetings, isLoading: meetingsLoading } = useFamilyMeetings(familyHeadIwellCode);
 
-  // Fetch networth summary for accurate multi-asset totals
-  const { data: networthData, isLoading: networthLoading } = useNetworthSummary(
-    { familyHeadIwellcode: familyHeadIwellCode },
-    { enabled: !!familyHeadIwellCode }
-  );
-
-  const isLoading = portfolioLoading || networthLoading;
+  const isLoading = portfolioLoading || membersLoading;
 
   if (isLoading) {
     return (
@@ -64,132 +64,19 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
     );
   }
 
-  // Use networth data for totals (includes ALL asset types), fallback to portfolio
-  const totalNetworth = networthData?.data?.total_networth ?? portfolio.total_current_value;
-  const totalInvested = networthData?.data?.total_invested ?? portfolio.total_invested;
-  const totalReturns = networthData?.data?.total_returns ?? portfolio.total_returns;
-  const returnPercentage = networthData?.data?.overall_return_percentage ?? portfolio.total_return_percentage;
-  const assetTypeCount = networthData?.data?.asset_type_count ?? 1;
+  // Get members for chart tabs - using familyMembersData (no duplicates)
+  const chartMembers = familyMembersData?.members || [];
 
-  const returnColor = totalReturns >= 0 ? colors.semantic.success : colors.semantic.error;
+  // Portfolio members for the cards section (has additional portfolio data)
+  const portfolioMembers = portfolio.members || [];
 
-  // Get members for chart tabs
-  const members = portfolio.members || [];
-
-  // Get active member details for individual chart
+  // Get active member details for individual chart navigation
   const activeMember = activeChartTab !== 'family'
-    ? members.find(m => m.customer_id === activeChartTab)
+    ? chartMembers.find(m => m.id === activeChartTab)
     : null;
 
   return (
     <div>
-      {/* Family Header with Networth Summary Cards */}
-      <div
-        style={{
-          backgroundColor: colors.utility.secondaryBackground,
-          borderRadius: '16px',
-          padding: '32px',
-          marginBottom: '24px',
-          background: isDarkMode
-            ? `linear-gradient(135deg, ${colors.brand.primary}15, ${colors.utility.secondaryBackground})`
-            : `linear-gradient(135deg, ${colors.brand.primary}10, ${colors.utility.secondaryBackground})`
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <div
-            style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '12px',
-              backgroundColor: colors.brand.primary + '20',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <Users size={32} color={colors.brand.primary} />
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {portfolio.family_head_name}'s Family
-            </h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: colors.utility.secondaryText }}>
-              {portfolio.total_members} {portfolio.total_members === 1 ? 'Member' : 'Members'} • {assetTypeCount} Asset Types • IWELL: {portfolio.family_head_iwell_code}
-            </p>
-          </div>
-        </div>
-
-        {/* Main Summary Cards - Using Networth Data for ALL asset types */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-          {/* Total Networth */}
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.utility.primaryText}10`
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Wallet size={18} color={colors.brand.primary} />
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText, textTransform: 'uppercase', fontWeight: '600' }}>
-                Total Networth
-              </div>
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {formatPrice(totalNetworth)}
-            </div>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              All {assetTypeCount} asset types
-            </div>
-          </div>
-
-          {/* Total Invested */}
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.utility.primaryText}10`
-          }}>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '8px', textTransform: 'uppercase', fontWeight: '600' }}>
-              Total Invested
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-              {formatPrice(totalInvested)}
-            </div>
-          </div>
-
-          {/* Total Profit/Loss */}
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.utility.primaryText}10`
-          }}>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '8px', textTransform: 'uppercase', fontWeight: '600' }}>
-              Total Profit/Loss
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: returnColor, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {totalReturns >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-              {totalReturns >= 0 ? '+' : ''}{formatPrice(totalReturns)}
-            </div>
-          </div>
-
-          {/* Return Percentage */}
-          <div style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.utility.primaryText}10`
-          }}>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '8px', textTransform: 'uppercase', fontWeight: '600' }}>
-              Overall Return
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: returnColor }}>
-              {returnPercentage >= 0 ? '+' : ''}{Number(returnPercentage).toFixed(2)}%
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Networth Chart Section with Tabs */}
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
@@ -197,9 +84,38 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
         padding: '24px',
         marginBottom: '24px'
       }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText }}>
-          Networth Projection
-        </h3>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px'
+        }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText }}>
+            Networth Projection
+          </h3>
+          {/* Navigation button for individual charts - positioned here to avoid overlap */}
+          {activeChartTab !== 'family' && activeMember && (
+            <button
+              onClick={() => onMemberClick?.(activeChartTab as number)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: `1px solid ${colors.brand.primary}`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.brand.primary,
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              View {activeMember.name}'s Dashboard
+              <ExternalLink size={14} />
+            </button>
+          )}
+        </div>
 
         {/* Chart Tabs: Family + Individual Members */}
         <div style={{
@@ -232,17 +148,17 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
             Family Networth
           </button>
 
-          {/* Individual Member Tabs */}
-          {members.map((member) => (
+          {/* Individual Member Tabs - using chartMembers (no duplicates) */}
+          {chartMembers.map((member) => (
             <button
-              key={member.customer_id}
-              onClick={() => setActiveChartTab(member.customer_id)}
+              key={member.id}
+              onClick={() => setActiveChartTab(member.id)}
               style={{
                 padding: '10px 20px',
                 borderRadius: '8px',
                 border: 'none',
-                backgroundColor: activeChartTab === member.customer_id ? colors.brand.primary : colors.utility.primaryBackground,
-                color: activeChartTab === member.customer_id ? '#FFFFFF' : colors.utility.secondaryText,
+                backgroundColor: activeChartTab === member.id ? colors.brand.primary : colors.utility.primaryBackground,
+                color: activeChartTab === member.id ? '#FFFFFF' : colors.utility.secondaryText,
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: 'pointer',
@@ -258,8 +174,8 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
                   fontSize: '10px',
                   padding: '2px 6px',
                   borderRadius: '4px',
-                  backgroundColor: activeChartTab === member.customer_id ? 'rgba(255,255,255,0.2)' : colors.brand.primary + '20',
-                  color: activeChartTab === member.customer_id ? '#FFFFFF' : colors.brand.primary
+                  backgroundColor: activeChartTab === member.id ? 'rgba(255,255,255,0.2)' : colors.brand.primary + '20',
+                  color: activeChartTab === member.id ? '#FFFFFF' : colors.brand.primary
                 }}>
                   HEAD
                 </span>
@@ -269,7 +185,7 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
         </div>
 
         {/* Chart Area */}
-        <div style={{ position: 'relative' }}>
+        <div>
           {activeChartTab === 'family' ? (
             // Family Networth Chart
             <NetworthProjectionChart
@@ -279,42 +195,11 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
             />
           ) : (
             // Individual Member Chart
-            <>
-              <NetworthProjectionChart
-                customerId={activeChartTab as number}
-                height={350}
-                showProjection={true}
-              />
-              {/* Navigation to Individual Dashboard */}
-              {activeMember && (
-                <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  zIndex: 10
-                }}>
-                  <button
-                    onClick={() => onMemberClick?.(activeChartTab as number)}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      border: `1px solid ${colors.brand.primary}`,
-                      backgroundColor: colors.utility.primaryBackground,
-                      color: colors.brand.primary,
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    View {activeMember.name}'s Dashboard
-                    <ExternalLink size={14} />
-                  </button>
-                </div>
-              )}
-            </>
+            <NetworthProjectionChart
+              customerId={activeChartTab as number}
+              height={350}
+              showProjection={true}
+            />
           )}
         </div>
       </div>
@@ -465,13 +350,13 @@ export const FamilyPortfolioView: React.FC<FamilyPortfolioViewProps> = ({
         )}
       </div>
 
-      {/* Family Members Portfolio Cards */}
+      {/* Family Members Portfolio Cards - using portfolioMembers for detailed data */}
       <div style={{ marginBottom: '24px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '16px' }}>
           Family Members Portfolio
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
-          {members.map((member: FamilyMemberPortfolio) => (
+          {portfolioMembers.map((member: FamilyMemberPortfolio) => (
             <div
               key={member.customer_id}
               onClick={() => onMemberClick?.(member.customer_id)}
