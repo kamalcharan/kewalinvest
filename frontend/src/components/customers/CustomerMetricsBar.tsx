@@ -1,26 +1,45 @@
 // frontend/src/components/customers/CustomerMetricsBar.tsx
 import React from 'react';
-import { TrendingUp as TrendUpIcon, TrendingDown as TrendDownIcon } from 'lucide-react';
+import { TrendingUp as TrendUpIcon, TrendingDown as TrendDownIcon, Wallet, PieChart } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNetworthSummary } from '../../hooks/usePortfolioData';
 import type { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import type { JTBDConfiguration } from '../../types/jtbd.types';
 
 interface CustomerMetricsBarProps {
   portfolio: CustomerPortfolioResponse;
   jtbds?: JTBDConfiguration[];
+  customerId?: number;  // Optional: If provided, will fetch and show networth
+  showNetworth?: boolean;  // Enable networth display (default: true if customerId provided)
 }
 
 export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
   portfolio,
-  jtbds
+  jtbds,
+  customerId,
+  showNetworth = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
+  // Fetch networth data if customerId is provided
+  const { data: networthData } = useNetworthSummary(
+    { customerId },
+    { enabled: showNetworth && !!customerId }
+  );
+
+  // Use networth data if available, otherwise fall back to portfolio
+  const hasNetworth = networthData?.data && networthData.data.total_networth > 0;
+  const totalNetworth = hasNetworth ? networthData.data!.total_networth : portfolio.summary.current_value ?? 0;
+  const totalInvested = hasNetworth ? networthData.data!.total_invested : portfolio.summary.total_invested ?? 0;
+  const assetTypeCount = hasNetworth ? networthData.data!.asset_type_count : 1;
+
   // Calculate metrics
-  const profitLoss = (portfolio.summary.current_value ?? 0) - (portfolio.summary.total_invested ?? 0);
+  const profitLoss = totalNetworth - totalInvested;
   const dayChangePercentage = portfolio.summary.day_change_percentage ?? 0;
-  const returnPercentage = portfolio.summary.return_percentage ?? 0;
+  const returnPercentage = hasNetworth
+    ? networthData.data!.overall_return_percentage
+    : portfolio.summary.return_percentage ?? 0;
 
   // Utility functions
   const formatCurrency = (value: number | null | undefined): string => {
@@ -58,7 +77,7 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '20px'
       }}>
-        {/* Total Portfolio - Highlight Card */}
+        {/* Total Networth / Portfolio - Highlight Card */}
         <div style={{
           background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
           borderRadius: '12px',
@@ -67,6 +86,9 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
           color: 'white'
         }}>
           <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
             fontSize: '12px',
             textTransform: 'uppercase',
             color: 'rgba(255,255,255,0.9)',
@@ -74,20 +96,31 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
             letterSpacing: '0.5px',
             marginBottom: '8px'
           }}>
-            Total Portfolio
+            {hasNetworth ? <Wallet size={14} /> : <PieChart size={14} />}
+            {hasNetworth ? 'Total Networth' : 'Total Portfolio'}
           </div>
           <div style={{
             fontSize: '28px',
             fontWeight: '700',
             marginBottom: '4px'
           }}>
-            {formatCurrency(portfolio.summary.current_value)}
+            {formatCurrency(totalNetworth)}
           </div>
           <div style={{
             fontSize: '13px',
             color: 'rgba(255,255,255,0.8)'
           }}>
-            Across {portfolio.holdings?.length || portfolio.summary.total_schemes || 0} schemes
+            {hasNetworth ? (
+              <>
+                Across {assetTypeCount} asset type{assetTypeCount !== 1 ? 's' : ''}
+                {' • '}
+                <span style={{ opacity: 0.9 }}>
+                  MF: {formatCurrency(portfolio.summary.current_value)}
+                </span>
+              </>
+            ) : (
+              `Across ${portfolio.holdings?.length || portfolio.summary.total_schemes || 0} schemes`
+            )}
           </div>
         </div>
 

@@ -607,6 +607,7 @@ const CustomerViewPage: React.FC = () => {
         <CustomerMetricsBar
           portfolio={portfolio}
           jtbds={jtbds}
+          customerId={customerId || undefined}
         />
       )}
 

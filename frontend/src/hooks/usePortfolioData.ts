@@ -251,3 +251,46 @@ export const usePortfolioSnapshots = (
     gcTime: 10 * 60 * 1000,   // 10 minutes (formerly cacheTime)
   });
 };
+
+// ==================== NETWORTH HOOKS ====================
+
+/**
+ * Hook for networth summary - total networth with asset breakdown
+ * Uses real-time MF data + assumption-based non-MF data
+ */
+export const useNetworthSummary = (
+  params: { customerId?: number; familyHeadIwellcode?: string },
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ['networth', 'summary', params.customerId, params.familyHeadIwellcode],
+    queryFn: () => PortfolioService.getNetworthSummary({
+      customer_id: params.customerId,
+      family_head_iwellcode: params.familyHeadIwellcode
+    }),
+    enabled: options?.enabled !== false && !!(params.customerId || params.familyHeadIwellcode),
+    staleTime: 2 * 60 * 1000, // 2 minutes - more frequent for real-time data
+    gcTime: 5 * 60 * 1000,
+  });
+};
+
+/**
+ * Hook for networth history timeline
+ */
+export const useNetworthHistory = (
+  params: { customerId?: number; familyHeadIwellcode?: string; startDate?: string; endDate?: string },
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ['networth', 'history', params.customerId, params.familyHeadIwellcode, params.startDate, params.endDate],
+    queryFn: () => PortfolioService.getNetworthHistory({
+      customer_id: params.customerId,
+      family_head_iwellcode: params.familyHeadIwellcode,
+      start_date: params.startDate,
+      end_date: params.endDate
+    }),
+    enabled: options?.enabled !== false && !!(params.customerId || params.familyHeadIwellcode),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+};

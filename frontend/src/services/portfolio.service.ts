@@ -284,6 +284,143 @@ export class PortfolioService {
       return_percentage: Math.round(returnPercentage * 100) / 100
     };
   }
+
+  // ==================== NETWORTH METHODS ====================
+
+  /**
+   * Get networth summary with asset breakdown
+   * Returns real-time MF data + assumption-based non-MF data
+   */
+  static async getNetworthSummary(
+    params: { customer_id?: number; family_head_iwellcode?: string; as_of_date?: string }
+  ): Promise<NetworthSummaryResponse> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.customer_id) queryParams.append('customer_id', params.customer_id.toString());
+      if (params.family_head_iwellcode) queryParams.append('family_head_iwellcode', params.family_head_iwellcode);
+      if (params.as_of_date) queryParams.append('as_of_date', params.as_of_date);
+
+      const url = `${API_ENDPOINTS.NETWORTH.SUMMARY}?${queryParams.toString()}`;
+      return await apiService.get<NetworthSummaryResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching networth summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get networth history timeline
+   */
+  static async getNetworthHistory(
+    params: { customer_id?: number; family_head_iwellcode?: string; start_date?: string; end_date?: string }
+  ): Promise<NetworthHistoryResponse> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.customer_id) queryParams.append('customer_id', params.customer_id.toString());
+      if (params.family_head_iwellcode) queryParams.append('family_head_iwellcode', params.family_head_iwellcode);
+      if (params.start_date) queryParams.append('start_date', params.start_date);
+      if (params.end_date) queryParams.append('end_date', params.end_date);
+
+      const url = `${API_ENDPOINTS.NETWORTH.HISTORY}?${queryParams.toString()}`;
+      return await apiService.get<NetworthHistoryResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching networth history:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper: Get asset type color
+   */
+  static getAssetTypeColor(assetTypeCode: string): string {
+    const colors: Record<string, string> = {
+      MF: '#3B82F6',      // Blue - Mutual Funds
+      GOLD: '#EAB308',    // Gold
+      SILVER: '#9CA3AF',  // Silver/Gray
+      RE: '#10B981',      // Green - Real Estate
+      FD: '#6366F1',      // Indigo - Fixed Deposits
+      PPF: '#8B5CF6',     // Purple - PPF
+      NSC: '#F59E0B',     // Amber - NSC
+      EQUITY: '#14B8A6',  // Teal - Direct Equity
+      DEFAULT: '#6B7280'  // Gray
+    };
+    return colors[assetTypeCode] || colors.DEFAULT;
+  }
+}
+
+// ==================== NETWORTH TYPES ====================
+
+export interface AssetTypeSummary {
+  asset_type_code: string;
+  asset_type_name: string;
+  total_invested: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  allocation_percentage: number;
+  plan_count: number;
+  calculation_method: 'NAV' | 'ASSUMPTION' | 'MIXED';
+}
+
+export interface NetworthSummaryResponse {
+  success: boolean;
+  data?: {
+    customer_id?: number;
+    customer_name?: string;
+    family_head_iwellcode?: string;
+    family_member_count?: number;
+    as_of_date: string;
+    total_networth: number;
+    total_invested: number;
+    total_returns: number;
+    overall_return_percentage: number;
+    by_asset_type: AssetTypeSummary[];
+    asset_type_count: number;
+    total_investment_plans: number;
+    chart_data: {
+      labels: string[];
+      values: number[];
+      colors: string[];
+    };
+  };
+  error?: string;
+}
+
+export interface NetworthHistoryPoint {
+  date: string;
+  total_networth: number;
+  total_invested: number;
+  total_returns: number;
+  return_percentage: number;
+  by_asset_type: Array<{ asset_type_code: string; current_value: number }>;
+}
+
+export interface NetworthHistoryResponse {
+  success: boolean;
+  data?: {
+    customer_id?: number;
+    family_head_iwellcode?: string;
+    history: NetworthHistoryPoint[];
+    start_date: string;
+    end_date: string;
+    data_points: number;
+    starting_networth: number;
+    ending_networth: number;
+    absolute_growth: number;
+    percentage_growth: number;
+    chart_ready: {
+      dates: string[];
+      networth_values: number[];
+      invested_values: number[];
+      by_asset_type: Array<{
+        asset_type_code: string;
+        asset_type_name: string;
+        values: number[];
+        color: string;
+      }>;
+    };
+  };
+  error?: string;
 }
 
 // Export types for convenience
