@@ -871,7 +871,6 @@ export class NetworthService {
       SELECT
         cu.id as customer_id,
         c.name as customer_name,
-        cu.relationship,
         CASE WHEN cu.iwellcode = $3 THEN true ELSE false END as is_family_head
       FROM t_customers cu
       JOIN t_contacts c ON cu.contact_id = c.id

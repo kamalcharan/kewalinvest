@@ -293,7 +293,6 @@ export interface RawSnapshotRow {
 export interface FamilyMemberForNetworth {
   customer_id: number;
   customer_name: string;
-  relationship: string;
   is_family_head: boolean;
 }
 
