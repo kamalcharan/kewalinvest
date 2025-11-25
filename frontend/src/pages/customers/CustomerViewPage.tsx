@@ -612,7 +612,7 @@ const CustomerViewPage: React.FC = () => {
         />
       )}
 
-      {/* Tabs */}
+      {/* Tabs - Only show Overview in family view */}
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
@@ -620,13 +620,15 @@ const CustomerViewPage: React.FC = () => {
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', padding: '0 24px' }}>
           {[
-            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
-            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
-            { key: 'goals', label: 'Goals Management', icon: Target },
-            { key: 'assets', label: 'Asset Types', icon: Package },
-            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare },
-            { key: 'transactions', label: 'Transactions', icon: DollarSign }
-          ].map(tab => {
+            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3, showInFamily: true },
+            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp, showInFamily: false },
+            { key: 'goals', label: 'Goals Management', icon: Target, showInFamily: false },
+            { key: 'assets', label: 'Asset Types', icon: Package, showInFamily: false },
+            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare, showInFamily: false },
+            { key: 'transactions', label: 'Transactions', icon: DollarSign, showInFamily: false }
+          ]
+          .filter(tab => viewMode === 'individual' || tab.showInFamily)
+          .map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
 
