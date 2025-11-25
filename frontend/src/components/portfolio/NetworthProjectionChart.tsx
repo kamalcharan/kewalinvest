@@ -314,12 +314,14 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     // Calculate change from previous month
     let changePercent = 0;
     let changeAmount = 0;
+    let isDecreasing = false;
     if (index > 0) {
       const prevValue = index >= historicalValues.length
         ? (index === historicalValues.length ? historicalValues[historicalValues.length - 1] : projectionValues[index - historicalValues.length - 1])
         : historicalValues[index - 1];
       changeAmount = value - prevValue;
       changePercent = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0;
+      isDecreasing = value < prevValue;
     }
 
     return {
@@ -327,6 +329,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       value,
       isProjection,
       isWithdrawal,
+      isDecreasing,
       changePercent,
       changeAmount
     };
@@ -431,54 +434,54 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const projectionStartX = xScale(historicalValues.length - 1);
   const projectionStartY = yScale(historicalValues[historicalValues.length - 1]);
 
-  // Build projection path with segments (green for growth, red for withdrawal drops)
+  // Build projection path with segments (green for growth, RED for ANY decrease)
   const projectionSegments: { path: string; color: string }[] = [];
-  let currentPath = `M ${projectionStartX},${projectionStartY}`;
-  let prevValue = historicalValues[historicalValues.length - 1];
-  let segmentStart = historicalValues.length - 1;
-  let isWithdrawalSegment = false;
 
-  projectionValues.forEach((v, i) => {
-    const pointIndex = historicalValues.length + i;
-    const x = xScale(pointIndex);
-    const y = yScale(v);
-    const isWithdrawal = withdrawalIndices.includes(pointIndex);
-    const isDecreasing = v < prevValue;
+  if (projectionValues.length > 0) {
+    let prevValue = historicalValues[historicalValues.length - 1];
+    let currentSegmentPath = `M ${projectionStartX},${projectionStartY}`;
+    let currentSegmentIsDecreasing = false;
 
-    // Check if we need to start a new segment
-    if (isWithdrawal && !isWithdrawalSegment) {
-      // Save current green segment and start red
-      if (currentPath !== `M ${projectionStartX},${projectionStartY}`) {
-        projectionSegments.push({ path: currentPath, color: '#10B981' }); // Green
-      }
-      currentPath = `M ${xScale(pointIndex - 1)},${yScale(projectionValues[i - 1] || historicalValues[historicalValues.length - 1])}`;
-      isWithdrawalSegment = true;
-    } else if (!isDecreasing && isWithdrawalSegment) {
-      // End red segment and start green
-      projectionSegments.push({ path: currentPath + ` L ${x},${y}`, color: '#EF4444' }); // Red
-      currentPath = `M ${x},${y}`;
-      isWithdrawalSegment = false;
-    }
-
-    currentPath += ` L ${x},${y}`;
-    prevValue = v;
-  });
-
-  // Add final segment
-  if (currentPath.includes('L')) {
-    projectionSegments.push({
-      path: currentPath,
-      color: isWithdrawalSegment ? '#EF4444' : '#10B981'
-    });
-  }
-
-  // If no segments created, create single green projection
-  if (projectionSegments.length === 0 && projectionValues.length > 0) {
-    let fullPath = `M ${projectionStartX},${projectionStartY}`;
     projectionValues.forEach((v, i) => {
-      fullPath += ` L ${xScale(historicalValues.length + i)},${yScale(v)}`;
+      const pointIndex = historicalValues.length + i;
+      const x = xScale(pointIndex);
+      const y = yScale(v);
+      const isDecreasing = v < prevValue;
+
+      // If this is the first point, just add it
+      if (i === 0) {
+        currentSegmentIsDecreasing = isDecreasing;
+        currentSegmentPath += ` L ${x},${y}`;
+      } else {
+        // Check if direction changed
+        if (isDecreasing !== currentSegmentIsDecreasing) {
+          // Save current segment
+          projectionSegments.push({
+            path: currentSegmentPath,
+            color: currentSegmentIsDecreasing ? '#EF4444' : '#10B981' // Red if decreasing, Green if increasing
+          });
+
+          // Start new segment from previous point
+          const prevX = xScale(pointIndex - 1);
+          const prevY = yScale(projectionValues[i - 1]);
+          currentSegmentPath = `M ${prevX},${prevY} L ${x},${y}`;
+          currentSegmentIsDecreasing = isDecreasing;
+        } else {
+          // Continue current segment
+          currentSegmentPath += ` L ${x},${y}`;
+        }
+      }
+
+      prevValue = v;
     });
-    projectionSegments.push({ path: fullPath, color: '#10B981' });
+
+    // Add final segment
+    if (currentSegmentPath.includes('L')) {
+      projectionSegments.push({
+        path: currentSegmentPath,
+        color: currentSegmentIsDecreasing ? '#EF4444' : '#10B981'
+      });
+    }
   }
 
   // Y-axis ticks
@@ -868,7 +871,13 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           {projectionValues.map((value, i) => {
             const pointIndex = historicalValues.length + i;
             const isWithdrawal = withdrawalIndices.includes(pointIndex);
-            const dotColor = isWithdrawal ? '#EF4444' : '#10B981';
+            // Check if value decreased from previous point
+            const prevValue = i === 0
+              ? historicalValues[historicalValues.length - 1]
+              : projectionValues[i - 1];
+            const isDecreasing = value < prevValue;
+            // RED for any decrease, GREEN for growth
+            const dotColor = isDecreasing ? '#EF4444' : '#10B981';
             const isHovered = hoveredIndex === pointIndex;
 
             return (
@@ -1008,10 +1017,10 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
               <div style={{
                 display: 'inline-block',
                 backgroundColor: info.isProjection
-                  ? (info.isWithdrawal ? '#EF444420' : '#10B98120')
+                  ? (info.isDecreasing ? '#EF444420' : '#10B98120')
                   : colors.brand.primary + '20',
                 color: info.isProjection
-                  ? (info.isWithdrawal ? '#EF4444' : '#10B981')
+                  ? (info.isDecreasing ? '#EF4444' : '#10B981')
                   : colors.brand.primary,
                 fontSize: '9px',
                 fontWeight: '600',
@@ -1021,7 +1030,9 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
                 marginBottom: '8px',
                 letterSpacing: '0.5px'
               }}>
-                {info.isProjection ? (info.isWithdrawal ? 'Withdrawal Month' : 'Projected') : 'Historical'}
+                {info.isProjection
+                  ? (info.isWithdrawal ? 'Withdrawal Month' : (info.isDecreasing ? 'Decline' : 'Projected'))
+                  : 'Historical'}
               </div>
 
               {/* Date/Month */}
@@ -1038,7 +1049,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
               <div style={{
                 fontSize: '20px',
                 fontWeight: '700',
-                color: info.isWithdrawal ? '#EF4444' : '#10B981',
+                color: info.isDecreasing ? '#EF4444' : '#10B981',
                 marginBottom: '6px'
               }}>
                 {formatCurrency(info.value)}
