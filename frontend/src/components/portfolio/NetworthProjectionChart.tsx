@@ -517,7 +517,9 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
   const currentNetworth = historicalValues[historicalValues.length - 1];
   const projectedNetworth = projectionValues[projectionValues.length - 1] || currentNetworth;
-  const projectedGrowth = ((projectedNetworth - currentNetworth) / currentNetworth) * 100;
+  const projectedGrowth = currentNetworth > 0
+    ? ((projectedNetworth - currentNetworth) / currentNetworth) * 100
+    : 0;
 
   // Combine all values for scale calculation
   const allValues = [...historicalValues, ...projectionValues];
