@@ -693,7 +693,18 @@ const CustomerViewPage: React.FC = () => {
                 onAction={() => navigate('/import')}
               />
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+              <>
+                {/* Networth Projection Chart - FULL WIDTH AT TOP */}
+                {customerId && customerId > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <NetworthProjectionChart
+                      customerId={customerId}
+                      height={320}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {/* Portfolio Performance Chart */}
                   <div
@@ -870,22 +881,6 @@ comparisonData={comparisonIndexData}
                     </div>
                   </div>
 
-                  {/* Networth Projection Chart */}
-                  <div style={{
-                    padding: '12px',
-                    background: '#ff000020',
-                    border: '2px solid red',
-                    borderRadius: '8px',
-                    marginBottom: '8px'
-                  }}>
-                    DEBUG: customerId = {customerId} | type = {typeof customerId}
-                  </div>
-                  {customerId && customerId > 0 && (
-                    <NetworthProjectionChart
-                      customerId={customerId}
-                      height={280}
-                    />
-                  )}
 
                   {/* Fund-wise Performance */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
@@ -1137,6 +1132,7 @@ comparisonData={comparisonIndexData}
                   )}
                 </div>
               </div>
+              </>
             )}
           </>
         )}

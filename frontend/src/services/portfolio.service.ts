@@ -330,6 +330,20 @@ export class PortfolioService {
   }
 
   /**
+   * Get all asset types from master data
+   * Used for dropdowns to show all available asset types
+   */
+  static async getAllAssetTypes(): Promise<AssetTypeMasterResponse> {
+    try {
+      const url = API_ENDPOINTS.ASSET_TYPES.LIST;
+      return await apiService.get<AssetTypeMasterResponse>(url);
+    } catch (error: any) {
+      console.error('Error fetching asset types:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper: Get asset type color
    */
   static getAssetTypeColor(assetTypeCode: string): string {
@@ -420,6 +434,29 @@ export interface NetworthHistoryResponse {
       }>;
     };
   };
+  error?: string;
+}
+
+// ==================== ASSET TYPE MASTER ====================
+
+export interface AssetTypeMaster {
+  id: number;
+  asset_type_code: string;
+  asset_type_name: string;
+  category?: string;
+  default_assumption_rate?: number;
+  is_active: boolean;
+  display_order: number;
+  description?: string;
+}
+
+export interface AssetTypeMasterResponse {
+  success: boolean;
+  data?: {
+    asset_types: AssetTypeMaster[];
+  };
+  // Direct format from some endpoints
+  asset_types?: AssetTypeMaster[];
   error?: string;
 }
 

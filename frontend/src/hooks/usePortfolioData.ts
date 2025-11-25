@@ -294,3 +294,17 @@ export const useNetworthHistory = (
     gcTime: 10 * 60 * 1000,
   });
 };
+
+/**
+ * Hook for fetching all asset types from master data
+ * Used for asset type dropdowns in networth viewer
+ */
+export const useAssetTypes = (options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['asset-types', 'master'],
+    queryFn: () => PortfolioService.getAllAssetTypes(),
+    enabled: options?.enabled !== false,
+    staleTime: 30 * 60 * 1000, // 30 minutes - master data doesn't change often
+    gcTime: 60 * 60 * 1000,     // 1 hour
+  });
+};
