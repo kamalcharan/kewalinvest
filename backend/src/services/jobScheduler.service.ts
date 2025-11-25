@@ -110,25 +110,30 @@ export class JobSchedulerService {
         tenant_id, job_type, user_id, is_live,
         schedule_type, cron_expression, is_enabled,
         max_retries, job_config, next_execution_at,
+        failover_enabled, failover_cron_expression,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
     `;
 
     const cronExpression = request.cron_expression || jobTypeInfo.default_cron_expression;
     const nextExecution = this.calculateNextExecution(cronExpression);
+    const failoverEnabled = request.failover_enabled ?? jobTypeInfo.failover_enabled ?? false;
+    const failoverCron = request.failover_cron_expression || jobTypeInfo.failover_cron_expression || null;
 
     const result = await this.db.query(query, [
       tenantId,
       jobType,
       request.user_id,
       isLive,
-      request.schedule_type || 'weekly',
+      request.schedule_type || jobTypeInfo.default_schedule_type || 'daily',
       cronExpression,
       request.is_enabled ?? true,
       request.max_retries ?? jobTypeInfo.default_max_retries,
       request.job_config ? JSON.stringify(request.job_config) : null,
-      nextExecution
+      nextExecution,
+      failoverEnabled,
+      failoverCron
     ]);
 
     const config = this.mapRowToConfig(result.rows[0]);
@@ -208,6 +213,16 @@ export class JobSchedulerService {
       values.push(JSON.stringify(request.job_config));
     }
 
+    if (request.failover_enabled !== undefined) {
+      updates.push(`failover_enabled = $${paramCount++}`);
+      values.push(request.failover_enabled);
+    }
+
+    if (request.failover_cron_expression !== undefined) {
+      updates.push(`failover_cron_expression = $${paramCount++}`);
+      values.push(request.failover_cron_expression);
+    }
+
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
     values.push(tenantId, isLive, jobType);
@@ -235,13 +250,13 @@ export class JobSchedulerService {
   // ==================== EXECUTION METHODS ====================
 
   /**
-   * Execute job with retry logic
+   * Execute job with retry logic and failover support
    */
   async executeWithRetry(
     tenantId: number,
     isLive: boolean,
     jobType: JobType,
-    triggerSource: 'scheduled' | 'manual',
+    triggerSource: 'scheduled' | 'manual' | 'failover',
     attempt: number = 0
   ): Promise<void> {
     const config = await this.getConfig(tenantId, isLive, jobType);
@@ -275,6 +290,7 @@ export class JobSchedulerService {
       // Complete execution
       await this.completeExecution(executionId, result);
       await this.updateConfigStats(config.id!, true);
+      await this.updateLastSuccess(config.id!);
 
       console.log(`[JobScheduler] Execution completed successfully for ${jobType}, tenant ${tenantId}`);
 
@@ -295,9 +311,68 @@ export class JobSchedulerService {
         await this.failExecution(executionId, error.message);
         await this.updateConfigStats(config.id!, false);
 
-        console.error(`[JobScheduler] Execution failed after ${config.max_retries} retries for ${jobType}, tenant ${tenantId}`);
+        // Check if failover is enabled and this wasn't already a failover attempt
+        if (config.failover_enabled && config.failover_cron_expression && triggerSource !== 'failover') {
+          console.log(`[JobScheduler] Scheduling failover for ${jobType}, tenant ${tenantId}`);
+          this.scheduleFailover(config);
+        } else {
+          console.error(`[JobScheduler] Execution failed after ${config.max_retries} retries for ${jobType}, tenant ${tenantId}`);
+        }
       }
     }
+  }
+
+  /**
+   * Schedule a failover execution
+   */
+  private scheduleFailover(config: JobSchedulerConfig): void {
+    if (!config.failover_cron_expression) return;
+
+    const failoverTime = this.calculateNextExecution(config.failover_cron_expression);
+    if (!failoverTime) return;
+
+    const now = new Date();
+    const delay = failoverTime.getTime() - now.getTime();
+
+    // Only schedule if failover is in the future and within 24 hours
+    if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
+      const failoverKey = `failover-${config.tenant_id}-${config.is_live}-${config.job_type}`;
+
+      // Clear any existing failover timer
+      const existingTimer = this.activeTimers.get(failoverKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+      }
+
+      const timerId = setTimeout(() => {
+        console.log(`[JobScheduler] Executing failover for ${config.job_type}, tenant ${config.tenant_id}`);
+        this.executeWithRetry(config.tenant_id, config.is_live, config.job_type, 'failover').catch(err => {
+          console.error('[JobScheduler] Failover execution failed:', err);
+        });
+        this.activeTimers.delete(failoverKey);
+      }, delay);
+
+      this.activeTimers.set(failoverKey, {
+        timerId,
+        nextRun: failoverTime,
+        config,
+        isActive: true
+      });
+
+      console.log(`[JobScheduler] Failover scheduled for ${config.job_type}, tenant ${config.tenant_id} at ${failoverTime.toISOString()}`);
+    }
+  }
+
+  /**
+   * Update last success timestamp
+   */
+  private async updateLastSuccess(configId: number): Promise<void> {
+    const query = `
+      UPDATE t_job_scheduler_configs
+      SET last_success_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `;
+    await this.db.query(query, [configId]);
   }
 
   /**
@@ -384,7 +459,7 @@ export class JobSchedulerService {
     tenantId: number,
     isLive: boolean,
     jobType: JobType,
-    triggerSource: 'scheduled' | 'manual',
+    triggerSource: 'scheduled' | 'manual' | 'failover',
     retryAttempt: number
   ): Promise<number> {
     const query = `
@@ -578,29 +653,82 @@ async getStatistics(tenantId: number, isLive: boolean, jobType: JobType): Promis
     return result.rows[0];
   }
 
-  private calculateNextExecution(cronExpression: string): Date | null {
-    // Simplified - only handles weekly schedule
-    const [minute, hour, , , dayOfWeek] = cronExpression.split(' ').map(Number);
-
-    const now = new Date();
-    const targetDay = dayOfWeek;
-    const currentDay = now.getDay();
-
-    let daysUntilTarget = (targetDay - currentDay + 7) % 7;
-    if (daysUntilTarget === 0) {
-      const targetTime = new Date(now);
-      targetTime.setHours(hour, minute, 0, 0);
-
-      if (now >= targetTime) {
-        daysUntilTarget = 7;
-      }
+  /**
+   * Calculate next execution time from cron expression
+   * Supports:
+   * - Daily: "0 21 * * *" (minute hour * * *)
+   * - Weekly: "0 21 * * 5" (minute hour * * dayOfWeek)
+   * - Monthly: "0 21 1 * *" (minute hour dayOfMonth * *)
+   */
+  calculateNextExecution(cronExpression: string, afterDate?: Date): Date | null {
+    const parts = cronExpression.split(' ');
+    if (parts.length !== 5) {
+      console.error(`[JobScheduler] Invalid cron expression: ${cronExpression}`);
+      return null;
     }
 
-    const nextRun = new Date(now);
-    nextRun.setDate(now.getDate() + daysUntilTarget);
-    nextRun.setHours(hour, minute, 0, 0);
+    const [minuteStr, hourStr, dayOfMonthStr, , dayOfWeekStr] = parts;
+    const minute = parseInt(minuteStr);
+    const hour = parseInt(hourStr);
+    const dayOfMonth = dayOfMonthStr === '*' ? null : parseInt(dayOfMonthStr);
+    const dayOfWeek = dayOfWeekStr === '*' ? null : parseInt(dayOfWeekStr);
 
-    return nextRun;
+    const now = afterDate || new Date();
+    const nextRun = new Date(now);
+    nextRun.setSeconds(0, 0);
+
+    // Daily schedule (dayOfWeek = * and dayOfMonth = *)
+    if (dayOfWeek === null && dayOfMonth === null) {
+      nextRun.setHours(hour, minute, 0, 0);
+
+      // If target time has passed today, schedule for tomorrow
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      return nextRun;
+    }
+
+    // Weekly schedule (specific dayOfWeek)
+    if (dayOfWeek !== null) {
+      const currentDay = now.getDay();
+      let daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
+
+      // Check if target is today
+      if (daysUntilTarget === 0) {
+        const targetTime = new Date(now);
+        targetTime.setHours(hour, minute, 0, 0);
+
+        // If time has passed today, schedule for next week
+        if (now >= targetTime) {
+          daysUntilTarget = 7;
+        }
+      }
+
+      nextRun.setDate(now.getDate() + daysUntilTarget);
+      nextRun.setHours(hour, minute, 0, 0);
+      return nextRun;
+    }
+
+    // Monthly schedule (specific dayOfMonth)
+    if (dayOfMonth !== null) {
+      nextRun.setDate(dayOfMonth);
+      nextRun.setHours(hour, minute, 0, 0);
+
+      // If target has passed this month, schedule for next month
+      if (nextRun <= now) {
+        nextRun.setMonth(nextRun.getMonth() + 1);
+      }
+      return nextRun;
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate failover execution time (typically 1 hour after primary)
+   */
+  private calculateFailoverExecution(failoverCron: string): Date | null {
+    return this.calculateNextExecution(failoverCron);
   }
 
   private calculateRetryDelay(attempt: number): number {
@@ -628,10 +756,13 @@ async getStatistics(tenantId: number, isLive: boolean, jobType: JobType): Promis
       is_enabled: row.is_enabled,
       max_retries: row.max_retries,
       job_config: row.job_config,
+      failover_enabled: row.failover_enabled ?? false,
+      failover_cron_expression: row.failover_cron_expression,
       last_executed_at: row.last_executed_at,
       next_execution_at: row.next_execution_at,
-      execution_count: row.execution_count,
-      failure_count: row.failure_count,
+      last_success_at: row.last_success_at,
+      execution_count: row.execution_count || 0,
+      failure_count: row.failure_count || 0,
       created_at: row.created_at,
       updated_at: row.updated_at
     };

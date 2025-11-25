@@ -854,7 +854,7 @@ CREATE TABLE t_portfolio_snapshot_executions (
     completed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
-    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual', 'failover'))
 );
 
 COMMENT ON TABLE t_portfolio_snapshot_executions IS 'Execution history for portfolio snapshot jobs';
@@ -867,11 +867,19 @@ CREATE TABLE m_job_types (
     default_cron_expression VARCHAR(100),
     default_max_retries INTEGER DEFAULT 3,
     is_active BOOLEAN DEFAULT true,
+    default_schedule_type VARCHAR(20) DEFAULT 'daily',  -- daily, weekly, monthly
+    failover_enabled BOOLEAN DEFAULT false,
+    failover_cron_expression VARCHAR(50),
+    is_global BOOLEAN DEFAULT false,  -- True for NAV/Market jobs that run once for all tenants
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE m_job_types IS 'Registry of all available job types in the system';
+COMMENT ON COLUMN m_job_types.default_schedule_type IS 'Default schedule type: daily, weekly, monthly';
+COMMENT ON COLUMN m_job_types.failover_enabled IS 'Default failover enabled setting';
+COMMENT ON COLUMN m_job_types.failover_cron_expression IS 'Default failover cron expression';
+COMMENT ON COLUMN m_job_types.is_global IS 'If true, job runs once globally (not per-tenant) - e.g., NAV/Market downloads';
 
 -- TABLE: t_job_scheduler_configs
 CREATE TABLE t_job_scheduler_configs (
@@ -880,13 +888,18 @@ CREATE TABLE t_job_scheduler_configs (
     job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
     user_id INTEGER NOT NULL REFERENCES t_users(id),
     is_live BOOLEAN NOT NULL,
-    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'daily',
     cron_expression VARCHAR(100) NOT NULL,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     max_retries INTEGER NOT NULL DEFAULT 3,
     job_config JSONB,
+    -- Failover support
+    failover_enabled BOOLEAN DEFAULT false,
+    failover_cron_expression VARCHAR(50),
+    -- Tracking
     last_executed_at TIMESTAMP,
     next_execution_at TIMESTAMP,
+    last_success_at TIMESTAMP,
     execution_count INTEGER DEFAULT 0,
     failure_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -896,6 +909,9 @@ CREATE TABLE t_job_scheduler_configs (
 );
 
 COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types';
+COMMENT ON COLUMN t_job_scheduler_configs.failover_enabled IS 'Enable failover execution if primary fails';
+COMMENT ON COLUMN t_job_scheduler_configs.failover_cron_expression IS 'Cron for failover time (e.g., 0 22 * * * for 10 PM)';
+COMMENT ON COLUMN t_job_scheduler_configs.last_success_at IS 'Timestamp of last successful execution';
 
 -- TABLE: t_job_executions
 CREATE TABLE t_job_executions (
@@ -916,7 +932,7 @@ CREATE TABLE t_job_executions (
     completed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
-    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual', 'failover'))
 );
 
 COMMENT ON TABLE t_job_executions IS 'Execution history for all job types';
