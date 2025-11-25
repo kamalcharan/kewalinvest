@@ -156,16 +156,17 @@ export class FamilyService {
     // Get asset allocation by category for entire family
     const categoryQuery = `
       SELECT
-        sd.scheme_category as category,
+        COALESCE(sm.name, 'Other') as category,
         SUM(cmp.current_value) as value,
         COUNT(DISTINCT cmp.scheme_code) as scheme_count
       FROM t_customer_master_portfolio cmp
       JOIN t_scheme_details sd ON cmp.scheme_code = sd.scheme_code
+      LEFT JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id AND sm.master_type = 'scheme_category'
       WHERE cmp.tenant_id = $1
         AND cmp.is_live = $2
         AND cmp.customer_id = ANY($3)
         AND cmp.current_value > 0
-      GROUP BY sd.scheme_category
+      GROUP BY sm.name
       ORDER BY value DESC
     `;
 
@@ -186,17 +187,18 @@ export class FamilyService {
         cmp.customer_id,
         ct.name,
         c.iwell_code,
-        sd.scheme_category as category,
+        COALESCE(sm.name, 'Other') as category,
         SUM(cmp.current_value) as value
       FROM t_customer_master_portfolio cmp
       JOIN t_customers c ON cmp.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
       JOIN t_scheme_details sd ON cmp.scheme_code = sd.scheme_code
+      LEFT JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id AND sm.master_type = 'scheme_category'
       WHERE cmp.tenant_id = $1
         AND cmp.is_live = $2
         AND cmp.customer_id = ANY($3)
         AND cmp.current_value > 0
-      GROUP BY cmp.customer_id, ct.name, c.iwell_code, sd.scheme_category
+      GROUP BY cmp.customer_id, ct.name, c.iwell_code, sm.name
       ORDER BY ct.name, value DESC
     `;
 
@@ -256,26 +258,8 @@ export class FamilyService {
         jc.customer_id,
         ct.name,
         COUNT(*) as goal_count,
-        SUM(
-          CASE
-            WHEN jc.tracking_type = 'time_based_goal'
-            THEN (jc.config_data->>'target_amount')::numeric
-            ELSE 0
-          END
-        ) as total_target,
-        SUM(
-          CASE
-            WHEN jc.tracking_type = 'time_based_goal'
-            THEN (
-              SELECT SUM(current_value)
-              FROM t_customer_master_portfolio cmp
-              WHERE cmp.customer_id = jc.customer_id
-                AND cmp.tenant_id = jc.tenant_id
-                AND cmp.is_live = jc.is_live
-            )
-            ELSE 0
-          END
-        ) as current_value,
+        SUM(COALESCE((jc.config_data->>'target_corpus')::numeric, 0)) as total_target,
+        SUM(COALESCE((jc.config_data->>'current_value')::numeric, 0)) as current_value,
         SUM(
           CASE
             WHEN (jc.config_data->>'status') = 'on_track' THEN 1
@@ -300,7 +284,8 @@ export class FamilyService {
       WHERE jc.tenant_id = $1
         AND jc.is_live = $2
         AND jc.customer_id = ANY($3)
-        AND jc.tracking_type IN ('time_based_goal', 'price_based_goal', 'time_and_price_based_goal')
+        AND jc.jtbd_type = 'goal_tracking'
+        AND jc.is_active = true
       GROUP BY jc.customer_id, ct.name
     `;
 
