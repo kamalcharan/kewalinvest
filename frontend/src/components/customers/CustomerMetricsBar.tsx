@@ -28,6 +28,15 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
 
   // Fetch networth data based on view mode
   const isFamilyMode = viewMode === 'family' && !!familyHeadIwellcode;
+
+  // Debug log to verify family mode detection
+  console.log('[CustomerMetricsBar] Debug:', {
+    viewMode,
+    familyHeadIwellcode,
+    isFamilyMode,
+    customerId
+  });
+
   const { data: networthData } = useNetworthSummary(
     isFamilyMode
       ? { familyHeadIwellcode }

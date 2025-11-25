@@ -604,18 +604,34 @@ const CustomerViewPage: React.FC = () => {
       />
 
       {/* Key Metrics Bar */}
-      {portfolio && (
-        <CustomerMetricsBar
-          portfolio={portfolio}
-          jtbds={jtbds}
-          customerId={customerId || undefined}
-          viewMode={viewMode}
-          familyHeadIwellcode={viewMode === 'family' && customer?.family_code
-            ? (customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)
-            : undefined
-          }
-        />
-      )}
+      {portfolio && (() => {
+        // Debug: Calculate familyHeadIwellcode
+        const derivedFamilyHeadIwellcode = viewMode === 'family' && customer
+          ? (customer.is_family_head
+              ? customer.iwell_code
+              : customer.family_head_iwell_code || undefined)
+          : undefined;
+
+        console.log('[CustomerViewPage] MetricsBar props:', {
+          viewMode,
+          customerExists: !!customer,
+          is_family_head: customer?.is_family_head,
+          iwell_code: customer?.iwell_code,
+          family_head_iwell_code: customer?.family_head_iwell_code,
+          family_code: customer?.family_code,
+          derivedFamilyHeadIwellcode
+        });
+
+        return (
+          <CustomerMetricsBar
+            portfolio={portfolio}
+            jtbds={jtbds}
+            customerId={customerId || undefined}
+            viewMode={viewMode}
+            familyHeadIwellcode={derivedFamilyHeadIwellcode}
+          />
+        );
+      })()}
 
       {/* Tabs - Only show Overview in family view */}
       <div style={{
