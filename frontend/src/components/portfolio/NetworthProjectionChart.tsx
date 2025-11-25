@@ -1,16 +1,24 @@
 // frontend/src/components/portfolio/NetworthProjectionChart.tsx
+// Supports both: Customer Networth View (customerId) and Individual Goal View (goalId)
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Target, ArrowDown } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNetworthHistory, useNetworthSummary, useAssetTypes } from '../../hooks/usePortfolioData';
+import { useGoal, useGoalHistory } from '../../hooks/useGoals';
 import { PortfolioService } from '../../services/portfolio.service';
+import { isTimeAndPriceGoal, isPriceBasedGoal, isTimeBasedGoal } from '../../types/goal.types';
 
 interface NetworthProjectionChartProps {
-  customerId: number;
+  // Customer networth mode (provide customerId)
+  customerId?: number;
   familyHeadIwellcode?: string;
+  // Goal progress mode (provide goalId)
+  goalId?: number;
+  // Common props
   height?: number;
   goals?: GoalMarker[];
   withdrawals?: WithdrawalMarker[];
+  showProjection?: boolean;
 }
 
 interface GoalMarker {
@@ -40,12 +48,17 @@ interface AssetTypeSelection {
 export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = ({
   customerId,
   familyHeadIwellcode,
+  goalId,
   height = 300,
   goals = [],
-  withdrawals = []
+  withdrawals = [],
+  showProjection = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  // Determine mode: Goal view or Customer Networth view
+  const isGoalMode = !!goalId;
 
   // Responsive chart width
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +84,76 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   // Tooltip state
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // ===== GOAL MODE: Fetch goal data =====
+  // Hooks have built-in enabled: goalId > 0, so they won't fetch if goalId is 0
+  const { data: goalData, isLoading: goalLoading } = useGoal(goalId || 0);
+  const { data: goalHistoryData, isLoading: goalHistoryLoading } = useGoalHistory(goalId || 0);
+
+  // Extract goal-specific data
+  const goalConfig = useMemo(() => {
+    if (!isGoalMode || !goalData) return null;
+    const cfg = goalData.config_data;
+
+    let targetAmount: number | null = null;
+    let targetDate: string | null = null;
+    let goalWithdrawals: WithdrawalMarker[] = [];
+
+    if (isTimeAndPriceGoal(cfg)) {
+      targetAmount = cfg.target_amount;
+      targetDate = cfg.target_date;
+      goalWithdrawals = (cfg.withdrawals || []).map((w, idx) => ({
+        id: idx,
+        name: w.reason || 'Withdrawal',
+        amount: w.amount,
+        date: w.withdrawal_date
+      }));
+    } else if (isPriceBasedGoal(cfg)) {
+      targetAmount = cfg.target_amount;
+      targetDate = cfg.projected_achievement_date || null;
+      goalWithdrawals = (cfg.withdrawals || []).map((w, idx) => ({
+        id: idx,
+        name: w.reason || 'Withdrawal',
+        amount: w.amount,
+        date: w.withdrawal_date
+      }));
+    } else if (isTimeBasedGoal(cfg)) {
+      targetDate = cfg.target_date;
+      targetAmount = cfg.projected_corpus || null;
+      goalWithdrawals = (cfg.withdrawals || []).map((w, idx) => ({
+        id: idx,
+        name: w.reason || 'Withdrawal',
+        amount: w.amount,
+        date: w.withdrawal_date
+      }));
+    }
+
+    return {
+      title: goalData.title,
+      targetAmount,
+      targetDate,
+      withdrawals: goalWithdrawals,
+      currentValue: cfg.current_value || 0,
+      monthlyContribution: cfg.monthly_contribution || 0
+    };
+  }, [isGoalMode, goalData]);
+
+  // Goal history values
+  const goalHistoricalData = useMemo(() => {
+    if (!isGoalMode || !goalHistoryData || goalHistoryData.length === 0) {
+      return { values: [], dates: [] };
+    }
+    const sorted = [...goalHistoryData].sort((a, b) =>
+      new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime()
+    );
+    return {
+      values: sorted.map(s => s.current_value),
+      dates: sorted.map(s => s.snapshot_date)
+    };
+  }, [isGoalMode, goalHistoryData]);
+
+  // Effective withdrawals: use goal's withdrawals in goal mode, otherwise use prop
+  const effectiveWithdrawals = isGoalMode ? (goalConfig?.withdrawals || []) : withdrawals;
 
   // Calculate date range based on timeframe
   // Always fetch 24 months of history to ensure data availability, then filter on frontend
@@ -120,24 +203,24 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     };
   }, [timeframePeriod]);
 
-  // Fetch data
+  // ===== CUSTOMER MODE: Fetch networth data =====
   const { data: summaryData, isLoading: summaryLoading } = useNetworthSummary(
-    { customerId, familyHeadIwellcode },
-    { enabled: !!customerId || !!familyHeadIwellcode }
+    { customerId: customerId || 0, familyHeadIwellcode },
+    { enabled: !isGoalMode && (!!customerId || !!familyHeadIwellcode) }
   );
 
   const { data: historyData, isLoading: historyLoading } = useNetworthHistory(
     {
-      customerId,
+      customerId: customerId || 0,
       familyHeadIwellcode,
       startDate: dateRange.startDate,
       endDate: dateRange.endDate
     },
-    { enabled: !!customerId || !!familyHeadIwellcode }
+    { enabled: !isGoalMode && (!!customerId || !!familyHeadIwellcode) }
   );
 
-  // Fetch ALL asset types from master data (DB-driven)
-  const { data: assetTypesData } = useAssetTypes();
+  // Fetch ALL asset types from master data (DB-driven) - only in customer mode
+  const { data: assetTypesData } = useAssetTypes({ enabled: !isGoalMode });
 
   // Build asset type options from MASTER DATA + summary data
   const assetTypeOptions = useMemo((): AssetTypeSelection[] => {
@@ -181,39 +264,58 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   }, [summaryData, assetTypesData, selectedAssetTypes, colors.brand.primary]);
 
   // Process historical data - slice to display only the requested months
+  // Works for both goal mode and customer networth mode
   const historicalValues = useMemo(() => {
+    // GOAL MODE: Use goal history data
+    if (isGoalMode) {
+      if (goalHistoricalData.values.length === 0) return [];
+      const sliceCount = Math.min(dateRange.displayHistoricalMonths, goalHistoricalData.values.length);
+      return goalHistoricalData.values.slice(-sliceCount);
+    }
+
+    // CUSTOMER MODE: Use networth history data
     if (!historyData?.data?.history || historyData.data.history.length === 0) return [];
 
-    // Get all values first
     const allValues = historyData.data.history.map(point => {
       if (selectedAssetTypes.includes('ALL')) {
         return point.total_networth;
       }
-      // Sum only selected asset types
       return point.by_asset_type
         .filter(at => selectedAssetTypes.includes(at.asset_type_code))
         .reduce((sum, at) => sum + at.current_value, 0);
     });
 
-    // Slice to show only the last N months based on displayHistoricalMonths
     const sliceCount = Math.min(dateRange.displayHistoricalMonths, allValues.length);
     return allValues.slice(-sliceCount);
-  }, [historyData, selectedAssetTypes, dateRange.displayHistoricalMonths]);
+  }, [isGoalMode, goalHistoricalData, historyData, selectedAssetTypes, dateRange.displayHistoricalMonths]);
 
   // Historical dates for X-axis - also sliced to match
   const historicalDates = useMemo(() => {
+    // GOAL MODE
+    if (isGoalMode) {
+      if (goalHistoricalData.dates.length === 0) return [];
+      const sliceCount = Math.min(dateRange.displayHistoricalMonths, goalHistoricalData.dates.length);
+      return goalHistoricalData.dates.slice(-sliceCount);
+    }
+
+    // CUSTOMER MODE
     if (!historyData?.data?.history || historyData.data.history.length === 0) return [];
     const allDates = historyData.data.history.map(point => point.date);
     const sliceCount = Math.min(dateRange.displayHistoricalMonths, allDates.length);
     return allDates.slice(-sliceCount);
-  }, [historyData, dateRange.displayHistoricalMonths]);
+  }, [isGoalMode, goalHistoricalData, historyData, dateRange.displayHistoricalMonths]);
 
   // Calculate projections with withdrawals
   const { projectionValues, projectionDates, withdrawalIndices } = useMemo(() => {
-    if (historicalValues.length === 0) return { projectionValues: [], projectionDates: [], withdrawalIndices: [] };
+    if (!showProjection || historicalValues.length === 0) {
+      return { projectionValues: [], projectionDates: [], withdrawalIndices: [] };
+    }
 
     const lastValue = historicalValues[historicalValues.length - 1];
     const monthlyGrowthRate = Math.pow(1 + assumptionRate / 100, 1 / 12) - 1;
+
+    // In goal mode, also add monthly contribution
+    const monthlyContribution = isGoalMode ? (goalConfig?.monthlyContribution || 0) : 0;
 
     const projections: number[] = [];
     const dates: string[] = [];
@@ -222,18 +324,18 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     let currentValue = lastValue;
     const now = new Date();
 
-    // Sort withdrawals by date
-    const sortedWithdrawals = [...withdrawals].sort((a, b) =>
+    // Use effectiveWithdrawals (goal's withdrawals in goal mode, prop withdrawals in customer mode)
+    const sortedWithdrawals = [...effectiveWithdrawals].sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
     for (let i = 0; i < dateRange.projectionMonths; i++) {
       const projDate = new Date(now);
       projDate.setMonth(projDate.getMonth() + i + 1);
-      const dateStr = projDate.toISOString().split('T')[0].slice(0, 7); // YYYY-MM
+      const dateStr = projDate.toISOString().split('T')[0].slice(0, 7);
 
-      // Apply growth
-      currentValue = currentValue * (1 + monthlyGrowthRate);
+      // Apply growth + monthly contribution (for goals)
+      currentValue = currentValue * (1 + monthlyGrowthRate) + monthlyContribution;
 
       // Check for withdrawals this month
       const monthWithdrawals = sortedWithdrawals.filter(w => {
@@ -252,7 +354,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     }
 
     return { projectionValues: projections, projectionDates: dates, withdrawalIndices: withdrawalIdx };
-  }, [historicalValues, assumptionRate, dateRange.projectionMonths, withdrawals]);
+  }, [historicalValues, assumptionRate, dateRange.projectionMonths, effectiveWithdrawals, showProjection, isGoalMode, goalConfig]);
 
   // Handle asset type selection
   const handleAssetTypeToggle = (code: string) => {
@@ -335,7 +437,10 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     };
   };
 
-  const isLoading = summaryLoading || historyLoading;
+  // Loading state - check based on mode
+  const isLoading = isGoalMode
+    ? (goalLoading || goalHistoryLoading)
+    : (summaryLoading || historyLoading);
 
   if (isLoading) {
     return (
@@ -348,15 +453,20 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         justifyContent: 'center',
         height: height + 100
       }}>
-        <div style={{ color: colors.utility.secondaryText }}>Loading networth data...</div>
+        <div style={{ color: colors.utility.secondaryText }}>
+          {isGoalMode ? 'Loading goal progress...' : 'Loading networth data...'}
+        </div>
       </div>
     );
   }
 
   // Check if we have any data at all from the API
-  const hasAnyHistoryData = historyData?.data?.history && historyData.data.history.length > 0;
+  const hasAnyHistoryData = isGoalMode
+    ? (goalHistoricalData.values.length > 0)
+    : (historyData?.data?.history && historyData.data.history.length > 0);
 
-  if (!summaryData?.data || (!hasAnyHistoryData && historicalValues.length === 0)) {
+  // No data state
+  if ((!isGoalMode && !summaryData?.data) || (!hasAnyHistoryData && historicalValues.length === 0)) {
     return (
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
@@ -371,18 +481,17 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       }}>
         <TrendingUp size={32} style={{ color: colors.utility.secondaryText, opacity: 0.5 }} />
         <div style={{ color: colors.utility.secondaryText }}>
-          No networth history available
+          {isGoalMode ? 'No goal progress history available' : 'No networth history available'}
         </div>
         <div style={{ fontSize: '12px', color: colors.utility.secondaryText, opacity: 0.7 }}>
-          Portfolio snapshots will appear after month-end processing
+          {isGoalMode ? 'Progress snapshots will appear after monthly updates' : 'Portfolio snapshots will appear after month-end processing'}
         </div>
       </div>
     );
   }
 
-  // If we have data but the sliced array is empty (shouldn't happen now), show what we have
+  // If we have data but the sliced array is empty, show fallback
   if (historicalValues.length === 0 && hasAnyHistoryData) {
-    // This means we have data but slicing resulted in empty - shouldn't happen, but fallback
     return (
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
@@ -573,14 +682,17 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             gap: '8px'
           }}>
             <TrendingUp size={20} />
-            Networth Projection
+            {isGoalMode ? (goalConfig?.title || 'Goal Progress') : 'Networth Projection'}
           </h3>
           <p style={{
             fontSize: '13px',
             color: colors.utility.secondaryText,
             margin: '4px 0 0 0'
           }}>
-            Historical performance + projected growth @ {assumptionRate}% p.a.
+            {isGoalMode
+              ? `${historicalDates.length} snapshots${showProjection ? ` • ${projectionDates.length}M projection @ ${assumptionRate}%` : ''}`
+              : `Historical performance + projected growth @ ${assumptionRate}% p.a.`
+            }
           </p>
         </div>
 
@@ -609,7 +721,8 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             ))}
           </div>
 
-          {/* Asset selector dropdown */}
+          {/* Asset selector dropdown - only in customer networth mode */}
+          {!isGoalMode && (
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowAssetSelector(!showAssetSelector)}
@@ -699,6 +812,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -1005,7 +1119,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           })}
 
           {/* Withdrawal markers - INVERTED TRIANGLE */}
-          {withdrawals.map(withdrawal => {
+          {effectiveWithdrawals.map(withdrawal => {
             const wDate = new Date(withdrawal.date);
             const now = new Date();
             const monthsFromNow = (wDate.getFullYear() - now.getFullYear()) * 12 +
@@ -1194,7 +1308,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           }} />
           <span>Projected</span>
         </div>
-        {withdrawals.length > 0 && (
+        {effectiveWithdrawals.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {/* Inverted triangle icon */}
             <svg width="16" height="16" viewBox="0 0 16 16">
