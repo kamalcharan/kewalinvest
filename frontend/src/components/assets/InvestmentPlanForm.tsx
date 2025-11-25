@@ -1,11 +1,13 @@
 // frontend/src/components/assets/InvestmentPlanForm.tsx
 // Form component for creating/editing investment plans (Release 1.1 - Phase 1)
+// Updated: 3-column layout, consistent radio button style, fixed modal height
 
 import React, { useState, useMemo } from 'react';
-import { X, Loader, AlertCircle, Search } from 'lucide-react';
+import { X, Loader, AlertCircle, Search, Check } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAssetTypes } from '../../hooks/useAssetTypes';
 import { useBookmarkedSchemes } from '../../hooks/useInvestmentPlans';
+import toastService from '../../services/toast.service';
 import {
   InvestmentPlan,
   CreateInvestmentPlanRequest,
@@ -19,6 +21,42 @@ interface InvestmentPlanFormProps {
   onSubmit: (data: CreateInvestmentPlanRequest) => Promise<void>;
   onCancel: () => void;
 }
+
+// Asset type icon mapping
+const getAssetIcon = (code: string): string => {
+  const icons: { [key: string]: string } = {
+    'MF': '📊',
+    'GOLD': '🪙',
+    'EQUITY': '📈',
+    'FD': '🏦',
+    'PPF': '🏛️',
+    'EPF': '💼',
+    'NPS': '🎯',
+    'REAL_ESTATE': '🏠',
+    'INSURANCE': '🛡️'
+  };
+  return icons[code] || '💰';
+};
+
+// Investment type icons
+const getInvestmentTypeIcon = (type: InvestmentType): string => {
+  const icons: { [key in InvestmentType]: string } = {
+    'one_time': '💵',
+    'sip': '🔄',
+    'recurring': '📆'
+  };
+  return icons[type];
+};
+
+// Frequency icons
+const getFrequencyIcon = (freq: InvestmentFrequency): string => {
+  const icons: { [key in InvestmentFrequency]: string } = {
+    'monthly': '📅',
+    'quarterly': '📊',
+    'yearly': '🗓️'
+  };
+  return icons[freq];
+};
 
 export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
   customerId,
@@ -93,31 +131,38 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
 
     if (!formData.asset_type_id) {
       setError('Please select an asset type');
+      toastService.error('Please select an asset type');
       return;
     }
     if (!investmentName.trim()) {
       setError('Please provide a name for this investment');
+      toastService.error('Please provide a name for this investment');
       return;
     }
     if (!formData.principal_amount || formData.principal_amount <= 0) {
       setError('Principal amount must be greater than 0');
+      toastService.error('Principal amount must be greater than 0');
       return;
     }
     if (!formData.start_date) {
       setError('Please select a start date');
+      toastService.error('Please select a start date');
       return;
     }
     if (isMFAsset && !formData.scheme_code) {
       setError('Please select a mutual fund scheme');
+      toastService.error('Please select a mutual fund scheme');
       return;
     }
     if (needsRecurringFields) {
       if (!formData.recurring_amount || formData.recurring_amount <= 0) {
         setError('Recurring amount is required for SIP/recurring investments');
+        toastService.error('Recurring amount is required for SIP/recurring investments');
         return;
       }
       if (!formData.investment_frequency) {
         setError('Please select investment frequency');
+        toastService.error('Please select investment frequency');
         return;
       }
     }
@@ -132,8 +177,11 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
     try {
       setSubmitting(true);
       await onSubmit(submitData);
+      toastService.success(plan ? 'Investment plan updated!' : 'Investment plan created!');
     } catch (err: any) {
-      setError(err.message || 'Failed to save investment plan');
+      const errMsg = err.message || 'Failed to save investment plan';
+      setError(errMsg);
+      toastService.error(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -150,14 +198,95 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
           <Loader style={{ width: '32px', height: '32px', color: colors.brand.primary, animation: 'spin 1s linear infinite', margin: '0 auto' }} />
           <p style={{ marginTop: '16px', color: colors.utility.secondaryText, fontSize: '14px' }}>Loading form data...</p>
         </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  // Styled Radio Button Component
+  const StyledRadioButton = ({
+    selected,
+    label,
+    sublabel,
+    icon,
+    onClick,
+    disabled = false
+  }: {
+    selected: boolean;
+    label: string;
+    sublabel?: string;
+    icon: string;
+    onClick: () => void;
+    disabled?: boolean;
+  }) => (
+    <div
+      onClick={() => !disabled && onClick()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '10px 12px',
+        border: `2px solid ${selected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+        borderRadius: '8px',
+        backgroundColor: selected ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        transition: 'all 0.2s',
+        gap: '10px'
+      }}
+    >
+      {/* Radio Circle */}
+      <div style={{
+        width: '18px',
+        height: '18px',
+        minWidth: '18px',
+        borderRadius: '50%',
+        border: `2px solid ${selected ? colors.brand.primary : colors.utility.secondaryText}`,
+        backgroundColor: colors.utility.primaryBackground,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        {selected && (
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: colors.brand.primary
+          }} />
+        )}
+      </div>
+
+      {/* Icon */}
+      <span style={{ fontSize: '18px', lineHeight: 1 }}>{icon}</span>
+
+      {/* Label */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '13px',
+          fontWeight: '600',
+          color: selected ? colors.brand.primary : colors.utility.primaryText,
+          lineHeight: 1.2
+        }}>
+          {label}
+        </div>
+        {sublabel && (
+          <div style={{ fontSize: '10px', color: colors.utility.secondaryText, lineHeight: 1.2 }}>
+            {sublabel}
+          </div>
+        )}
+      </div>
+
+      {/* Checkmark */}
+      {selected && (
+        <Check size={16} color={colors.brand.primary} strokeWidth={3} />
+      )}
+    </div>
+  );
+
   return (
     <div style={{
-      minWidth: '800px',
-      maxWidth: '1100px',
+      width: '1100px',
+      maxWidth: '95vw',
       backgroundColor: colors.utility.primaryBackground,
       borderRadius: '12px',
       overflow: 'hidden'
@@ -167,10 +296,10 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '20px 24px',
+        padding: '16px 24px',
         borderBottom: `1px solid ${colors.utility.primaryText}10`
       }}>
-        <h3 style={{ fontSize: '20px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
           {plan ? 'Edit Investment Plan' : 'Create New Investment Plan'}
         </h3>
         <button
@@ -191,193 +320,100 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '20px 24px' }}>
           {/* Error Message */}
           {error && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '12px 16px',
+              padding: '10px 14px',
               backgroundColor: colors.semantic.error + '10',
               border: `1px solid ${colors.semantic.error}30`,
               borderRadius: '8px',
-              marginBottom: '20px'
+              marginBottom: '16px'
             }}>
-              <AlertCircle style={{ width: '18px', height: '18px', color: colors.semantic.error, flexShrink: 0 }} />
-              <span style={{ fontSize: '14px', color: colors.semantic.error }}>{error}</span>
+              <AlertCircle style={{ width: '16px', height: '16px', color: colors.semantic.error, flexShrink: 0 }} />
+              <span style={{ fontSize: '13px', color: colors.semantic.error }}>{error}</span>
             </div>
           )}
 
-          {/* Two Column Layout */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            {/* LEFT COLUMN */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* 3-Column Layout */}
+          <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 1fr', gap: '20px' }}>
+
+            {/* COLUMN 1: Asset Type Selection (Light Primary Card) */}
+            <div style={{
+              padding: '16px',
+              backgroundColor: colors.brand.primary + '08',
+              borderRadius: '12px',
+              border: `1px solid ${colors.brand.primary}20`
+            }}>
+              <label style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: colors.brand.primary,
+                marginBottom: '12px'
+              }}>
+                Select Asset Type *
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                {assetTypes.slice(0, 9).map(at => {
+                  const isSelected = formData.asset_type_id === at.id;
+                  return (
+                    <StyledRadioButton
+                      key={at.id}
+                      selected={isSelected}
+                      label={at.asset_type_name}
+                      sublabel={at.asset_type_code}
+                      icon={getAssetIcon(at.asset_type_code)}
+                      onClick={() => updateField('asset_type_id', at.id)}
+                      disabled={!!plan}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* COLUMN 2: Investment Details */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Investment Name */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                   Investment Name *
                 </label>
                 <input
                   type="text"
                   value={investmentName}
                   onChange={(e) => setInvestmentName(e.target.value)}
-                  placeholder="e.g., My SIP in Large Cap Fund"
+                  placeholder="e.g., My Gold Investment"
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
+                    padding: '8px 12px',
                     border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    fontSize: '14px'
+                    fontSize: '13px'
                   }}
                 />
               </div>
 
-              {/* Asset Type Selection - Radio Buttons */}
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
-                  Asset Type *
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                  {assetTypes.slice(0, 9).map(at => {
-                    const isSelected = formData.asset_type_id === at.id;
-
-                    // Icon mapping for each asset type
-                    const getAssetIcon = (code: string) => {
-                      const icons: { [key: string]: string } = {
-                        'MF': '📊',
-                        'GOLD': '🪙',
-                        'EQUITY': '📈',
-                        'FD': '🏦',
-                        'PPF': '🏛️',
-                        'EPF': '💼',
-                        'NPS': '🎯',
-                        'REAL_ESTATE': '🏠',
-                        'INSURANCE': '🛡️'
-                      };
-                      return icons[code] || '💰';
-                    };
-
-                    return (
-                      <label
-                        key={at.id}
-                        style={{
-                          position: 'relative',
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '12px',
-                          border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                          borderRadius: '8px',
-                          backgroundColor: isSelected ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
-                          cursor: plan ? 'not-allowed' : 'pointer',
-                          opacity: plan ? 0.6 : 1,
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="asset_type"
-                          value={at.id}
-                          checked={isSelected}
-                          onChange={() => !plan && updateField('asset_type_id', at.id)}
-                          disabled={!!plan}
-                          style={{
-                            position: 'absolute',
-                            opacity: 0,
-                            width: '100%',
-                            height: '100%',
-                            cursor: plan ? 'not-allowed' : 'pointer',
-                            top: 0,
-                            left: 0
-                          }}
-                        />
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                          {/* Radio Circle Indicator */}
-                          <div style={{
-                            width: '18px',
-                            height: '18px',
-                            minWidth: '18px',
-                            borderRadius: '50%',
-                            border: `2px solid ${isSelected ? colors.brand.primary : colors.utility.secondaryText}`,
-                            backgroundColor: colors.utility.primaryBackground,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            {isSelected && (
-                              <div style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                backgroundColor: colors.brand.primary
-                              }} />
-                            )}
-                          </div>
-
-                          {/* Icon */}
-                          <span style={{ fontSize: '20px', lineHeight: 1 }}>
-                            {getAssetIcon(at.asset_type_code)}
-                          </span>
-
-                          {/* Label and Description */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontSize: '13px',
-                              fontWeight: '600',
-                              color: isSelected ? colors.brand.primary : colors.utility.primaryText,
-                              lineHeight: 1.2,
-                              marginBottom: '2px'
-                            }}>
-                              {at.asset_type_name}
-                            </div>
-                            <div style={{
-                              fontSize: '10px',
-                              color: colors.utility.secondaryText,
-                              lineHeight: 1.2,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {at.asset_type_code}
-                            </div>
-                          </div>
-
-                          {/* Checkmark when selected */}
-                          {isSelected && (
-                            <div style={{
-                              color: colors.brand.primary,
-                              fontSize: '16px',
-                              fontWeight: 'bold',
-                              lineHeight: 1
-                            }}>
-                              ✓
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* MF Scheme Selection - Searchable */}
+              {/* MF Scheme Selection */}
               {isMFAsset && (
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
-                    Select Mutual Fund Scheme *
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                    Mutual Fund Scheme *
                   </label>
                   <div style={{ position: 'relative' }}>
                     <Search style={{
                       position: 'absolute',
-                      left: '12px',
+                      left: '10px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      width: '16px',
-                      height: '16px',
+                      width: '14px',
+                      height: '14px',
                       color: colors.utility.secondaryText
                     }} />
                     <input
@@ -387,29 +423,29 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                       placeholder="Search schemes..."
                       style={{
                         width: '100%',
-                        padding: '10px 12px 10px 36px',
+                        padding: '8px 12px 8px 32px',
                         border: `1px solid ${colors.utility.primaryText}20`,
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         backgroundColor: colors.utility.secondaryBackground,
                         color: colors.utility.primaryText,
-                        fontSize: '14px'
+                        fontSize: '13px'
                       }}
                     />
                   </div>
                   <div style={{
-                    marginTop: '8px',
-                    maxHeight: '200px',
+                    marginTop: '6px',
+                    maxHeight: '150px',
                     overflowY: 'auto',
                     border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     backgroundColor: colors.utility.secondaryBackground
                   }}>
                     {filteredSchemes.length === 0 ? (
-                      <div style={{ padding: '16px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
+                      <div style={{ padding: '12px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
                         No schemes found
                       </div>
                     ) : (
-                      filteredSchemes.map(s => (
+                      filteredSchemes.slice(0, 10).map(s => (
                         <button
                           key={s.scheme_code}
                           type="button"
@@ -419,33 +455,18 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                           }}
                           style={{
                             width: '100%',
-                            padding: '10px 12px',
+                            padding: '8px 10px',
                             border: 'none',
                             borderBottom: `1px solid ${colors.utility.primaryText}05`,
                             backgroundColor: formData.scheme_code === s.scheme_code ? colors.brand.primary + '10' : 'transparent',
                             color: colors.utility.primaryText,
-                            fontSize: '13px',
+                            fontSize: '12px',
                             textAlign: 'left',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (formData.scheme_code !== s.scheme_code) {
-                              e.currentTarget.style.backgroundColor = colors.utility.primaryText + '05';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (formData.scheme_code !== s.scheme_code) {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
+                            cursor: 'pointer'
                           }}
                         >
-                          <div style={{ fontWeight: '500', marginBottom: '2px' }}>
-                            {s.alias_name || s.scheme_name}
-                          </div>
-                          <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                            {s.scheme_code}
-                          </div>
+                          <div style={{ fontWeight: '500', marginBottom: '2px' }}>{s.alias_name || s.scheme_name}</div>
+                          <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>{s.scheme_code}</div>
                         </button>
                       ))
                     )}
@@ -455,8 +476,8 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
 
               {/* Principal Amount */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
-                  Principal Amount (₹) *
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                  Principal Amount (INR) *
                 </label>
                 <input
                   type="number"
@@ -467,60 +488,30 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
+                    padding: '8px 12px',
                     border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    fontSize: '14px'
+                    fontSize: '13px'
                   }}
                 />
               </div>
 
-              {/* Investment Type - Radio Buttons */}
+              {/* Investment Type */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                   Investment Type *
                 </label>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                   {(['one_time', 'sip', 'recurring'] as InvestmentType[]).map(type => (
-                    <label
+                    <StyledRadioButton
                       key={type}
-                      style={{
-                        flex: 1,
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '10px',
-                        border: `2px solid ${formData.investment_type === type ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                        borderRadius: '8px',
-                        backgroundColor: formData.investment_type === type ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
-                        color: formData.investment_type === type ? colors.brand.primary : colors.utility.primaryText,
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="investment_type"
-                        value={type}
-                        checked={formData.investment_type === type}
-                        onChange={() => updateField('investment_type', type)}
-                        style={{
-                          position: 'absolute',
-                          opacity: 0,
-                          width: '100%',
-                          height: '100%',
-                          cursor: 'pointer',
-                          top: 0,
-                          left: 0
-                        }}
-                      />
-                      {type === 'one_time' ? 'One-time' : type.toUpperCase()}
-                    </label>
+                      selected={formData.investment_type === type}
+                      label={type === 'one_time' ? 'One-time' : type.toUpperCase()}
+                      icon={getInvestmentTypeIcon(type)}
+                      onClick={() => updateField('investment_type', type)}
+                    />
                   ))}
                 </div>
               </div>
@@ -529,8 +520,8 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
               {needsRecurringFields && (
                 <>
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
-                      Recurring Amount (₹) *
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                      Recurring Amount (INR) *
                     </label>
                     <input
                       type="number"
@@ -541,60 +532,29 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                       required
                       style={{
                         width: '100%',
-                        padding: '10px 12px',
+                        padding: '8px 12px',
                         border: `1px solid ${colors.utility.primaryText}20`,
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         backgroundColor: colors.utility.secondaryBackground,
                         color: colors.utility.primaryText,
-                        fontSize: '14px'
+                        fontSize: '13px'
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                       Frequency *
                     </label>
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {(['monthly', 'quarterly', 'yearly'] as InvestmentFrequency[]).map(freq => (
-                        <label
+                        <StyledRadioButton
                           key={freq}
-                          style={{
-                            flex: 1,
-                            position: 'relative',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '10px',
-                            border: `2px solid ${formData.investment_frequency === freq ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                            borderRadius: '8px',
-                            backgroundColor: formData.investment_frequency === freq ? colors.brand.primary + '15' : colors.utility.secondaryBackground,
-                            color: formData.investment_frequency === freq ? colors.brand.primary : colors.utility.primaryText,
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            textTransform: 'capitalize'
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="investment_frequency"
-                            value={freq}
-                            checked={formData.investment_frequency === freq}
-                            onChange={() => updateField('investment_frequency', freq)}
-                            style={{
-                              position: 'absolute',
-                              opacity: 0,
-                              width: '100%',
-                              height: '100%',
-                              cursor: 'pointer',
-                              top: 0,
-                              left: 0
-                            }}
-                          />
-                          {freq}
-                        </label>
+                          selected={formData.investment_frequency === freq}
+                          label={freq.charAt(0).toUpperCase() + freq.slice(1)}
+                          icon={getFrequencyIcon(freq)}
+                          onClick={() => updateField('investment_frequency', freq)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -602,11 +562,11 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
               )}
             </div>
 
-            {/* RIGHT COLUMN */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* COLUMN 3: Duration & Settings */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Start Date */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                   Start Date *
                 </label>
                 <input
@@ -616,22 +576,22 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
+                    padding: '8px 12px',
                     border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    fontSize: '14px'
+                    fontSize: '13px'
                   }}
                 />
               </div>
 
-              {/* Duration with End Date Calculation */}
+              {/* Duration */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                   Duration
                 </label>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="number"
                     value={durationUnit === 'months' ? (formData.duration_months || '') : (formData.duration_years || '')}
@@ -649,24 +609,24 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                     placeholder="Duration"
                     style={{
                       flex: 1,
-                      padding: '10px 12px',
+                      padding: '8px 12px',
                       border: `1px solid ${colors.utility.primaryText}20`,
-                      borderRadius: '8px',
+                      borderRadius: '6px',
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText,
-                      fontSize: '14px'
+                      fontSize: '13px'
                     }}
                   />
                   <select
                     value={durationUnit}
                     onChange={(e) => setDurationUnit(e.target.value as 'months' | 'years')}
                     style={{
-                      padding: '10px 12px',
+                      padding: '8px 12px',
                       border: `1px solid ${colors.utility.primaryText}20`,
-                      borderRadius: '8px',
+                      borderRadius: '6px',
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText,
-                      fontSize: '14px',
+                      fontSize: '13px',
                       cursor: 'pointer'
                     }}
                   >
@@ -676,31 +636,40 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                 </div>
                 {calculatedEndDate && (
                   <div style={{
-                    marginTop: '10px',
-                    padding: '10px 12px',
+                    marginTop: '8px',
+                    padding: '8px 10px',
                     backgroundColor: colors.semantic.success + '15',
                     border: `1px solid ${colors.semantic.success}30`,
-                    borderRadius: '8px',
-                    fontSize: '14px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
                     color: colors.semantic.success,
                     fontWeight: '600',
                     textAlign: 'center'
                   }}>
-                    📅 Expected End Date: {calculatedEndDate}
+                    End Date: {calculatedEndDate}
                   </div>
                 )}
               </div>
 
-              {/* Has Started Checkbox */}
+              {/* Has Started */}
               <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '10px', backgroundColor: colors.utility.secondaryBackground, borderRadius: '8px' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  cursor: 'pointer',
+                  padding: '10px 12px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderRadius: '6px',
+                  border: `1px solid ${colors.utility.primaryText}10`
+                }}>
                   <input
                     type="checkbox"
                     checked={formData.has_started}
                     onChange={(e) => updateField('has_started', e.target.checked)}
-                    style={{ width: '18px', height: '18px', accentColor: colors.brand.primary, cursor: 'pointer' }}
+                    style={{ width: '16px', height: '16px', accentColor: colors.brand.primary, cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '14px', color: colors.utility.primaryText, fontWeight: '500' }}>
+                  <span style={{ fontSize: '13px', color: colors.utility.primaryText, fontWeight: '500' }}>
                     Investment has started
                   </span>
                 </label>
@@ -708,8 +677,8 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
 
               {/* Expected Growth Rate */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '10px' }}>
-                  Expected Growth Rate (% per year)
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
+                  Expected Growth Rate (%)
                 </label>
                 <input
                   type="number"
@@ -721,17 +690,17 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
                   placeholder={selectedAssetType?.default_assumption_rate ? `Default: ${selectedAssetType.default_assumption_rate}%` : 'Enter rate'}
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
+                    padding: '8px 12px',
                     border: `1px solid ${colors.utility.primaryText}20`,
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    fontSize: '14px'
+                    fontSize: '13px'
                   }}
                 />
                 {selectedAssetType?.default_assumption_rate && (
-                  <p style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '6px', marginBottom: 0 }}>
-                    Default rate for {selectedAssetType.asset_type_name}: {selectedAssetType.default_assumption_rate}%
+                  <p style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px', marginBottom: 0 }}>
+                    Default: {selectedAssetType.default_assumption_rate}% for {selectedAssetType.asset_type_name}
                   </p>
                 )}
               </div>
@@ -744,7 +713,7 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
           display: 'flex',
           justifyContent: 'flex-end',
           gap: '12px',
-          padding: '16px 24px',
+          padding: '14px 24px',
           borderTop: `1px solid ${colors.utility.primaryText}10`,
           backgroundColor: colors.utility.secondaryBackground
         }}>
@@ -753,12 +722,12 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
             onClick={onCancel}
             disabled={submitting}
             style={{
-              padding: '10px 24px',
+              padding: '10px 20px',
               backgroundColor: colors.utility.primaryText + '10',
               color: colors.utility.primaryText,
               border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
+              borderRadius: '6px',
+              fontSize: '13px',
               fontWeight: '600',
               cursor: submitting ? 'not-allowed' : 'pointer',
               opacity: submitting ? 0.5 : 1
@@ -773,22 +742,24 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '10px 24px',
+              padding: '10px 20px',
               backgroundColor: colors.brand.primary,
               color: 'white',
               border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
+              borderRadius: '6px',
+              fontSize: '13px',
               fontWeight: '600',
               cursor: submitting ? 'not-allowed' : 'pointer',
               opacity: submitting ? 0.7 : 1
             }}
           >
-            {submitting && <Loader style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />}
+            {submitting && <Loader style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />}
             <span>{plan ? 'Update' : 'Create'} Investment</span>
           </button>
         </div>
       </form>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

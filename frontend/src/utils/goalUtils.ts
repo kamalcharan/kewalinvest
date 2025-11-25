@@ -183,10 +183,11 @@ export function getPriorityDisplay(priority: string): { label: string; color: st
 
 /**
  * Get goal status with color and message
+ * Uses Monte Carlo results from config_data (calculated by backend)
  */
 export function getGoalStatus(goal: GoalConfiguration): GoalStatusInfo {
   const config = goal.config_data;
-  
+
   // Time-based goal - always on track (timeline is fixed)
   if (isTimeBasedGoal(config)) {
     return {
@@ -197,11 +198,11 @@ export function getGoalStatus(goal: GoalConfiguration): GoalStatusInfo {
       message: 'Timeline is fixed, accumulating corpus'
     };
   }
-  
+
   // Price-based goal - check pace
   if (isPriceBasedGoal(config)) {
     const paceStatus = config.pace_status || 'on_track';
-    
+
     if (paceStatus === 'ahead') {
       return {
         status: 'ahead',
@@ -228,48 +229,64 @@ export function getGoalStatus(goal: GoalConfiguration): GoalStatusInfo {
       };
     }
   }
-  
-  // Time & price goal - check multiple factors
+
+  // Time & price goal - USE MONTE CARLO RESULTS DIRECTLY
   if (isTimeAndPriceGoal(config)) {
-    const onTrack = config.on_track !== false;
-    const deviation = config.deviation_percentage || 0;
+    // Read Monte Carlo results from config_data
+    const onTrack = config.on_track === true;
     const probability = config.probability_of_success || 0;
-    
-    if (onTrack && probability >= 75 && deviation >= 0) {
-      return {
-        status: 'ahead',
-        color: '#10B981',
-        icon: '✓',
-        label: 'On Track',
-        message: `${probability.toFixed(0)}% probability of success`
-      };
-    } else if (!onTrack && probability < 60) {
-      return {
-        status: 'behind',
-        color: '#DC2626',
-        icon: '⚠️',
-        label: 'Behind Schedule',
-        message: `Only ${probability.toFixed(0)}% chance. Action required.`
-      };
-    } else if (!onTrack || deviation < -5) {
-      return {
-        status: 'behind',
-        color: '#F59E0B',
-        icon: '⚠️',
-        label: 'Needs Attention',
-        message: `Behind by ${Math.abs(deviation).toFixed(1)}%`
-      };
+    const confidence = config.success_confidence || 'medium';
+
+    // Simple logic based on Monte Carlo on_track flag
+    if (onTrack) {
+      // Goal is on track (corpus_gap >= 0 && probability >= 75%)
+      if (probability >= 90) {
+        return {
+          status: 'ahead',
+          color: '#10B981',
+          icon: '🚀',
+          label: 'Excellent',
+          message: `${probability.toFixed(0)}% probability of success`
+        };
+      } else {
+        return {
+          status: 'on_track',
+          color: '#10B981',
+          icon: '✓',
+          label: 'On Track',
+          message: `${probability.toFixed(0)}% probability of success`
+        };
+      }
     } else {
-      return {
-        status: 'on_track',
-        color: '#3B82F6',
-        icon: '✓',
-        label: 'On Track',
-        message: 'Progressing well'
-      };
+      // Goal is NOT on track
+      if (probability < 40) {
+        return {
+          status: 'behind',
+          color: '#DC2626',
+          icon: '🚨',
+          label: 'Critical',
+          message: `Only ${probability.toFixed(0)}% chance. Immediate action required.`
+        };
+      } else if (probability < 60) {
+        return {
+          status: 'behind',
+          color: '#F59E0B',
+          icon: '⚠️',
+          label: 'Behind Schedule',
+          message: `${probability.toFixed(0)}% chance. Action recommended.`
+        };
+      } else {
+        return {
+          status: 'behind',
+          color: '#F59E0B',
+          icon: '⚠️',
+          label: 'Needs Attention',
+          message: `${probability.toFixed(0)}% chance. Review allocations.`
+        };
+      }
     }
   }
-  
+
   // Unknown goal type
   return {
     status: 'unknown',

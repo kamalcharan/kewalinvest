@@ -141,6 +141,8 @@ export class PortfolioService {
       // ========================================
       // 7. GET PERFORMANCE HISTORY (FROM SNAPSHOTS)
       // IMPORTANT: Fetch ALL snapshots for full timeline, not just last 365 days
+      // NOTE: Filter by asset_type_code = 'MF' for backward compatibility
+      //       NetworthViewer will use separate aggregated API in Cycle 2
       // ========================================
       let performance: PortfolioPerformanceMetric[] = [];
       try {
@@ -155,6 +157,7 @@ export class PortfolioService {
           WHERE customer_id = $1
             AND tenant_id = $2
             AND is_live = $3
+            AND asset_type_code = 'MF'
           ORDER BY snapshot_month_end ASC
         `;
 
@@ -230,14 +233,16 @@ export class PortfolioService {
     customerId: number
   ): Promise<{ day_change: number; day_change_percentage: number }> {
     try {
+      // NOTE: Filter by asset_type_code = 'MF' for backward compatibility
       const query = `
         WITH latest_months AS (
-          SELECT 
+          SELECT
             snapshot_month_end,
             current_value,
             ROW_NUMBER() OVER (ORDER BY snapshot_month_end DESC) as rn
           FROM t_monthly_portfolio_snapshots
           WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+            AND asset_type_code = 'MF'
           LIMIT 2
         ),
         current_month AS (

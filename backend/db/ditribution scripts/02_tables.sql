@@ -770,23 +770,45 @@ CREATE TABLE t_transaction_table (
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
 
 -- TABLE: t_monthly_portfolio_snapshots
+-- Extended for multi-asset support (NetworthViewer feature)
 CREATE TABLE t_monthly_portfolio_snapshots (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     is_live BOOLEAN NOT NULL,
     customer_id INTEGER NOT NULL,
     snapshot_month_end DATE NOT NULL,
+
+    -- Value columns
     total_invested NUMERIC(18,2),
     current_value NUMERIC(18,2),
     total_returns NUMERIC(18,2),
     return_percentage NUMERIC(10,2),
-    total_units NUMERIC(18,4),
-    total_schemes INTEGER,
+
+    -- MF-specific columns (nullable for non-MF assets)
+    total_units NUMERIC(18,4),           -- Only for MF: sum of units
+    total_schemes INTEGER,                -- Only for MF: count of schemes
+
+    -- Multi-asset support columns
+    asset_type_code VARCHAR(50) DEFAULT 'MF',  -- MF, RE, GOLD, FD, etc.
+    investment_plan_id INTEGER,                 -- FK to t_customer_asset_assignments (NULL for MF aggregated)
+    calculation_method VARCHAR(20) DEFAULT 'NAV',  -- NAV or ASSUMPTION
+    growth_rate_applied NUMERIC(5,2),           -- Rate used for assumption-based calculation
+    actual_amount NUMERIC(18,2),                -- User-entered override value
+
+    -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT chk_calculation_method CHECK (calculation_method IN ('NAV', 'ASSUMPTION'))
 );
 
-COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio snapshots for tracking performance';
+COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio/networth snapshots for tracking performance across all asset types';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.asset_type_code IS 'Asset type code (MF, RE, GOLD, FD, etc.). Default MF for backward compatibility.';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.investment_plan_id IS 'Reference to t_customer_asset_assignments. NULL for MF aggregated snapshots.';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.calculation_method IS 'How current_value was calculated: NAV (units × nav_value) or ASSUMPTION (principal × growth_rate).';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.growth_rate_applied IS 'Annual growth rate used for assumption-based calculations (e.g., 8.00 for 8%).';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.actual_amount IS 'User-entered actual market value. When set, overrides calculated current_value for display.';
 
 -- TABLE: t_portfolio_snapshot_configs
 CREATE TABLE t_portfolio_snapshot_configs (
@@ -1398,7 +1420,8 @@ CREATE TABLE t_customer_asset_assignments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT unique_customer_asset UNIQUE(tenant_id, is_live, customer_id, asset_type_id, scheme_code),
+    -- Note: unique_customer_asset constraint removed in migration 019 to allow multiple same asset types
+    -- Duplicate investment name validation is handled in application layer (notes field)
     CONSTRAINT chk_duration CHECK (
         (duration_months IS NOT NULL AND duration_years IS NULL) OR
         (duration_months IS NULL AND duration_years IS NOT NULL) OR

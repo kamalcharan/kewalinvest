@@ -181,6 +181,14 @@ export interface SnapshotCustomerError {
 // PORTFOLIO SNAPSHOT DATA TYPES
 // ============================================================================
 
+/**
+ * Calculation method for snapshot values
+ */
+export type SnapshotCalculationMethod = 'NAV' | 'ASSUMPTION';
+
+/**
+ * Base portfolio snapshot data (for MF - NAV based)
+ */
 export interface PortfolioSnapshotData {
   customer_id: number;
   snapshot_month_end: Date;
@@ -190,6 +198,79 @@ export interface PortfolioSnapshotData {
   return_percentage: number;
   total_units: number;
   total_schemes: number;
+  // Multi-asset support fields
+  asset_type_code?: string;           // 'MF', 'RE', 'GOLD', 'FD', etc.
+  investment_plan_id?: number | null; // FK to t_customer_asset_assignments
+  calculation_method?: SnapshotCalculationMethod;  // 'NAV' or 'ASSUMPTION'
+  growth_rate_applied?: number | null; // Rate used for assumption-based calculation
+  actual_amount?: number | null;       // User-entered override value
+}
+
+/**
+ * Asset snapshot data (for non-MF assets - assumption based)
+ */
+export interface AssetSnapshotData {
+  customer_id: number;
+  snapshot_month_end: Date;
+  investment_plan_id: number;
+  asset_type_code: string;
+  total_invested: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  calculation_method: 'ASSUMPTION';
+  growth_rate_applied: number;
+  actual_amount?: number | null;
+  // These are null for non-MF
+  total_units: null;
+  total_schemes: null;
+}
+
+/**
+ * Investment plan details for snapshot calculation
+ */
+export interface InvestmentPlanForSnapshot {
+  id: number;
+  customer_id: number;
+  asset_type_id: number;
+  asset_type_code: string;
+  principal_amount: number;
+  start_date: Date;
+  has_started: boolean;
+  duration_months: number | null;
+  duration_years: number | null;
+  investment_type: 'one_time' | 'sip' | 'recurring';
+  recurring_amount: number | null;
+  investment_frequency: 'monthly' | 'quarterly' | 'yearly' | null;
+  custom_assumption_rate: number | null;
+  default_assumption_rate: number;
+  notes: string | null;
+}
+
+/**
+ * Networth summary for a customer (aggregated across all assets)
+ */
+export interface NetworthSummary {
+  customer_id: number;
+  snapshot_month_end: Date;
+  total_networth: number;
+  total_invested: number;
+  total_returns: number;
+  return_percentage: number;
+  by_asset_type: AssetTypeBreakdown[];
+}
+
+/**
+ * Breakdown by asset type
+ */
+export interface AssetTypeBreakdown {
+  asset_type_code: string;
+  asset_type_name?: string;
+  total_invested: number;
+  current_value: number;
+  total_returns: number;
+  return_percentage: number;
+  plan_count: number;
 }
 
 export interface PortfolioCalculationInput {

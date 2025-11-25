@@ -619,7 +619,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Goals Overview (Phase 2) */}
+            {/* Goals Overview */}
             <div style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px',
@@ -637,7 +637,7 @@ const Dashboard: React.FC = () => {
                   color: colors.utility.primaryText,
                   margin: 0
                 }}>
-                  Goals Tracking (Phase 2)
+                  Goals Tracking
                 </h2>
                 <button
                   onClick={() => navigate('/goals')}
