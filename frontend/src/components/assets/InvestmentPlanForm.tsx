@@ -285,14 +285,11 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
 
   return (
     <div style={{
-      width: '1000px',
+      width: '1100px',
       maxWidth: '95vw',
-      maxHeight: '90vh',
       backgroundColor: colors.utility.primaryBackground,
       borderRadius: '12px',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
+      overflow: 'hidden'
     }}>
       {/* Header */}
       <div style={{
@@ -300,8 +297,7 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '16px 24px',
-        borderBottom: `1px solid ${colors.utility.primaryText}10`,
-        flexShrink: 0
+        borderBottom: `1px solid ${colors.utility.primaryText}10`
       }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
           {plan ? 'Edit Investment Plan' : 'Create New Investment Plan'}
@@ -323,8 +319,8 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+      <form onSubmit={handleSubmit}>
+        <div style={{ padding: '20px 24px' }}>
           {/* Error Message */}
           {error && (
             <div style={{
@@ -719,8 +715,7 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
           gap: '12px',
           padding: '14px 24px',
           borderTop: `1px solid ${colors.utility.primaryText}10`,
-          backgroundColor: colors.utility.secondaryBackground,
-          flexShrink: 0
+          backgroundColor: colors.utility.secondaryBackground
         }}>
           <button
             type="button"
