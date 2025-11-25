@@ -532,12 +532,57 @@ const GoalDetailsPage: React.FC = () => {
             {actions.length === 0 ? (
               <div style={{
                 textAlign: 'center',
-                padding: '60px 40px',
+                padding: '40px 30px',
                 color: colors.utility.secondaryText
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>✨</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: colors.semantic.success }}>No Actions Needed</div>
-                <div style={{ fontSize: '13px' }}>Your goal is performing as expected. Keep up the good work!</div>
+                {goal.config_data?.goal_type === 'time_and_price_goal' ? (
+                  <>
+                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>✨</div>
+                    <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: colors.semantic.success }}>
+                      No Actions Needed
+                    </div>
+                    <div style={{ fontSize: '13px', marginBottom: '16px' }}>
+                      Your goal is performing as expected. Keep up the good work!
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>📊</div>
+                    <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: colors.utility.primaryText }}>
+                      Recommended Actions
+                    </div>
+                    <div style={{ fontSize: '13px', marginBottom: '16px', lineHeight: 1.6 }}>
+                      This feature analyzes your goal progress using Monte Carlo simulation to provide actionable recommendations like:
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      justifyContent: 'center',
+                      marginBottom: '20px'
+                    }}>
+                      <span style={{ padding: '6px 12px', backgroundColor: colors.semantic.warning + '15', borderRadius: '6px', fontSize: '12px' }}>💰 Increase SIP</span>
+                      <span style={{ padding: '6px 12px', backgroundColor: colors.semantic.info + '15', borderRadius: '6px', fontSize: '12px' }}>⚖️ Rebalance Portfolio</span>
+                      <span style={{ padding: '6px 12px', backgroundColor: colors.utility.primaryText + '10', borderRadius: '6px', fontSize: '12px' }}>📅 Extend Timeline</span>
+                    </div>
+                    <div style={{
+                      padding: '16px',
+                      backgroundColor: colors.semantic.info + '10',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.semantic.info}20`,
+                      textAlign: 'left'
+                    }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: colors.semantic.info, marginBottom: '8px' }}>
+                        ℹ️ To enable recommendations:
+                      </div>
+                      <ol style={{ fontSize: '12px', margin: 0, paddingLeft: '20px', lineHeight: 1.8 }}>
+                        <li>Ensure goal type is "Time & Price Goal" (both target amount and date set)</li>
+                        <li>Allocate investments to this goal in the Allocations tab</li>
+                        <li>Click "Recalculate" to run the Monte Carlo analysis</li>
+                      </ol>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

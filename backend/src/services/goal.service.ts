@@ -519,13 +519,14 @@ export class GoalService {
       // Get previous snapshot for comparison
       const previousSnapshot = await this.getLatestSnapshot(client, goalId);
 
-      // Get current portfolio value
+      // Get current portfolio value (Phase 2: includes investment plan allocations)
       const currentValue = await this.getGoalPortfolioValue(
         client,
         tenantId,
         isLive,
         goal.customer_id,
-        config.linked_schemes
+        config.linked_schemes,
+        goalId
       );
 
       // Recalculate based on goal type
@@ -708,6 +709,7 @@ export class GoalService {
 
   /**
    * Validate linked schemes exist in portfolio
+   * Note: In Phase 2, goals may not have linked_schemes (using investment plan allocations instead)
    */
   private async validateLinkedSchemes(
     client: PoolClient,
@@ -716,9 +718,14 @@ export class GoalService {
     customerId: number,
     linkedSchemes: GoalConfig['linked_schemes']
   ): Promise<void> {
+    // Phase 2: linked_schemes may be null/undefined when using investment plan allocations
+    if (!linkedSchemes || !Array.isArray(linkedSchemes) || linkedSchemes.length === 0) {
+      return; // Skip validation - goal uses investment plan allocations
+    }
+
     for (const scheme of linkedSchemes) {
       const result = await client.query(
-        `SELECT 1 FROM t_customer_master_portfolio 
+        `SELECT 1 FROM t_customer_master_portfolio
          WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3 AND scheme_code = $4`,
         [tenantId, isLive, customerId, scheme.scheme_code]
       );
@@ -733,14 +740,24 @@ export class GoalService {
  * Get goal portfolio value from linked schemes (using month-end NAV)
  * Queries v_portfolio_current materialized view
  * Uses scheme_value_month_end for stable goal tracking
+ * In Phase 2: Falls back to investment plan allocations if no linked_schemes
  */
 private async getGoalPortfolioValue(
   client: PoolClient,
   tenantId: number,
   isLive: boolean,
   customerId: number,
-  linkedSchemes: GoalConfig['linked_schemes']
+  linkedSchemes: GoalConfig['linked_schemes'],
+  goalId?: number
 ): Promise<number> {
+  // Phase 2: If no linked_schemes, get value from investment plan allocations
+  if (!linkedSchemes || !Array.isArray(linkedSchemes) || linkedSchemes.length === 0) {
+    if (goalId) {
+      return this.getGoalValueFromInvestmentPlans(client, tenantId, isLive, goalId);
+    }
+    return 0;
+  }
+
   let totalValue = 0;
 
   for (const link of linkedSchemes) {
@@ -788,6 +805,64 @@ private async getGoalPortfolioValue(
   console.log(`Total goal portfolio value (month-end): ₹${totalValue}`);
   return totalValue;
 }
+
+  /**
+   * Get goal value from investment plan allocations (Phase 2)
+   * Uses t_goal_investment_allocations table
+   */
+  private async getGoalValueFromInvestmentPlans(
+    client: PoolClient,
+    tenantId: number,
+    isLive: boolean,
+    goalId: number
+  ): Promise<number> {
+    try {
+      // Get all investment plan allocations for this goal
+      const result = await client.query(
+        `SELECT
+           gia.investment_plan_id,
+           gia.allocated_percentage,
+           caa.principal_amount,
+           caa.asset_type_id,
+           at.default_assumption_rate
+         FROM t_goal_investment_allocations gia
+         JOIN t_customer_asset_assignments caa ON caa.id = gia.investment_plan_id
+         JOIN m_asset_types at ON at.id = caa.asset_type_id
+         WHERE gia.goal_id = $1
+           AND gia.tenant_id = $2
+           AND gia.is_live = $3
+           AND gia.is_active = true
+           AND caa.is_active = true`,
+        [goalId, tenantId, isLive]
+      );
+
+      if (result.rows.length === 0) {
+        console.log(`No investment plan allocations found for goal ${goalId}`);
+        return 0;
+      }
+
+      let totalValue = 0;
+
+      for (const row of result.rows) {
+        const principalAmount = parseFloat(row.principal_amount) || 0;
+        const allocationPercentage = parseFloat(row.allocated_percentage) || 100;
+
+        // Calculate allocated value
+        const allocatedValue = (principalAmount * allocationPercentage) / 100;
+        totalValue += allocatedValue;
+
+        console.log(
+          `Investment Plan ${row.investment_plan_id}: ₹${principalAmount} × ${allocationPercentage}% = ₹${allocatedValue}`
+        );
+      }
+
+      console.log(`Total goal value from investment plans: ₹${totalValue}`);
+      return totalValue;
+    } catch (error) {
+      console.error(`Error getting goal value from investment plans for goal ${goalId}:`, error);
+      return 0;
+    }
+  }
 
   /**
    * Perform initial calculation for new goal
