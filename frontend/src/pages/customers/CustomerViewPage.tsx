@@ -871,7 +871,16 @@ comparisonData={comparisonIndexData}
                   </div>
 
                   {/* Networth Projection Chart */}
-                  {customerId && (
+                  <div style={{
+                    padding: '12px',
+                    background: '#ff000020',
+                    border: '2px solid red',
+                    borderRadius: '8px',
+                    marginBottom: '8px'
+                  }}>
+                    DEBUG: customerId = {customerId} | type = {typeof customerId}
+                  </div>
+                  {customerId && customerId > 0 && (
                     <NetworthProjectionChart
                       customerId={customerId}
                       height={280}
