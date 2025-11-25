@@ -73,46 +73,49 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   // Calculate date range based on timeframe
+  // Always fetch 24 months of history to ensure data availability, then filter on frontend
   const dateRange = useMemo(() => {
     const now = new Date();
     const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // End of current month
 
-    let historicalMonths: number;
+    // Always fetch 24 months of history to ensure we have data
+    const fetchStartDate = new Date(now);
+    fetchStartDate.setMonth(fetchStartDate.getMonth() - 24);
+
+    // Determine how many months to DISPLAY based on timeframe
+    let displayHistoricalMonths: number;
     let projectionMonths: number;
 
     switch (timeframePeriod) {
       case '1M':
-        historicalMonths = 1;
+        displayHistoricalMonths = 1;
         projectionMonths = 1;
         break;
       case '3M':
-        historicalMonths = 3;
+        displayHistoricalMonths = 3;
         projectionMonths = 3;
         break;
       case '6M':
-        historicalMonths = 6;
+        displayHistoricalMonths = 6;
         projectionMonths = 6;
         break;
       case '1Y':
-        historicalMonths = 12;
+        displayHistoricalMonths = 12;
         projectionMonths = 12;
         break;
       case '24M':
-        historicalMonths = 12;
+        displayHistoricalMonths = 24;
         projectionMonths = 12;
         break;
       default:
-        historicalMonths = 12;
+        displayHistoricalMonths = 12;
         projectionMonths = 12;
     }
 
-    const startDate = new Date(now);
-    startDate.setMonth(startDate.getMonth() - historicalMonths);
-
     return {
-      startDate: startDate.toISOString().split('T')[0],
+      startDate: fetchStartDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
-      historicalMonths,
+      displayHistoricalMonths,
       projectionMonths
     };
   }, [timeframePeriod]);
@@ -177,27 +180,33 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     return options;
   }, [summaryData, assetTypesData, selectedAssetTypes, colors.brand.primary]);
 
-  // Process historical data
+  // Process historical data - slice to display only the requested months
   const historicalValues = useMemo(() => {
-    if (!historyData?.data?.history) return [];
+    if (!historyData?.data?.history || historyData.data.history.length === 0) return [];
 
-    return historyData.data.history.map(point => {
+    // Get all values first
+    const allValues = historyData.data.history.map(point => {
       if (selectedAssetTypes.includes('ALL')) {
         return point.total_networth;
       }
-
       // Sum only selected asset types
       return point.by_asset_type
         .filter(at => selectedAssetTypes.includes(at.asset_type_code))
         .reduce((sum, at) => sum + at.current_value, 0);
     });
-  }, [historyData, selectedAssetTypes]);
 
-  // Historical dates for X-axis
+    // Slice to show only the last N months based on displayHistoricalMonths
+    const sliceCount = Math.min(dateRange.displayHistoricalMonths, allValues.length);
+    return allValues.slice(-sliceCount);
+  }, [historyData, selectedAssetTypes, dateRange.displayHistoricalMonths]);
+
+  // Historical dates for X-axis - also sliced to match
   const historicalDates = useMemo(() => {
-    if (!historyData?.data?.history) return [];
-    return historyData.data.history.map(point => point.date);
-  }, [historyData]);
+    if (!historyData?.data?.history || historyData.data.history.length === 0) return [];
+    const allDates = historyData.data.history.map(point => point.date);
+    const sliceCount = Math.min(dateRange.displayHistoricalMonths, allDates.length);
+    return allDates.slice(-sliceCount);
+  }, [historyData, dateRange.displayHistoricalMonths]);
 
   // Calculate projections with withdrawals
   const { projectionValues, projectionDates, withdrawalIndices } = useMemo(() => {
@@ -341,7 +350,10 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     );
   }
 
-  if (!summaryData?.data || historicalValues.length === 0) {
+  // Check if we have any data at all from the API
+  const hasAnyHistoryData = historyData?.data?.history && historyData.data.history.length > 0;
+
+  if (!summaryData?.data || (!hasAnyHistoryData && historicalValues.length === 0)) {
     return (
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
@@ -357,6 +369,35 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         <TrendingUp size={32} style={{ color: colors.utility.secondaryText, opacity: 0.5 }} />
         <div style={{ color: colors.utility.secondaryText }}>
           No networth history available
+        </div>
+        <div style={{ fontSize: '12px', color: colors.utility.secondaryText, opacity: 0.7 }}>
+          Portfolio snapshots will appear after month-end processing
+        </div>
+      </div>
+    );
+  }
+
+  // If we have data but the sliced array is empty (shouldn't happen now), show what we have
+  if (historicalValues.length === 0 && hasAnyHistoryData) {
+    // This means we have data but slicing resulted in empty - shouldn't happen, but fallback
+    return (
+      <div style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        padding: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: height + 100,
+        flexDirection: 'column',
+        gap: '8px'
+      }}>
+        <TrendingUp size={32} style={{ color: colors.utility.secondaryText, opacity: 0.5 }} />
+        <div style={{ color: colors.utility.secondaryText }}>
+          Limited data for {timeframePeriod} view
+        </div>
+        <div style={{ fontSize: '12px', color: colors.utility.secondaryText, opacity: 0.7 }}>
+          Try selecting a longer timeframe (1Y or 24M)
         </div>
       </div>
     );
