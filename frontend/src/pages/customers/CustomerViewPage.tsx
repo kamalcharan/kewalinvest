@@ -755,7 +755,7 @@ const CustomerViewPage: React.FC = () => {
                       gap: '12px'
                     }}>
                       <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-                        Portfolio Performance
+                        Portfolio Performance - MF
                       </h3>
 
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
