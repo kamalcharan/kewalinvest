@@ -601,6 +601,7 @@ const CustomerViewPage: React.FC = () => {
         onViewModeChange={setViewMode}
         onNewGoal={() => navigate(`/customers/${customerId}/goals/new`)}
         onMeeting={() => setShowMeetingModal(true)}
+        onNewAlert={() => setShowJTBDSetupModal(true)}
       />
 
       {/* Key Metrics Bar */}
