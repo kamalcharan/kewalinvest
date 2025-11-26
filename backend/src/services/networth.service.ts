@@ -457,8 +457,31 @@ export class NetworthService {
       const networthValues = history.map(h => h.total_networth);
       const investedValues = history.map(h => h.total_invested);
 
+      // Get earliest start dates for each asset type from investment plans
+      const startDateQuery = `
+        SELECT
+          atm.asset_type_code,
+          MIN(caa.start_date) as earliest_start_date
+        FROM t_customer_asset_assignments caa
+        JOIN m_asset_types atm ON caa.asset_type_id = atm.id
+        WHERE caa.tenant_id = $1
+          AND caa.is_live = $2
+          AND caa.customer_id = ANY($3)
+          AND caa.is_active = true
+        GROUP BY atm.asset_type_code
+      `;
+      const startDateResult = await this.db.query(startDateQuery, [tenantId, isLive, customerIds]);
+
+      // Build map of asset_type_code -> earliest start date
+      const assetStartDates = new Map<string, Date>();
+      startDateResult.rows.forEach(row => {
+        if (row.earliest_start_date) {
+          assetStartDates.set(row.asset_type_code, new Date(row.earliest_start_date));
+        }
+      });
+
       // Build asset type series for stacked chart
-      // Each asset type only includes dates where it has actual data (not zero-padded)
+      // Each asset type only includes dates from its actual start date
       const assetTypeSeries = Array.from(allAssetTypes).map(code => {
         const assetType = assetTypes.find(at => at.asset_type_code === code);
 
@@ -468,11 +491,24 @@ export class NetworthService {
           return dateBreakdown?.get(code) || 0;
         });
 
-        // Find the first index where this asset type has meaningful data (>= 100)
-        const firstMeaningfulIndex = allValues.findIndex(v => v >= 100);
+        // Get earliest start date for this asset type
+        const earliestStartDate = assetStartDates.get(code);
 
-        // If no meaningful data, return with empty arrays (will be filtered out by frontend)
-        if (firstMeaningfulIndex === -1) {
+        // Find the first index where date >= start date
+        let firstValidIndex = 0;
+        if (earliestStartDate && code !== 'MF') {
+          // For non-MF assets, use the investment plan start date
+          const startMonth = new Date(earliestStartDate.getFullYear(), earliestStartDate.getMonth(), 1);
+          firstValidIndex = dates.findIndex(d => new Date(d) >= startMonth);
+          if (firstValidIndex === -1) firstValidIndex = dates.length; // No valid dates
+        } else if (code === 'MF') {
+          // For MF, use first non-zero value (has actual transactions)
+          firstValidIndex = allValues.findIndex(v => v >= 100);
+          if (firstValidIndex === -1) firstValidIndex = dates.length;
+        }
+
+        // If no valid data, return empty
+        if (firstValidIndex >= dates.length) {
           return {
             asset_type_code: code,
             asset_type_name: assetType?.asset_type_name || code,
@@ -482,9 +518,9 @@ export class NetworthService {
           };
         }
 
-        // Only include dates from when this asset type has data
-        const filteredDates = dates.slice(firstMeaningfulIndex);
-        const filteredValues = allValues.slice(firstMeaningfulIndex);
+        // Only include dates from when this asset type actually started
+        const filteredDates = dates.slice(firstValidIndex);
+        const filteredValues = allValues.slice(firstValidIndex);
 
         return {
           asset_type_code: code,
