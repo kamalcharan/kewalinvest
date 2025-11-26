@@ -99,6 +99,23 @@ const getMoMArrow = (value: number): string => {
   return '–';
 };
 
+// Calculate MoM changes for index data
+const calculateIndexMoM = (data: Array<{ date: string; value: number }>): Array<{ date: string; value: number }> => {
+  if (data.length < 2) return data.map(d => ({ date: d.date, value: 0 }));
+
+  return data.map((point, index) => {
+    if (index === 0) {
+      return { date: point.date, value: 0 };
+    }
+    const prev = data[index - 1];
+    const prevValue = prev.value || 0;
+    const momPercentage = prevValue > 0
+      ? ((point.value - prevValue) / prevValue) * 100
+      : 0;
+    return { date: point.date, value: momPercentage };
+  });
+};
+
 const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
   customerId,
   assetTypeCode,
@@ -118,6 +135,9 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
   const [showComparison, setShowComparison] = useState(true);
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
 
+  // Chart view mode: cumulative (% from start) or mom (month-over-month)
+  const [chartViewMode, setChartViewMode] = useState<'cumulative' | 'mom'>('cumulative');
+
   const chartId = `performance-chart-${customerId}-${assetTypeCode}`;
 
   // Calculate MoM for the data
@@ -136,6 +156,12 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
   }, [dataWithMoM]);
 
   const latestMoM = latestMoMData?.returnsMoM ?? null;
+
+  // Compute index MoM data when in MoM view mode
+  const indexMoMData = useMemo(() => {
+    if (chartViewMode !== 'mom' || comparisonIndexData.length === 0) return [];
+    return calculateIndexMoM(comparisonIndexData);
+  }, [chartViewMode, comparisonIndexData]);
 
   // Format currency
   const formatCurrency = (value: number): string => {
@@ -354,6 +380,54 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
             </>
           )}
 
+          {/* View Mode Toggle */}
+          <div style={{
+            display: 'flex',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            border: `1px solid ${colors.utility.primaryText}20`
+          }}>
+            <button
+              onClick={() => setChartViewMode('cumulative')}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: '500',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: chartViewMode === 'cumulative'
+                  ? colors.brand.primary
+                  : colors.utility.primaryBackground,
+                color: chartViewMode === 'cumulative'
+                  ? '#ffffff'
+                  : colors.utility.secondaryText,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              Cumulative
+            </button>
+            <button
+              onClick={() => setChartViewMode('mom')}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: '500',
+                border: 'none',
+                borderLeft: `1px solid ${colors.utility.primaryText}20`,
+                cursor: 'pointer',
+                backgroundColor: chartViewMode === 'mom'
+                  ? colors.brand.primary
+                  : colors.utility.primaryBackground,
+                color: chartViewMode === 'mom'
+                  ? '#ffffff'
+                  : colors.utility.secondaryText,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              MoM
+            </button>
+          </div>
+
           {/* Index Selector */}
           <div style={{ minWidth: '180px' }}>
             <IndexSelector
@@ -440,10 +514,10 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
                 momChangePercentage: p.returns_mom_percentage,
                 isSignificantInvestment: p.is_significant_investment
               }))}
-              comparisonData={comparisonIndexData}
+              comparisonData={chartViewMode === 'mom' ? indexMoMData : comparisonIndexData}
               comparisonName={defaultComparisonIndex?.index_name || 'Index'}
-              showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-              viewMode="percentage"
+              showComparison={showComparison && !isLoadingIndexComparison && (chartViewMode === 'mom' ? indexMoMData.length > 0 : comparisonIndexData.length > 0)}
+              viewMode={chartViewMode === 'mom' ? 'mom' : 'percentage'}
               height={isFullscreenMode ? window.innerHeight - 200 : height}
               primaryLabel={assetTypeName}
               primaryColor={color}
@@ -454,8 +528,11 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
               textAlign: 'center',
               marginTop: '8px'
             }}>
-              Showing cumulative % returns from start ({dataWithMoM.length} months)
-              {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
+              {chartViewMode === 'cumulative'
+                ? `Showing cumulative % returns from start (${dataWithMoM.length} months)`
+                : `Showing month-over-month % changes (${dataWithMoM.length} months)`
+              }
+              {showComparison && defaultComparisonIndex && (chartViewMode === 'mom' ? indexMoMData.length > 0 : comparisonIndexData.length > 0) && (
                 <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
                   • vs {defaultComparisonIndex.index_name}
                 </span>

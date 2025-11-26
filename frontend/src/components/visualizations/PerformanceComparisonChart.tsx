@@ -45,7 +45,7 @@ export interface PerformanceComparisonChartProps {
   showComparison?: boolean;
 
   // Display options
-  viewMode?: 'absolute' | 'percentage';  // absolute = ₹ values, percentage = % from start
+  viewMode?: 'absolute' | 'percentage' | 'mom';  // absolute = ₹ values, percentage = % from start, mom = month-over-month %
   height?: number;
 
   // Labels
@@ -358,11 +358,29 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
   const portfolioColor = primaryColor || colors.brand.primary;
   const indexColor = comparisonColor || '#FCD34D'; // Yellow/gold for index
 
-  const isPercentage = viewMode === 'percentage';
+  const isPercentage = viewMode === 'percentage' || viewMode === 'mom';
+  const isMoMView = viewMode === 'mom';
 
   // Process chart data
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
+
+    // For MoM view, use momChangePercentage directly
+    if (isMoMView) {
+      return data.map((d, index) => ({
+        date: d.date,
+        portfolio: d.momChangePercentage ?? 0,
+        // Include original data for tooltip
+        momChangePercentage: d.momChangePercentage ?? null,
+        isSignificantInvestment: d.isSignificantInvestment ?? false,
+        invested: d.invested,
+        returns: d.returns,
+        originalValue: d.value,
+        ...(showComparison && comparisonData && comparisonData.length > index && {
+          comparison: comparisonData[index]?.value ?? 0
+        })
+      }));
+    }
 
     // Prepare primary data
     const primaryData = data.map(d => ({
@@ -370,8 +388,8 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
       value: d.value
     }));
 
-    // Normalize if percentage view
-    const normalizedPrimary = isPercentage
+    // Normalize if percentage view (cumulative)
+    const normalizedPrimary = viewMode === 'percentage'
       ? normalizeToPercentage(primaryData)
       : primaryData;
 
@@ -382,7 +400,7 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
       const matchedComparison = matchDates(primaryData, comparisonData);
 
       // Normalize if percentage view
-      normalizedComparison = isPercentage
+      normalizedComparison = viewMode === 'percentage'
         ? normalizeToPercentage(matchedComparison)
         : matchedComparison;
     }
@@ -400,7 +418,7 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
         comparison: normalizedComparison[index].value
       })
     }));
-  }, [data, comparisonData, showComparison, isPercentage]);
+  }, [data, comparisonData, showComparison, viewMode, isMoMView]);
 
   // Calculate Y-axis domain
   const yDomain = useMemo(() => {
