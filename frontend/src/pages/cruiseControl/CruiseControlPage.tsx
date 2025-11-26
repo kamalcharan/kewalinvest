@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Shield, Info } from 'lucide-react';
-import { DashboardOverview } from './DashboardOverview';
 import { NavTab } from './NavTab';
 import { MarketTab } from './MarketTab';
 import { AlertsTab } from './AlertsTab';
@@ -117,16 +116,12 @@ export const CruiseControlPage: React.FC = () => {
         )}
       </div>
 
-      {/* Dashboard Overview */}
-      <DashboardOverview />
-
       {/* Tab Navigation */}
       <div style={{
         display: 'flex',
         gap: '12px',
         borderBottom: `2px solid ${colors.utility.primaryText}10`,
-        marginBottom: '24px',
-        marginTop: '32px'
+        marginBottom: '24px'
       }}>
         {tabs.map(tab => (
           <button
