@@ -19,15 +19,13 @@ import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
-import { calculatePortfolioMoM, getMoMColor, getMoMArrow } from '../../utils/dataTransformers';
-import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
+import { calculatePortfolioMoM, getMoMArrow } from '../../utils/dataTransformers';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
-import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
@@ -38,7 +36,6 @@ import GoalCard from '../../components/goals/GoalCard';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
-import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
@@ -264,41 +261,6 @@ const CustomerViewPage: React.FC = () => {
     if (value < 0) return '#EF4444';
     return colors.utility.secondaryText;
   };
-
-  const ArrowLeftIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12,19 5,12 12,5" />
-    </svg>
-  );
-
-  const DownloadIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-
-  const TrendUpIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="23,6 13.5,15.5 8.5,10.5 1,18" />
-      <polyline points="17,6 23,6 23,12" />
-    </svg>
-  );
-
-  const TrendDownIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="23,18 13.5,8.5 8.5,13.5 1,6" />
-      <polyline points="17,18 23,18 23,12" />
-    </svg>
-  );
-
-  const StarIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
 
   const AlertIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -586,10 +548,6 @@ const CustomerViewPage: React.FC = () => {
     />;
   }
 
-  const profitLoss = portfolio?.summary.total_returns ?? 0;
-  const dayChangePercentage = portfolio?.summary.day_change_percentage ?? 0;
-  const returnPercentage = portfolio?.summary.return_percentage ?? 0;
-  
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.utility.primaryBackground }}>
       {/* Header */}

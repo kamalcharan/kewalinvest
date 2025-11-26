@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomers, useCustomerStats, useActivateCustomer, useDeleteCustomer } from '../../hooks/useCustomers';
 import { usePortfolioMetrics } from '../../hooks/usePortfolioData';
-import { CustomerSearchParams, CustomerWithContact } from '../../types/customer.types';
+import { CustomerSearchParams } from '../../types/customer.types';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import CustomerCard from '../../components/customers/CustomerCard';
 import CustomerFilters from '../../components/customers/CustomerFilters';
@@ -157,26 +157,6 @@ const CustomersPage: React.FC = () => {
         { customerId, selected, error: error.message },
         error.stack
       );
-    }
-  };
-
-  // Format currency
-  const formatCurrency = (value: number): string => {
-    try {
-      if (value >= 10000000) {
-        return `₹${(value / 10000000).toFixed(2)}Cr`;
-      } else if (value >= 100000) {
-        return `₹${(value / 100000).toFixed(2)}L`;
-      }
-      return `₹${value.toLocaleString('en-IN')}`;
-    } catch (error: any) {
-      FrontendErrorLogger.error(
-        'Currency formatting failed',
-        'CustomersPage',
-        { value, error: error.message },
-        error.stack
-      );
-      return `₹${value}`;
     }
   };
 
