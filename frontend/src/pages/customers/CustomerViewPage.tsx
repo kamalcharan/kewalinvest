@@ -12,7 +12,7 @@ import {
 } from '../../utils/fullscreenUtils';
 import ChartExport from '../../components/visualizations/chartViewer/export/ChartExport';
 import { useCustomer } from '../../hooks/useCustomers';
-import { usePortfolioData } from '../../hooks/usePortfolioData';
+import { usePortfolioData, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
 import { useCustomerGoals, useGoalSummary, useRecalculateGoal, useAddToWatchlist, useRemoveFromWatchlist } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
@@ -23,6 +23,7 @@ import { calculatePortfolioMoM, getMoMArrow } from '../../utils/dataTransformers
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
 import PerformanceComparisonChart from '../../components/visualizations/PerformanceComparisonChart';
+import AssetTypePerformanceChart from '../../components/visualizations/AssetTypePerformanceChart';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
@@ -104,6 +105,12 @@ const CustomerViewPage: React.FC = () => {
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
   const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
+
+  // Load networth history for asset type performance charts
+  const { data: networthHistoryData } = useNetworthHistory(
+    { customerId: customerId || undefined },
+    { enabled: !!customerId }
+  );
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -784,237 +791,53 @@ const CustomerViewPage: React.FC = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Portfolio Performance Chart */}
-                  <div
-                    id={performanceChartId}
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: isFullscreenMode ? '0' : '12px',
-                      padding: '24px',
-                      position: 'relative',
-                      ...(isFullscreenMode && {
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '100vh',
-                        width: '100vw'
-                      })
-                    }}
-                  >
-                    {/* Header Row - Title, MoM Badge, and Action Buttons */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '20px',
-                      flexWrap: 'wrap',
-                      gap: '12px'
-                    }}>
-                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-                        Portfolio Performance - MF
-                      </h3>
+                  {/* Asset Type Performance Charts - One chart per asset type */}
+                  {networthHistoryData?.data?.chart_ready?.by_asset_type &&
+                   networthHistoryData.data.chart_ready.by_asset_type.length > 0 ? (
+                    networthHistoryData.data.chart_ready.by_asset_type.map((assetType) => {
+                      // Build performance data from networth history
+                      const dates = networthHistoryData.data!.chart_ready.dates;
+                      const performanceData = dates.map((date, index) => ({
+                        date,
+                        value: assetType.values[index] || 0,
+                        // invested data not available per asset type in history, using value as proxy
+                        invested: assetType.values[0] || 0,
+                        returns: (assetType.values[index] || 0) - (assetType.values[0] || 0),
+                        return_percentage: assetType.values[0] > 0
+                          ? ((assetType.values[index] - assetType.values[0]) / assetType.values[0]) * 100
+                          : 0
+                      }));
 
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        {/* MoM Badge - Shows returns-based MoM (true market growth) */}
-                        {latestMoMData && portfolioWithMoM.length > 1 && (
-                          <>
-                            {/* Returns MoM Badge */}
-                            {latestMoM !== null && (
-                              <div
-                                style={{
-                                  padding: '6px 12px',
-                                  borderRadius: '8px',
-                                  backgroundColor: latestMoM >= 0
-                                    ? colors.semantic.success + '20'
-                                    : colors.semantic.error + '20',
-                                  border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: '600'
-                                }}
-                              >
-                                <span style={{ fontSize: '12px' }}>
-                                  {latestMoM >= 0 ? '📈' : '📉'}
-                                </span>
-                                <span style={{
-                                  color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
-                                }}>
-                                  {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
-                                </span>
-                                <span style={{
-                                  fontSize: '10px',
-                                  color: colors.utility.secondaryText
-                                }}>
-                                  returns MoM
-                                </span>
-                              </div>
-                            )}
-                            {/* New Investment Badge - shown when significant new investment detected */}
-                            {latestMoMData.isSignificantInvestment && latestMoMData.investmentChange && (
-                              <div
-                                style={{
-                                  padding: '6px 12px',
-                                  borderRadius: '8px',
-                                  backgroundColor: colors.brand.primary + '15',
-                                  border: `1px solid ${colors.brand.primary}30`,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: '500'
-                                }}
-                              >
-                                <span style={{ fontSize: '12px' }}>💰</span>
-                                <span style={{ color: colors.brand.primary }}>
-                                  +{formatCurrency(latestMoMData.investmentChange)}
-                                </span>
-                                <span style={{
-                                  fontSize: '10px',
-                                  color: colors.utility.secondaryText
-                                }}>
-                                  new investment
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {/* Index Selector for comparison */}
-                        <div style={{ minWidth: '180px' }}>
-                          <IndexSelector
-                            selectedIndexId={defaultComparisonIndex?.id || null}
-                            onIndexSelect={handleIndexSelect}
-                            disabled={isLoadingIndexComparison}
-                            placeholder="Compare with index..."
-                          />
-                        </div>
-
-                        {/* Toggle visibility when index is selected */}
-                        {defaultComparisonIndex && comparisonIndexData.length > 0 && (
-                          <button
-                            onClick={() => setShowComparison(!showComparison)}
-                            title={showComparison ? 'Hide comparison' : 'Show comparison'}
-                            style={{
-                              padding: '6px 10px',
-                              backgroundColor: showComparison ? colors.brand.primary + '20' : 'transparent',
-                              color: showComparison ? colors.brand.primary : colors.utility.secondaryText,
-                              border: `1px solid ${showComparison ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
-                          </button>
-                        )}
-
-                        {/* Fullscreen Button */}
-                        {isFullscreenSupported() && (
-                          <button
-                            onClick={handleFullscreenToggle}
-                            title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: colors.utility.primaryBackground,
-                              color: colors.utility.primaryText,
-                              border: `1px solid ${colors.utility.primaryText}20`,
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {isFullscreenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            {isFullscreenMode ? 'Exit' : 'Fullscreen'}
-                          </button>
-                        )}
-
-                        {/* Export Button */}
-                        <ChartExport
-                          elementId={performanceChartId}
-                          indexName={customer?.name || 'Portfolio'}
-                          colors={colors}
+                      return (
+                        <AssetTypePerformanceChart
+                          key={assetType.asset_type_code}
+                          customerId={customerId!}
+                          assetTypeCode={assetType.asset_type_code}
+                          assetTypeName={assetType.asset_type_name}
+                          performanceData={performanceData}
+                          color={assetType.color}
+                          height={280}
                         />
-                      </div>
-                    </div>
-                    
-                    <div style={{
-                      height: isFullscreenMode ? 'auto' : '300px',
-                      flex: isFullscreenMode ? 1 : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: isFullscreenMode ? '400px' : 'auto'
-                    }}>
-                      {portfolioWithMoM && portfolioWithMoM.length > 1 ? (
-                        <div style={{ width: '100%', height: '100%' }}>
-                          {/* NEW: Recharts-based comparison chart with % normalization */}
-                          <PerformanceComparisonChart
-                            data={portfolioWithMoM.map(p => ({
-                              date: p.date,
-                              value: p.current_value ?? 0,
-                              invested: p.invested,
-                              returns: p.returns,
-                              returnPercentage: p.return_percentage,
-                              momChangePercentage: p.returns_mom_percentage, // Use returns-based MoM
-                              isSignificantInvestment: p.is_significant_investment
-                            }))}
-                            comparisonData={comparisonIndexData}
-                            comparisonName={defaultComparisonIndex?.index_name || 'Index'}
-                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-                            viewMode="percentage"
-                            height={isFullscreenMode ? window.innerHeight - 200 : 280}
-                            primaryLabel="Portfolio"
-                          />
-                          <div style={{
-                            fontSize: '12px',
-                            color: colors.utility.secondaryText,
-                            textAlign: 'center',
-                            marginTop: '8px'
-                          }}>
-                            Showing cumulative % returns from start ({portfolioWithMoM.length} months)
-                            {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
-                              <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
-                                • vs {defaultComparisonIndex.index_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ 
-                            fontSize: '48px', 
-                            fontWeight: '700', 
-                            color: colors.brand.primary,
-                            marginBottom: '12px'
-                          }}>
-                            {formatCurrency(portfolio.summary.current_value)}
-                          </div>
-                          <div style={{ 
-                            fontSize: '14px', 
-                            color: colors.utility.secondaryText,
-                            marginBottom: '8px'
-                          }}>
-                            Current Portfolio Value
-                          </div>
-                          <div style={{ 
-                            fontSize: '12px', 
-                            color: colors.utility.secondaryText,
-                            fontStyle: 'italic'
-                          }}>
-                            Historical performance data will appear as more transactions are recorded
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
+                      );
+                    })
+                  ) : (
+                    // Fallback to MF-only chart if no networth history
+                    portfolioWithMoM && portfolioWithMoM.length > 0 && (
+                      <AssetTypePerformanceChart
+                        customerId={customerId!}
+                        assetTypeCode="MF"
+                        assetTypeName="Mutual Funds"
+                        performanceData={portfolioWithMoM.map(p => ({
+                          date: p.date,
+                          value: p.current_value ?? 0,
+                          invested: p.invested,
+                          returns: p.returns,
+                          return_percentage: p.return_percentage
+                        }))}
+                        height={280}
+                      />
+                    )
+                  )}
 
                   {/* Fund-wise Performance */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
