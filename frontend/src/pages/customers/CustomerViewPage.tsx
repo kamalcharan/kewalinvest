@@ -22,6 +22,7 @@ import { TransactionWithDetails } from '../../types/transaction.types';
 import { calculatePortfolioMoM, getMoMArrow } from '../../utils/dataTransformers';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
+import PerformanceComparisonChart from '../../components/visualizations/PerformanceComparisonChart';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
@@ -859,40 +860,34 @@ const CustomerViewPage: React.FC = () => {
                       minHeight: isFullscreenMode ? '400px' : 'auto'
                     }}>
                       {portfolio.performance && portfolio.performance.length > 1 ? (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          {/* Responsive chart sizing */}
-                          <PerformanceSparkline
-                            performanceData={portfolioWithMoM}
-                            data={portfolio.performance.map(p => p.current_value ?? 0)}
-                            width={isFullscreenMode ? window.innerWidth - 100 : 600}
-                            height={isFullscreenMode ? window.innerHeight - 200 : 250}
-                            showArea={true}
-                            showDots={true}
-                            interactive={true}
-                            timeframe={selectedTimeframe}
-                            showTimelineMarkers={true}
-                            timelineMarkerSize={isFullscreenMode ? 8 : 5}
-                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+                        <div style={{ width: '100%', height: '100%' }}>
+                          {/* NEW: Recharts-based comparison chart with % normalization */}
+                          <PerformanceComparisonChart
+                            data={portfolio.performance.map(p => ({
+                              date: p.date,
+                              value: p.current_value ?? 0,
+                              invested: p.invested,
+                              returns: p.returns,
+                              returnPercentage: p.return_percentage,
+                              momChangePercentage: p.mom_change_percentage
+                            }))}
                             comparisonData={comparisonIndexData}
-                            comparisonIndexName={defaultComparisonIndex?.index_name}
+                            comparisonName={defaultComparisonIndex?.index_name || 'Index'}
+                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            viewMode="percentage"
+                            height={isFullscreenMode ? window.innerHeight - 200 : 280}
+                            primaryLabel="Portfolio"
                           />
                           <div style={{
                             fontSize: '12px',
                             color: colors.utility.secondaryText,
                             textAlign: 'center',
-                            marginTop: '12px'
+                            marginTop: '8px'
                           }}>
-                            Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
+                            Showing cumulative % returns from start ({portfolio.performance.length} months)
                             {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
                               <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
-                                • Compared with {defaultComparisonIndex.index_name}
+                                • vs {defaultComparisonIndex.index_name}
                               </span>
                             )}
                           </div>
