@@ -1,33 +1,37 @@
-# Frontend Dockerfile
-FROM node:18-alpine
+# ============================================
+# Stage 1: Build the React application
+# ============================================
+FROM node:18-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
-# Set environment variable to avoid OpenSSL issues
 ENV OPENSSL_CONF=/dev/null
-
-# Set production environment
-ENV NODE_ENV=production
-ENV GENERATE_SOURCEMAP=false
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with legacy peer deps and force
+# Install dependencies
 RUN npm install --legacy-peer-deps --force
 
-# Install serve globally for serving the production build
-RUN npm install -g serve
-
-# Copy all files
+# Copy source code
 COPY . .
 
-# Build the production application
+# Build for production
 RUN npm run build
 
-# Expose port
-EXPOSE 3000
+# ============================================
+# Stage 2: Serve with Nginx (lightweight)
+# ============================================
+FROM nginx:alpine
 
-# Start the application using serve (lightweight static server)
-CMD ["serve", "-s", "build", "-l", "3000"]
+# Copy built files from build stage
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

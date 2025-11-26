@@ -327,8 +327,42 @@ CREATE INDEX idx_txn_types_active ON m_transaction_types USING btree (is_active)
 CREATE INDEX idx_txn_types_code ON m_transaction_types USING btree (txn_code);
 CREATE INDEX idx_txn_types_type ON m_transaction_types USING btree (txn_type);
 
--- Monthly portfolio snapshots indexes
+-- Monthly portfolio snapshots indexes (extended for multi-asset support)
+-- Primary index for querying snapshots
 CREATE INDEX idx_monthly_snapshots ON t_monthly_portfolio_snapshots USING btree (tenant_id, is_live, customer_id, snapshot_month_end);
+
+-- Unique index to enforce one snapshot per customer/month/asset_type/plan combination
+-- Uses COALESCE to handle NULL investment_plan_id (for MF aggregated snapshots)
+CREATE UNIQUE INDEX idx_monthly_portfolio_snapshots_unique
+ON t_monthly_portfolio_snapshots (
+    tenant_id,
+    is_live,
+    customer_id,
+    snapshot_month_end,
+    asset_type_code,
+    COALESCE(investment_plan_id, 0)
+);
+
+-- Index for querying by asset type (for filtered views)
+CREATE INDEX idx_snapshots_asset_type
+ON t_monthly_portfolio_snapshots (tenant_id, is_live, customer_id, asset_type_code);
+
+-- Index for querying by investment plan (for plan-specific history)
+CREATE INDEX idx_snapshots_investment_plan
+ON t_monthly_portfolio_snapshots (investment_plan_id)
+WHERE investment_plan_id IS NOT NULL;
+
+-- Index for networth aggregation queries (all assets for a customer)
+CREATE INDEX idx_snapshots_networth
+ON t_monthly_portfolio_snapshots (tenant_id, is_live, customer_id, snapshot_month_end)
+INCLUDE (asset_type_code, current_value, actual_amount);
+
+-- Foreign key constraint for investment_plan_id
+ALTER TABLE t_monthly_portfolio_snapshots
+ADD CONSTRAINT fk_snapshot_investment_plan
+FOREIGN KEY (investment_plan_id)
+REFERENCES t_customer_asset_assignments(id)
+ON DELETE SET NULL;
 
 -- ============================================================================
 -- 2.5: IMPORT & STAGING INDEXES
@@ -454,6 +488,23 @@ WHERE execution_status IN ('planned', 'due');
 COMMENT ON INDEX idx_jtbd_exec_tenant_status_date IS 'Primary query index for execution tracking (JTBD Consolidation)';
 COMMENT ON INDEX idx_jtbd_exec_date_range IS 'Optimized for timeline and calendar views (JTBD Consolidation)';
 
+-- Migration 023: Alert visibility and completion tracking indexes
+CREATE INDEX IF NOT EXISTS idx_jtbd_alert_visibility
+ON t_jtbd_configurations (tenant_id, is_live, is_active, next_alert_date, completed_at)
+WHERE is_active = true AND completed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_auto_expire
+ON t_jtbd_configurations (auto_expire_at)
+WHERE auto_expire_at IS NOT NULL AND is_active = true AND completed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_asset_assignments_alerts
+ON t_customer_asset_assignments (tenant_id, is_live, is_active, alerts_enabled)
+WHERE is_active = true AND alerts_enabled = true;
+
+COMMENT ON INDEX idx_jtbd_alert_visibility IS 'Migration 023: Efficient queries for visible alerts with date and completion filtering';
+COMMENT ON INDEX idx_jtbd_auto_expire IS 'Migration 023: Index for processing auto-expiring notifications';
+COMMENT ON INDEX idx_asset_assignments_alerts IS 'Migration 023: Find investment plans with alerts enabled';
+
 -- Goal-related indexes
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);
@@ -461,8 +512,23 @@ CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshot
 CREATE INDEX IF NOT EXISTS idx_goal_alerts_goal ON t_goal_alerts USING btree (goal_id);
 CREATE INDEX IF NOT EXISTS idx_goal_alerts_unacknowledged ON t_goal_alerts USING btree (is_acknowledged, created_at DESC) WHERE (is_acknowledged = false);
 
+-- DEPRECATED: Old goal-scheme allocation indexes (Phase 1)
+-- Commented out as table is replaced by t_goal_investment_allocations in Phase 2
+/*
 CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_goal ON t_goal_scheme_allocations USING btree (goal_id);
 CREATE INDEX IF NOT EXISTS idx_goal_scheme_allocations_scheme ON t_goal_scheme_allocations USING btree (scheme_id);
+*/
+
+-- NEW Phase 2: Goal-Investment allocation indexes
+CREATE INDEX IF NOT EXISTS idx_goal_investments_goal ON t_goal_investment_allocations USING btree (goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_plan ON t_goal_investment_allocations USING btree (investment_plan_id);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_tenant ON t_goal_investment_allocations USING btree (tenant_id, is_live);
+CREATE INDEX IF NOT EXISTS idx_goal_investments_composite ON t_goal_investment_allocations USING btree (tenant_id, is_live, goal_id);
+
+COMMENT ON INDEX idx_goal_investments_goal IS 'Phase 2: Find all investment plans allocated to a specific goal';
+COMMENT ON INDEX idx_goal_investments_plan IS 'Phase 2: Find all goals that a specific investment plan is allocated to';
+COMMENT ON INDEX idx_goal_investments_tenant IS 'Phase 2: Tenant isolation and environment filtering';
+COMMENT ON INDEX idx_goal_investments_composite IS 'Phase 2: Optimized composite index for goal queries';
 
 -- ============================================================================
 -- 2.8: MARKET DATA INDEXES
@@ -727,7 +793,15 @@ CREATE TRIGGER update_jtbd_updated_at BEFORE UPDATE ON t_jtbd_configurations
 CREATE TRIGGER update_jtbd_executions_updated_at BEFORE UPDATE ON t_jtbd_executions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- DEPRECATED: Old goal-scheme allocations trigger (Phase 1)
+-- Commented out as table is replaced by t_goal_investment_allocations in Phase 2
+/*
 CREATE TRIGGER update_goal_scheme_allocations_updated_at BEFORE UPDATE ON t_goal_scheme_allocations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+*/
+
+-- NEW Phase 2: Goal-Investment allocations trigger
+CREATE TRIGGER trigger_update_goal_investments_updated_at BEFORE UPDATE ON t_goal_investment_allocations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Market data triggers
@@ -787,6 +861,90 @@ EXECUTE FUNCTION update_scheme_allocation();
 DO $$
 BEGIN
     RAISE NOTICE '✓ Goal allocation auto-sync triggers created successfully';
+END $$;
+
+-- ============================================================================
+-- SECTION 3B: MULTI-ASSET PORTFOLIO INDEXES & TRIGGERS (Release 1.1 - Phase 1)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Multi-Asset Portfolio Indexes and Triggers...';
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: m_asset_types
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_asset_types_code
+ON m_asset_types(asset_type_code);
+
+CREATE INDEX IF NOT EXISTS idx_asset_types_active
+ON m_asset_types(is_active, display_order)
+WHERE is_active = true;
+
+-- ----------------------------------------------------------------------------
+-- INDEXES: t_customer_asset_assignments
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_customer_assets_customer
+ON t_customer_asset_assignments(customer_id, is_active)
+WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_tenant
+ON t_customer_asset_assignments(tenant_id, is_live, customer_id);
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_asset_type
+ON t_customer_asset_assignments(asset_type_id, is_active)
+WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_assigned_by
+ON t_customer_asset_assignments(assigned_by, assigned_at DESC);
+
+-- Investment plan specific indexes
+CREATE INDEX IF NOT EXISTS idx_customer_assets_scheme_code
+ON t_customer_asset_assignments(scheme_code)
+WHERE scheme_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_investment_type
+ON t_customer_asset_assignments(investment_type);
+
+CREATE INDEX IF NOT EXISTS idx_customer_assets_has_started
+ON t_customer_asset_assignments(has_started)
+WHERE is_active = true;
+
+-- ----------------------------------------------------------------------------
+-- TRIGGERS: Auto-update updated_at timestamps
+-- ----------------------------------------------------------------------------
+
+-- Trigger for m_asset_types
+CREATE OR REPLACE FUNCTION update_asset_types_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_asset_types_updated_at
+    BEFORE UPDATE ON m_asset_types
+    FOR EACH ROW
+    EXECUTE FUNCTION update_asset_types_updated_at();
+
+-- Trigger for t_customer_asset_assignments
+CREATE OR REPLACE FUNCTION update_customer_assets_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_customer_assets_updated_at
+    BEFORE UPDATE ON t_customer_asset_assignments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_customer_assets_updated_at();
+
+DO $$
+BEGIN
+    RAISE NOTICE '✓ Multi-Asset Portfolio indexes and triggers created';
 END $$;
 
 -- ============================================================================

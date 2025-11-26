@@ -16,12 +16,12 @@ SSL: Disable/None
 
 
 
-docker build -t vikuna/kewalinvest-backend:latest ./backend
-docker push vikuna/kewalinvest-backend:latest
+    docker build -t vikuna/kewalinvest-backend:latest ./backend
+    docker push vikuna/kewalinvest-backend:latest
 
 
-docker build -t vikuna/kewalinvest-frontend:latest ./frontend
-docker push vikuna/kewalinvest-frontend:latest
+    docker build -t vikuna/kewalinvest-frontend:latest ./frontend
+    docker push vikuna/kewalinvest-frontend:latest
 
 
 

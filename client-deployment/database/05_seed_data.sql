@@ -132,15 +132,80 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
-INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active) VALUES
-('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true)
-ON CONFLICT (code) DO UPDATE
-    SET name = EXCLUDED.name,
-        description = EXCLUDED.description,
-        default_cron_expression = EXCLUDED.default_cron_expression,
-        default_max_retries = EXCLUDED.default_max_retries,
-        is_active = EXCLUDED.is_active,
-        updated_at = CURRENT_TIMESTAMP;
+-- Portfolio Snapshot - Friday 9 PM (weekly)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true, 'weekly', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- NAV Download - Daily 9 PM, failover 10 PM (GLOBAL - runs once for all tenants)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('NAV_DOWNLOAD', 'NAV Download', 'Download NAV data for all bookmarked schemes', '0 21 * * *', 3, true, 'daily', true, '0 22 * * *', true)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Market OHLC Download - Daily 9:30 PM (GLOBAL - runs once for all tenants)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('MARKET_OHLC_DOWNLOAD', 'Market OHLC Download', 'Download OHLC data for market indices', '30 21 * * *', 3, true, 'daily', false, NULL, true)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Goal Calculation - Friday 8:30 PM
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('GOAL_CALCULATION', 'Goal Calculation', 'Recalculate all customer goals and generate alerts', '30 20 * * 5', 3, true, 'weekly', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Daily Alerts - Daily 8 PM
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('DAILY_ALERTS', 'Daily Alerts', 'Process and generate daily alert cards for customers', '0 20 * * *', 3, true, 'daily', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
 
 DO $$
 BEGIN
@@ -593,6 +658,69 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- SECTION 6A: SEED ASSET TYPES (Release 1.1 - Phase 1)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seeding Asset Types (Phase 1)';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- Insert 9 asset types with default growth rate assumptions
+INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
+VALUES
+    ('MF', 'Mutual Fund', 'equity', 12.00, 1, true,
+     'Equity and debt mutual fund schemes with professionally managed portfolios'),
+
+    ('GOLD', 'Gold', 'commodity', 8.00, 2, true,
+     'Physical gold, gold ETFs, sovereign gold bonds, and gold mutual funds'),
+
+    ('EQUITY', 'Equity', 'equity', 15.00, 3, true,
+     'Direct equity investments in stocks and shares'),
+
+    ('FD', 'Fixed Deposit', 'fixed_income', 6.50, 4, true,
+     'Bank and corporate fixed deposits with guaranteed returns'),
+
+    ('PPF', 'Public Provident Fund', 'fixed_income', 7.10, 5, true,
+     'Government-backed long-term savings scheme with tax benefits'),
+
+    ('EPF', 'Employee Provident Fund', 'fixed_income', 8.25, 6, true,
+     'Mandatory retirement savings scheme for salaried employees'),
+
+    ('NPS', 'National Pension System', 'equity', 10.00, 7, true,
+     'Government-sponsored pension scheme with equity and debt options'),
+
+    ('REAL_ESTATE', 'Real Estate', 'real_estate', 8.00, 8, true,
+     'Property investments including residential and commercial real estate'),
+
+    ('INSURANCE', 'Insurance', 'insurance', 5.00, 9, true,
+     'Life insurance, term insurance, and insurance-linked investment products')
+ON CONFLICT (asset_type_code) DO NOTHING;
+
+-- Verify asset types seeded
+DO $$
+DECLARE
+    v_asset_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO v_asset_count FROM m_asset_types WHERE is_active = true;
+    RAISE NOTICE '✓ Asset Types seeded: % active types', v_asset_count;
+
+    -- Show seeded categories
+    RAISE NOTICE '  Categories:';
+    RAISE NOTICE '    - Equity: %',
+        (SELECT COUNT(*) FROM m_asset_types WHERE category = 'equity');
+    RAISE NOTICE '    - Fixed Income: %',
+        (SELECT COUNT(*) FROM m_asset_types WHERE category = 'fixed_income');
+    RAISE NOTICE '    - Commodity: %',
+        (SELECT COUNT(*) FROM m_asset_types WHERE category = 'commodity');
+    RAISE NOTICE '    - Real Estate: %',
+        (SELECT COUNT(*) FROM m_asset_types WHERE category = 'real_estate');
+    RAISE NOTICE '    - Insurance: %',
+        (SELECT COUNT(*) FROM m_asset_types WHERE category = 'insurance');
+END $$;
+
+-- ============================================================================
 -- SECTION 7: VERIFICATION & SUMMARY
 -- ============================================================================
 DO $$
@@ -606,22 +734,25 @@ DECLARE
     v_unique_reasons INTEGER;
     v_market_indices_count INTEGER;
     v_active_indices INTEGER;
+    v_asset_types_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO v_txn_count FROM m_transaction_types WHERE is_active = true;
     SELECT COUNT(*) INTO v_job_types_count FROM m_job_types WHERE is_active = true;
-    
+
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_admin = true)
     INTO v_tenant_count, v_admin_tenant_count
     FROM t_tenants WHERE id <= 3;
-    
+
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true), COUNT(DISTINCT reason_code)
     INTO v_bookmark_count, v_active_bookmark, v_unique_reasons
     FROM m_bookmark_reasons
     WHERE tenant_id IN (1, 2, 3);
-    
+
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
     INTO v_market_indices_count, v_active_indices
     FROM t_market_indices;
+
+    SELECT COUNT(*) INTO v_asset_types_count FROM m_asset_types WHERE is_active = true;
 
     RAISE NOTICE '========================================';
     RAISE NOTICE '     SEED DATA SUMMARY';
@@ -629,9 +760,10 @@ BEGIN
     RAISE NOTICE 'Transaction Types: % active', v_txn_count;
     RAISE NOTICE 'Job Types: % active', v_job_types_count;
     RAISE NOTICE 'Admin Tenants: % total (% admin)', v_tenant_count, v_admin_tenant_count;
-    RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)', 
+    RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)',
         v_bookmark_count, v_unique_reasons, v_tenant_count;
     RAISE NOTICE 'Market Indices: % total (% active)', v_market_indices_count, v_active_indices;
+    RAISE NOTICE 'Asset Types (Phase 1): % active', v_asset_types_count;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
     RAISE NOTICE 'Client tenants (ID 4+) will auto-seed via /register';

@@ -48,6 +48,175 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 COMMENT ON FUNCTION current_environment IS 'Get current environment (live/test) from session';
 
+-- ============================================================================
+-- SECTION 1.1: ALERT VISIBILITY FUNCTIONS (Migration 023)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: get_alert_visibility_settings
+-- Description: Returns visibility settings for a specific alert type
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION get_alert_visibility_settings(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_jtbd_type VARCHAR(50)
+)
+RETURNS TABLE (
+    days_before INTEGER,
+    days_after INTEGER,
+    auto_expire_hours INTEGER
+) AS $$
+BEGIN
+    -- First try tenant-specific setting for this type
+    RETURN QUERY
+    SELECT s.days_before, s.days_after, s.auto_expire_hours
+    FROM m_alert_settings s
+    WHERE s.tenant_id = p_tenant_id
+      AND s.is_live = p_is_live
+      AND s.is_active = true
+      AND (s.applies_to_types IS NULL OR p_jtbd_type = ANY(s.applies_to_types))
+    ORDER BY
+        CASE WHEN s.applies_to_types IS NOT NULL THEN 0 ELSE 1 END  -- Specific types first
+    LIMIT 1;
+
+    -- If no tenant-specific, use global defaults
+    IF NOT FOUND THEN
+        RETURN QUERY
+        SELECT s.days_before, s.days_after, s.auto_expire_hours
+        FROM m_alert_settings s
+        WHERE s.tenant_id IS NULL
+          AND s.is_active = true
+          AND (s.applies_to_types IS NULL OR p_jtbd_type = ANY(s.applies_to_types))
+        ORDER BY
+            CASE WHEN s.applies_to_types IS NOT NULL THEN 0 ELSE 1 END
+        LIMIT 1;
+    END IF;
+
+    -- Final fallback: return hardcoded defaults
+    IF NOT FOUND THEN
+        RETURN QUERY SELECT 3::INTEGER, 10::INTEGER, NULL::INTEGER;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION get_alert_visibility_settings IS 'Returns visibility settings for a specific alert type, checking tenant overrides first, then global defaults';
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: is_alert_visible
+-- Description: Checks if an alert should be visible based on visibility settings
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION is_alert_visible(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_jtbd_type VARCHAR(50),
+    p_next_alert_date DATE,
+    p_created_at TIMESTAMP,
+    p_auto_expire_at TIMESTAMP,
+    p_completed_at TIMESTAMP
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_days_before INTEGER;
+    v_days_after INTEGER;
+    v_auto_expire_hours INTEGER;
+    v_today DATE := CURRENT_DATE;
+BEGIN
+    -- Already completed = not visible
+    IF p_completed_at IS NOT NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Check auto-expire timestamp
+    IF p_auto_expire_at IS NOT NULL AND p_auto_expire_at <= NOW() THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Get visibility settings
+    SELECT * INTO v_days_before, v_days_after, v_auto_expire_hours
+    FROM get_alert_visibility_settings(p_tenant_id, p_is_live, p_jtbd_type);
+
+    -- For import notifications with auto_expire_hours, check creation time
+    IF v_auto_expire_hours IS NOT NULL AND p_created_at IS NOT NULL THEN
+        IF p_created_at + (v_auto_expire_hours || ' hours')::INTERVAL <= NOW() THEN
+            RETURN FALSE;
+        END IF;
+    END IF;
+
+    -- Check date window if next_alert_date is set
+    IF p_next_alert_date IS NOT NULL THEN
+        -- Alert is visible if: (next_alert_date - days_before) <= today <= (next_alert_date + days_after)
+        RETURN (p_next_alert_date - v_days_before) <= v_today
+           AND v_today <= (p_next_alert_date + v_days_after);
+    END IF;
+
+    -- No date constraint = always visible (until expired or completed)
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION is_alert_visible IS 'Checks if an alert should be visible based on visibility settings, expiry, and completion status';
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: mark_sip_alert_complete_on_transaction
+-- Description: Marks matching SIP alerts as complete when transaction is imported
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION mark_sip_alert_complete_on_transaction(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_customer_id INTEGER,
+    p_scheme_code VARCHAR(50),
+    p_transaction_date DATE,
+    p_transaction_amount NUMERIC
+)
+RETURNS INTEGER AS $$
+DECLARE
+    v_alert_id INTEGER;
+    v_alerts_marked INTEGER := 0;
+    v_alert_record RECORD;
+BEGIN
+    -- Find active SIP alerts for this customer/scheme that are due around this transaction date
+    -- Window: transaction_date should be within 7 days before to 7 days after the next_alert_date
+    FOR v_alert_record IN
+        SELECT j.id, j.next_alert_date, j.config_data
+        FROM t_jtbd_configurations j
+        WHERE j.tenant_id = p_tenant_id
+          AND j.is_live = p_is_live
+          AND j.customer_id = p_customer_id
+          AND j.is_active = true
+          AND j.completed_at IS NULL
+          AND j.jtbd_type IN ('goal_sip_plan', 'portfolio_alert')
+          -- Match scheme from config_data
+          AND (
+              j.config_data->>'scheme_code' = p_scheme_code
+              OR j.config_data->>'fund_code' = p_scheme_code
+              OR j.config_data->'asset_assignment'->>'scheme_code' = p_scheme_code
+          )
+          -- Match date window: 7 days before to 7 days after
+          AND j.next_alert_date IS NOT NULL
+          AND p_transaction_date BETWEEN (j.next_alert_date - 7) AND (j.next_alert_date + 7)
+        ORDER BY ABS(j.next_alert_date - p_transaction_date)  -- Closest match first
+        LIMIT 1  -- Only mark one alert per transaction
+    LOOP
+        -- Mark the alert as completed
+        UPDATE t_jtbd_configurations
+        SET completed_at = NOW(),
+            completed_by = NULL,  -- System completion
+            completion_source = 'transaction_import',
+            updated_at = NOW()
+        WHERE id = v_alert_record.id;
+
+        v_alerts_marked := v_alerts_marked + 1;
+
+        RAISE NOTICE 'Marked SIP alert % as complete (scheme: %, txn_date: %, alert_date: %)',
+            v_alert_record.id, p_scheme_code, p_transaction_date, v_alert_record.next_alert_date;
+    END LOOP;
+
+    RETURN v_alerts_marked;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION mark_sip_alert_complete_on_transaction IS 'Marks matching SIP alerts as complete when a transaction is imported for the same scheme/customer within date window';
+
 -- ----------------------------------------------------------------------------
 -- FUNCTION: normalize_customer_name (Migration 006)
 -- ----------------------------------------------------------------------------
@@ -855,7 +1024,8 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: process_transaction_import_session (Complete from original)
+-- FUNCTION: process_transaction_import_session
+-- Features: Customer lookup, PAN fallback, orphan tracking, auto MF assignment with alerts
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_transaction_import_session(
     p_session_id INTEGER,
@@ -889,14 +1059,32 @@ DECLARE
     v_error_msg TEXT;
     v_txn_id INTEGER;
     v_session_info RECORD;
+    -- Variables for auto-assignment
+    v_mf_asset_type_id INTEGER;
+    v_existing_assignment_id INTEGER;
+    v_customer_name VARCHAR;
+    v_new_assignment_id INTEGER;
+    v_session_creator_id INTEGER;
+    v_txn_amount NUMERIC;
 BEGIN
-    SELECT tenant_id, is_live INTO v_session_info
+    -- Get session info
+    SELECT tenant_id, is_live, created_by
+    INTO v_session_info
     FROM t_import_sessions
     WHERE id = p_session_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
+
+    -- Get MF asset type ID
+    SELECT id INTO v_mf_asset_type_id
+    FROM m_asset_types
+    WHERE asset_type_code = 'MF' AND is_active = true
+    LIMIT 1;
+
+    -- Get session creator for alert creation
+    v_session_creator_id := COALESCE(v_session_info.created_by, 1);
 
     UPDATE t_import_sessions
     SET status = 'processing',
@@ -925,6 +1113,10 @@ BEGIN
             v_bookmark_id := NULL;
             v_txn_type_id := NULL;
             v_error_msg := NULL;
+            v_customer_name := NULL;
+            v_existing_assignment_id := NULL;
+            v_new_assignment_id := NULL;
+            v_txn_amount := NULL;
 
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
             IF p_customer_lookup_method = 'iwell_code' THEN
@@ -1051,6 +1243,12 @@ BEGIN
                 CONTINUE;
             END IF;
 
+            -- Get customer name for alerts
+            SELECT ct.name INTO v_customer_name
+            FROM t_customers c
+            INNER JOIN t_contacts ct ON ct.id = c.contact_id
+            WHERE c.id = v_customer_id;
+
             -- TRANSACTION TYPE LOOKUP
             IF v_staging_record.mapped_data->>'txn_code' IS NOT NULL
                AND TRIM(v_staging_record.mapped_data->>'txn_code') != '' THEN
@@ -1165,6 +1363,9 @@ BEGIN
                 CONTINUE;
             END IF;
 
+            -- Get transaction amount for investment plan
+            v_txn_amount := COALESCE(NULLIF(v_staging_record.mapped_data->>'total_amount', '')::NUMERIC, 0);
+
             -- CREATE/UPDATE PORTFOLIO ENTRY
             INSERT INTO t_customer_master_portfolio (
                 tenant_id,
@@ -1238,6 +1439,163 @@ BEGIN
                 NOW()
             ) RETURNING id INTO v_txn_id;
 
+            -- ============================================================================
+            -- MARK SIP ALERTS AS COMPLETE (if matching transaction)
+            -- ============================================================================
+            PERFORM mark_sip_alert_complete_on_transaction(
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_scheme_code,
+                (v_staging_record.mapped_data->>'txn_date')::DATE,
+                v_txn_amount
+            );
+
+            -- ============================================================================
+            -- AUTO-CREATE INVESTMENT PLAN (MF) AND ALERTS
+            -- ============================================================================
+            IF v_mf_asset_type_id IS NOT NULL THEN
+                -- Check if customer already has this scheme assigned
+                SELECT id INTO v_existing_assignment_id
+                FROM t_customer_asset_assignments
+                WHERE tenant_id = v_staging_record.tenant_id
+                  AND is_live = v_staging_record.is_live
+                  AND customer_id = v_customer_id
+                  AND asset_type_id = v_mf_asset_type_id
+                  AND scheme_code = v_scheme_code
+                  AND is_active = true
+                LIMIT 1;
+
+                IF v_existing_assignment_id IS NULL THEN
+                    -- NEW: Create Investment Plan for this MF
+                    INSERT INTO t_customer_asset_assignments (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        asset_type_id,
+                        scheme_code,
+                        principal_amount,
+                        investment_type,
+                        recurring_amount,
+                        investment_frequency,
+                        has_started,
+                        custom_assumption_rate,
+                        is_active,
+                        assigned_by,
+                        notes,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        v_mf_asset_type_id,
+                        v_scheme_code,
+                        v_txn_amount,           -- principal_amount = SIP amount
+                        'sip',                   -- investment_type
+                        v_txn_amount,           -- recurring_amount = SIP amount
+                        'monthly',               -- investment_frequency
+                        true,                    -- has_started = true
+                        12.00,                   -- custom_assumption_rate = 12%
+                        true,
+                        v_session_creator_id,
+                        'Auto-created from transaction import (Session: ' || p_session_id || ')',
+                        NOW(),
+                        NOW()
+                    ) RETURNING id INTO v_new_assignment_id;
+
+                    -- Create Alert: New MF Added
+                    INSERT INTO t_jtbd_configurations (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        jtbd_type,
+                        jtbd_category,
+                        title,
+                        description,
+                        priority,
+                        is_active,
+                        config_data,
+                        next_alert_date,
+                        created_by,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        'import_notification',
+                        'alert',
+                        COALESCE(v_customer_name, 'Customer') || ' - ' || v_scheme_name,
+                        'New Mutual Fund scheme has been added. Please set the start date and review the investment details.',
+                        'medium',
+                        true,
+                        jsonb_build_object(
+                            'notification_type', 'new_mf_added',
+                            'scheme_code', v_scheme_code,
+                            'scheme_name', v_scheme_name,
+                            'customer_name', v_customer_name,
+                            'sip_amount', v_txn_amount,
+                            'assignment_id', v_new_assignment_id,
+                            'import_session_id', p_session_id,
+                            'transaction_id', v_txn_id
+                        ),
+                        CURRENT_DATE,  -- Alert is due today
+                        v_session_creator_id,
+                        NOW(),
+                        NOW()
+                    );
+
+                    RAISE NOTICE '[Session %] Created new MF assignment for customer % scheme %',
+                        p_session_id, v_customer_id, v_scheme_code;
+                ELSE
+                    -- DUPLICATE: Scheme already assigned, create skip alert
+                    INSERT INTO t_jtbd_configurations (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        jtbd_type,
+                        jtbd_category,
+                        title,
+                        description,
+                        priority,
+                        is_active,
+                        config_data,
+                        next_alert_date,
+                        created_by,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        'import_notification',
+                        'alert',
+                        'Scheme already assigned - ' || COALESCE(v_customer_name, 'Customer'),
+                        'Scheme "' || v_scheme_name || '" is already available for ' || COALESCE(v_customer_name, 'this customer') || ', ignoring duplicate assignment.',
+                        'low',
+                        true,
+                        jsonb_build_object(
+                            'notification_type', 'duplicate_mf_skipped',
+                            'scheme_code', v_scheme_code,
+                            'scheme_name', v_scheme_name,
+                            'customer_name', v_customer_name,
+                            'existing_assignment_id', v_existing_assignment_id,
+                            'import_session_id', p_session_id,
+                            'transaction_id', v_txn_id
+                        ),
+                        CURRENT_DATE,  -- Alert is due today
+                        v_session_creator_id,
+                        NOW(),
+                        NOW()
+                    );
+
+                    RAISE NOTICE '[Session %] Scheme % already assigned to customer %, skipped',
+                        p_session_id, v_scheme_code, v_customer_id;
+                END IF;
+            END IF;
+            -- ============================================================================
+
             UPDATE t_import_staging_data
             SET processing_status = 'success',
                 created_record_id = v_txn_id,
@@ -1299,7 +1657,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking';
+COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking, and auto MF assignment with alerts';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS

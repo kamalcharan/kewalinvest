@@ -138,7 +138,10 @@ services:
       REACT_APP_API_URL: http://localhost:8080
       REACT_APP_N8N_URL: http://localhost:5678  # Add n8n URL for frontend if needed
       CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: 1000
       WATCHPACK_POLLING: 'true'
+      WDS_SOCKET_PORT: 3000         
+      FAST_REFRESH: 'true'  
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
