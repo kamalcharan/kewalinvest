@@ -399,4 +399,205 @@ export class JTBDDashboardService {
       throw error;
     }
   }
+
+  /**
+   * Get latest alerts for header dropdown
+   * Returns the most recent alerts sorted by creation date
+   * UPDATED: Filters out completed and expired alerts using visibility function
+   */
+  async getLatestAlerts(
+    tenantId: number,
+    isLive: boolean,
+    limit: number = 10
+  ): Promise<any[]> {
+    try {
+      // Use the is_alert_visible function to filter alerts
+      const query = `
+        SELECT
+          j.id,
+          j.customer_id,
+          j.jtbd_type,
+          j.jtbd_category,
+          j.title,
+          j.description,
+          j.priority,
+          j.next_alert_date,
+          j.is_active,
+          j.config_data,
+          j.created_at,
+          j.completed_at,
+          j.auto_expire_at,
+          c.name AS customer_name
+        FROM t_jtbd_configurations j
+        LEFT JOIN t_customers cust ON cust.id = j.customer_id
+        LEFT JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.is_active = true
+          AND j.completed_at IS NULL
+          AND (j.auto_expire_at IS NULL OR j.auto_expire_at > NOW())
+          AND (
+            j.jtbd_type != 'import_notification'
+            OR j.created_at > NOW() - INTERVAL '24 hours'
+          )
+        ORDER BY j.created_at DESC
+        LIMIT $3
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive, limit]);
+
+      return result.rows.map(row => ({
+        ...row,
+        notification_type: row.config_data?.notification_type || null,
+        scheme_name: row.config_data?.scheme_name || null,
+        is_new: this.isNewAlert(row.created_at)
+      }));
+    } catch (error) {
+      console.error('Error getting latest alerts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get visible alerts for CruiseControl AlertsTab
+   * Uses the database visibility settings to filter alerts
+   * Supports filtering by status (active/acknowledged/dismissed)
+   */
+  async getVisibleAlerts(
+    tenantId: number,
+    isLive: boolean,
+    status?: 'all' | 'active' | 'acknowledged' | 'dismissed',
+    limit: number = 100
+  ): Promise<any[]> {
+    try {
+      let query = `
+        SELECT
+          j.id,
+          j.customer_id,
+          j.jtbd_type,
+          j.jtbd_category,
+          j.title,
+          j.description,
+          j.priority,
+          j.next_alert_date,
+          j.is_active,
+          j.config_data,
+          j.created_at,
+          j.completed_at,
+          j.completed_by,
+          j.completion_source,
+          j.auto_expire_at,
+          c.name AS customer_name,
+          CASE
+            WHEN j.completed_at IS NOT NULL AND j.completion_source = 'manual' THEN 'acknowledged'
+            WHEN j.completed_at IS NOT NULL THEN 'dismissed'
+            WHEN j.is_active = false THEN 'dismissed'
+            ELSE 'active'
+          END AS status
+        FROM t_jtbd_configurations j
+        LEFT JOIN t_customers cust ON cust.id = j.customer_id
+        LEFT JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.jtbd_category = 'alert'
+      `;
+
+      const params: any[] = [tenantId, isLive];
+      let paramIndex = 3;
+
+      // Add status filter
+      if (status === 'active') {
+        query += ` AND j.is_active = true AND j.completed_at IS NULL`;
+        // Add visibility window check for active alerts
+        query += ` AND is_alert_visible($1, $2, j.jtbd_type, j.next_alert_date, j.created_at, j.auto_expire_at, j.completed_at) = true`;
+      } else if (status === 'acknowledged') {
+        query += ` AND j.completed_at IS NOT NULL AND j.completion_source = 'manual'`;
+      } else if (status === 'dismissed') {
+        query += ` AND (j.is_active = false OR (j.completed_at IS NOT NULL AND j.completion_source != 'manual'))`;
+      }
+      // 'all' status doesn't add any filter
+
+      query += ` ORDER BY
+        CASE WHEN j.completed_at IS NULL AND j.is_active = true THEN 0 ELSE 1 END,
+        j.next_alert_date ASC NULLS LAST,
+        j.created_at DESC
+        LIMIT $${paramIndex}`;
+      params.push(limit);
+
+      const result = await this.db.query(query, params);
+
+      return result.rows.map(row => ({
+        ...row,
+        notification_type: row.config_data?.notification_type || null,
+        scheme_name: row.config_data?.scheme_name || null,
+        is_new: this.isNewAlert(row.created_at)
+      }));
+    } catch (error) {
+      console.error('Error getting visible alerts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Acknowledge an alert (mark as completed with manual source)
+   */
+  async acknowledgeAlert(
+    alertId: number,
+    tenantId: number,
+    isLive: boolean,
+    userId: number
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_jtbd_configurations
+        SET completed_at = NOW(),
+            completed_by = $4,
+            completion_source = 'manual',
+            updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2 AND is_live = $3
+      `;
+
+      await this.db.query(query, [alertId, tenantId, isLive, userId]);
+    } catch (error) {
+      console.error('Error acknowledging alert:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Dismiss an alert (mark as inactive)
+   */
+  async dismissAlert(
+    alertId: number,
+    tenantId: number,
+    isLive: boolean,
+    userId: number
+  ): Promise<void> {
+    try {
+      const query = `
+        UPDATE t_jtbd_configurations
+        SET is_active = false,
+            completed_at = NOW(),
+            completed_by = $4,
+            completion_source = 'system',
+            updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2 AND is_live = $3
+      `;
+
+      await this.db.query(query, [alertId, tenantId, isLive, userId]);
+    } catch (error) {
+      console.error('Error dismissing alert:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if alert was created within the last 24 hours
+   */
+  private isNewAlert(createdAt: string): boolean {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const hoursDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+    return hoursDiff <= 24;
+  }
 }

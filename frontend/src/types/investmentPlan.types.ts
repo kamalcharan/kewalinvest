@@ -33,6 +33,7 @@ export interface InvestmentPlan {
 
   // Metadata
   is_active: boolean;
+  alerts_enabled: boolean;
   assigned_at: string;
   assigned_by: number | null;
   notes: string | null;

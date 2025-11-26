@@ -188,6 +188,36 @@ export class InvestmentPlanController {
   };
 
   /**
+   * PATCH /api/customers/:customerId/investments/:id/toggle-alerts
+   * Toggle alerts enabled/disabled for an investment plan
+   */
+  toggleAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const id = parseInt(req.params.id);
+
+      const result = await this.investmentPlanService.toggleAlerts(
+        id,
+        user!.tenant_id,
+        isLive
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: `Alerts ${result.alerts_enabled ? 'enabled' : 'disabled'} for investment plan`
+      });
+    } catch (error: any) {
+      console.error('Error toggling alerts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to toggle alerts'
+      });
+    }
+  };
+
+  /**
    * GET /api/family/:familyHeadId/investments
    * Get family investment summary
    */

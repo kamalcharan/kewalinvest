@@ -1,5 +1,5 @@
 // frontend/src/components/jtbd/JTBDSetupModal.tsx
-// UPDATED: Added Goal Tracking as 4th option
+// UPDATED: Added hideTypes prop to filter visible options
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ import PortfolioAlertForm from './forms/PortfolioAlertForm';
 import TimeAlertForm from './forms/TimeAlertForm';
 import ProfileTriggerForm from './forms/ProfileTriggerForm';
 
+type JTBDType = 'portfolio_alert' | 'time_based' | 'profile_trigger' | 'goal_tracking';
 
 interface JTBDSetupModalProps {
   customerId: number;
@@ -17,9 +18,10 @@ interface JTBDSetupModalProps {
   isOpen?: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Array of JTBD types to hide from selection */
+  hideTypes?: JTBDType[];
 }
 
-type JTBDType = 'portfolio_alert' | 'time_based' | 'profile_trigger' | 'goal_tracking';
 type SetupStep = 'select_type' | 'configure';
 
 const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
@@ -27,7 +29,8 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
   customerName = 'Customer',
   isOpen = true,
   onClose,
-  onSuccess
+  onSuccess,
+  hideTypes = []
 }) => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
@@ -302,7 +305,7 @@ const JTBDSetupModal: React.FC<JTBDSetupModalProps> = ({
                   gap: '20px'
                 }}
               >
-                {typeCards.map((card) => (
+                {typeCards.filter(card => !hideTypes.includes(card.type)).map((card) => (
                   <div
                     key={card.type}
                     onClick={() => handleTypeSelect(card.type)}

@@ -945,7 +945,60 @@ BEGIN
     RAISE NOTICE 'Creating JTBD Tables...';
 END $$;
 
--- TABLE: t_jtbd_configurations (UPDATED: Added jtbd_category from JTBD Consolidation)
+-- TABLE: m_alert_settings (NEW: Migration 023 - Alert System Enhancements)
+-- Description: Configurable alert visibility settings - determines when alerts appear and expire
+CREATE TABLE IF NOT EXISTS m_alert_settings (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id),
+    is_live BOOLEAN DEFAULT true,
+
+    -- Setting identification
+    setting_key VARCHAR(100) NOT NULL,
+    setting_label VARCHAR(255) NOT NULL,
+
+    -- Visibility window configuration
+    days_before INTEGER NOT NULL DEFAULT 3,      -- Show alert X days before scheduled date
+    days_after INTEGER NOT NULL DEFAULT 10,      -- Keep alert visible X days after scheduled date
+
+    -- Auto-expire configuration (for notifications)
+    auto_expire_hours INTEGER,                   -- NULL = never auto-expire
+
+    -- Which alert types this setting applies to
+    applies_to_types TEXT[],                     -- Array of jtbd_type values, NULL = all types
+
+    -- Metadata
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Unique constraint per tenant (or global if tenant_id is NULL)
+    CONSTRAINT unique_alert_setting UNIQUE (tenant_id, is_live, setting_key)
+);
+
+COMMENT ON TABLE m_alert_settings IS 'Configurable alert visibility settings - determines when alerts appear and expire';
+COMMENT ON COLUMN m_alert_settings.tenant_id IS 'NULL for global defaults, tenant_id for tenant-specific overrides';
+COMMENT ON COLUMN m_alert_settings.days_before IS 'Number of days before next_alert_date to start showing the alert';
+COMMENT ON COLUMN m_alert_settings.days_after IS 'Number of days after next_alert_date to keep showing the alert';
+COMMENT ON COLUMN m_alert_settings.auto_expire_hours IS 'For notifications: auto-deactivate after X hours from creation';
+COMMENT ON COLUMN m_alert_settings.applies_to_types IS 'Array of jtbd_type values this setting applies to. NULL = all types.';
+
+-- Seed default alert settings (global defaults with tenant_id = NULL)
+INSERT INTO m_alert_settings (tenant_id, is_live, setting_key, setting_label, days_before, days_after, auto_expire_hours, applies_to_types)
+VALUES
+    -- Default for SIP/Recurring alerts (show 3 days before, keep 10 days after)
+    (NULL, true, 'sip_recurring_default', 'SIP/Recurring Payment Alerts', 3, 10, NULL, ARRAY['goal_sip_plan', 'portfolio_alert']),
+
+    -- Default for time-based alerts (birthday, anniversary - show 7 days before, keep 3 days after)
+    (NULL, true, 'time_based_default', 'Time-Based Reminders', 7, 3, NULL, ARRAY['time_based', 'profile_trigger']),
+
+    -- Default for import notifications (auto-expire after 24 hours)
+    (NULL, true, 'import_notification_default', 'Import Notifications', 0, 0, 24, ARRAY['import_notification']),
+
+    -- Default fallback for any other alert types
+    (NULL, true, 'general_default', 'General Alerts', 3, 10, NULL, NULL)
+ON CONFLICT (tenant_id, is_live, setting_key) DO NOTHING;
+
+-- TABLE: t_jtbd_configurations (UPDATED: Added jtbd_category from JTBD Consolidation, completion tracking from Migration 023)
 CREATE TABLE t_jtbd_configurations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -964,12 +1017,28 @@ CREATE TABLE t_jtbd_configurations (
     next_alert_date DATE,
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    -- Alert completion tracking (Migration 023)
+    completed_at TIMESTAMP,
+    completed_by INTEGER REFERENCES t_users(id),
+    completion_source VARCHAR(50),
+    auto_expire_at TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT chk_completion_source CHECK (
+        completion_source IS NULL OR
+        completion_source IN ('manual', 'transaction_import', 'auto_expire', 'system')
+    )
 );
 
 COMMENT ON TABLE t_jtbd_configurations IS 'Unified JTBD configurations - Goals, Alerts, and Meeting templates. Use jtbd_category to filter.';
 COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger, goal_tracking, etc.';
 COMMENT ON COLUMN t_jtbd_configurations.jtbd_category IS 'Category: transactional (goals), alert (reminders, SIPs), meeting (client meetings)';
+COMMENT ON COLUMN t_jtbd_configurations.completed_at IS 'Timestamp when the alert was marked as completed';
+COMMENT ON COLUMN t_jtbd_configurations.completed_by IS 'User who completed the alert (NULL for system/auto)';
+COMMENT ON COLUMN t_jtbd_configurations.completion_source IS 'How alert was completed: manual, transaction_import, auto_expire, system';
+COMMENT ON COLUMN t_jtbd_configurations.auto_expire_at IS 'For notifications: auto-deactivate after this timestamp';
 
 -- TABLE: t_jtbd_executions (NEW: From JTBD Consolidation migration)
 CREATE TABLE t_jtbd_executions (
@@ -1155,6 +1224,9 @@ CREATE TABLE IF NOT EXISTS t_customer_asset_assignments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
+    -- Alert configuration (Migration 023)
+    alerts_enabled BOOLEAN DEFAULT true,
+
     CONSTRAINT chk_duration CHECK (
         (duration_months IS NOT NULL AND duration_years IS NULL) OR
         (duration_months IS NULL AND duration_years IS NOT NULL) OR
@@ -1178,6 +1250,7 @@ COMMENT ON COLUMN t_customer_asset_assignments.scheme_code IS 'For MF: scheme co
 COMMENT ON COLUMN t_customer_asset_assignments.is_active IS 'Whether this assignment is currently active';
 COMMENT ON COLUMN t_customer_asset_assignments.assigned_by IS 'User who made the assignment';
 COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about the investment plan';
+COMMENT ON COLUMN t_customer_asset_assignments.alerts_enabled IS 'Toggle to enable/disable automatic alert generation for this investment plan';
 
 -- ============================================================================
 -- TABLE: t_goal_investment_allocations (NEW - Phase 2)

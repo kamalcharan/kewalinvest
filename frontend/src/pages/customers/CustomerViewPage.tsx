@@ -601,6 +601,7 @@ const CustomerViewPage: React.FC = () => {
         onViewModeChange={setViewMode}
         onNewGoal={() => navigate(`/customers/${customerId}/goals/new`)}
         onMeeting={() => setShowMeetingModal(true)}
+        onNewAlert={() => setShowJTBDSetupModal(true)}
       />
 
       {/* Key Metrics Bar */}
@@ -1570,14 +1571,16 @@ comparisonData={comparisonIndexData}
         )}
       </div>
 
-      {/* JTBD Setup Modal */}
+      {/* JTBD Setup Modal - Hide portfolio_alert and goal_tracking when opened from New Alert button */}
       {showJTBDSetupModal && (
         <JTBDSetupModal
           customerId={customerId}
+          customerName={customer.name}
           onClose={() => setShowJTBDSetupModal(false)}
           onSuccess={() => {
             setShowJTBDSetupModal(false);
           }}
+          hideTypes={['portfolio_alert', 'goal_tracking']}
         />
       )}
 

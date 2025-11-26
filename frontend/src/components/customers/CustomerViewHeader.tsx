@@ -1,7 +1,8 @@
 // frontend/src/components/customers/CustomerViewHeader.tsx
+// UPDATED: Added New Alert button next to Meeting button
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Calendar as CalendarIcon, Target as TargetIcon } from 'lucide-react';
+import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Calendar as CalendarIcon, Target as TargetIcon, Bell as BellIcon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import FamilyMembersPopover from './FamilyMembersPopover';
 import { IndividualFamilySwitch } from './IndividualFamilySwitch';
@@ -14,6 +15,7 @@ interface CustomerViewHeaderProps {
   customerId: number;
   onNewGoal?: () => void;
   onMeeting?: () => void;
+  onNewAlert?: () => void;
   // Family view props
   viewMode?: 'individual' | 'family';
   onViewModeChange?: (mode: 'individual' | 'family') => void;
@@ -25,6 +27,7 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   customerId,
   onNewGoal,
   onMeeting,
+  onNewAlert,
   viewMode = 'individual',
   onViewModeChange
 }) => {
@@ -173,6 +176,33 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
               }}
             >
               <CalendarIcon size={16} /> Meeting
+            </button>
+
+            {/* New Alert Button */}
+            <button
+              onClick={onNewAlert}
+              style={{
+                padding: '8px 14px',
+                backgroundColor: colors.utility.secondaryBackground,
+                border: `1px solid ${colors.semantic.warning}40`,
+                borderRadius: '8px',
+                color: colors.semantic.warning,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.semantic.warning + '15';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+              }}
+            >
+              <BellIcon size={16} /> New Alert
             </button>
 
             <button

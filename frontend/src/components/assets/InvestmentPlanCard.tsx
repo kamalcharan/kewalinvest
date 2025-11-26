@@ -1,8 +1,9 @@
 // frontend/src/components/assets/InvestmentPlanCard.tsx
 // Card component for displaying investment plans with calculations (Release 1.1 - Phase 1)
+// UPDATED: Added alerts toggle functionality
 
 import React from 'react';
-import { Edit2, Trash2, TrendingUp, TrendingDown, Calendar, DollarSign, Target } from 'lucide-react';
+import { Edit2, Trash2, TrendingUp, TrendingDown, Calendar, DollarSign, Target, Bell, BellOff } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { InvestmentPlan, calculateInvestmentValue } from '../../types/investmentPlan.types';
 
@@ -17,6 +18,7 @@ interface InvestmentPlanCardProps {
   plan: InvestmentPlan;
   onEdit: (plan: InvestmentPlan) => void;
   onDelete: (plan: InvestmentPlan) => void;
+  onToggleAlerts?: (plan: InvestmentPlan) => void;
   goalAllocations?: GoalAllocationInfo[];
 }
 
@@ -24,6 +26,7 @@ export const InvestmentPlanCard: React.FC<InvestmentPlanCardProps> = ({
   plan,
   onEdit,
   onDelete,
+  onToggleAlerts,
   goalAllocations = []
 }) => {
   const { theme, isDarkMode } = useTheme();
@@ -107,6 +110,31 @@ export const InvestmentPlanCard: React.FC<InvestmentPlanCardProps> = ({
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Alerts Toggle - Only show for SIP/recurring plans */}
+          {onToggleAlerts && (plan.investment_type === 'sip' || plan.investment_type === 'recurring') && (
+            <button
+              onClick={() => onToggleAlerts(plan)}
+              style={{
+                padding: '6px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: plan.alerts_enabled !== false ? colors.semantic.success : colors.utility.secondaryText,
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'opacity 0.2s'
+              }}
+              title={plan.alerts_enabled !== false ? 'Click to disable alerts' : 'Click to enable alerts'}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              {plan.alerts_enabled !== false ? (
+                <Bell style={{ width: '16px', height: '16px' }} />
+              ) : (
+                <BellOff style={{ width: '16px', height: '16px' }} />
+              )}
+            </button>
+          )}
           <button
             onClick={() => onEdit(plan)}
             style={{

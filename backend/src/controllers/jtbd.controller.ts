@@ -700,4 +700,161 @@ export class JTBDController {
       });
     }
   };
+
+  /**
+   * GET /api/jtbd/dashboard/latest-alerts
+   * Get latest alerts for header dropdown (most recent 10)
+   */
+  getLatestAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const alerts = await dashboardService.getLatestAlerts(
+        user!.tenant_id,
+        isLive,
+        limit
+      );
+
+      res.json({
+        success: true,
+        data: alerts,
+        meta: {
+          count: alerts.length,
+          limit
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting latest alerts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get latest alerts'
+      });
+    }
+  };
+
+  /**
+   * GET /api/jtbd/dashboard/visible-alerts
+   * Get visible alerts for CruiseControl AlertsTab with status filtering
+   */
+  getVisibleAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const status = req.query.status as 'all' | 'active' | 'acknowledged' | 'dismissed' | undefined;
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const alerts = await dashboardService.getVisibleAlerts(
+        user!.tenant_id,
+        isLive,
+        status || 'active',
+        limit
+      );
+
+      res.json({
+        success: true,
+        data: alerts,
+        meta: {
+          count: alerts.length,
+          status: status || 'active',
+          limit
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting visible alerts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get visible alerts'
+      });
+    }
+  };
+
+  /**
+   * PATCH /api/jtbd/dashboard/alerts/:id/acknowledge
+   * Acknowledge an alert (mark as completed with manual source)
+   */
+  acknowledgeAlert = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const alertId = parseInt(req.params.id);
+
+      if (isNaN(alertId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid alert ID'
+        });
+        return;
+      }
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      await dashboardService.acknowledgeAlert(
+        alertId,
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        message: 'Alert acknowledged successfully'
+      });
+    } catch (error: any) {
+      console.error('Error acknowledging alert:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to acknowledge alert'
+      });
+    }
+  };
+
+  /**
+   * PATCH /api/jtbd/dashboard/alerts/:id/dismiss
+   * Dismiss an alert (mark as inactive)
+   */
+  dismissAlert = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const alertId = parseInt(req.params.id);
+
+      if (isNaN(alertId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid alert ID'
+        });
+        return;
+      }
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      await dashboardService.dismissAlert(
+        alertId,
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        message: 'Alert dismissed successfully'
+      });
+    } catch (error: any) {
+      console.error('Error dismissing alert:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to dismiss alert'
+      });
+    }
+  };
 }

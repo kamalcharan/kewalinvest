@@ -45,6 +45,12 @@ router.put('/customers/:customerId/investments/:id', investmentPlanController.up
 router.delete('/customers/:customerId/investments/:id', investmentPlanController.deleteInvestmentPlan);
 
 /**
+ * PATCH /api/customers/:customerId/investments/:id/toggle-alerts
+ * Toggle alerts enabled/disabled for an investment plan
+ */
+router.patch('/customers/:customerId/investments/:id/toggle-alerts', investmentPlanController.toggleAlerts);
+
+/**
  * GET /api/family/:familyHeadId/investments
  * Get family investment summary (aggregated across family members)
  * familyHeadId = iwell_code of family head

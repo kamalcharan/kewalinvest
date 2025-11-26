@@ -488,6 +488,23 @@ WHERE execution_status IN ('planned', 'due');
 COMMENT ON INDEX idx_jtbd_exec_tenant_status_date IS 'Primary query index for execution tracking (JTBD Consolidation)';
 COMMENT ON INDEX idx_jtbd_exec_date_range IS 'Optimized for timeline and calendar views (JTBD Consolidation)';
 
+-- Migration 023: Alert visibility and completion tracking indexes
+CREATE INDEX IF NOT EXISTS idx_jtbd_alert_visibility
+ON t_jtbd_configurations (tenant_id, is_live, is_active, next_alert_date, completed_at)
+WHERE is_active = true AND completed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_jtbd_auto_expire
+ON t_jtbd_configurations (auto_expire_at)
+WHERE auto_expire_at IS NOT NULL AND is_active = true AND completed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_asset_assignments_alerts
+ON t_customer_asset_assignments (tenant_id, is_live, is_active, alerts_enabled)
+WHERE is_active = true AND alerts_enabled = true;
+
+COMMENT ON INDEX idx_jtbd_alert_visibility IS 'Migration 023: Efficient queries for visible alerts with date and completion filtering';
+COMMENT ON INDEX idx_jtbd_auto_expire IS 'Migration 023: Index for processing auto-expiring notifications';
+COMMENT ON INDEX idx_asset_assignments_alerts IS 'Migration 023: Find investment plans with alerts enabled';
+
 -- Goal-related indexes
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal ON t_goal_progress_snapshots USING btree (goal_id, snapshot_date DESC);
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_tenant ON t_goal_progress_snapshots USING btree (tenant_id, is_live, snapshot_date DESC);

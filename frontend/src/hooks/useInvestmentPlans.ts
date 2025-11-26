@@ -69,6 +69,24 @@ export const useInvestmentPlans = (customerId: number | null) => {
     }
   };
 
+  const toggleAlerts = async (id: number): Promise<{ id: number; alerts_enabled: boolean }> => {
+    if (!customerId) throw new Error('Customer ID is required');
+
+    try {
+      const result = await investmentPlanService.toggleAlerts(customerId, id);
+      // Update local state immediately
+      setPlans(prevPlans =>
+        prevPlans.map(plan =>
+          plan.id === id ? { ...plan, alerts_enabled: result.alerts_enabled } : plan
+        )
+      );
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to toggle alerts');
+      throw err;
+    }
+  };
+
   return {
     plans,
     loading,
@@ -76,7 +94,8 @@ export const useInvestmentPlans = (customerId: number | null) => {
     reload: loadPlans,
     createPlan,
     updatePlan,
-    deletePlan
+    deletePlan,
+    toggleAlerts
   };
 };
 

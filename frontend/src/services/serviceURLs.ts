@@ -128,6 +128,10 @@ export const API_ENDPOINTS = {
     UPCOMING_ALERTS: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,
     ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
     COMMUNICATION_QUEUE: `${API_BASE}/jtbd/dashboard/communication-queue`,
+    LATEST_ALERTS: `${API_BASE}/jtbd/dashboard/latest-alerts`,
+    VISIBLE_ALERTS: `${API_BASE}/jtbd/dashboard/visible-alerts`,  // NEW: For AlertsTab with visibility filtering
+    ACKNOWLEDGE_ALERT: (id: number) => `${API_BASE}/jtbd/dashboard/alerts/${id}/acknowledge`,  // NEW: Acknowledge alert
+    DISMISS_ALERT: (id: number) => `${API_BASE}/jtbd/dashboard/alerts/${id}/dismiss`,  // NEW: Dismiss alert
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}/summary`,
     CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
     TRANSACTION_TYPES: `${API_BASE}/jtbd/transaction-types`,
@@ -444,6 +448,7 @@ export const API_ENDPOINTS = {
     GET: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
     UPDATE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
     DELETE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
+    TOGGLE_ALERTS: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}/toggle-alerts`,
 
     // Family Investment Plans
     FAMILY_SUMMARY: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/investments`,
