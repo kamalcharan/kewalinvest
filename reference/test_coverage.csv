@@ -1,0 +1,792 @@
+TC_ID,Module,Sub_Module,Test_Case_Title,Description,Pre_Conditions,Test_Steps,Expected_Result,Priority,Test_Type,Multi_Tenant_Test,Environment_Applicable,Automation_Candidate
+TC_AUTH_001,Authentication,Login,Valid user login,Verify user can login with valid credentials,User account exists and is active,"1. Navigate to login page
+2. Enter valid email
+3. Enter valid password
+4. Click Login button",User is logged in successfully and redirected to dashboard with valid JWT token,P1,Functional,No,Both,Yes
+TC_AUTH_002,Authentication,Login,Invalid password login,Verify login fails with invalid password,User account exists,"1. Navigate to login page
+2. Enter valid email
+3. Enter invalid password
+4. Click Login button",Login fails with appropriate error message 'Invalid credentials',P1,Functional,No,Both,Yes
+TC_AUTH_003,Authentication,Login,Invalid email login,Verify login fails with non-existent email,None,"1. Navigate to login page
+2. Enter non-existent email
+3. Enter any password
+4. Click Login button",Login fails with appropriate error message,P1,Functional,No,Both,Yes
+TC_AUTH_004,Authentication,Login,Inactive user login,Verify inactive user cannot login,User account exists but is_active=false,"1. Navigate to login page
+2. Enter inactive user credentials
+3. Click Login button",Login fails with 'Account is inactive' message,P1,Security,No,Both,Yes
+TC_AUTH_005,Authentication,Login,Inactive tenant user login,Verify user from inactive tenant cannot login,User exists but tenant is_active=false,"1. Navigate to login page
+2. Enter user credentials from inactive tenant
+3. Click Login button",Login fails with appropriate error message,P1,Security,Yes,Both,Yes
+TC_AUTH_006,Authentication,Registration,New user registration,Verify new user can register successfully,Tenant exists and is active,"1. Navigate to registration page
+2. Fill all required fields
+3. Submit registration form",User account created successfully and can login,P1,Functional,Yes,Both,Yes
+TC_AUTH_007,Authentication,Registration,Duplicate email registration,Verify registration fails with existing email,User with same email already exists,"1. Navigate to registration page
+2. Enter email that already exists
+3. Fill other fields
+4. Submit form",Registration fails with 'Email already exists' error,P1,Functional,No,Both,Yes
+TC_AUTH_008,Authentication,Password,Change password successfully,Verify user can change password,User is logged in,"1. Navigate to change password
+2. Enter current password
+3. Enter new password
+4. Confirm new password
+5. Submit",Password changed successfully and user can login with new password,P1,Functional,No,Both,Yes
+TC_AUTH_009,Authentication,Password,Change password with wrong current,Verify password change fails with wrong current password,User is logged in,"1. Navigate to change password
+2. Enter wrong current password
+3. Enter new password
+4. Submit",Password change fails with 'Current password is incorrect' error,P1,Security,No,Both,Yes
+TC_AUTH_010,Authentication,Token,JWT token expiration,Verify expired JWT token is rejected,User has logged in and token has expired,"1. Login and get JWT token
+2. Wait for token to expire
+3. Make API call with expired token",API returns 401 Unauthorized error,P1,Security,No,Both,Yes
+TC_AUTH_011,Authentication,Token,Invalid JWT token,Verify tampered JWT token is rejected,None,"1. Create/modify JWT token manually
+2. Make API call with tampered token",API returns 401 Unauthorized error,P1,Security,No,Both,Yes
+TC_MT_001,Multi-Tenant,Data Isolation,Customer data isolation between tenants,Verify tenant A cannot see tenant B customers,Two tenants with different customers exist,"1. Login as tenant A user
+2. Fetch customer list
+3. Login as tenant B user
+4. Fetch customer list",Each tenant only sees their own customers,P1,Security,Yes,Both,Yes
+TC_MT_002,Multi-Tenant,Data Isolation,Transaction data isolation,Verify transactions are isolated per tenant,Transactions exist for multiple tenants,"1. Login as tenant A user
+2. Fetch transactions
+3. Login as tenant B user
+4. Fetch transactions",Each tenant only sees their own transactions,P1,Security,Yes,Both,Yes
+TC_MT_003,Multi-Tenant,Data Isolation,Goal data isolation,Verify goals are isolated per tenant,Goals exist for multiple tenants,"1. Login as tenant A user
+2. Fetch goals
+3. Login as tenant B user
+4. Fetch goals",Each tenant only sees their own goals,P1,Security,Yes,Both,Yes
+TC_MT_004,Multi-Tenant,Data Isolation,Portfolio data isolation,Verify portfolio data is isolated per tenant,Portfolio data exists for multiple tenants,"1. Login as tenant A user
+2. View portfolio
+3. Login as tenant B user
+4. View portfolio",Each tenant only sees their own portfolio data,P1,Security,Yes,Both,Yes
+TC_MT_005,Multi-Tenant,Data Isolation,JTBD/Alerts isolation,Verify alerts are isolated per tenant,Alerts exist for multiple tenants,"1. Login as tenant A user
+2. View alerts
+3. Login as tenant B user
+4. View alerts",Each tenant only sees their own alerts,P1,Security,Yes,Both,Yes
+TC_MT_006,Multi-Tenant,Data Isolation,Import session isolation,Verify import sessions are isolated per tenant,Import sessions exist for multiple tenants,"1. Login as tenant A user
+2. View import sessions
+3. Login as tenant B user
+4. View import sessions",Each tenant only sees their own import sessions,P1,Security,Yes,Both,Yes
+TC_MT_007,Multi-Tenant,Data Isolation,Scheme bookmark isolation,Verify scheme bookmarks are isolated per tenant,Scheme bookmarks exist for multiple tenants,"1. Login as tenant A user
+2. View scheme bookmarks
+3. Login as tenant B user
+4. View scheme bookmarks",Each tenant only sees their own scheme bookmarks,P1,Security,Yes,Both,Yes
+TC_MT_008,Multi-Tenant,Data Isolation,Cross-tenant customer access via ID,Verify direct ID access blocked for other tenant customers,Customer exists in tenant A,"1. Login as tenant B user
+2. Try to access tenant A customer by ID via API",Access denied or 404 returned - no data leakage,P1,Security,Yes,Both,Yes
+TC_MT_009,Multi-Tenant,Data Isolation,Cross-tenant goal access via ID,Verify direct ID access blocked for other tenant goals,Goal exists in tenant A,"1. Login as tenant B user
+2. Try to access tenant A goal by ID via API",Access denied or 404 returned - no data leakage,P1,Security,Yes,Both,Yes
+TC_MT_010,Multi-Tenant,Data Isolation,Cross-tenant transaction access,Verify direct ID access blocked for other tenant transactions,Transaction exists in tenant A,"1. Login as tenant B user
+2. Try to access tenant A transaction by ID",Access denied or 404 returned,P1,Security,Yes,Both,Yes
+TC_ENV_001,Environment,Switching,Switch from LIVE to TEST environment,Verify user can switch to TEST environment,User logged in with LIVE environment,"1. Login to LIVE environment
+2. Navigate to environment settings
+3. Switch to TEST environment
+4. Confirm switch",Environment changes to TEST and only TEST data is visible,P1,Functional,No,Both,Yes
+TC_ENV_002,Environment,Switching,Switch from TEST to LIVE environment,Verify user can switch to LIVE environment,User logged in with TEST environment,"1. Login to TEST environment
+2. Navigate to environment settings
+3. Switch to LIVE environment
+4. Confirm switch",Environment changes to LIVE and only LIVE data is visible,P1,Functional,No,Both,Yes
+TC_ENV_003,Environment,Data Isolation,LIVE data not visible in TEST,Verify LIVE data is hidden in TEST environment,LIVE data exists for tenant,"1. Create customer in LIVE environment
+2. Switch to TEST environment
+3. Search for the customer",Customer created in LIVE not visible in TEST,P1,Functional,No,Both,Yes
+TC_ENV_004,Environment,Data Isolation,TEST data not visible in LIVE,Verify TEST data is hidden in LIVE environment,TEST data exists for tenant,"1. Create customer in TEST environment
+2. Switch to LIVE environment
+3. Search for the customer",Customer created in TEST not visible in LIVE,P1,Functional,No,Both,Yes
+TC_ENV_005,Environment,Data Isolation,Transactions filtered by environment,Verify transactions are filtered by environment,Transactions exist in both environments,"1. Login to LIVE environment
+2. View transactions
+3. Switch to TEST environment
+4. View transactions",Only environment-specific transactions are visible,P1,Functional,No,Both,Yes
+TC_ENV_006,Environment,Data Isolation,Goals filtered by environment,Verify goals are filtered by environment,Goals exist in both environments,"1. Login to LIVE environment
+2. View goals
+3. Switch to TEST environment
+4. View goals",Only environment-specific goals are visible,P1,Functional,No,Both,Yes
+TC_ENV_007,Environment,Data Isolation,Portfolio filtered by environment,Verify portfolio is filtered by environment,Portfolio data exists in both environments,"1. Login to LIVE environment
+2. View portfolio
+3. Switch to TEST environment
+4. View portfolio",Only environment-specific portfolio data is visible,P1,Functional,No,Both,Yes
+TC_ENV_008,Environment,Persistence,Environment preference persists after logout,Verify environment preference is saved,User has set environment preference,"1. Set environment to TEST
+2. Logout
+3. Login again",Environment preference is restored to TEST,P2,Functional,No,Both,Yes
+TC_CONTACT_001,Contacts,Create,Create new contact with all fields,Verify contact creation with all fields populated,User is logged in,"1. Navigate to Contacts
+2. Click Add Contact
+3. Fill all fields including channels
+4. Save contact",Contact created successfully with all data,P1,Functional,Yes,Both,Yes
+TC_CONTACT_002,Contacts,Create,Create contact with minimal fields,Verify contact creation with only required fields,User is logged in,"1. Navigate to Contacts
+2. Click Add Contact
+3. Fill only required fields
+4. Save contact",Contact created successfully with minimal data,P1,Functional,Yes,Both,Yes
+TC_CONTACT_003,Contacts,Update,Update contact details,Verify contact can be updated,Contact exists,"1. Navigate to Contacts
+2. Select existing contact
+3. Click Edit
+4. Modify fields
+5. Save",Contact updated successfully,P1,Functional,Yes,Both,Yes
+TC_CONTACT_004,Contacts,Delete,Delete contact,Verify contact can be deleted,Contact exists without customer conversion,"1. Navigate to Contacts
+2. Select contact
+3. Click Delete
+4. Confirm deletion",Contact deleted successfully,P1,Functional,Yes,Both,Yes
+TC_CONTACT_005,Contacts,Channels,Add multiple contact channels,Verify multiple channels can be added to contact,Contact exists,"1. Open contact
+2. Add email channel
+3. Add phone channel
+4. Add WhatsApp channel
+5. Save",All channels saved and visible on contact,P2,Functional,Yes,Both,Yes
+TC_CONTACT_006,Contacts,Channels,Update contact channel,Verify contact channel can be updated,Contact with channel exists,"1. Open contact
+2. Edit existing channel
+3. Change channel value
+4. Save",Channel updated successfully,P2,Functional,Yes,Both,Yes
+TC_CONTACT_007,Contacts,Channels,Delete contact channel,Verify contact channel can be deleted,Contact with multiple channels exists,"1. Open contact
+2. Delete one channel
+3. Save",Channel removed from contact,P2,Functional,Yes,Both,Yes
+TC_CONTACT_008,Contacts,Convert,Convert contact to customer,Verify contact can be converted to customer,Contact exists and is not already a customer,"1. Open contact
+2. Click Convert to Customer
+3. Fill additional customer fields
+4. Submit",Contact converted to customer and linked,P1,Functional,Yes,Both,Yes
+TC_CONTACT_009,Contacts,Search,Search contacts by name,Verify contacts can be searched by name,Multiple contacts exist,"1. Navigate to Contacts
+2. Enter search term in search box
+3. Submit search",Matching contacts displayed in results,P2,Functional,Yes,Both,Yes
+TC_CONTACT_010,Contacts,List,List contacts with pagination,Verify contacts list with pagination,More than 20 contacts exist,"1. Navigate to Contacts
+2. View first page
+3. Navigate to next page",Contacts displayed with proper pagination,P2,Functional,Yes,Both,Yes
+TC_CUST_001,Customers,Create,Create new customer with all fields,Verify customer creation with complete data,User is logged in,"1. Navigate to Customers
+2. Click Add Customer
+3. Fill all fields (name PAN IWELL etc)
+4. Add address
+5. Save",Customer created with all details,P1,Functional,Yes,Both,Yes
+TC_CUST_002,Customers,Create,Create customer with minimal fields,Verify customer creation with required fields only,User is logged in,"1. Navigate to Customers
+2. Click Add Customer
+3. Fill only required fields
+4. Save",Customer created successfully,P1,Functional,Yes,Both,Yes
+TC_CUST_003,Customers,Update,Update customer details,Verify customer details can be updated,Customer exists,"1. Navigate to Customers
+2. Select customer
+3. Click Edit
+4. Modify fields
+5. Save",Customer updated successfully,P1,Functional,Yes,Both,Yes
+TC_CUST_004,Customers,Delete,Delete customer without transactions,Verify customer deletion when no transactions exist,Customer exists with no transactions,"1. Navigate to Customers
+2. Select customer
+3. Click Delete
+4. Confirm",Customer deleted successfully,P1,Functional,Yes,Both,Yes
+TC_CUST_005,Customers,Delete,Delete customer with transactions blocked,Verify customer with transactions cannot be deleted,Customer exists with transactions,"1. Navigate to Customers
+2. Select customer with transactions
+3. Try to Delete",Deletion blocked with appropriate message,P1,Functional,Yes,Both,Yes
+TC_CUST_006,Customers,Address,Add customer address,Verify address can be added to customer,Customer exists,"1. Open customer
+2. Click Add Address
+3. Fill address fields
+4. Save",Address added to customer,P2,Functional,Yes,Both,Yes
+TC_CUST_007,Customers,Address,Update customer address,Verify customer address can be updated,Customer with address exists,"1. Open customer
+2. Edit existing address
+3. Modify fields
+4. Save",Address updated successfully,P2,Functional,Yes,Both,Yes
+TC_CUST_008,Customers,Address,Multiple addresses per customer,Verify customer can have multiple addresses,Customer exists,"1. Open customer
+2. Add home address
+3. Add office address
+4. Save",Both addresses visible on customer,P2,Functional,Yes,Both,Yes
+TC_CUST_009,Customers,Bookmark,Add customer bookmark,Verify bookmark can be added to customer,Customer exists,"1. Open customer
+2. Click Add Bookmark
+3. Select reason
+4. Add notes
+5. Save",Bookmark added to customer,P2,Functional,Yes,Both,Yes
+TC_CUST_010,Customers,Bookmark,Update customer bookmark,Verify customer bookmark can be updated,Customer with bookmark exists,"1. Open customer
+2. Edit bookmark
+3. Change reason/notes
+4. Save",Bookmark updated successfully,P2,Functional,Yes,Both,Yes
+TC_CUST_011,Customers,Bookmark,Remove customer bookmark,Verify bookmark can be removed from customer,Customer with bookmark exists,"1. Open customer
+2. Click remove bookmark
+3. Confirm",Bookmark removed from customer,P2,Functional,Yes,Both,Yes
+TC_CUST_012,Customers,Family,Set family head,Verify customer can be set as family head,Customer exists,"1. Open customer
+2. Set as family head
+3. Assign family code
+4. Save",Customer marked as family head,P2,Functional,Yes,Both,Yes
+TC_CUST_013,Customers,Family,Link customer to family,Verify customer can be linked to family head,Family head and another customer exist,"1. Open customer
+2. Set family head reference
+3. Save",Customer linked to family head,P2,Functional,Yes,Both,Yes
+TC_CUST_014,Customers,Family,View family members,Verify all family members are visible,Family with multiple members exists,"1. Navigate to family view
+2. Select family",All family members displayed,P2,Functional,Yes,Both,Yes
+TC_CUST_015,Customers,Survival,Mark customer deceased,Verify customer can be marked deceased,Customer with survival_status=alive exists,"1. Open customer
+2. Change survival status to deceased
+3. Save",Customer marked as deceased,P2,Functional,Yes,Both,Yes
+TC_CUST_016,Customers,Filter,Filter customers by bookmark,Verify customers can be filtered by bookmark,Customers with bookmarks exist,"1. Navigate to Customers
+2. Apply bookmark filter
+3. View results",Only customers with selected bookmark shown,P2,Functional,Yes,Both,Yes
+TC_CUST_017,Customers,Search,Search customers by PAN,Verify customers can be searched by PAN number,Customers with PAN exist,"1. Navigate to Customers
+2. Enter PAN in search
+3. Submit",Customer with matching PAN displayed,P2,Functional,Yes,Both,Yes
+TC_CUST_018,Customers,Statistics,View customer statistics,Verify customer statistics are accurate,Multiple customers exist,"1. Navigate to customer statistics
+2. View counts",Statistics match actual customer data,P2,Functional,Yes,Both,Yes
+TC_SCHEME_001,Schemes,List,List all schemes,Verify scheme master list is displayed,Schemes exist in database,"1. Navigate to Schemes
+2. View scheme list",All schemes displayed with pagination,P1,Functional,Yes,Both,Yes
+TC_SCHEME_002,Schemes,Search,Search schemes by name,Verify schemes can be searched by name,Schemes exist,"1. Navigate to Schemes
+2. Enter scheme name in search
+3. Submit",Matching schemes displayed,P1,Functional,Yes,Both,Yes
+TC_SCHEME_003,Schemes,Search,Search schemes by ISIN,Verify schemes can be searched by ISIN code,Schemes with ISIN exist,"1. Navigate to Schemes
+2. Enter ISIN code
+3. Submit",Scheme with matching ISIN displayed,P1,Functional,Yes,Both,Yes
+TC_SCHEME_004,Schemes,Filter,Filter schemes by type,Verify schemes can be filtered by type,Multiple scheme types exist,"1. Navigate to Schemes
+2. Select scheme type filter
+3. Apply filter",Only schemes of selected type displayed,P2,Functional,Yes,Both,Yes
+TC_SCHEME_005,Schemes,Filter,Filter schemes by category,Verify schemes can be filtered by category,Multiple categories exist,"1. Navigate to Schemes
+2. Select category filter
+3. Apply filter",Only schemes of selected category displayed,P2,Functional,Yes,Both,Yes
+TC_SCHEME_006,Schemes,Details,View scheme details,Verify scheme details page displays all info,Scheme exists,"1. Navigate to Schemes
+2. Click on scheme
+3. View details",All scheme details displayed correctly,P2,Functional,Yes,Both,Yes
+TC_SCHEME_007,Schemes,Validation,Validate ISIN code format,Verify ISIN validation works correctly,None,"1. Navigate to scheme creation
+2. Enter invalid ISIN format
+3. Submit",Validation error for invalid ISIN format,P2,Functional,No,Both,Yes
+TC_NAV_001,NAV,Download,Daily NAV download,Verify daily NAV data can be downloaded,Scheme bookmarks exist,"1. Navigate to NAV section
+2. Click Daily Download
+3. Wait for completion",NAV data downloaded and stored for bookmarked schemes,P1,Functional,Yes,Both,Yes
+TC_NAV_002,NAV,Download,Historical NAV download,Verify historical NAV data can be downloaded,Scheme exists,"1. Navigate to NAV section
+2. Select scheme
+3. Select date range
+4. Download historical data",Historical NAV data downloaded for date range,P1,Functional,Yes,Both,Yes
+TC_NAV_003,NAV,View,View latest NAV for scheme,Verify latest NAV is displayed for scheme,NAV data exists for scheme,"1. Navigate to NAV section
+2. Select scheme
+3. View latest NAV",Latest NAV value and date displayed,P1,Functional,Yes,Both,Yes
+TC_NAV_004,NAV,View,View NAV time-series,Verify NAV time-series chart is displayed,NAV history exists for scheme,"1. Navigate to NAV section
+2. Select scheme
+3. View time-series chart",NAV chart displayed with correct data points,P2,Functional,Yes,Both,Yes
+TC_NAV_005,NAV,Bookmarks,Create scheme bookmark,Verify scheme can be bookmarked for customer,Scheme and customer exist,"1. Navigate to NAV bookmarks
+2. Click Add Bookmark
+3. Select scheme and customer
+4. Save",Scheme bookmarked for customer,P1,Functional,Yes,Both,Yes
+TC_NAV_006,NAV,Bookmarks,Delete scheme bookmark,Verify scheme bookmark can be deleted,Bookmark exists,"1. Navigate to NAV bookmarks
+2. Select bookmark
+3. Delete
+4. Confirm",Bookmark deleted successfully,P2,Functional,Yes,Both,Yes
+TC_NAV_007,NAV,Gaps,Identify bookmark gaps,Verify bookmark gaps are identified,Bookmarks exist with missing NAV data,"1. Navigate to bookmark gaps
+2. View gap report",Schemes with missing NAV data identified,P2,Functional,Yes,Both,Yes
+TC_NAV_008,NAV,Scheduler,Configure NAV scheduler,Verify NAV scheduler can be configured,User logged in,"1. Navigate to NAV scheduler
+2. Configure schedule (daily/weekly)
+3. Save configuration",Scheduler configured successfully,P2,Functional,Yes,Both,Yes
+TC_NAV_009,NAV,Scheduler,Trigger NAV scheduler manually,Verify NAV scheduler can be triggered manually,Scheduler configured,"1. Navigate to NAV scheduler
+2. Click Trigger Now
+3. Wait for completion",Scheduler executed and NAV downloaded,P2,Functional,Yes,Both,Yes
+TC_NAV_010,NAV,Scheduler,View scheduler execution history,Verify scheduler execution history is displayed,Scheduler has run before,"1. Navigate to NAV scheduler
+2. View execution history",Execution history with status displayed,P2,Functional,Yes,Both,Yes
+TC_NAV_011,NAV,Statistics,View NAV statistics,Verify NAV statistics are accurate,NAV data exists,"1. Navigate to NAV section
+2. View statistics",Statistics match actual NAV data counts,P2,Functional,Yes,Both,Yes
+TC_TXN_001,Transactions,Create,Create purchase transaction,Verify purchase transaction can be created,Customer and scheme exist,"1. Navigate to Transactions
+2. Click Add Transaction
+3. Select Purchase type
+4. Fill details
+5. Save",Purchase transaction created successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_002,Transactions,Create,Create SIP transaction,Verify SIP transaction can be created,Customer and scheme exist,"1. Navigate to Transactions
+2. Click Add Transaction
+3. Select SIP type
+4. Fill details
+5. Save",SIP transaction created successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_003,Transactions,Create,Create redemption transaction,Verify redemption transaction can be created,Customer has holdings in scheme,"1. Navigate to Transactions
+2. Click Add Transaction
+3. Select Redemption type
+4. Fill details
+5. Save",Redemption transaction created successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_004,Transactions,Create,Create SWP transaction,Verify SWP transaction can be created,Customer has holdings in scheme,"1. Navigate to Transactions
+2. Click Add Transaction
+3. Select SWP type
+4. Fill details
+5. Save",SWP transaction created successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_005,Transactions,Create,Create dividend reinvestment transaction,Verify dividend reinvestment can be recorded,Customer has holdings,"1. Navigate to Transactions
+2. Click Add Transaction
+3. Select Dividend Reinvestment
+4. Fill details
+5. Save",Dividend reinvestment recorded,P2,Functional,Yes,Both,Yes
+TC_TXN_006,Transactions,Update,Update transaction details,Verify transaction can be updated,Transaction exists,"1. Navigate to Transactions
+2. Select transaction
+3. Click Edit
+4. Modify fields
+5. Save",Transaction updated successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_007,Transactions,Delete,Delete transaction,Verify transaction can be deleted,Transaction exists,"1. Navigate to Transactions
+2. Select transaction
+3. Click Delete
+4. Confirm",Transaction deleted successfully,P1,Functional,Yes,Both,Yes
+TC_TXN_008,Transactions,Portfolio Flag,Toggle portfolio flag on,Verify transaction can be included in portfolio,Transaction with portfolio_flag=false exists,"1. Navigate to Transactions
+2. Select transaction
+3. Toggle portfolio flag ON
+4. Save",Transaction included in portfolio calculations,P2,Functional,Yes,Both,Yes
+TC_TXN_009,Transactions,Portfolio Flag,Toggle portfolio flag off,Verify transaction can be excluded from portfolio,Transaction with portfolio_flag=true exists,"1. Navigate to Transactions
+2. Select transaction
+3. Toggle portfolio flag OFF
+4. Save",Transaction excluded from portfolio calculations,P2,Functional,Yes,Both,Yes
+TC_TXN_010,Transactions,Filter,Filter transactions by customer,Verify transactions can be filtered by customer,Multiple customers with transactions exist,"1. Navigate to Transactions
+2. Select customer filter
+3. Apply filter",Only selected customer transactions displayed,P2,Functional,Yes,Both,Yes
+TC_TXN_011,Transactions,Filter,Filter transactions by scheme,Verify transactions can be filtered by scheme,Multiple schemes with transactions exist,"1. Navigate to Transactions
+2. Select scheme filter
+3. Apply filter",Only selected scheme transactions displayed,P2,Functional,Yes,Both,Yes
+TC_TXN_012,Transactions,Filter,Filter transactions by date range,Verify transactions can be filtered by date,Transactions with various dates exist,"1. Navigate to Transactions
+2. Select date range
+3. Apply filter",Only transactions in date range displayed,P2,Functional,Yes,Both,Yes
+TC_TXN_013,Transactions,Filter,Filter transactions by type,Verify transactions can be filtered by type,Multiple transaction types exist,"1. Navigate to Transactions
+2. Select transaction type filter
+3. Apply filter",Only transactions of selected type displayed,P2,Functional,Yes,Both,Yes
+TC_TXN_014,Transactions,Duplicate,Detect potential duplicate transactions,Verify duplicate detection works,Similar transactions exist,"1. Create transaction similar to existing one
+2. Submit",System warns about potential duplicate,P2,Functional,Yes,Both,Yes
+TC_TXN_015,Transactions,Summary,View transaction summary,Verify transaction summary is accurate,Multiple transactions exist,"1. Navigate to transaction summary
+2. View totals",Summary totals match individual transactions,P2,Functional,Yes,Both,Yes
+TC_PORT_001,Portfolio,View,View customer portfolio,Verify customer portfolio is displayed correctly,Customer has transactions,"1. Navigate to Portfolio
+2. Select customer
+3. View portfolio",Portfolio holdings displayed with current values,P1,Functional,Yes,Both,Yes
+TC_PORT_002,Portfolio,View,View portfolio totals,Verify portfolio totals are calculated correctly,Customer has multiple holdings,"1. Navigate to Portfolio
+2. Select customer
+3. View portfolio totals",Total investment and current value calculated correctly,P1,Functional,Yes,Both,Yes
+TC_PORT_003,Portfolio,View,View scheme holding details,Verify individual scheme holding details,Customer has holdings in scheme,"1. Navigate to Portfolio
+2. Select customer
+3. Click on scheme holding",Scheme holding details with transactions displayed,P2,Functional,Yes,Both,Yes
+TC_PORT_004,Portfolio,Refresh,Refresh portfolio calculations,Verify portfolio can be recalculated,Customer has transactions and NAV data,"1. Navigate to Portfolio
+2. Select customer
+3. Click Refresh
+4. Wait for completion",Portfolio values recalculated with latest NAV,P1,Functional,Yes,Both,Yes
+TC_PORT_005,Portfolio,Statistics,View portfolio statistics,Verify portfolio statistics are accurate,Multiple customers with portfolios exist,"1. Navigate to Portfolio Statistics
+2. View aggregates",Statistics match actual portfolio data,P2,Functional,Yes,Both,Yes
+TC_PORT_006,Portfolio,Family,View family portfolio,Verify family aggregate portfolio is displayed,Family with multiple members exists,"1. Navigate to Family Portfolio
+2. Select family
+3. View aggregate",All family member holdings aggregated correctly,P2,Functional,Yes,Both,Yes
+TC_GOAL_001,Goals,Create,Create new goal with all fields,Verify goal creation with complete data,Customer exists,"1. Navigate to Goals
+2. Click Add Goal
+3. Fill all fields (name target date amount)
+4. Save",Goal created successfully,P1,Functional,Yes,Both,Yes
+TC_GOAL_002,Goals,Create,Create goal with minimal fields,Verify goal creation with required fields only,Customer exists,"1. Navigate to Goals
+2. Click Add Goal
+3. Fill only required fields
+4. Save",Goal created with default values applied,P1,Functional,Yes,Both,Yes
+TC_GOAL_003,Goals,Update,Update goal details,Verify goal can be updated,Goal exists,"1. Navigate to Goals
+2. Select goal
+3. Click Edit
+4. Modify fields
+5. Save",Goal updated and recalculated,P1,Functional,Yes,Both,Yes
+TC_GOAL_004,Goals,Delete,Delete goal,Verify goal can be deleted,Goal exists,"1. Navigate to Goals
+2. Select goal
+3. Click Delete
+4. Confirm",Goal deleted successfully,P1,Functional,Yes,Both,Yes
+TC_GOAL_005,Goals,View,View customer goals,Verify all customer goals are displayed,Customer has multiple goals,"1. Navigate to Customer Goals
+2. Select customer
+3. View goals",All goals for customer displayed,P1,Functional,Yes,Both,Yes
+TC_GOAL_006,Goals,Progress,View goal progress,Verify goal progress is calculated correctly,Goal exists with linked investments,"1. Navigate to Goals
+2. Select goal
+3. View progress",Progress percentage calculated correctly based on current value vs target,P1,Functional,Yes,Both,Yes
+TC_GOAL_007,Goals,Projection,View projected amount,Verify projected amount calculation,Goal exists with growth assumptions,"1. Navigate to Goals
+2. Select goal
+3. View projection",Projected amount at target date calculated correctly,P1,Functional,Yes,Both,Yes
+TC_GOAL_008,Goals,SIP,View required monthly SIP,Verify SIP calculation for goal achievement,Goal exists with shortfall,"1. Navigate to Goals
+2. Select goal
+3. View SIP requirement",Monthly SIP required to meet goal calculated correctly,P1,Functional,Yes,Both,Yes
+TC_GOAL_009,Goals,Status,On-track goal status,Verify on-track status is determined correctly,Goal with sufficient progress exists,"1. Navigate to Goals
+2. View goal that is on-track",Goal shows green/on-track status,P2,Functional,Yes,Both,Yes
+TC_GOAL_010,Goals,Status,Off-track goal status,Verify off-track status is determined correctly,Goal with insufficient progress exists,"1. Navigate to Goals
+2. View goal that is off-track",Goal shows red/off-track status,P2,Functional,Yes,Both,Yes
+TC_GOAL_011,Goals,Recalculate,Recalculate single goal,Verify single goal can be recalculated,Goal exists,"1. Navigate to Goals
+2. Select goal
+3. Click Recalculate",Goal recalculated with latest data,P2,Functional,Yes,Both,Yes
+TC_GOAL_012,Goals,Recalculate,Recalculate all customer goals,Verify all customer goals can be recalculated,Customer has multiple goals,"1. Navigate to Customer Goals
+2. Click Recalculate All",All goals recalculated,P2,Functional,Yes,Both,Yes
+TC_GOAL_013,Goals,History,View goal history,Verify goal tracking history is displayed,Goal with history exists,"1. Navigate to Goals
+2. Select goal
+3. View history tab",Historical progress tracking displayed,P2,Functional,Yes,Both,Yes
+TC_GOAL_014,Goals,Allocation,Allocate investment to goal,Verify investment can be allocated to goal,Goal and investment plan exist,"1. Navigate to Goals
+2. Select goal
+3. Allocate investment
+4. Set percentage
+5. Save",Investment allocated to goal,P1,Functional,Yes,Both,Yes
+TC_GOAL_015,Goals,Allocation,Update investment allocation,Verify investment allocation can be updated,Investment allocated to goal,"1. Navigate to Goals
+2. Select goal
+3. Edit allocation
+4. Save",Allocation updated and goal recalculated,P2,Functional,Yes,Both,Yes
+TC_GOAL_016,Goals,Allocation,Remove investment allocation,Verify investment allocation can be removed,Investment allocated to goal,"1. Navigate to Goals
+2. Select goal
+3. Remove allocation
+4. Confirm",Allocation removed and goal recalculated,P2,Functional,Yes,Both,Yes
+TC_GOAL_017,Goals,Withdrawal,Simulate goal withdrawal,Verify withdrawal simulation works,Goal exists with investments,"1. Navigate to Goals
+2. Select goal
+3. Run withdrawal simulation
+4. Enter withdrawal amount",Simulation shows impact on goal achievement,P2,Functional,Yes,Both,Yes
+TC_INV_001,Investment Plans,Create,Create one-time investment plan,Verify one-time investment plan creation,Customer and asset type exist,"1. Navigate to Investment Plans
+2. Click Add Plan
+3. Select one_time type
+4. Fill details
+5. Save",One-time investment plan created,P1,Functional,Yes,Both,Yes
+TC_INV_002,Investment Plans,Create,Create SIP investment plan,Verify SIP investment plan creation,Customer and asset type exist,"1. Navigate to Investment Plans
+2. Click Add Plan
+3. Select SIP type
+4. Set frequency and duration
+5. Save",SIP investment plan created,P1,Functional,Yes,Both,Yes
+TC_INV_003,Investment Plans,Create,Create recurring investment plan,Verify recurring investment plan creation,Customer and asset type exist,"1. Navigate to Investment Plans
+2. Click Add Plan
+3. Select recurring type
+4. Set frequency
+5. Save",Recurring investment plan created,P1,Functional,Yes,Both,Yes
+TC_INV_004,Investment Plans,Update,Update investment plan details,Verify investment plan can be updated,Investment plan exists,"1. Navigate to Investment Plans
+2. Select plan
+3. Click Edit
+4. Modify details
+5. Save",Investment plan updated,P1,Functional,Yes,Both,Yes
+TC_INV_005,Investment Plans,Delete,Delete investment plan,Verify investment plan can be deleted,Investment plan exists,"1. Navigate to Investment Plans
+2. Select plan
+3. Click Delete
+4. Confirm",Investment plan deleted,P1,Functional,Yes,Both,Yes
+TC_INV_006,Investment Plans,Alerts,Toggle alerts for investment plan,Verify alerts can be toggled per plan,Investment plan exists,"1. Navigate to Investment Plans
+2. Select plan
+3. Toggle alerts OFF/ON
+4. Save",Alerts enabled/disabled for plan,P1,Functional,Yes,Both,Yes
+TC_INV_007,Investment Plans,Growth,Set custom growth assumption,Verify custom growth rate can be set,Investment plan exists,"1. Navigate to Investment Plans
+2. Select plan
+3. Set custom growth rate
+4. Save",Custom growth rate applied to projections,P2,Functional,Yes,Both,Yes
+TC_INV_008,Investment Plans,Scheme,Link scheme to investment plan,Verify scheme can be linked to plan,Investment plan and scheme exist,"1. Navigate to Investment Plans
+2. Select plan
+3. Link scheme
+4. Save",Scheme linked to investment plan,P2,Functional,Yes,Both,Yes
+TC_INV_009,Investment Plans,List,List customer investment plans,Verify all customer plans are displayed,Customer has multiple plans,"1. Navigate to Customer
+2. View Investment Plans tab",All investment plans displayed,P1,Functional,Yes,Both,Yes
+TC_JTBD_001,JTBD/Alerts,Create,Create time-based alert,Verify time-based alert can be created,Customer exists,"1. Navigate to Alerts
+2. Click Add Alert
+3. Select time_based type
+4. Set date and details
+5. Save",Time-based alert created,P1,Functional,Yes,Both,Yes
+TC_JTBD_002,JTBD/Alerts,Create,Create profile trigger alert (birthday),Verify birthday alert can be created,Customer with birthday exists,"1. Navigate to Alerts
+2. Click Add Alert
+3. Select profile_trigger type
+4. Select birthday
+5. Save",Birthday alert created,P1,Functional,Yes,Both,Yes
+TC_JTBD_003,JTBD/Alerts,Create,Create profile trigger alert (anniversary),Verify anniversary alert can be created,Customer with anniversary exists,"1. Navigate to Alerts
+2. Click Add Alert
+3. Select profile_trigger type
+4. Select anniversary
+5. Save",Anniversary alert created,P2,Functional,Yes,Both,Yes
+TC_JTBD_004,JTBD/Alerts,Create,Create goal tracking alert,Verify goal tracking alert can be created,Customer with goal exists,"1. Navigate to Alerts
+2. Click Add Alert
+3. Select goal_tracking type
+4. Link goal
+5. Save",Goal tracking alert created,P1,Functional,Yes,Both,Yes
+TC_JTBD_005,JTBD/Alerts,Create,Create client meeting,Verify meeting can be scheduled,Customer exists,"1. Navigate to Meetings
+2. Click Add Meeting
+3. Select client_meeting type
+4. Set date/time
+5. Save",Client meeting scheduled,P1,Functional,Yes,Both,Yes
+TC_JTBD_006,JTBD/Alerts,Create,Create portfolio review meeting,Verify portfolio review can be scheduled,Customer with portfolio exists,"1. Navigate to Meetings
+2. Click Add Meeting
+3. Select portfolio_review type
+4. Set details
+5. Save",Portfolio review meeting scheduled,P2,Functional,Yes,Both,Yes
+TC_JTBD_007,JTBD/Alerts,Update,Update alert details,Verify alert can be updated,Alert exists,"1. Navigate to Alerts
+2. Select alert
+3. Click Edit
+4. Modify details
+5. Save",Alert updated,P1,Functional,Yes,Both,Yes
+TC_JTBD_008,JTBD/Alerts,Delete,Delete alert,Verify alert can be deleted,Alert exists,"1. Navigate to Alerts
+2. Select alert
+3. Click Delete
+4. Confirm",Alert deleted,P1,Functional,Yes,Both,Yes
+TC_JTBD_009,JTBD/Alerts,Toggle,Toggle alert active status,Verify alert can be toggled on/off,Alert exists,"1. Navigate to Alerts
+2. Select alert
+3. Toggle active status",Alert toggled on/off,P2,Functional,Yes,Both,Yes
+TC_JTBD_010,JTBD/Alerts,Dashboard,View upcoming alerts dashboard,Verify dashboard shows upcoming alerts,Alerts with future dates exist,"1. Navigate to JTBD Dashboard
+2. View upcoming section",Upcoming alerts displayed correctly,P1,Functional,Yes,Both,Yes
+TC_JTBD_011,JTBD/Alerts,Dashboard,View overdue alerts,Verify dashboard shows overdue alerts,Alerts with past dates exist,"1. Navigate to JTBD Dashboard
+2. View overdue section",Overdue alerts highlighted,P1,Functional,Yes,Both,Yes
+TC_JTBD_012,JTBD/Alerts,Auto-complete,SIP alert auto-complete on transaction,Verify SIP alert completes when transaction imported,SIP alert exists and matching transaction imported,"1. Import transaction matching SIP alert criteria
+2. Check alert status",SIP alert marked as completed,P1,Integration,Yes,Both,Yes
+TC_JTBD_013,JTBD/Alerts,Modal,New alert button hides auto types,Verify New Alert modal hides portfolio_alert and goal_tracking,User on customer page,"1. Click New Alert button in customer header
+2. View alert type options",portfolio_alert and goal_tracking options hidden,P2,Functional,Yes,Both,Yes
+TC_JTBD_014,JTBD/Alerts,Customer View,View customer alerts timeline,Verify customer alert timeline is displayed,Customer has multiple alerts,"1. Navigate to Customer
+2. View Alerts tab
+3. Check timeline",All customer alerts in timeline view,P2,Functional,Yes,Both,Yes
+TC_IMPORT_001,Data Import,Upload,Upload CSV file,Verify CSV file can be uploaded,User logged in,"1. Navigate to Import
+2. Click Upload
+3. Select CSV file
+4. Upload",File uploaded and headers detected,P1,Functional,Yes,Both,Yes
+TC_IMPORT_002,Data Import,Upload,Upload Excel file,Verify Excel file can be uploaded,User logged in,"1. Navigate to Import
+2. Click Upload
+3. Select Excel file
+4. Upload",File uploaded and headers detected,P1,Functional,Yes,Both,Yes
+TC_IMPORT_003,Data Import,Headers,Auto-detect column headers,Verify column headers are auto-detected,File uploaded,"1. Upload file
+2. View detected headers",Column headers detected and displayed,P1,Functional,Yes,Both,Yes
+TC_IMPORT_004,Data Import,Mapping,Map fields manually,Verify manual field mapping works,Headers detected,"1. Upload file
+2. Map source to target fields manually
+3. Confirm mapping",Field mappings saved correctly,P1,Functional,Yes,Both,Yes
+TC_IMPORT_005,Data Import,Mapping,Save mapping as template,Verify mapping can be saved as template,Mapping created,"1. Create field mapping
+2. Click Save as Template
+3. Enter template name
+4. Save",Template saved for reuse,P2,Functional,Yes,Both,Yes
+TC_IMPORT_006,Data Import,Mapping,Load mapping from template,Verify saved template can be loaded,Template exists,"1. Upload file
+2. Click Load Template
+3. Select template",Template mapping applied to current import,P2,Functional,Yes,Both,Yes
+TC_IMPORT_007,Data Import,Validation,Validate mapping before process,Verify mapping validation works,Mapping created,"1. Create mapping
+2. Click Validate
+3. View validation results",Validation errors/warnings displayed,P1,Functional,Yes,Both,Yes
+TC_IMPORT_008,Data Import,Process,Process customer import,Verify customer data import works,File uploaded and mapped,"1. Upload customer file
+2. Map fields
+3. Validate
+4. Process import",Customers imported successfully,P1,Functional,Yes,Both,Yes
+TC_IMPORT_009,Data Import,Process,Process transaction import,Verify transaction data import works,File uploaded and mapped,"1. Upload transaction file
+2. Map fields
+3. Validate
+4. Process import",Transactions imported successfully,P1,Functional,Yes,Both,Yes
+TC_IMPORT_010,Data Import,Process,Process scheme bookmark import,Verify bookmark import works,File uploaded and mapped,"1. Upload bookmark file
+2. Map fields
+3. Validate
+4. Process import",Bookmarks imported successfully,P1,Functional,Yes,Both,Yes
+TC_IMPORT_011,Data Import,Family,Import family_head_name field,Verify FAMILY HEAD column maps correctly,File with FAMILY HEAD column,"1. Upload file with 'FAMILY HEAD' column
+2. Verify auto-mapping to family_head_name
+3. Process import",Family head name imported correctly,P1,Functional,Yes,Both,Yes
+TC_IMPORT_012,Data Import,Duplicate,Detect duplicates during import,Verify duplicate detection works,Existing data in database,"1. Upload file with duplicate records
+2. Process import
+3. View results",Duplicates detected and flagged,P1,Functional,Yes,Both,Yes
+TC_IMPORT_013,Data Import,Errors,Edit failed staging record,Verify failed record can be edited,Import with failed records,"1. Process import with errors
+2. View failed records
+3. Edit a record
+4. Save",Record updated in staging,P1,Functional,Yes,Both,Yes
+TC_IMPORT_014,Data Import,Errors,Reprocess single staging record,Verify single record can be reprocessed,Edited staging record exists,"1. Navigate to failed record
+2. Click Reprocess
+3. Wait for completion",Record reprocessed successfully,P1,Functional,Yes,Both,Yes
+TC_IMPORT_015,Data Import,Session,View import status,Verify import progress is displayed,Import in progress,"1. Start import
+2. View status page",Progress percentage and record counts displayed,P1,Functional,Yes,Both,Yes
+TC_IMPORT_016,Data Import,Session,Cancel import session,Verify import can be cancelled,Import in progress,"1. Start import
+2. Click Cancel
+3. Confirm",Import cancelled and partial data handled,P2,Functional,Yes,Both,Yes
+TC_IMPORT_017,Data Import,Session,Restart import session,Verify import session can be restarted,Import session exists,"1. Navigate to import sessions
+2. Select session
+3. Click Restart",Import session restarted from beginning,P2,Functional,Yes,Both,Yes
+TC_IMPORT_018,Data Import,Export,Export error records,Verify error records can be exported,Import with errors exists,"1. Navigate to import results
+2. Click Export Errors
+3. Download",Error records exported to CSV/Excel,P2,Functional,Yes,Both,Yes
+TC_IMPORT_019,Data Import,Performance,Import large file (10000+ records),Verify large file import performance,Large CSV file available,"1. Upload file with 10000+ records
+2. Process import
+3. Monitor progress",Import completes without timeout or errors,P1,Performance,Yes,Both,Yes
+TC_IMPORT_020,Data Import,Template,Delete import template,Verify template can be deleted,Template exists,"1. Navigate to templates
+2. Select template
+3. Delete
+4. Confirm",Template deleted successfully,P3,Functional,Yes,Both,Yes
+TC_CRUISE_001,Cruise Control,Config,Configure snapshot scheduler,Verify scheduler configuration works,User logged in,"1. Navigate to Cruise Control
+2. Click Configure
+3. Set schedule (weekly/monthly)
+4. Save",Scheduler configured successfully,P1,Functional,Yes,Both,Yes
+TC_CRUISE_002,Cruise Control,Config,Update scheduler configuration,Verify scheduler config can be updated,Config exists,"1. Navigate to Cruise Control
+2. Edit configuration
+3. Change schedule
+4. Save",Configuration updated,P2,Functional,Yes,Both,Yes
+TC_CRUISE_003,Cruise Control,Execute,Execute manual snapshot,Verify manual snapshot can be executed,Scheduler configured,"1. Navigate to Cruise Control
+2. Click Execute Now
+3. Wait for completion",Snapshot generated for all customers,P1,Functional,Yes,Both,Yes
+TC_CRUISE_004,Cruise Control,Operations,Generate missing snapshots,Verify missing snapshots can be generated,Some snapshots missing,"1. Navigate to Cruise Control
+2. Click Generate Missing
+3. Wait for completion",Missing snapshots generated,P1,Functional,Yes,Both,Yes
+TC_CRUISE_005,Cruise Control,Operations,Update all snapshots,Verify all snapshots can be updated,Snapshots exist,"1. Navigate to Cruise Control
+2. Click Update All
+3. Wait for completion",All snapshots updated with latest data,P2,Functional,Yes,Both,Yes
+TC_CRUISE_006,Cruise Control,Operations,Regenerate all snapshots,Verify all snapshots can be regenerated,Snapshots exist,"1. Navigate to Cruise Control
+2. Click Regenerate All
+3. Confirm
+4. Wait for completion",All snapshots regenerated from scratch,P2,Functional,Yes,Both,Yes
+TC_CRUISE_007,Cruise Control,Operations,Drop all snapshots,Verify all snapshots can be dropped,Snapshots exist,"1. Navigate to Cruise Control
+2. Click Drop All
+3. Confirm",All snapshots deleted,P2,Functional,Yes,Both,Yes
+TC_CRUISE_008,Cruise Control,Backfill,Backfill snapshots,Verify snapshot backfill works,Historical data exists,"1. Navigate to Cruise Control
+2. Click Backfill
+3. Select date range
+4. Execute",Historical snapshots generated,P2,Functional,Yes,Both,Yes
+TC_CRUISE_009,Cruise Control,History,View execution history,Verify execution history is displayed,Snapshots executed,"1. Navigate to Cruise Control
+2. View Execution History tab",All executions with status displayed,P2,Functional,Yes,Both,Yes
+TC_CRUISE_010,Cruise Control,Statistics,View snapshot statistics,Verify statistics are accurate,Snapshots exist,"1. Navigate to Cruise Control
+2. View Statistics",Statistics match actual snapshot data,P2,Functional,Yes,Both,Yes
+TC_CRUISE_011,Cruise Control,Health,Check cruise control health,Verify health check endpoint works,System running,"1. Call health endpoint
+2. Check response",Health status returned with metrics,P2,Functional,Yes,Both,Yes
+TC_MARKET_001,Market Data,Indices,List market indices,Verify market indices are displayed,Market indices exist,"1. Navigate to Market Analysis
+2. View indices list",All configured indices displayed,P1,Functional,Yes,Both,Yes
+TC_MARKET_002,Market Data,Download,Download historical market data,Verify historical data download works,Index exists,"1. Navigate to Market Analysis
+2. Select index
+3. Download historical data
+4. Set date range",Historical data downloaded,P1,Functional,Yes,Both,Yes
+TC_MARKET_003,Market Data,Download,Download EOD market data,Verify end-of-day download works,Index exists,"1. Navigate to Market Analysis
+2. Click Download EOD
+3. Wait for completion",EOD data downloaded for all indices,P1,Functional,Yes,Both,Yes
+TC_MARKET_004,Market Data,View,View latest index value,Verify latest index value is displayed,Index data exists,"1. Navigate to Market Analysis
+2. Select index
+3. View latest value",Latest value and date displayed,P1,Functional,Yes,Both,Yes
+TC_MARKET_005,Market Data,View,View index time-series,Verify index time-series chart works,Historical data exists,"1. Navigate to Market Analysis
+2. Select index
+3. View time-series chart",Chart displayed with correct data,P2,Functional,Yes,Both,Yes
+TC_MARKET_006,Market Data,Statistics,View market statistics,Verify market statistics are accurate,Market data exists,"1. Navigate to Market Analysis
+2. View statistics dashboard",Statistics match actual data,P2,Functional,Yes,Both,Yes
+TC_CALC_001,Calculations,Daily Return,Calculate daily return,Verify daily return calculation,Index with 2+ days data,"1. Get index data for consecutive days
+2. Calculate daily return manually
+3. Compare with system calculation",Daily return = ((end-start)/start)*100 correct,P1,Functional,No,Both,Yes
+TC_CALC_002,Calculations,Period Return,Calculate 1-week return,Verify 1-week return calculation,Index with 7+ days data,"1. Get index data for 1 week
+2. Calculate return manually
+3. Compare with system",1-week return calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_003,Calculations,Period Return,Calculate 1-month return,Verify 1-month return calculation,Index with 30+ days data,"1. Get index data for 1 month
+2. Calculate return manually
+3. Compare with system",1-month return calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_004,Calculations,Period Return,Calculate 1-year return,Verify 1-year return calculation,Index with 1+ year data,"1. Get index data for 1 year
+2. Calculate return manually
+3. Compare with system",1-year return calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_005,Calculations,Period Return,Calculate YTD return,Verify year-to-date return calculation,Index with YTD data,"1. Get index data from Jan 1 to today
+2. Calculate return manually
+3. Compare with system",YTD return calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_006,Calculations,Std Deviation,Calculate 7-day standard deviation,Verify 7-day volatility calculation,Index with 7+ days data,"1. Get 7 days of daily returns
+2. Calculate std dev manually
+3. Compare with system",7-day std deviation calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_007,Calculations,Std Deviation,Calculate 3-month standard deviation,Verify 3-month volatility calculation,Index with 3+ months data,"1. Get 3 months of daily returns
+2. Calculate std dev manually
+3. Compare with system",3-month std deviation calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_008,Calculations,Sharpe Ratio,Calculate Sharpe ratio,Verify Sharpe ratio calculation,Index with return and volatility data,"1. Get period return and std deviation
+2. Calculate Sharpe = (Return - 6.5%) / StdDev
+3. Compare with system",Sharpe ratio calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_009,Calculations,Max Drawdown,Calculate maximum drawdown,Verify max drawdown calculation,Index with varied performance,"1. Identify peak and trough values
+2. Calculate max drawdown manually
+3. Compare with system",Max drawdown calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_010,Calculations,CAGR,Calculate CAGR,Verify CAGR calculation,Index with multi-year data,"1. Get start and end values over years
+2. Calculate CAGR = (End/Start)^(1/years) - 1
+3. Compare with system",CAGR calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_011,Calculations,Goal Progress,Calculate goal progress percentage,Verify goal progress calculation,Goal with current value and target,"1. Get current value and target
+2. Calculate progress = (current/target)*100
+3. Compare with system",Progress percentage calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_012,Calculations,Goal Projection,Calculate projected goal amount,Verify Monte Carlo projection,Goal with growth assumptions,"1. Get current value growth rate and duration
+2. Run projection
+3. Verify reasonable output range",Projected amount within expected range,P1,Functional,No,Both,Yes
+TC_CALC_013,Calculations,SIP Required,Calculate monthly SIP for goal,Verify SIP requirement calculation,Goal with shortfall,"1. Get target amount time and expected return
+2. Calculate SIP using FV formula
+3. Compare with system",Monthly SIP amount calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_014,Calculations,Portfolio Value,Calculate portfolio current value,Verify portfolio value calculation,Portfolio with multiple holdings and NAV,"1. Get all holdings units and NAV
+2. Calculate total = sum(units * NAV)
+3. Compare with system",Portfolio total calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_015,Calculations,Portfolio Return,Calculate portfolio return percentage,Verify portfolio return calculation,Portfolio with investment and current value,"1. Get total investment and current value
+2. Calculate return = ((current-investment)/investment)*100
+3. Compare with system",Portfolio return calculated correctly,P1,Functional,No,Both,Yes
+TC_CALC_016,Calculations,Scheme Metrics,Bulk calculate scheme metrics,Verify bulk scheme metric calculation,Multiple schemes with NAV data,"1. Trigger bulk metric calculation
+2. Verify all schemes processed
+3. Check metrics accuracy",All scheme metrics calculated correctly,P1,Functional,Yes,Both,Yes
+TC_CALC_017,Calculations,Index Metrics,Bulk calculate index metrics,Verify bulk index metric calculation,Multiple indices with data,"1. Trigger bulk metric calculation
+2. Verify all indices processed
+3. Check metrics accuracy",All index metrics calculated correctly,P1,Functional,Yes,Both,Yes
+TC_NW_001,Networth Viewer,Summary,View networth summary,Verify networth summary is displayed,Customer with multi-asset portfolio,"1. Navigate to Networth Viewer
+2. Select customer
+3. View summary",Total networth displayed with breakdown,P1,Functional,Yes,Both,Yes
+TC_NW_002,Networth Viewer,Breakdown,View asset type breakdown,Verify asset breakdown by type,Customer with multiple asset types,"1. Navigate to Networth Viewer
+2. Select customer
+3. View breakdown tab",Networth breakdown by asset type displayed,P1,Functional,Yes,Both,Yes
+TC_NW_003,Networth Viewer,History,View networth history,Verify historical networth tracking,Customer with networth history,"1. Navigate to Networth Viewer
+2. Select customer
+3. View history tab",Historical networth trend displayed,P2,Functional,Yes,Both,Yes
+TC_NW_004,Networth Viewer,Family,View family networth,Verify family aggregate networth,Family with multiple members,"1. Navigate to Networth Viewer
+2. Select family view
+3. Select family",Family aggregate networth displayed,P1,Functional,Yes,Both,Yes
+TC_NW_005,Networth Viewer,Goals,View goal achievability projections,Verify goal projections in networth context,Customer with goals,"1. Navigate to Networth Viewer
+2. Select customer
+3. View goals tab",Goal achievability projections displayed,P2,Functional,Yes,Both,Yes
+TC_NW_006,Networth Viewer,Health,Check networth health endpoint,Verify health check works,System running,"1. Call networth health endpoint
+2. Check response",Health status returned,P3,Functional,Yes,Both,Yes
+TC_PERF_001,Performance,Load,Dashboard load time,Verify dashboard loads within acceptable time,System with moderate data,"1. Login to system
+2. Measure dashboard load time",Dashboard loads within 3 seconds,P1,Performance,No,Both,No
+TC_PERF_002,Performance,Load,Customer list with 1000+ records,Verify customer list performance,1000+ customers exist,"1. Navigate to Customers
+2. Measure list load time",List loads within 5 seconds,P1,Performance,Yes,Both,Yes
+TC_PERF_003,Performance,Load,Transaction list with 10000+ records,Verify transaction list performance,10000+ transactions exist,"1. Navigate to Transactions
+2. Measure list load time with pagination",List loads within 5 seconds per page,P1,Performance,Yes,Both,Yes
+TC_PERF_004,Performance,Calculation,Portfolio calculation for 100+ holdings,Verify portfolio calc performance,Customer with 100+ holdings,"1. Navigate to customer portfolio
+2. Measure calculation time",Portfolio calculated within 10 seconds,P1,Performance,Yes,Both,Yes
+TC_PERF_005,Performance,Calculation,Goal recalculation batch,Verify batch goal recalculation performance,Customer with 20+ goals,"1. Trigger recalculate all goals
+2. Measure completion time",All goals recalculated within 30 seconds,P2,Performance,Yes,Both,Yes
+TC_PERF_006,Performance,Import,Large file import processing,Verify large import performance,10000+ record file,"1. Upload large file
+2. Process import
+3. Measure total time",Import completes within 5 minutes,P1,Performance,Yes,Both,Yes
+TC_PERF_007,Performance,Download,NAV download for 500+ schemes,Verify bulk NAV download performance,500+ bookmarked schemes,"1. Trigger daily NAV download
+2. Measure completion time",Download completes within 10 minutes,P2,Performance,Yes,Both,Yes
+TC_PERF_008,Performance,Snapshot,Snapshot generation for 100+ customers,Verify snapshot generation performance,100+ customers with portfolios,"1. Trigger snapshot generation
+2. Measure completion time",Snapshots generated within 15 minutes,P2,Performance,Yes,Both,Yes
+TC_SEC_001,Security,SQL Injection,SQL injection in search fields,Verify SQL injection is prevented,None,"1. Enter SQL injection payload in search
+2. Submit search",No SQL injection - query properly escaped,P1,Security,No,Both,Yes
+TC_SEC_002,Security,XSS,XSS in customer name field,Verify XSS is prevented,None,"1. Create customer with XSS payload in name
+2. View customer",Script not executed - output escaped,P1,Security,No,Both,Yes
+TC_SEC_003,Security,XSS,XSS in notes/description fields,Verify XSS is prevented in text areas,None,"1. Enter XSS payload in notes field
+2. Save and view",Script not executed - output sanitized,P1,Security,No,Both,Yes
+TC_SEC_004,Security,IDOR,Direct object reference - customer,Verify IDOR protection for customers,Customers in multiple tenants,"1. Get customer ID from tenant A
+2. Try to access as tenant B user via direct API call",Access denied - 404 or 403 returned,P1,Security,Yes,Both,Yes
+TC_SEC_005,Security,IDOR,Direct object reference - goal,Verify IDOR protection for goals,Goals in multiple tenants,"1. Get goal ID from tenant A
+2. Try to access as tenant B user",Access denied - 404 or 403 returned,P1,Security,Yes,Both,Yes
+TC_SEC_006,Security,IDOR,Direct object reference - transaction,Verify IDOR protection for transactions,Transactions in multiple tenants,"1. Get transaction ID from tenant A
+2. Try to access as tenant B user",Access denied - 404 or 403 returned,P1,Security,Yes,Both,Yes
+TC_SEC_007,Security,Auth Bypass,Access protected route without token,Verify routes require authentication,None,"1. Call protected API without Bearer token
+2. Check response",401 Unauthorized returned,P1,Security,No,Both,Yes
+TC_SEC_008,Security,Password,Password stored hashed,Verify passwords are not stored in plaintext,User created,"1. Check database for user password
+2. Verify hashing",Password is bcrypt hashed - not readable,P1,Security,No,Both,Yes
+TC_SEC_009,Security,Session,Concurrent session handling,Verify session management works,User logged in,"1. Login from device A
+2. Login from device B
+3. Check device A session",Both sessions work or old session invalidated per policy,P2,Security,No,Both,Yes
+TC_SEC_010,Security,Rate Limit,Login rate limiting,Verify login attempts are rate limited,None,"1. Attempt 10+ failed logins rapidly
+2. Check response",Rate limiting applied after threshold,P2,Security,No,Both,Yes
+TC_UI_001,UI/UX,Responsive,Dashboard responsive design,Verify dashboard works on mobile,System running,"1. Access dashboard on mobile browser
+2. Check layout and functionality",Dashboard adapts to mobile screen,P2,UI,No,Both,No
+TC_UI_002,UI/UX,Responsive,Customer list responsive,Verify customer list on tablet,System running,"1. Access customers on tablet
+2. Check table responsiveness",Table readable and functional on tablet,P2,UI,No,Both,No
+TC_UI_003,UI/UX,Forms,Form validation messages,Verify form validation shows errors,None,"1. Submit form with missing required fields
+2. Check error display",Clear error messages shown for each field,P2,UI,No,Both,No
+TC_UI_004,UI/UX,Loading,Loading states displayed,Verify loading indicators shown,None,"1. Trigger data load operation
+2. Observe UI",Loading spinner/skeleton displayed during load,P2,UI,No,Both,No
+TC_UI_005,UI/UX,Toast,Success toast notifications,Verify success toasts appear,None,"1. Complete a successful operation
+2. Observe notifications",Success toast displayed and auto-dismisses,P2,UI,No,Both,No
+TC_UI_006,UI/UX,Toast,Error toast notifications,Verify error toasts appear,None,"1. Trigger an error condition
+2. Observe notifications",Error toast displayed with message,P2,UI,No,Both,No
+TC_UI_007,UI/UX,Modal,Modal dialog behavior,Verify modals work correctly,None,"1. Open a modal dialog
+2. Try clicking outside
+3. Try pressing Escape",Modal closes appropriately,P3,UI,No,Both,No
+TC_UI_008,UI/UX,Navigation,Side navigation works,Verify navigation menu functions,User logged in,"1. Click each navigation item
+2. Verify page loads",All navigation items work correctly,P2,UI,No,Both,No
+TC_UI_009,UI/UX,Pagination,Pagination controls work,Verify pagination in lists,List with multiple pages,"1. Navigate to list
+2. Use pagination controls",Pages load correctly with proper counts,P2,UI,No,Both,No
+TC_UI_010,UI/UX,Charts,Chart rendering,Verify charts render correctly,Data for charts exists,"1. Navigate to page with charts
+2. Verify chart display",Charts render with correct data and legends,P2,UI,No,Both,No
+TC_INT_001,Integration,End-to-End,Complete customer journey,Verify full customer lifecycle,System ready,"1. Create contact
+2. Convert to customer
+3. Add transactions
+4. Create goals
+5. Set alerts",Full customer journey works,P1,Integration,Yes,Both,No
+TC_INT_002,Integration,End-to-End,Import to portfolio flow,Verify import updates portfolio,Import file ready,"1. Import transactions via CSV
+2. Verify portfolio updated
+3. Check calculations",Import reflects in portfolio correctly,P1,Integration,Yes,Both,Yes
+TC_INT_003,Integration,End-to-End,Goal to investment allocation flow,Verify goal-investment linking works,Goals and investments exist,"1. Create goal
+2. Create investment plan
+3. Allocate investment to goal
+4. Verify goal recalculation",Allocation reflects in goal progress,P1,Integration,Yes,Both,Yes
+TC_INT_004,Integration,End-to-End,NAV to portfolio value update,Verify NAV updates portfolio values,Portfolio with NAV data exists,"1. Download new NAV data
+2. Refresh portfolio
+3. Verify values updated",Portfolio reflects new NAV values,P1,Integration,Yes,Both,Yes
+TC_INT_005,Integration,End-to-End,Alert to transaction completion,Verify SIP alert completes on transaction,SIP alert exists,"1. Import transaction matching SIP criteria
+2. Check alert status",Alert marked complete automatically,P1,Integration,Yes,Both,Yes
+TC_INT_006,Integration,End-to-End,Family portfolio aggregation,Verify family portfolio aggregates correctly,Family with members and portfolios,"1. View family head networth
+2. Verify family aggregation
+3. Add transaction to family member
+4. Verify aggregate updates",Family portfolio aggregates all members,P1,Integration,Yes,Both,Yes
+TC_INT_007,Integration,API,API error handling consistency,Verify APIs return consistent error format,None,"1. Trigger various API errors
+2. Check error response format",All APIs return consistent error JSON structure,P2,Integration,No,Both,Yes
+TC_INT_008,Integration,Database,Database transaction rollback,Verify failed operations rollback,None,"1. Start multi-step operation
+2. Cause failure mid-way
+3. Check database state",Partial changes rolled back on failure,P1,Integration,No,Both,Yes
+TC_EDGE_001,Edge Cases,Data,Customer with no investments,Verify customer page works with no data,Customer without investments,"1. Create customer
+2. Navigate to customer portfolio
+3. View all tabs",All pages load without errors - show empty states,P2,Functional,Yes,Both,Yes
+TC_EDGE_002,Edge Cases,Data,Goal with zero target,Verify goal handles zero target,None,"1. Try to create goal with zero target
+2. Check validation",Validation error or handled gracefully,P2,Functional,Yes,Both,Yes
+TC_EDGE_003,Edge Cases,Data,Investment with future start date,Verify future-dated investment works,Customer exists,"1. Create investment plan with future start date
+2. View portfolio
+3. Check calculations",Future investment handled correctly,P2,Functional,Yes,Both,Yes
+TC_EDGE_004,Edge Cases,Data,Scheme with no NAV data,Verify scheme without NAV is handled,Scheme without NAV exists,"1. Add bookmark for scheme without NAV
+2. View portfolio",Graceful handling - show message or placeholder,P2,Functional,Yes,Both,Yes
+TC_EDGE_005,Edge Cases,Data,Transaction with invalid folio,Verify invalid folio handling,None,"1. Create transaction with invalid folio format
+2. Submit",Appropriate validation or warning shown,P2,Functional,Yes,Both,Yes
+TC_EDGE_006,Edge Cases,Data,Family with deceased head,Verify family with deceased head works,Family exists,"1. Mark family head as deceased
+2. View family
+3. Check aggregations",Family functions with deceased head,P2,Functional,Yes,Both,Yes
+TC_EDGE_007,Edge Cases,Calculation,Division by zero scenarios,Verify division by zero is handled,None,"1. Create scenario where divisor could be zero
+2. Trigger calculation",No crash - handled gracefully with 0 or N/A,P1,Functional,No,Both,Yes
+TC_EDGE_008,Edge Cases,Calculation,Very large numbers,Verify large number calculations work,None,"1. Create goal with very large target (10 crore+)
+2. Create investment with large amount
+3. Check calculations",Large numbers handled without overflow,P2,Functional,Yes,Both,Yes
+TC_EDGE_009,Edge Cases,Calculation,Negative values in calculations,Verify negative values handled,Portfolio with losses,"1. Create scenario with negative returns
+2. View calculations
+3. Check display",Negative values displayed correctly,P2,Functional,Yes,Both,Yes
+TC_EDGE_010,Edge Cases,Date,Goal with past target date,Verify past-dated goal handling,Goal with past target date,"1. Create goal with past target date
+2. View goal status",Goal shows as overdue/expired,P2,Functional,Yes,Both,Yes
+TC_EDGE_011,Edge Cases,Import,Empty file import,Verify empty file is handled,Empty CSV file,"1. Upload empty CSV file
+2. Try to process",Appropriate error message shown,P2,Functional,Yes,Both,Yes
+TC_EDGE_012,Edge Cases,Import,File with only headers,Verify header-only file handled,CSV with headers only,"1. Upload file with only header row
+2. Try to process",Appropriate message - no data to import,P2,Functional,Yes,Both,Yes
+TC_EDGE_013,Edge Cases,Import,Special characters in data,Verify special chars handled in import,File with special chars,"1. Upload file with special characters (unicode accents etc)
+2. Process import
+3. Verify data",Special characters preserved correctly,P2,Functional,Yes,Both,Yes
+TC_EDGE_014,Edge Cases,Concurrent,Concurrent edit same record,Verify concurrent edit handling,Record exists,"1. Open record in two sessions
+2. Edit in both
+3. Save both",Last save wins or conflict message shown,P2,Functional,No,Both,No
+TC_EDGE_015,Edge Cases,Session,Session timeout handling,Verify session timeout is handled,Active session,"1. Wait for session to timeout
+2. Try to perform action",Redirect to login with appropriate message,P2,Functional,No,Both,No
