@@ -8,7 +8,7 @@ import { useGoal, useGoalHistory, useRecalculateGoal } from '../../hooks/useGoal
 import { useJTBDExecutions } from '../../hooks/useJTBD';
 import { formatDate, formatCurrency, formatPercentage } from '../../utils/goalUtils';
 import GoalCard from '../../components/goals/GoalCard';
-import GoalProgressChart from '../../components/goals/GoalProgressChart';
+import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import GoalActionCard from '../../components/goals/GoalActionCard';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import JTBDExecutionCard from '../../components/jtbd/JTBDExecutionCard';
@@ -400,22 +400,8 @@ const GoalDetailsPage: React.FC = () => {
 
             {/* Progress Tracking - 70:30 Split */}
             <div style={{ display: 'grid', gridTemplateColumns: '70% 30%', gap: '20px' }}>
-              {/* Left: Progress Chart (70%) */}
-              <div style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderRadius: '12px',
-                padding: '24px'
-              }}>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  margin: '0 0 20px 0'
-                }}>
-                  Progress Tracking
-                </h3>
-                <GoalProgressChart goalId={goalIdNum} height={300} showProjection={true} />
-              </div>
+              {/* Left: Progress Chart (70%) - With RED lines & inverted triangles */}
+              <NetworthProjectionChart goalId={goalIdNum} height={300} showProjection={true} />
 
               {/* Right: Metrics Card (30%) */}
               <GoalMetricsCard

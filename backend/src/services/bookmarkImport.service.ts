@@ -105,7 +105,7 @@ export class BookmarkImportService {
               tenant_id, user_id, scheme_id, scheme_code, 
               scheme_name, amc_name, is_live, is_active, daily_download_enabled
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, true, false)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, true)  -- Auto-enable daily_download
             ON CONFLICT (tenant_id, scheme_code, is_live)
             DO UPDATE SET
               user_id = EXCLUDED.user_id,

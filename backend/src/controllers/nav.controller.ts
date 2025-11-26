@@ -2,6 +2,7 @@
 // UPDATED: Added time-series endpoint for chart visualization
 
 import { Request, Response } from 'express';
+import { pool } from '../config/database';
 import { NavService } from '../services/nav.service';
 import { NavDownloadService } from '../services/navDownload.service';
 import { NavSchedulerService } from '../services/navScheduler.service';
@@ -820,6 +821,152 @@ export class NavController {
       SimpleLogger.error('NavController', 'Failed to trigger daily download', 'triggerDailyDownload', {
         tenantId: req.user?.tenant_id,
         userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to trigger daily download'
+      });
+    }
+  };
+
+  /**
+   * Download NAV for a single scheme (latest data from AMFI)
+   * Used by "Update NAV" button in Cruise Control
+   *
+   * IMPORTANT: NAV data is GLOBAL - if another tenant already downloaded today's data,
+   * we return success without hitting AMFI again
+   */
+  downloadSchemeNav = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const { schemeCode } = req.params;
+
+      if (!schemeCode) {
+        res.status(400).json({
+          success: false,
+          error: 'scheme_code is required'
+        });
+        return;
+      }
+
+      // Get scheme details
+      const schemeQuery = `
+        SELECT id, scheme_name FROM m_schemes WHERE scheme_code = $1
+      `;
+      const schemeResult = await pool.query(schemeQuery, [schemeCode]);
+
+      if (schemeResult.rows.length === 0) {
+        res.status(404).json({
+          success: false,
+          error: `Scheme not found: ${schemeCode}`
+        });
+        return;
+      }
+
+      const schemeId = schemeResult.rows[0].id;
+      const schemeName = schemeResult.rows[0].scheme_name;
+
+      // GLOBAL CHECK: Check if today's NAV data already exists (downloaded by any tenant)
+      const today = new Date().toISOString().split('T')[0];
+      const existingNavQuery = `
+        SELECT nav_date, nav
+        FROM t_nav_data
+        WHERE scheme_id = $1 AND nav_date >= $2::date
+        ORDER BY nav_date DESC
+        LIMIT 1
+      `;
+      const existingNav = await pool.query(existingNavQuery, [schemeId, today]);
+
+      if (existingNav.rows.length > 0) {
+        // Today's NAV already exists (downloaded by another tenant) - return success
+        const existingData = existingNav.rows[0];
+
+        SimpleLogger.info('NavController', 'NAV already available (global)', 'downloadSchemeNav', {
+          schemeCode,
+          schemeName,
+          nav_date: existingData.nav_date,
+          source: 'cache'
+        }, user!.user_id, user!.tenant_id);
+
+        res.json({
+          success: true,
+          data: {
+            scheme_code: schemeCode,
+            scheme_name: schemeName,
+            records_found: 1,
+            records_inserted: 0,
+            records_updated: 0,
+            nav_date: existingData.nav_date,
+            nav_value: existingData.nav,
+            source: 'already_available'
+          },
+          message: `NAV already up to date for ${schemeName}`
+        });
+        return;
+      }
+
+      // NAV not available - download from AMFI
+      const amfiResponse = await this.amfiService.downloadDailyNavData({
+        requestId: `single_${schemeCode}_${Date.now()}`
+      });
+
+      if (!amfiResponse.success || !amfiResponse.data) {
+        throw new Error(amfiResponse.error || 'Failed to download NAV from AMFI');
+      }
+
+      // Filter for just this scheme
+      const schemeNavData = amfiResponse.data.filter(record => record.scheme_code === schemeCode);
+
+      if (schemeNavData.length === 0) {
+        res.status(200).json({
+          success: true,
+          data: {
+            scheme_code: schemeCode,
+            scheme_name: schemeName,
+            records_found: 0,
+            message: 'No NAV data found for this scheme in today\'s AMFI data'
+          }
+        });
+        return;
+      }
+
+      // Upsert NAV data (globally available for all tenants)
+      const upsertResult = await this.navService.upsertNavData(
+        user!.tenant_id,
+        isLive,
+        schemeNavData
+      );
+
+      SimpleLogger.info('NavController', 'Single scheme NAV download completed', 'downloadSchemeNav', {
+        schemeCode,
+        schemeName,
+        recordsFound: schemeNavData.length,
+        inserted: upsertResult.inserted,
+        updated: upsertResult.updated,
+        source: 'amfi'
+      }, user!.user_id, user!.tenant_id);
+
+      res.json({
+        success: true,
+        data: {
+          scheme_code: schemeCode,
+          scheme_name: schemeName,
+          records_found: schemeNavData.length,
+          records_inserted: upsertResult.inserted,
+          records_updated: upsertResult.updated,
+          nav_date: schemeNavData[0]?.nav_date,
+          nav_value: schemeNavData[0]?.nav_value,
+          source: 'downloaded'
+        },
+        message: `NAV updated for ${schemeName}`
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to download scheme NAV', 'downloadSchemeNav', {
+        schemeCode: req.params.schemeCode,
         error: error.message
       }, req.user?.user_id, req.user?.tenant_id, error.stack);
 

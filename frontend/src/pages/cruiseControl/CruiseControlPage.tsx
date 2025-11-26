@@ -1,9 +1,6 @@
 // frontend/src/pages/cruiseControl/CruiseControlPage.tsx
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { Shield, Info } from 'lucide-react';
-import { DashboardOverview } from './DashboardOverview';
 import { NavTab } from './NavTab';
 import { MarketTab } from './MarketTab';
 import { AlertsTab } from './AlertsTab';
@@ -12,7 +9,6 @@ import { SettingsTab } from './SettingsTab';
 
 export const CruiseControlPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
-  const { isSuperAdmin } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [activeTab, setActiveTab] = useState<'nav' | 'market' | 'alerts' | 'snapshots' | 'settings'>('nav');
@@ -55,78 +51,15 @@ export const CruiseControlPage: React.FC = () => {
               Monitor and manage all daily downloads and alerts in one place
             </p>
           </div>
-
-          {/* Admin/User Badge */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: '20px',
-            backgroundColor: isSuperAdmin ? `${colors.brand.tertiary}15` : `${colors.brand.primary}15`,
-            border: `1px solid ${isSuperAdmin ? colors.brand.tertiary : colors.brand.primary}40`
-          }}>
-            {isSuperAdmin ? (
-              <>
-                <Shield size={18} style={{ color: colors.brand.tertiary }} />
-                <span style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: colors.brand.tertiary
-                }}>
-                  Admin Access
-                </span>
-              </>
-            ) : (
-              <>
-                <Info size={18} style={{ color: colors.brand.primary }} />
-                <span style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: colors.brand.primary
-                }}>
-                  Tenant View
-                </span>
-              </>
-            )}
-          </div>
         </div>
-
-        {/* Non-Admin Info Banner */}
-        {!isSuperAdmin && (
-          <div style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            backgroundColor: `${colors.brand.primary}10`,
-            border: `1px solid ${colors.brand.primary}30`,
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <Info size={16} style={{ color: colors.brand.primary, flexShrink: 0 }} />
-            <span style={{
-              fontSize: '13px',
-              color: colors.utility.primaryText,
-              lineHeight: '1.5'
-            }}>
-              You are viewing in <strong>read-only mode</strong>. NAV/Market scheduler configurations are managed by administrators.
-              You can monitor download status and view alerts for your bookmarked schemes.
-            </span>
-          </div>
-        )}
       </div>
-
-      {/* Dashboard Overview */}
-      <DashboardOverview />
 
       {/* Tab Navigation */}
       <div style={{
         display: 'flex',
         gap: '12px',
         borderBottom: `2px solid ${colors.utility.primaryText}10`,
-        marginBottom: '24px',
-        marginTop: '32px'
+        marginBottom: '24px'
       }}>
         {tabs.map(tab => (
           <button

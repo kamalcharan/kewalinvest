@@ -6,11 +6,12 @@
 // ============================================================================
 
 export enum JobType {
-  PORTFOLIO_SNAPSHOT = 'PORTFOLIO_SNAPSHOT',
-  // Add more job types here as needed:
-  // DATA_CLEANUP = 'DATA_CLEANUP',
-  // METRICS_CALCULATION = 'METRICS_CALCULATION',
-  // REPORT_GENERATION = 'REPORT_GENERATION',
+  // Core scheduler jobs
+  PORTFOLIO_SNAPSHOT = 'PORTFOLIO_SNAPSHOT',    // Friday 9 PM - Generate monthly portfolio snapshots
+  NAV_DOWNLOAD = 'NAV_DOWNLOAD',                // Daily 9 PM - Download NAV for bookmarked schemes
+  MARKET_OHLC_DOWNLOAD = 'MARKET_OHLC_DOWNLOAD', // Daily 9:30 PM - Download market index OHLC data
+  GOAL_CALCULATION = 'GOAL_CALCULATION',        // Friday 8:30 PM - Recalculate all goals
+  DAILY_ALERTS = 'DAILY_ALERTS',                // Daily 8 PM - Process and generate alert cards
 }
 
 // ============================================================================
@@ -24,6 +25,10 @@ export interface JobTypeDefinition {
   default_cron_expression: string;
   default_max_retries: number;
   is_active: boolean;
+  default_schedule_type: 'daily' | 'weekly' | 'monthly';
+  failover_enabled: boolean;
+  failover_cron_expression?: string;
+  is_global: boolean;  // True for NAV/Market jobs that run once for all tenants
   created_at?: Date;
   updated_at?: Date;
 }
@@ -43,8 +48,15 @@ export interface JobSchedulerConfig {
   is_enabled: boolean;
   max_retries: number;
   job_config?: any;  // Job-specific configuration (JSON)
+
+  // Failover support - if primary execution fails, retry at failover time
+  failover_enabled: boolean;
+  failover_cron_expression?: string;  // e.g., "0 22 * * *" for 10 PM failover
+
+  // Tracking
   last_executed_at?: Date;
   next_execution_at?: Date;
+  last_success_at?: Date;           // Track last successful execution
   execution_count: number;
   failure_count: number;
   created_at?: Date;
@@ -58,6 +70,8 @@ export interface CreateJobConfigRequest {
   is_enabled?: boolean;
   max_retries?: number;
   job_config?: any;
+  failover_enabled?: boolean;
+  failover_cron_expression?: string;
 }
 
 export interface UpdateJobConfigRequest {
@@ -66,6 +80,8 @@ export interface UpdateJobConfigRequest {
   is_enabled?: boolean;
   max_retries?: number;
   job_config?: any;
+  failover_enabled?: boolean;
+  failover_cron_expression?: string;
 }
 
 // ============================================================================
@@ -80,7 +96,7 @@ export interface JobExecution {
   is_live: boolean;
   execution_time: Date;
   status: 'success' | 'failed' | 'running' | 'retrying' | 'skipped';
-  trigger_source: 'scheduled' | 'manual';
+  trigger_source: 'scheduled' | 'manual' | 'failover';
   retry_attempt: number;
   execution_data?: any;  // Job-specific results (JSON)
   error_message?: string;
@@ -132,7 +148,7 @@ export interface JobStatistics {
 export interface JobExecutionContext {
   tenant_id: number;
   is_live: boolean;
-  trigger_source: 'scheduled' | 'manual';
+  trigger_source: 'scheduled' | 'manual' | 'failover';
   job_config?: any;
   scheduler_config_id?: number;
 }
@@ -174,9 +190,59 @@ export interface PortfolioSnapshotExecutionData {
   }>;
 }
 
-// Future job types will have their execution data types here:
-// export interface DataCleanupExecutionData { ... }
-// export interface MetricsCalculationExecutionData { ... }
+// NAV Download Job
+export interface NavDownloadExecutionData {
+  download_date: Date;
+  schemes_processed: number;
+  schemes_updated: number;
+  schemes_failed: number;
+  errors?: Array<{
+    scheme_code: string;
+    scheme_name?: string;
+    error_message: string;
+  }>;
+}
+
+// Market OHLC Download Job
+export interface MarketOhlcExecutionData {
+  download_date: Date;
+  indices_processed: number;
+  indices_updated: number;
+  indices_failed: number;
+  errors?: Array<{
+    index_id: number;
+    index_name?: string;
+    error_message: string;
+  }>;
+}
+
+// Goal Calculation Job
+export interface GoalCalculationExecutionData {
+  calculation_date: Date;
+  goals_processed: number;
+  goals_updated: number;
+  goals_failed: number;
+  alerts_generated: number;
+  errors?: Array<{
+    goal_id: number;
+    customer_id: number;
+    error_message: string;
+  }>;
+}
+
+// Daily Alerts Job
+export interface DailyAlertsExecutionData {
+  execution_date: Date;
+  alerts_processed: number;
+  alerts_triggered: number;
+  alerts_skipped: number;
+  customers_affected: number;
+  errors?: Array<{
+    alert_id: number;
+    customer_id: number;
+    error_message: string;
+  }>;
+}
 
 // ============================================================================
 // API RESPONSE TYPES

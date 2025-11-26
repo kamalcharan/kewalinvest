@@ -31,6 +31,7 @@ import FamilyMembersPopover from '../../components/customers/FamilyMembersPopove
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
+import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import { PortfolioAllocationSummary } from '../../components/portfolio/PortfolioAllocationSummary';
 import { SchemeCard } from '../../components/common/SchemeCard';
 import GoalCard from '../../components/goals/GoalCard';
@@ -603,14 +604,36 @@ const CustomerViewPage: React.FC = () => {
       />
 
       {/* Key Metrics Bar */}
-      {portfolio && (
-        <CustomerMetricsBar
-          portfolio={portfolio}
-          jtbds={jtbds}
-        />
-      )}
+      {portfolio && (() => {
+        // Debug: Calculate familyHeadIwellcode
+        const derivedFamilyHeadIwellcode = viewMode === 'family' && customer
+          ? (customer.is_family_head
+              ? customer.iwell_code
+              : customer.family_head_iwell_code || undefined)
+          : undefined;
 
-      {/* Tabs */}
+        console.log('[CustomerViewPage] MetricsBar props:', {
+          viewMode,
+          customerExists: !!customer,
+          is_family_head: customer?.is_family_head,
+          iwell_code: customer?.iwell_code,
+          family_head_iwell_code: customer?.family_head_iwell_code,
+          family_code: customer?.family_code,
+          derivedFamilyHeadIwellcode
+        });
+
+        return (
+          <CustomerMetricsBar
+            portfolio={portfolio}
+            jtbds={jtbds}
+            customerId={customerId || undefined}
+            viewMode={viewMode}
+            familyHeadIwellcode={derivedFamilyHeadIwellcode}
+          />
+        );
+      })()}
+
+      {/* Tabs - Only show Overview in family view */}
       <div style={{
         backgroundColor: colors.utility.secondaryBackground,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
@@ -618,13 +641,15 @@ const CustomerViewPage: React.FC = () => {
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', padding: '0 24px' }}>
           {[
-            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3 },
-            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp },
-            { key: 'goals', label: 'Goals Management', icon: Target },
-            { key: 'assets', label: 'Asset Types', icon: Package },
-            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare },
-            { key: 'transactions', label: 'Transactions', icon: DollarSign }
-          ].map(tab => {
+            { key: 'overview', label: 'Portfolio Overview', icon: BarChart3, showInFamily: true },
+            { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp, showInFamily: false },
+            { key: 'goals', label: 'Goals Management', icon: Target, showInFamily: false },
+            { key: 'assets', label: 'Asset Types', icon: Package, showInFamily: false },
+            { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare, showInFamily: false },
+            { key: 'transactions', label: 'Transactions', icon: DollarSign, showInFamily: false }
+          ]
+          .filter(tab => viewMode === 'individual' || tab.showInFamily)
+          .map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
 
@@ -675,6 +700,7 @@ const CustomerViewPage: React.FC = () => {
         {viewMode === 'family' && customer.family_code ? (
           <FamilyPortfolioView
             familyHeadIwellCode={(customer.is_family_head ? customer.iwell_code : customer.family_head_iwell_code || customer.iwell_code)!}
+            familyCode={customer.family_code}
             onMemberClick={(memberId: number) => navigate(`/customers/${memberId}`)}
           />
         ) : (
@@ -691,7 +717,57 @@ const CustomerViewPage: React.FC = () => {
                 onAction={() => navigate('/import')}
               />
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+              <>
+                {/* Networth Projection Chart - FULL WIDTH AT TOP */}
+                {customerId && customerId > 0 && (() => {
+                  // Map goals to GoalMarker format - support ALL goal types
+                  const goalMarkers = (goals || [])
+                    .filter(g => g.is_active && g.config_data)
+                    .map(g => {
+                      const cfg = g.config_data as any;
+                      // Get target date: from target_date or projected_achievement_date
+                      const targetDate = cfg.target_date || cfg.projected_achievement_date || '';
+                      // Get target amount: from target_amount or projected_corpus
+                      const targetAmount = cfg.target_amount || cfg.projected_corpus || 0;
+
+                      // Only include if we have both a date and an amount
+                      if (!targetDate || !targetAmount) return null;
+
+                      return {
+                        id: g.id,
+                        name: g.title,
+                        targetAmount: targetAmount,
+                        targetDate: targetDate
+                      };
+                    })
+                    .filter((g): g is NonNullable<typeof g> => g !== null);
+
+                  // Extract all withdrawals from goals
+                  const withdrawalMarkers = (goals || [])
+                    .filter(g => g.is_active && g.config_data?.withdrawals && g.config_data.withdrawals.length > 0)
+                    .flatMap(g => {
+                      const withdrawals = (g.config_data as any).withdrawals || [];
+                      return withdrawals.map((w: any, idx: number) => ({
+                        id: parseInt(String(w.id).replace(/\D/g, '')) || (g.id * 100 + idx),
+                        name: w.reason || `Withdrawal from ${g.title}`,
+                        amount: w.amount || 0,
+                        date: w.withdrawal_date || ''
+                      }));
+                    });
+
+                  return (
+                    <div style={{ marginBottom: '24px' }}>
+                      <NetworthProjectionChart
+                        customerId={customerId}
+                        height={320}
+                        goals={goalMarkers}
+                        withdrawals={withdrawalMarkers}
+                      />
+                    </div>
+                  );
+                })()}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {/* Portfolio Performance Chart */}
                   <div
@@ -867,6 +943,7 @@ comparisonData={comparisonIndexData}
                       )}
                     </div>
                   </div>
+
 
                   {/* Fund-wise Performance */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
@@ -1118,6 +1195,7 @@ comparisonData={comparisonIndexData}
                   )}
                 </div>
               </div>
+              </>
             )}
           </>
         )}

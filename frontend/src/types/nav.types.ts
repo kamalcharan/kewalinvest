@@ -67,6 +67,7 @@ export interface SchemeBookmark {
   last_download_status?: 'success' | 'failed' | 'pending' | null;
   last_download_error?: string;
   last_download_attempt?: string;
+  metrics_calculated_at?: string | null;  // ISO datetime when metrics were last calculated
 }
 
 // ==================== BULK BOOKMARK TYPES ====================

@@ -132,15 +132,80 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
-INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active) VALUES
-('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true)
-ON CONFLICT (code) DO UPDATE
-    SET name = EXCLUDED.name,
-        description = EXCLUDED.description,
-        default_cron_expression = EXCLUDED.default_cron_expression,
-        default_max_retries = EXCLUDED.default_max_retries,
-        is_active = EXCLUDED.is_active,
-        updated_at = CURRENT_TIMESTAMP;
+-- Portfolio Snapshot - Friday 9 PM (weekly)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('PORTFOLIO_SNAPSHOT', 'Portfolio Snapshot Generation', 'Generate monthly portfolio snapshots for all customers to enable performance tracking', '0 21 * * 5', 3, true, 'weekly', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- NAV Download - Daily 9 PM, failover 10 PM (GLOBAL - runs once for all tenants)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('NAV_DOWNLOAD', 'NAV Download', 'Download NAV data for all bookmarked schemes', '0 21 * * *', 3, true, 'daily', true, '0 22 * * *', true)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Market OHLC Download - Daily 9:30 PM (GLOBAL - runs once for all tenants)
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('MARKET_OHLC_DOWNLOAD', 'Market OHLC Download', 'Download OHLC data for market indices', '30 21 * * *', 3, true, 'daily', false, NULL, true)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Goal Calculation - Friday 8:30 PM
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('GOAL_CALCULATION', 'Goal Calculation', 'Recalculate all customer goals and generate alerts', '30 20 * * 5', 3, true, 'weekly', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Daily Alerts - Daily 8 PM
+INSERT INTO m_job_types (code, name, description, default_cron_expression, default_max_retries, is_active, default_schedule_type, failover_enabled, failover_cron_expression, is_global)
+VALUES ('DAILY_ALERTS', 'Daily Alerts', 'Process and generate daily alert cards for customers', '0 20 * * *', 3, true, 'daily', false, NULL, false)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    default_cron_expression = EXCLUDED.default_cron_expression,
+    default_max_retries = EXCLUDED.default_max_retries,
+    is_active = EXCLUDED.is_active,
+    default_schedule_type = EXCLUDED.default_schedule_type,
+    failover_enabled = EXCLUDED.failover_enabled,
+    failover_cron_expression = EXCLUDED.failover_cron_expression,
+    is_global = EXCLUDED.is_global,
+    updated_at = CURRENT_TIMESTAMP;
 
 DO $$
 BEGIN

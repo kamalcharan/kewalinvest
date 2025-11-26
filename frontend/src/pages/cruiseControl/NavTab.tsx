@@ -1,21 +1,30 @@
 // frontend/src/pages/cruiseControl/NavTab.tsx
-import React, { useState, useEffect } from 'react';
+// With proper pagination support
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Download, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
 import { EnhancedBookmarkCard } from '../../components/nav/EnhancedBookmarkCard';
+import { HistoricalDownloadModal } from '../../components/nav/HistoricalDownloadModal';
+import { MetricsCalculationModal } from '../../components/nav/MetricsCalculationModal';
 import type { SchemeBookmark } from '../../types/nav.types';
+
+type FilterType = 'all' | 'pending' | 'failed' | 'no-data' | 'metrics-pending' | null;
+
+const PAGE_SIZE = 25;
 
 interface StatCardProps {
   title: string;
   count: number;
   color?: 'blue' | 'yellow' | 'red' | 'green';
   onClick?: () => void;
+  active?: boolean;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onClick }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onClick, active }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -33,8 +42,8 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onCli
       onClick={onClick}
       style={{
         padding: '20px',
-        backgroundColor: colors.utility.primaryBackground,
-        border: `2px solid ${selectedColor}20`,
+        backgroundColor: active ? `${selectedColor}15` : colors.utility.primaryBackground,
+        border: `2px solid ${active ? selectedColor : `${selectedColor}20`}`,
         borderRadius: '10px',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.2s'
@@ -47,7 +56,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onCli
         }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = `${selectedColor}20`;
+        e.currentTarget.style.borderColor = active ? selectedColor : `${selectedColor}20`;
         e.currentTarget.style.boxShadow = 'none';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
@@ -71,11 +80,98 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onCli
   );
 };
 
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}
+
+const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, totalItems, pageSize, onPageChange }) => {
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '16px 0',
+      borderTop: `1px solid ${colors.utility.primaryText}10`,
+      marginTop: '16px'
+    }}>
+      <div style={{
+        fontSize: '14px',
+        color: colors.utility.secondaryText
+      }}>
+        Showing {startItem} - {endItem} of {totalItems}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '8px 16px',
+            backgroundColor: currentPage <= 1 ? colors.utility.secondaryBackground : colors.brand.primary,
+            color: currentPage <= 1 ? colors.utility.secondaryText : '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+            opacity: currentPage <= 1 ? 0.5 : 1
+          }}
+        >
+          <ChevronLeft size={16} />
+          Previous
+        </button>
+        <span style={{
+          padding: '8px 16px',
+          fontSize: '14px',
+          color: colors.utility.primaryText,
+          fontWeight: '500'
+        }}>
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '8px 16px',
+            backgroundColor: currentPage >= totalPages ? colors.utility.secondaryBackground : colors.brand.primary,
+            color: currentPage >= totalPages ? colors.utility.secondaryText : '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+            opacity: currentPage >= totalPages ? 0.5 : 1
+          }}
+        >
+          Next
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const NavTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'no-data' | null>(null);
+  // State
+  const [filter, setFilter] = useState<FilterType>(null);
   const [stats, setStats] = useState({
     totalActive: 0,
     pendingDownloads: 0,
@@ -85,12 +181,75 @@ export const NavTab: React.FC = () => {
   });
   const [bookmarks, setBookmarks] = useState<SchemeBookmark[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalBookmarks, setTotalBookmarks] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Modal state
+  const [selectedBookmark, setSelectedBookmark] = useState<SchemeBookmark | null>(null);
+  const [showHistoricalModal, setShowHistoricalModal] = useState(false);
+  const [showMetricsModal, setShowMetricsModal] = useState(false);
+  const [calculatingSchemeId, setCalculatingSchemeId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchNavStats();
-    fetchBookmarks();
   }, []);
+
+  // Fetch bookmarks when filter or page changes
+  useEffect(() => {
+    if (filter) {
+      fetchBookmarks(currentPage);
+    }
+  }, [filter, currentPage]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
+
+  // Fetch bookmarks with pagination
+  const fetchBookmarks = async (page: number) => {
+    try {
+      setBookmarksLoading(true);
+
+      // Build query params based on filter
+      let queryParams = `?page=${page}&page_size=${PAGE_SIZE}`;
+
+      if (filter === 'pending') {
+        queryParams += '&daily_download_only=true';
+      } else if (filter === 'no-data') {
+        queryParams += '&has_historical_data=false';
+      } else if (filter === 'metrics-pending') {
+        queryParams += '&has_calculations=false&has_historical_data=true';
+      }
+      // For 'all' and 'failed', no special filter needed
+
+      const response = await apiService.get(`${API_ENDPOINTS.NAV.BOOKMARKS}${queryParams}`) as any;
+
+      if (response.success && response.data) {
+        let bookmarksData = response.data.bookmarks || [];
+
+        // Client-side filter for 'failed' status (API doesn't support this filter)
+        if (filter === 'failed') {
+          bookmarksData = bookmarksData.filter((b: SchemeBookmark) => b.last_download_status === 'failed');
+        }
+
+        setBookmarks(bookmarksData);
+        setTotalBookmarks(response.data.total || bookmarksData.length);
+        setTotalPages(response.data.total_pages || Math.ceil((response.data.total || bookmarksData.length) / PAGE_SIZE));
+      }
+    } catch (err: any) {
+      console.error('Error fetching bookmarks:', err);
+      toastService.error('Failed to load bookmarks');
+    } finally {
+      setBookmarksLoading(false);
+    }
+  };
 
   const fetchNavStats = async () => {
     try {
@@ -99,11 +258,11 @@ export const NavTab: React.FC = () => {
       const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.NAV_STATISTICS) as any;
       if (response.success && response.data) {
         setStats({
-          totalActive: response.data.total_active_navs || 0,
-          pendingDownloads: response.data.pending_downloads || 0,
-          failedDownloads: response.data.failed_downloads || 0,
-          pendingBeyondDaily: response.data.pending_beyond_daily || 0,
-          metricsPending: response.data.metrics_pending || 0
+          totalActive: response.data.total_schemes_tracked || 0,
+          pendingDownloads: response.data.schemes_with_daily_download || 0,
+          failedDownloads: response.data.failed_downloads_today || 0,
+          pendingBeyondDaily: (response.data.total_schemes_tracked || 0) - (response.data.schemes_with_historical_data || 0),
+          metricsPending: response.data.schemes_without_calculations || 0
         });
       }
     } catch (err: any) {
@@ -113,50 +272,59 @@ export const NavTab: React.FC = () => {
     }
   };
 
-  const fetchBookmarks = async () => {
+  // Download NAV for all bookmarked schemes
+  const handleDownloadAll = async () => {
     try {
-      const response = await apiService.get(API_ENDPOINTS.NAV.BOOKMARKS) as any;
-      if (response.success && response.data) {
-        setBookmarks(response.data.bookmarks || []);
-      }
-    } catch (err: any) {
-      console.error('Error fetching bookmarks:', err);
-    }
-  };
-
-  const handleDownloadNow = async (schemeCode: string) => {
-    try {
-      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.NAV_DOWNLOAD(schemeCode)) as any;
+      setDownloadingAll(true);
+      const response = await apiService.post(API_ENDPOINTS.NAV.DOWNLOAD_DAILY) as any;
       if (response.success) {
-        toastService.success(response.message || 'NAV download triggered');
+        toastService.success(response.message || 'Daily NAV download triggered for all bookmarked schemes');
         fetchNavStats();
+        if (filter) fetchBookmarks(currentPage);
       } else {
-        toastService.error(response.error || 'Failed to trigger NAV download');
+        toastService.error(response.error || 'Failed to trigger daily download');
       }
     } catch (err: any) {
-      toastService.error('Failed to trigger NAV download');
+      toastService.error('Failed to trigger daily NAV download');
+    } finally {
+      setDownloadingAll(false);
     }
   };
 
-  const getFilteredBookmarks = (): SchemeBookmark[] => {
-    if (!filter) return [];
+  // Open historical download modal
+  const handleHistoricalDownload = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowHistoricalModal(true);
+  }, []);
+
+  // Open metrics calculation modal
+  const handleCalculateMetrics = useCallback((bookmark: SchemeBookmark) => {
+    setSelectedBookmark(bookmark);
+    setShowMetricsModal(true);
+  }, []);
+
+  // Handle calculation started
+  const handleCalculationStarted = useCallback((schemeId: number) => {
+    setCalculatingSchemeId(schemeId);
+  }, []);
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of list
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  };
+
+  const getFilterTitle = (): string => {
     switch (filter) {
-      case 'all':
-        return bookmarks;
-      case 'pending':
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        return bookmarks.filter(b => b.latest_nav_date && new Date(b.latest_nav_date) < yesterday);
-      case 'failed':
-        return [];
-      case 'no-data':
-        return bookmarks.filter(b => (b.nav_records_count || 0) === 0);
-      default:
-        return [];
+      case 'all': return 'All NAV Schemes';
+      case 'pending': return 'Pending Downloads';
+      case 'failed': return 'Failed Downloads';
+      case 'no-data': return 'Schemes with No Data';
+      case 'metrics-pending': return 'Metrics Pending';
+      default: return '';
     }
   };
-
-  const filteredBookmarks = getFilteredBookmarks();
 
   if (loading) {
     return (
@@ -178,10 +346,67 @@ export const NavTab: React.FC = () => {
 
   return (
     <div>
+      {/* Header with Download All Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px'
+      }}>
+        <div>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: colors.utility.primaryText,
+            margin: 0
+          }}>
+            NAV Downloads
+          </h2>
+          <p style={{
+            fontSize: '13px',
+            color: colors.utility.secondaryText,
+            margin: '4px 0 0 0'
+          }}>
+            Manage NAV data for bookmarked schemes
+          </p>
+        </div>
+        <button
+          onClick={handleDownloadAll}
+          disabled={downloadingAll || stats.totalActive === 0}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            backgroundColor: downloadingAll ? colors.utility.secondaryBackground : colors.brand.primary,
+            color: downloadingAll ? colors.utility.secondaryText : '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: downloadingAll || stats.totalActive === 0 ? 'not-allowed' : 'pointer',
+            opacity: stats.totalActive === 0 ? 0.5 : 1,
+            transition: 'all 0.2s'
+          }}
+        >
+          {downloadingAll ? (
+            <>
+              <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              Downloading...
+            </>
+          ) : (
+            <>
+              <Download size={16} />
+              Download All NAVs
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Statistics Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
         gap: '16px',
         marginBottom: '32px'
       }}>
@@ -189,30 +414,36 @@ export const NavTab: React.FC = () => {
           title="Total Active NAVs"
           count={stats.totalActive}
           color="blue"
+          active={filter === 'all'}
           onClick={() => setFilter(filter === 'all' ? null : 'all')}
         />
         <StatCard
           title="Pending Downloads"
           count={stats.pendingDownloads}
           color="yellow"
+          active={filter === 'pending'}
           onClick={() => setFilter(filter === 'pending' ? null : 'pending')}
         />
         <StatCard
           title="Failed Downloads"
           count={stats.failedDownloads}
           color="red"
+          active={filter === 'failed'}
           onClick={() => setFilter(filter === 'failed' ? null : 'failed')}
         />
         <StatCard
-          title="Pending Beyond Daily"
+          title="No NAV Data"
           count={stats.pendingBeyondDaily}
           color="red"
+          active={filter === 'no-data'}
           onClick={() => setFilter(filter === 'no-data' ? null : 'no-data')}
         />
         <StatCard
           title="Metrics Pending"
           count={stats.metricsPending}
           color="yellow"
+          active={filter === 'metrics-pending'}
+          onClick={() => setFilter(filter === 'metrics-pending' ? null : 'metrics-pending')}
         />
       </div>
 
@@ -225,12 +456,7 @@ export const NavTab: React.FC = () => {
           textAlign: 'center',
           border: `1px dashed ${colors.brand.primary}40`
         }}>
-          <div style={{
-            fontSize: '48px',
-            marginBottom: '16px'
-          }}>
-            👆
-          </div>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>👆</div>
           <div style={{
             fontSize: '18px',
             fontWeight: '600',
@@ -263,11 +489,7 @@ export const NavTab: React.FC = () => {
               color: colors.utility.primaryText,
               margin: 0
             }}>
-              {filter === 'all' && 'All NAV Schemes'}
-              {filter === 'pending' && 'Pending Downloads'}
-              {filter === 'failed' && 'Failed Downloads'}
-              {filter === 'no-data' && 'Schemes with No Data'}
-              {' '}({filteredBookmarks.length})
+              {getFilterTitle()} ({totalBookmarks})
             </h3>
             <button
               onClick={() => setFilter(null)}
@@ -286,19 +508,26 @@ export const NavTab: React.FC = () => {
             </button>
           </div>
 
-          {filteredBookmarks.length === 0 ? (
+          {bookmarksLoading ? (
             <div style={{
               padding: '48px',
               textAlign: 'center',
               backgroundColor: colors.utility.secondaryBackground,
               borderRadius: '12px'
             }}>
-              <div style={{
-                fontSize: '48px',
-                marginBottom: '16px'
-              }}>
-                🎉
+              <Loader2 size={32} className="animate-spin" style={{ color: colors.brand.primary, marginBottom: '16px' }} />
+              <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                Loading bookmarks...
               </div>
+            </div>
+          ) : bookmarks.length === 0 ? (
+            <div style={{
+              padding: '48px',
+              textAlign: 'center',
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
               <div style={{
                 fontSize: '16px',
                 color: colors.utility.secondaryText
@@ -307,23 +536,69 @@ export const NavTab: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              {filteredBookmarks.map(bookmark => (
-                <EnhancedBookmarkCard
-                  key={bookmark.id}
-                  bookmark={bookmark}
-                  showActions
-                  onHistoricalDownload={(b) => handleDownloadNow(b.scheme_code)}
-                  onCalculateMetrics={(b) => toastService.info('Metrics calculation feature coming soon')}
+            <>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {bookmarks.map(bookmark => (
+                  <EnhancedBookmarkCard
+                    key={bookmark.id}
+                    bookmark={bookmark}
+                    showActions
+                    onHistoricalDownload={handleHistoricalDownload}
+                    onCalculateMetrics={handleCalculateMetrics}
+                    isCalculating={calculatingSchemeId === bookmark.scheme_id}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalBookmarks}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={handlePageChange}
                 />
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
+      )}
+
+      {/* Historical Download Modal */}
+      {showHistoricalModal && selectedBookmark && (
+        <HistoricalDownloadModal
+          isOpen={showHistoricalModal}
+          onClose={() => {
+            setShowHistoricalModal(false);
+            // Refresh data after closing modal
+            fetchNavStats();
+            if (filter) fetchBookmarks(currentPage);
+          }}
+          bookmark={selectedBookmark}
+          onDownloadStarted={() => {}}
+        />
+      )}
+
+      {/* Metrics Calculation Modal */}
+      {showMetricsModal && selectedBookmark && (
+        <MetricsCalculationModal
+          isOpen={showMetricsModal}
+          onClose={() => setShowMetricsModal(false)}
+          bookmark={selectedBookmark}
+          onCalculationStarted={handleCalculationStarted}
+          onCalculationComplete={(schemeId: number) => {
+            setCalculatingSchemeId(null);
+            setShowMetricsModal(false);
+            fetchNavStats();
+            if (filter) fetchBookmarks(currentPage);
+            toastService.success('Metrics calculation completed');
+          }}
+        />
       )}
     </div>
   );

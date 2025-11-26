@@ -6,24 +6,35 @@ dotenv.config();
 
 /**
  * PostgreSQL Connection Pool Configuration
- * 
+ *
  * Connection settings optimized for production use with proper timeout handling
  * for both regular operations and long-running import processes.
  */
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://kewal_app_user:app123@localhost:5432/kewalinvest',
-  
+
   // Connection Pool Settings
-  max: 15000,                      // Maximum number of clients in the pool
-  min: 5,                        // Minimum number of clients in the pool
-  idleTimeoutMillis: 30000000,     // 5 minutes - how long a client can be idle before being removed
-  connectionTimeoutMillis: 2000000, // 20 seconds - how long to wait for a connection
-  
+  max: 20,                         // Maximum number of clients in the pool
+  min: 2,                          // Minimum number of clients in the pool
+  idleTimeoutMillis: 30000,        // 30 seconds - how long a client can be idle before being removed
+  connectionTimeoutMillis: 10000,  // 10 seconds - how long to wait for a connection
+
   // Statement Timeout
-  statement_timeout: 0,          // No timeout - managed per operation for flexibility
-  
+  statement_timeout: 0,            // No timeout - managed per operation for flexibility
+
   // Pool Settings
-  allowExitOnIdle: true          // Allow process to exit if all clients are idle
+  allowExitOnIdle: true            // Allow process to exit if all clients are idle
+});
+
+// Handle pool errors - prevents app crash on connection issues
+pool.on('error', (err: Error) => {
+  console.error('Unexpected database pool error:', err.message);
+  // Don't exit - let the pool recover
+});
+
+// Log when a client is acquired (debug)
+pool.on('connect', () => {
+  console.log('New database client connected');
 });
 
 /**

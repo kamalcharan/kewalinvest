@@ -261,7 +261,7 @@ export const API_ENDPOINTS = {
     ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
 
     // Manual Triggers (using existing endpoints)
-    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/historical?scheme_code=${schemeCode}`,
+    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/scheme/${schemeCode}`,
     MARKET_DOWNLOAD: (indexId: number) => `${API_BASE}/market/download/eod?index_id=${indexId}`,
 
     // Market Downloads (using existing market endpoints)
@@ -450,6 +450,24 @@ export const API_ENDPOINTS = {
     FAMILY_BULK_ASSIGN: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/investments/bulk`,
   },
 
+  // NetworthViewer endpoints (Release 1.1 - Cycle 2)
+  NETWORTH: {
+    // Summary - Total networth with asset breakdown
+    SUMMARY: `${API_BASE}/networth/summary`,
+
+    // History - Historical timeline aggregated by month
+    HISTORY: `${API_BASE}/networth/history`,
+
+    // Breakdown - Per-asset-type details with investment plans
+    BREAKDOWN: `${API_BASE}/networth/breakdown`,
+
+    // Goals - Goal achievability data
+    GOALS: `${API_BASE}/networth/goals`,
+
+    // Health check
+    HEALTH: `${API_BASE}/networth/health`,
+  },
+
   // File management endpoints (for future sprints)
   FILES: {
     UPLOAD: `${API_BASE}/files/upload`,
@@ -509,6 +527,7 @@ export type MarketAnalysisEndpoints = typeof API_ENDPOINTS.MARKET_ANALYSIS;
 export type SchemeAnalysisEndpoints = typeof API_ENDPOINTS.SCHEME_ANALYSIS;
 export type SchemeAliasEndpoints = typeof API_ENDPOINTS.SCHEME_ALIASES;
 export type AssetTypesEndpoints = typeof API_ENDPOINTS.ASSET_TYPES;
+export type NetworthEndpoints = typeof API_ENDPOINTS.NETWORTH;
 export type FileEndpoints = typeof API_ENDPOINTS.FILES;
 export type DashboardEndpoints = typeof API_ENDPOINTS.DASHBOARD;
 export type CommunicationEndpoints = typeof API_ENDPOINTS.COMMUNICATIONS;
@@ -1137,6 +1156,29 @@ export const INVESTMENT_PLANS_URLS = {
     `${API_ENDPOINTS.INVESTMENT_PLANS.FAMILY_BULK_ASSIGN(familyHeadId)}${buildQueryParams({}, environment)}`,
 } as const;
 
+// NetworthViewer-specific URL helpers (Release 1.1 - Cycle 2)
+export const NETWORTH_URLS = {
+  // Summary - Total networth with asset breakdown
+  getSummary: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NETWORTH.SUMMARY}${buildQueryParams(params || {}, environment)}`,
+
+  // History - Historical timeline aggregated by month
+  getHistory: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NETWORTH.HISTORY}${buildQueryParams(params || {}, environment)}`,
+
+  // Breakdown - Per-asset-type details with investment plans
+  getBreakdown: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NETWORTH.BREAKDOWN}${buildQueryParams(params || {}, environment)}`,
+
+  // Goals - Goal achievability data
+  getGoals: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NETWORTH.GOALS}${buildQueryParams(params || {}, environment)}`,
+
+  // Health check
+  getHealth: (environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.NETWORTH.HEALTH}${buildQueryParams({}, environment)}`,
+} as const;
+
 // Development logging
 if (process.env.NODE_ENV === 'development') {
   console.log('🔗 API Base URL:', API_BASE);
@@ -1156,6 +1198,7 @@ if (process.env.NODE_ENV === 'development') {
     Market: Object.keys(API_ENDPOINTS.MARKET).length,
     MarketAnalysis: Object.keys(API_ENDPOINTS.MARKET_ANALYSIS).length,
     SchemeAnalysis: Object.keys(API_ENDPOINTS.SCHEME_ANALYSIS).length,
+    Networth: Object.keys(API_ENDPOINTS.NETWORTH).length,
     Files: Object.keys(API_ENDPOINTS.FILES).length,
     Dashboard: Object.keys(API_ENDPOINTS.DASHBOARD).length,
     Communications: Object.keys(API_ENDPOINTS.COMMUNICATIONS).length,

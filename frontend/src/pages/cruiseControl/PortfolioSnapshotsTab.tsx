@@ -27,7 +27,7 @@ export const PortfolioSnapshotsTab: React.FC = () => {
     try {
       const [statsResponse, execResponse] = await Promise.all([
         JobsService.getStatistics(JOB_TYPE, environment),
-        JobsService.getExecutions(JOB_TYPE, environment, page, 10)
+        JobsService.getExecutions(JOB_TYPE, environment, page, 25)
       ]);
 
       if (statsResponse.success && statsResponse.data) {
