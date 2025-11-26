@@ -855,7 +855,8 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: process_transaction_import_session (Complete from original)
+-- FUNCTION: process_transaction_import_session
+-- Features: Customer lookup, PAN fallback, orphan tracking, auto MF assignment with alerts
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_transaction_import_session(
     p_session_id INTEGER,
@@ -889,14 +890,32 @@ DECLARE
     v_error_msg TEXT;
     v_txn_id INTEGER;
     v_session_info RECORD;
+    -- Variables for auto-assignment
+    v_mf_asset_type_id INTEGER;
+    v_existing_assignment_id INTEGER;
+    v_customer_name VARCHAR;
+    v_new_assignment_id INTEGER;
+    v_session_creator_id INTEGER;
+    v_txn_amount NUMERIC;
 BEGIN
-    SELECT tenant_id, is_live INTO v_session_info
+    -- Get session info
+    SELECT tenant_id, is_live, created_by
+    INTO v_session_info
     FROM t_import_sessions
     WHERE id = p_session_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
+
+    -- Get MF asset type ID
+    SELECT id INTO v_mf_asset_type_id
+    FROM m_asset_types
+    WHERE asset_type_code = 'MF' AND is_active = true
+    LIMIT 1;
+
+    -- Get session creator for alert creation
+    v_session_creator_id := COALESCE(v_session_info.created_by, 1);
 
     UPDATE t_import_sessions
     SET status = 'processing',
@@ -925,6 +944,10 @@ BEGIN
             v_bookmark_id := NULL;
             v_txn_type_id := NULL;
             v_error_msg := NULL;
+            v_customer_name := NULL;
+            v_existing_assignment_id := NULL;
+            v_new_assignment_id := NULL;
+            v_txn_amount := NULL;
 
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
             IF p_customer_lookup_method = 'iwell_code' THEN
@@ -1051,6 +1074,12 @@ BEGIN
                 CONTINUE;
             END IF;
 
+            -- Get customer name for alerts
+            SELECT ct.name INTO v_customer_name
+            FROM t_customers c
+            INNER JOIN t_contacts ct ON ct.id = c.contact_id
+            WHERE c.id = v_customer_id;
+
             -- TRANSACTION TYPE LOOKUP
             IF v_staging_record.mapped_data->>'txn_code' IS NOT NULL
                AND TRIM(v_staging_record.mapped_data->>'txn_code') != '' THEN
@@ -1165,6 +1194,9 @@ BEGIN
                 CONTINUE;
             END IF;
 
+            -- Get transaction amount for investment plan
+            v_txn_amount := COALESCE(NULLIF(v_staging_record.mapped_data->>'total_amount', '')::NUMERIC, 0);
+
             -- CREATE/UPDATE PORTFOLIO ENTRY
             INSERT INTO t_customer_master_portfolio (
                 tenant_id,
@@ -1238,6 +1270,151 @@ BEGIN
                 NOW()
             ) RETURNING id INTO v_txn_id;
 
+            -- ============================================================================
+            -- AUTO-CREATE INVESTMENT PLAN (MF) AND ALERTS
+            -- ============================================================================
+            IF v_mf_asset_type_id IS NOT NULL THEN
+                -- Check if customer already has this scheme assigned
+                SELECT id INTO v_existing_assignment_id
+                FROM t_customer_asset_assignments
+                WHERE tenant_id = v_staging_record.tenant_id
+                  AND is_live = v_staging_record.is_live
+                  AND customer_id = v_customer_id
+                  AND asset_type_id = v_mf_asset_type_id
+                  AND scheme_code = v_scheme_code
+                  AND is_active = true
+                LIMIT 1;
+
+                IF v_existing_assignment_id IS NULL THEN
+                    -- NEW: Create Investment Plan for this MF
+                    INSERT INTO t_customer_asset_assignments (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        asset_type_id,
+                        scheme_code,
+                        principal_amount,
+                        investment_type,
+                        recurring_amount,
+                        investment_frequency,
+                        has_started,
+                        custom_assumption_rate,
+                        is_active,
+                        assigned_by,
+                        notes,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        v_mf_asset_type_id,
+                        v_scheme_code,
+                        v_txn_amount,           -- principal_amount = SIP amount
+                        'sip',                   -- investment_type
+                        v_txn_amount,           -- recurring_amount = SIP amount
+                        'monthly',               -- investment_frequency
+                        true,                    -- has_started = true
+                        12.00,                   -- custom_assumption_rate = 12%
+                        true,
+                        v_session_creator_id,
+                        'Auto-created from transaction import (Session: ' || p_session_id || ')',
+                        NOW(),
+                        NOW()
+                    ) RETURNING id INTO v_new_assignment_id;
+
+                    -- Create Alert: New MF Added
+                    INSERT INTO t_jtbd_configurations (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        jtbd_type,
+                        jtbd_category,
+                        title,
+                        description,
+                        priority,
+                        is_active,
+                        config_data,
+                        next_alert_date,
+                        created_by,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        'import_notification',
+                        'alert',
+                        COALESCE(v_customer_name, 'Customer') || ' - ' || v_scheme_name,
+                        'New Mutual Fund scheme has been added. Please set the start date and review the investment details.',
+                        'medium',
+                        true,
+                        jsonb_build_object(
+                            'notification_type', 'new_mf_added',
+                            'scheme_code', v_scheme_code,
+                            'scheme_name', v_scheme_name,
+                            'customer_name', v_customer_name,
+                            'sip_amount', v_txn_amount,
+                            'assignment_id', v_new_assignment_id,
+                            'import_session_id', p_session_id,
+                            'transaction_id', v_txn_id
+                        ),
+                        CURRENT_DATE,  -- Alert is due today
+                        v_session_creator_id,
+                        NOW(),
+                        NOW()
+                    );
+
+                    RAISE NOTICE '[Session %] Created new MF assignment for customer % scheme %',
+                        p_session_id, v_customer_id, v_scheme_code;
+                ELSE
+                    -- DUPLICATE: Scheme already assigned, create skip alert
+                    INSERT INTO t_jtbd_configurations (
+                        tenant_id,
+                        is_live,
+                        customer_id,
+                        jtbd_type,
+                        jtbd_category,
+                        title,
+                        description,
+                        priority,
+                        is_active,
+                        config_data,
+                        next_alert_date,
+                        created_by,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        v_staging_record.tenant_id,
+                        v_staging_record.is_live,
+                        v_customer_id,
+                        'import_notification',
+                        'alert',
+                        'Scheme already assigned - ' || COALESCE(v_customer_name, 'Customer'),
+                        'Scheme "' || v_scheme_name || '" is already available for ' || COALESCE(v_customer_name, 'this customer') || ', ignoring duplicate assignment.',
+                        'low',
+                        true,
+                        jsonb_build_object(
+                            'notification_type', 'duplicate_mf_skipped',
+                            'scheme_code', v_scheme_code,
+                            'scheme_name', v_scheme_name,
+                            'customer_name', v_customer_name,
+                            'existing_assignment_id', v_existing_assignment_id,
+                            'import_session_id', p_session_id,
+                            'transaction_id', v_txn_id
+                        ),
+                        CURRENT_DATE,  -- Alert is due today
+                        v_session_creator_id,
+                        NOW(),
+                        NOW()
+                    );
+
+                    RAISE NOTICE '[Session %] Scheme % already assigned to customer %, skipped',
+                        p_session_id, v_scheme_code, v_customer_id;
+                END IF;
+            END IF;
+            -- ============================================================================
+
             UPDATE t_import_staging_data
             SET processing_status = 'success',
                 created_record_id = v_txn_id,
@@ -1299,7 +1476,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking';
+COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking, and auto MF assignment with alerts';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS

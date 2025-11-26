@@ -700,4 +700,40 @@ export class JTBDController {
       });
     }
   };
+
+  /**
+   * GET /api/jtbd/dashboard/latest-alerts
+   * Get latest alerts for header dropdown (most recent 10)
+   */
+  getLatestAlerts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const alerts = await dashboardService.getLatestAlerts(
+        user!.tenant_id,
+        isLive,
+        limit
+      );
+
+      res.json({
+        success: true,
+        data: alerts,
+        meta: {
+          count: alerts.length,
+          limit
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting latest alerts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get latest alerts'
+      });
+    }
+  };
 }

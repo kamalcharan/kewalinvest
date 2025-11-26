@@ -26,6 +26,7 @@ export const JTBD_TYPE = {
   TIME_BASED: 'time_based',                // Date-based reminders
   PROFILE_TRIGGER: 'profile_trigger',      // Birthday/anniversary
   GOAL_SIP_PLAN: 'goal_sip_plan',          // SIP instances linked to goals
+  IMPORT_NOTIFICATION: 'import_notification', // Auto-generated from transaction imports
 
   // Meeting Types
   CLIENT_MEETING: 'client_meeting',
@@ -98,6 +99,7 @@ export const JTBD_TYPE_LABELS = {
   [JTBD_TYPE.TIME_BASED]: 'Time-Based Reminder',
   [JTBD_TYPE.PROFILE_TRIGGER]: 'Profile Event',
   [JTBD_TYPE.GOAL_SIP_PLAN]: 'Goal SIP Plan',
+  [JTBD_TYPE.IMPORT_NOTIFICATION]: 'Import Notification',
 
   // Meetings
   [JTBD_TYPE.CLIENT_MEETING]: 'Client Meeting',
@@ -168,6 +170,12 @@ export const JTBD_TYPE_COLORS = {
     border: 'border-green-500',
     text: 'text-green-900',
     badge: 'bg-green-100 text-green-800',
+  },
+  [JTBD_TYPE.IMPORT_NOTIFICATION]: {
+    bg: 'bg-cyan-50',
+    border: 'border-cyan-500',
+    text: 'text-cyan-900',
+    badge: 'bg-cyan-100 text-cyan-800',
   },
 
   // Meetings
@@ -273,6 +281,7 @@ export const JTBD_TYPE_ICONS = {
   [JTBD_TYPE.TIME_BASED]: '⏰',
   [JTBD_TYPE.PROFILE_TRIGGER]: '🎂',
   [JTBD_TYPE.GOAL_SIP_PLAN]: '💰',
+  [JTBD_TYPE.IMPORT_NOTIFICATION]: '📥',
 
   // Meetings
   [JTBD_TYPE.CLIENT_MEETING]: '👥',
@@ -296,6 +305,7 @@ export const getCategoryForType = (type: JTBDType): JTBDCategory => {
     case JTBD_TYPE.TIME_BASED:
     case JTBD_TYPE.PROFILE_TRIGGER:
     case JTBD_TYPE.GOAL_SIP_PLAN:
+    case JTBD_TYPE.IMPORT_NOTIFICATION:
       return JTBD_CATEGORY.ALERT;
 
     case JTBD_TYPE.CLIENT_MEETING:
@@ -322,6 +332,7 @@ export const getTypesForCategory = (category: JTBDCategory): JTBDType[] => {
         JTBD_TYPE.TIME_BASED,
         JTBD_TYPE.PROFILE_TRIGGER,
         JTBD_TYPE.GOAL_SIP_PLAN,
+        JTBD_TYPE.IMPORT_NOTIFICATION,
       ];
 
     case JTBD_CATEGORY.MEETING:

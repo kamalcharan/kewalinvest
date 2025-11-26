@@ -399,4 +399,62 @@ export class JTBDDashboardService {
       throw error;
     }
   }
+
+  /**
+   * Get latest alerts for header dropdown
+   * Returns the most recent alerts sorted by creation date
+   */
+  async getLatestAlerts(
+    tenantId: number,
+    isLive: boolean,
+    limit: number = 10
+  ): Promise<any[]> {
+    try {
+      const query = `
+        SELECT
+          j.id,
+          j.customer_id,
+          j.jtbd_type,
+          j.jtbd_category,
+          j.title,
+          j.description,
+          j.priority,
+          j.next_alert_date,
+          j.is_active,
+          j.config_data,
+          j.created_at,
+          c.name AS customer_name
+        FROM t_jtbd_configurations j
+        LEFT JOIN t_customers cust ON cust.id = j.customer_id
+        LEFT JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.is_active = true
+        ORDER BY j.created_at DESC
+        LIMIT $3
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive, limit]);
+
+      return result.rows.map(row => ({
+        ...row,
+        notification_type: row.config_data?.notification_type || null,
+        scheme_name: row.config_data?.scheme_name || null,
+        is_new: this.isNewAlert(row.created_at)
+      }));
+    } catch (error) {
+      console.error('Error getting latest alerts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if alert was created within the last 24 hours
+   */
+  private isNewAlert(createdAt: string): boolean {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const hoursDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+    return hoursDiff <= 24;
+  }
 }
