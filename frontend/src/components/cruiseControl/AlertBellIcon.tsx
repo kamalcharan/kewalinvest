@@ -6,6 +6,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { JTBD_TYPE_ICONS } from '../../constants/jtbd.constants';
 import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 
 interface Alert {
   id: number;
@@ -82,7 +83,9 @@ export const AlertBellIcon: React.FC<AlertBellIconProps> = ({ alertCount = 0 }) 
   const fetchLatestAlerts = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get<LatestAlertsResponse>('/jtbd/dashboard/latest-alerts?limit=10');
+      const response = await apiService.get<LatestAlertsResponse>(
+        `${API_ENDPOINTS.JTBD.LATEST_ALERTS}?limit=10`
+      );
 
       if (response.success) {
         setAlerts(response.data || []);

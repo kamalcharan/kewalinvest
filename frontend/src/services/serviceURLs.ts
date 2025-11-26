@@ -128,6 +128,7 @@ export const API_ENDPOINTS = {
     UPCOMING_ALERTS: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,
     ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
     COMMUNICATION_QUEUE: `${API_BASE}/jtbd/dashboard/communication-queue`,
+    LATEST_ALERTS: `${API_BASE}/jtbd/dashboard/latest-alerts`,
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}/summary`,
     CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
     TRANSACTION_TYPES: `${API_BASE}/jtbd/transaction-types`,
