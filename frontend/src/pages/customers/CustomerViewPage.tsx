@@ -797,14 +797,23 @@ const CustomerViewPage: React.FC = () => {
                     networthHistoryData.data.chart_ready.by_asset_type.map((assetType) => {
                       // Build performance data from networth history
                       const dates = networthHistoryData.data!.chart_ready.dates;
-                      const performanceData = dates.map((date, index) => ({
+
+                      // Find the first index where this asset type has actual data (non-zero value)
+                      const firstNonZeroIndex = assetType.values.findIndex(v => v > 0);
+                      if (firstNonZeroIndex === -1) return null; // No data for this asset type
+
+                      // Filter to only include dates from when asset has data
+                      const filteredDates = dates.slice(firstNonZeroIndex);
+                      const filteredValues = assetType.values.slice(firstNonZeroIndex);
+                      const startValue = filteredValues[0] || 0;
+
+                      const performanceData = filteredDates.map((date, index) => ({
                         date,
-                        value: assetType.values[index] || 0,
-                        // invested data not available per asset type in history, using value as proxy
-                        invested: assetType.values[0] || 0,
-                        returns: (assetType.values[index] || 0) - (assetType.values[0] || 0),
-                        return_percentage: assetType.values[0] > 0
-                          ? ((assetType.values[index] - assetType.values[0]) / assetType.values[0]) * 100
+                        value: filteredValues[index] || 0,
+                        invested: startValue,
+                        returns: (filteredValues[index] || 0) - startValue,
+                        return_percentage: startValue > 0
+                          ? ((filteredValues[index] - startValue) / startValue) * 100
                           : 0
                       }));
 
@@ -819,7 +828,7 @@ const CustomerViewPage: React.FC = () => {
                           height={280}
                         />
                       );
-                    })
+                    }).filter(Boolean)
                   ) : (
                     // Fallback to MF-only chart if no networth history
                     portfolioWithMoM && portfolioWithMoM.length > 0 && (
