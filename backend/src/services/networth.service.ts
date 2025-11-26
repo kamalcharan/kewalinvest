@@ -458,15 +458,39 @@ export class NetworthService {
       const investedValues = history.map(h => h.total_invested);
 
       // Build asset type series for stacked chart
+      // Each asset type only includes dates where it has actual data (not zero-padded)
       const assetTypeSeries = Array.from(allAssetTypes).map(code => {
         const assetType = assetTypes.find(at => at.asset_type_code === code);
+
+        // Get all values for this asset type
+        const allValues = dates.map(date => {
+          const dateBreakdown = breakdownMap.get(date);
+          return dateBreakdown?.get(code) || 0;
+        });
+
+        // Find the first index where this asset type has meaningful data (>= 100)
+        const firstMeaningfulIndex = allValues.findIndex(v => v >= 100);
+
+        // If no meaningful data, return with empty arrays (will be filtered out by frontend)
+        if (firstMeaningfulIndex === -1) {
+          return {
+            asset_type_code: code,
+            asset_type_name: assetType?.asset_type_name || code,
+            values: [],
+            dates: [],
+            color: getAssetTypeColor(code)
+          };
+        }
+
+        // Only include dates from when this asset type has data
+        const filteredDates = dates.slice(firstMeaningfulIndex);
+        const filteredValues = allValues.slice(firstMeaningfulIndex);
+
         return {
           asset_type_code: code,
           asset_type_name: assetType?.asset_type_name || code,
-          values: dates.map(date => {
-            const dateBreakdown = breakdownMap.get(date);
-            return dateBreakdown?.get(code) || 0;
-          }),
+          values: filteredValues,
+          dates: filteredDates,  // Asset-specific dates
           color: getAssetTypeColor(code)
         };
       });

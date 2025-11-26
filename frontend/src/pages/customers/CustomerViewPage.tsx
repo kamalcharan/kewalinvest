@@ -795,26 +795,29 @@ const CustomerViewPage: React.FC = () => {
                   {networthHistoryData?.data?.chart_ready?.by_asset_type &&
                    networthHistoryData.data.chart_ready.by_asset_type.length > 0 ? (
                     networthHistoryData.data.chart_ready.by_asset_type.map((assetType) => {
-                      // Build performance data from networth history
-                      const dates = networthHistoryData.data!.chart_ready.dates;
+                      // Use asset-specific dates if available, otherwise use global dates
+                      const assetDates = (assetType as any).dates || networthHistoryData.data!.chart_ready.dates;
+                      const assetValues = assetType.values;
 
-                      // Find the first index where this asset type has meaningful data
-                      // Use threshold of 100 to filter out any tiny calculated/rounding values
-                      const firstMeaningfulIndex = assetType.values.findIndex(v => v >= 100);
-                      if (firstMeaningfulIndex === -1) return null; // No meaningful data for this asset type
+                      // Skip if no meaningful data
+                      if (!assetValues || assetValues.length === 0) return null;
 
-                      // Filter to only include dates from when asset has data
-                      const filteredDates = dates.slice(firstMeaningfulIndex);
-                      const filteredValues = assetType.values.slice(firstMeaningfulIndex);
-                      const startValue = filteredValues[0] || 0;
+                      // Double-check: find first meaningful value (in case backend didn't filter)
+                      const firstMeaningfulIndex = assetValues.findIndex(v => v >= 100);
+                      if (firstMeaningfulIndex === -1) return null;
 
-                      const performanceData = filteredDates.map((date, index) => ({
+                      // Use dates from the index of first meaningful value
+                      const effectiveDates = assetDates.slice(firstMeaningfulIndex);
+                      const effectiveValues = assetValues.slice(firstMeaningfulIndex);
+                      const startValue = effectiveValues[0] || 0;
+
+                      const performanceData = effectiveDates.map((date: string, index: number) => ({
                         date,
-                        value: filteredValues[index] || 0,
+                        value: effectiveValues[index] || 0,
                         invested: startValue,
-                        returns: (filteredValues[index] || 0) - startValue,
+                        returns: (effectiveValues[index] || 0) - startValue,
                         return_percentage: startValue > 0
-                          ? ((filteredValues[index] - startValue) / startValue) * 100
+                          ? ((effectiveValues[index] - startValue) / startValue) * 100
                           : 0
                       }));
 
