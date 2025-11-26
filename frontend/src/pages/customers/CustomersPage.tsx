@@ -523,7 +523,7 @@ const CustomersPage: React.FC = () => {
 
         {/* Customer List */}
         <div style={{
-          backgroundColor: colors.utility.secondaryBackground,
+          backgroundColor: colors.utility.primaryBackground,
           borderRadius: '12px',
           padding: '20px'
         }}>

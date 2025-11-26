@@ -1,0 +1,571 @@
+TC_ID,Section,Sub_Section,Test_Case_Title,Description,Pre_Conditions,Test_Steps,Expected_Result,Priority,Test_Type,Multi_Tenant_Test,Environment
+CV_HDR_001,Header,Customer Info,Display customer name with prefix,Verify customer name displays with appropriate prefix (Mr/Ms/Mrs),Customer exists with prefix set,"1. Navigate to CustomerView page
+2. Observe customer name in header",Customer name displays with correct prefix (e.g. 'Mr. John Doe'),P1,Functional,Yes,Both
+CV_HDR_002,Header,Customer Info,Display star badge for high return customer,Verify star badge appears when return_percentage > 10%,Customer with return > 10% exists,"1. Navigate to customer with >10% returns
+2. Observe header area",Gold star badge (⭐) appears next to customer name,P2,Functional,Yes,Both
+CV_HDR_003,Header,Customer Info,No star badge for low return customer,Verify star badge does not appear when return_percentage <= 10%,Customer with return <= 10% exists,"1. Navigate to customer with <=10% returns
+2. Observe header area",No star badge appears next to customer name,P2,Functional,Yes,Both
+CV_HDR_004,Header,Customer Info,Display customer ID,Verify customer ID is displayed in header,Customer exists,"1. Navigate to CustomerView
+2. Locate customer ID display",Customer ID displayed correctly (e.g. 'ID: 12345'),P1,Functional,Yes,Both
+CV_HDR_005,Header,Customer Info,Display IWell code when exists,Verify IWell code displays when customer has one,Customer with iwell_code exists,"1. Navigate to customer with IWell code
+2. Observe header",IWell code displayed (e.g. 'IWell: ABC123'),P2,Functional,Yes,Both
+CV_HDR_006,Header,Customer Info,Hide IWell code when not exists,Verify IWell code section hidden when not present,Customer without iwell_code,"1. Navigate to customer without IWell code
+2. Observe header",No IWell code section displayed,P2,Functional,Yes,Both
+CV_HDR_007,Header,Customer Info,Display schemes count,Verify total schemes count from portfolio is displayed,Customer with portfolio exists,"1. Navigate to CustomerView
+2. Observe schemes count",Schemes count matches actual portfolio holdings count,P2,Functional,Yes,Both
+CV_HDR_008,Header,Customer Info,Display member since year,Verify member since year is displayed,Customer exists,"1. Navigate to CustomerView
+2. Observe member since",Member since year displayed correctly,P3,Functional,Yes,Both
+CV_HDR_009,Header,Family Badge,Display family badge for family head,Verify family head badge displays correctly,Customer is family head (family_code exists is_family_head=true),"1. Navigate to family head customer
+2. Observe family badge",Badge shows 'Family Head: {family_code}' with correct styling,P1,Functional,Yes,Both
+CV_HDR_010,Header,Family Badge,Display family badge for family member,Verify family member badge displays correctly,Customer is family member (family_code exists is_family_head=false),"1. Navigate to family member customer
+2. Observe family badge",Badge shows 'Family: {family_code}' with correct styling,P1,Functional,Yes,Both
+CV_HDR_011,Header,Family Badge,Family badge clickable - opens popover,Verify clicking family badge opens FamilyMembersPopover,Customer has family_code,"1. Navigate to customer with family
+2. Click family badge",FamilyMembersPopover opens showing all family members,P1,Functional,Yes,Both
+CV_HDR_012,Header,Family Badge,No family badge for non-family customer,Verify no family badge for customers without family_code,Customer without family_code,"1. Navigate to customer without family
+2. Observe header",No family badge displayed,P2,Functional,Yes,Both
+CV_HDR_013,Header,Back Button,Back to Customers navigation,Verify back button navigates to customers list,On CustomerView page,"1. Click 'Back to Customers' button
+2. Observe navigation",Navigates to /customers page,P1,Functional,No,Both
+CV_HDR_014,Header,Meeting Button,Open CreateMeetingModal,Verify Meeting button opens meeting creation modal,On CustomerView page,"1. Click 'Meeting' button
+2. Observe modal",CreateMeetingModal opens with customer pre-selected,P1,Functional,Yes,Both
+CV_HDR_015,Header,New Alert Button,Open JTBDSetupModal,Verify New Alert button opens JTBD setup modal,On CustomerView page,"1. Click 'New Alert' button
+2. Observe modal",JTBDSetupModal opens with filtered types (hides portfolio_alert and goal_tracking),P1,Functional,Yes,Both
+CV_HDR_016,Header,New Alert Button,Hidden types in New Alert modal,Verify portfolio_alert and goal_tracking are hidden in New Alert modal,On CustomerView page,"1. Click 'New Alert' button
+2. Check available alert types",Only time_based and profile_trigger types visible; portfolio_alert and goal_tracking hidden,P1,Functional,Yes,Both
+CV_HDR_017,Header,New Goal Button,Navigate to goal creation,Verify New Goal button navigates to goal creation page,On CustomerView page,"1. Click 'New Goal' button
+2. Observe navigation",Navigates to /customers/{id}/goals/new,P1,Functional,No,Both
+CV_HDR_018,Header,Family Switch,Display Individual/Family toggle for family customers,Verify toggle appears for customers with family_code,Customer with family_code,"1. Navigate to customer with family
+2. Observe toggle button",Individual/Family toggle button visible,P1,Functional,Yes,Both
+CV_HDR_019,Header,Family Switch,Hide toggle for non-family customers,Verify toggle hidden for customers without family_code,Customer without family_code,"1. Navigate to customer without family
+2. Observe header area",No Individual/Family toggle displayed,P2,Functional,Yes,Both
+CV_HDR_020,Header,Family Switch,Switch to Family view,Verify switching to Family view updates URL and content,Customer with family_code on Individual view,"1. Click toggle to switch to 'Family'
+2. Observe URL and content",URL updates to ?view=family and family data loads,P1,Functional,Yes,Both
+CV_HDR_021,Header,Family Switch,Switch to Individual view,Verify switching to Individual view updates URL and content,Customer on Family view,"1. Click toggle to switch to 'Individual'
+2. Observe URL and content",URL updates to ?view=individual and individual data loads,P1,Functional,Yes,Both
+CV_HDR_022,Header,Styling,Header gradient background,Verify header has gradient background styling,On CustomerView page,"1. Navigate to CustomerView
+2. Inspect header styling",Header has primary+secondary color gradient background,P3,UI,No,Both
+CV_HDR_023,Header,Responsive,Header responsive on mobile,Verify header adapts to mobile viewport,On CustomerView page,"1. Resize browser to mobile width (<768px)
+2. Observe header layout",Header elements stack appropriately without overflow,P2,UI,No,Both
+CV_MET_001,Metrics Bar,Layout,Display 4 metric cards,Verify metrics bar displays 4 cards in row,Customer with portfolio exists,"1. Navigate to CustomerView
+2. Observe metrics bar below header",4 metric cards displayed: Networth/Portfolio Profit/Loss Today's Change Overall Return,P1,Functional,Yes,Both
+CV_MET_002,Metrics Bar,Total Portfolio,Display total portfolio value,Verify total portfolio value displays correctly,Customer with portfolio,"1. Navigate to CustomerView
+2. Check first metric card",Total portfolio value displayed in ₹ format (Cr/L as appropriate),P1,Functional,Yes,Both
+CV_MET_003,Metrics Bar,Total Portfolio,Portfolio value formatting - Crores,Verify values >= 1Cr display as Cr,Customer with portfolio > 1Cr,"1. Navigate to customer with portfolio > 1Cr
+2. Check portfolio value",Value displayed as 'X.XX Cr' format,P2,Functional,Yes,Both
+CV_MET_004,Metrics Bar,Total Portfolio,Portfolio value formatting - Lakhs,Verify values < 1Cr display as L,Customer with portfolio < 1Cr,"1. Navigate to customer with portfolio 50L
+2. Check portfolio value",Value displayed as 'XX.XX L' format,P2,Functional,Yes,Both
+CV_MET_005,Metrics Bar,Profit/Loss,Display profit in green,Verify positive profit shows in green,Customer with positive returns,"1. Navigate to customer with profits
+2. Check Profit/Loss card",Profit value displayed in green color with + sign,P1,Functional,Yes,Both
+CV_MET_006,Metrics Bar,Profit/Loss,Display loss in red,Verify negative returns shows in red,Customer with negative returns,"1. Navigate to customer with losses
+2. Check Profit/Loss card",Loss value displayed in red color with - sign,P1,Functional,Yes,Both
+CV_MET_007,Metrics Bar,Today Change,Display today's change with arrow,Verify today's change shows with direction arrow,Customer with portfolio and today's data,"1. Navigate to CustomerView
+2. Check Today's Change card",Today's change value with up/down arrow based on direction,P1,Functional,Yes,Both
+CV_MET_008,Metrics Bar,Today Change,Green arrow for positive change,Verify up arrow in green for positive daily change,Positive market movement,"1. Navigate to customer
+2. Check Today's Change card when market is up",Green up arrow displayed,P2,UI,Yes,Both
+CV_MET_009,Metrics Bar,Today Change,Red arrow for negative change,Verify down arrow in red for negative daily change,Negative market movement,"1. Navigate to customer
+2. Check Today's Change card when market is down",Red down arrow displayed,P2,UI,Yes,Both
+CV_MET_010,Metrics Bar,Overall Return,Display return percentage,Verify overall return percentage displays correctly,Customer with transactions and current value,"1. Navigate to CustomerView
+2. Check Overall Return card",Return percentage displayed with % symbol,P1,Functional,Yes,Both
+CV_MET_011,Metrics Bar,Overall Return,Return percentage color - positive,Verify positive return shows in green,Customer with positive returns,"1. Navigate to customer with >0% return
+2. Check Overall Return card",Percentage displayed in green,P2,UI,Yes,Both
+CV_MET_012,Metrics Bar,Overall Return,Return percentage color - negative,Verify negative return shows in red,Customer with negative returns,"1. Navigate to customer with <0% return
+2. Check Overall Return card",Percentage displayed in red,P2,UI,Yes,Both
+CV_MET_013,Metrics Bar,Family View,Display Family Networth title,Verify title changes to Family Networth in family view,Customer in family view mode,"1. Switch to Family view
+2. Check first metric card title",Title shows 'Family Networth' instead of 'Total Portfolio',P1,Functional,Yes,Both
+CV_MET_014,Metrics Bar,Family View,Display family icon,Verify Users icon appears in family view,Customer in family view mode,"1. Switch to Family view
+2. Check first metric card icon",Users icon displayed instead of Wallet icon,P2,UI,Yes,Both
+CV_MET_015,Metrics Bar,Family View,Display asset types count,Verify asset types count shows in family view,Family with multiple asset types,"1. Switch to Family view
+2. Check first metric card subtitle",Shows 'Across X asset types' text,P2,Functional,Yes,Both
+CV_MET_016,Metrics Bar,Loading,Display loading skeleton,Verify skeleton shows while data loads,Slow network or fresh page load,"1. Navigate to CustomerView
+2. Observe metrics bar during load",Skeleton/shimmer effect displays until data loads,P2,UI,No,Both
+CV_MET_017,Metrics Bar,Zero Values,Handle zero portfolio value,Verify zero value displays correctly,Customer with no portfolio,"1. Navigate to customer with no holdings
+2. Check metric cards",Shows ₹0 or appropriate empty state message,P2,Functional,Yes,Both
+CV_TAB_001,Tab Navigation,Layout,Display all 6 tabs,Verify all tabs are visible in navigation,Customer exists,"1. Navigate to CustomerView
+2. Observe tab navigation",6 tabs visible: Portfolio Overview Portfolio Snapshots Goals Management Asset Types Jobs To Do Transactions,P1,Functional,No,Both
+CV_TAB_002,Tab Navigation,Icons,Tabs display correct icons,Verify each tab has correct icon,On CustomerView page,"1. Navigate to CustomerView
+2. Check each tab icon",BarChart3 TrendingUp Target Package CheckSquare DollarSign icons match tabs,P2,UI,No,Both
+CV_TAB_003,Tab Navigation,Default Tab,Overview tab selected by default,Verify Overview tab is active on page load,Fresh navigation to CustomerView,"1. Navigate to CustomerView without tab parameter
+2. Check active tab",Overview tab (Portfolio Overview) is active/highlighted,P1,Functional,No,Both
+CV_TAB_004,Tab Navigation,URL Param,Tab syncs with URL parameter,Verify tab changes when URL has tab param,On CustomerView page,"1. Navigate to CustomerView?tab=goals
+2. Check active tab",Goals Management tab is active,P1,Functional,No,Both
+CV_TAB_005,Tab Navigation,Click Navigation,Tab click updates content,Verify clicking tab updates content area,On CustomerView page,"1. Click on 'Transactions' tab
+2. Observe content area",Content changes to transactions table,P1,Functional,No,Both
+CV_TAB_006,Tab Navigation,URL Update,Tab click updates URL,Verify URL updates when tab is clicked,On CustomerView page,"1. Click on 'Goals Management' tab
+2. Check URL",URL updates to include ?tab=goals,P1,Functional,No,Both
+CV_TAB_007,Tab Navigation,Family View,Only Overview tab in family view,Verify other tabs hidden in family view,Customer on family view,"1. Switch to Family view
+2. Check visible tabs",Only 'Portfolio Overview' tab visible; other 5 tabs hidden,P1,Functional,Yes,Both
+CV_TAB_008,Tab Navigation,Active Styling,Active tab has distinct styling,Verify active tab is visually distinguished,On CustomerView page,"1. Click different tabs
+2. Observe styling",Active tab has different background/border color,P2,UI,No,Both
+CV_OVW_001,Overview Tab,Networth Chart,Display networth projection chart,Verify networth projection chart renders,Customer with portfolio data,"1. Navigate to Overview tab
+2. Observe main chart area",Networth projection chart displays with line graph,P1,Functional,Yes,Both
+CV_OVW_002,Overview Tab,Networth Chart,Chart shows historical data,Verify chart includes historical networth data,Customer with portfolio history,"1. Navigate to Overview tab
+2. Check chart data points",Historical networth values displayed as line,P1,Functional,Yes,Both
+CV_OVW_003,Overview Tab,Networth Chart,Chart shows projected values,Verify chart includes projected future values,Customer with goals/projections,"1. Navigate to Overview tab
+2. Check projected area of chart",Projected networth displayed (typically dashed or different style),P1,Functional,Yes,Both
+CV_OVW_004,Overview Tab,Networth Chart,Goal markers display,Verify goal target dates and amounts marked on chart,Customer with goals,"1. Navigate to Overview tab with goals
+2. Check chart markers",Goal markers visible at target dates with amounts,P1,Functional,Yes,Both
+CV_OVW_005,Overview Tab,Networth Chart,Withdrawal markers display,Verify planned withdrawals marked on chart,Customer with planned withdrawals,"1. Navigate to Overview tab with withdrawals
+2. Check chart markers",Withdrawal markers visible at planned dates,P2,Functional,Yes,Both
+CV_OVW_006,Overview Tab,Networth Chart,Asset type selector,Verify asset type filter works on chart,Customer with multiple asset types,"1. Navigate to Overview tab
+2. Use asset type selector
+3. Observe chart update",Chart filters to show selected asset type only,P2,Functional,Yes,Both
+CV_OVW_007,Overview Tab,Networth Chart,Assumption rate slider,Verify assumption rate slider affects projections,Customer with projections,"1. Navigate to Overview tab
+2. Adjust assumption rate slider
+3. Observe projected values",Projected values update based on new assumption rate (default 8%),P2,Functional,Yes,Both
+CV_OVW_008,Overview Tab,Networth Chart,Timeframe selector,Verify timeframe buttons filter chart data,Customer with history,"1. Navigate to Overview tab
+2. Click different timeframes (1M 3M 6M 1Y 24M)",Chart updates to show selected timeframe data,P1,Functional,Yes,Both
+CV_OVW_009,Overview Tab,Networth Chart,Chart tooltip on hover,Verify hovering shows data tooltip,Customer with chart data,"1. Navigate to Overview tab
+2. Hover over chart data points",Tooltip shows date and value for hovered point,P2,UI,No,Both
+CV_OVW_010,Overview Tab,Networth Chart,Chart responsive to window resize,Verify chart resizes with window,On Overview tab,"1. Resize browser window
+2. Observe chart",Chart resizes proportionally without distortion,P2,UI,No,Both
+CV_OVW_011,Overview Tab,Performance Chart,Display performance sparkline chart,Verify portfolio performance chart renders,Customer with performance data,"1. Navigate to Overview tab
+2. Observe left column chart area",Performance sparkline/area chart displayed (height 300px),P1,Functional,Yes,Both
+CV_OVW_012,Overview Tab,Performance Chart,MoM badge display,Verify Month-over-Month change badge shows,Customer with 2+ months data,"1. Navigate to Overview tab
+2. Check top-right of performance chart",MoM badge shows percentage change with color coding,P1,Functional,Yes,Both
+CV_OVW_013,Overview Tab,Performance Chart,MoM positive styling,Verify positive MoM shows green,Positive month-over-month change,"1. Navigate to customer with positive MoM
+2. Check MoM badge",Badge shows green background with + percentage,P2,UI,Yes,Both
+CV_OVW_014,Overview Tab,Performance Chart,MoM negative styling,Verify negative MoM shows red,Negative month-over-month change,"1. Navigate to customer with negative MoM
+2. Check MoM badge",Badge shows red background with - percentage,P2,UI,Yes,Both
+CV_OVW_015,Overview Tab,Performance Chart,Index comparison toggle - show,Verify index comparison data can be shown,Customer with performance data,"1. Navigate to Overview tab
+2. Click 'Show Index Comparison' toggle",Market index line appears on chart (e.g. Sensex),P1,Functional,Yes,Both
+CV_OVW_016,Overview Tab,Performance Chart,Index comparison toggle - hide,Verify index comparison data can be hidden,Index comparison currently shown,"1. Click 'Hide Index Comparison' toggle
+2. Observe chart",Market index line disappears from chart,P1,Functional,Yes,Both
+CV_OVW_017,Overview Tab,Performance Chart,Fullscreen button,Verify fullscreen mode works for chart,On Overview tab,"1. Click fullscreen button on performance chart
+2. Observe chart",Chart expands to fullscreen mode,P2,Functional,No,Both
+CV_OVW_018,Overview Tab,Performance Chart,Exit fullscreen,Verify can exit fullscreen mode,Chart in fullscreen mode,"1. Press Escape or click exit button
+2. Observe chart",Chart returns to normal size,P2,Functional,No,Both
+CV_OVW_019,Overview Tab,Performance Chart,Export to PNG button,Verify chart can be exported as PNG,On Overview tab,"1. Click Export button on chart
+2. Check download",PNG file downloads with chart image,P2,Functional,No,Both
+CV_OVW_020,Overview Tab,Performance Chart,Chart data point count,Verify chart shows correct number of data points,Customer with varied history,"1. Navigate to Overview tab
+2. Check chart detail",Chart shows data point count matching timeframe,P3,Functional,Yes,Both
+CV_OVW_021,Overview Tab,Fund Performance Table,Display fund-wise table when holdings exist,Verify fund performance table appears,Customer with holdings,"1. Navigate to Overview tab
+2. Scroll to fund-wise section",Table displays with all holdings,P1,Functional,Yes,Both
+CV_OVW_022,Overview Tab,Fund Performance Table,Table columns correct,Verify all columns present in fund table,Customer with holdings,"1. Navigate to Overview tab
+2. Check fund table columns",Columns: Fund Name Invested Amount Current Value Returns Allocation %,P1,Functional,Yes,Both
+CV_OVW_023,Overview Tab,Fund Performance Table,Fund name with scheme code,Verify fund name shows scheme code,Customer with holdings,"1. Check fund name column
+2. Observe scheme code",Fund name displays with scheme code below/beside,P2,Functional,Yes,Both
+CV_OVW_024,Overview Tab,Fund Performance Table,Invested amount format,Verify invested amount in ₹ format,Customer with holdings,"1. Check Invested Amount column
+2. Observe formatting",Values display as ₹X.XX L or ₹X.XX Cr,P2,Functional,Yes,Both
+CV_OVW_025,Overview Tab,Fund Performance Table,Current value format,Verify current value in ₹ format,Customer with holdings,"1. Check Current Value column
+2. Observe formatting",Values display as ₹X.XX L or ₹X.XX Cr,P2,Functional,Yes,Both
+CV_OVW_026,Overview Tab,Fund Performance Table,Returns - percentage and absolute,Verify returns shows both % and ₹ value,Customer with holdings,"1. Check Returns column
+2. Observe format",Shows both percentage (XX.XX%) and absolute value (₹X.XX),P1,Functional,Yes,Both
+CV_OVW_027,Overview Tab,Fund Performance Table,Returns color - positive green,Verify positive returns in green,Holdings with positive returns,"1. Check Returns column for profitable holdings
+2. Observe color",Positive returns displayed in green,P2,UI,Yes,Both
+CV_OVW_028,Overview Tab,Fund Performance Table,Returns color - negative red,Verify negative returns in red,Holdings with negative returns,"1. Check Returns column for loss holdings
+2. Observe color",Negative returns displayed in red,P2,UI,Yes,Both
+CV_OVW_029,Overview Tab,Fund Performance Table,Allocation percentage total 100%,Verify allocation percentages sum to 100%,Customer with holdings,"1. Check all Allocation % values
+2. Sum them",Total allocation should be 100% (or close with rounding),P2,Functional,Yes,Both
+CV_OVW_030,Overview Tab,Fund Performance Table,Hide table when no holdings,Verify table hidden when no holdings,Customer without holdings,"1. Navigate to customer without holdings
+2. Check fund-wise section",Table not displayed or shows empty state,P2,Functional,Yes,Both
+CV_OVW_031,Overview Tab,Asset Allocation Chart,Display donut chart,Verify asset allocation donut chart renders,Customer with diversified portfolio,"1. Navigate to Overview tab
+2. Check right sidebar area",Donut chart displays (240px size),P1,Functional,Yes,Both
+CV_OVW_032,Overview Tab,Asset Allocation Chart,Chart segments by category,Verify donut shows segments per category,Customer with multiple categories,"1. Check donut chart segments
+2. Compare with portfolio",Each category has distinct colored segment,P1,Functional,Yes,Both
+CV_OVW_033,Overview Tab,Asset Allocation Chart,Chart legend display,Verify legend shows categories with values,Customer with portfolio,"1. Check below/beside donut chart
+2. Observe legend",Legend shows category names percentages and colors,P2,Functional,Yes,Both
+CV_OVW_034,Overview Tab,Asset Allocation Chart,Chart segment percentages,Verify segment sizes match allocation %,Customer with portfolio,"1. Check each segment
+2. Compare with allocation data",Segment sizes proportional to allocation percentages,P2,Functional,Yes,Both
+CV_OVW_035,Overview Tab,Asset Allocation Chart,Chart tooltip on hover,Verify hovering segment shows tooltip,Customer with portfolio,"1. Hover over donut segment
+2. Observe tooltip",Tooltip shows category name and percentage/value,P2,UI,No,Both
+CV_OVW_036,Overview Tab,Goal Allocation Summary,Display portfolio goal allocation card,Verify goal allocation summary card displays,Customer with goals,"1. Navigate to Overview tab
+2. Check summary cards area",Goal allocation summary card visible,P2,Functional,Yes,Both
+CV_OVW_037,Overview Tab,Goal Allocation Summary,Show total portfolio value,Verify total portfolio value in summary,Customer with goals,"1. Check goal allocation summary
+2. Find total value",Total portfolio value displayed,P2,Functional,Yes,Both
+CV_OVW_038,Overview Tab,Goal Allocation Summary,Show allocated value,Verify allocated value shows correctly,Customer with goal allocations,"1. Check goal allocation summary
+2. Find allocated value",Allocated value displayed,P2,Functional,Yes,Both
+CV_OVW_039,Overview Tab,Goal Allocation Summary,Show allocated percentage,Verify allocated percentage calculation,Customer with goal allocations,"1. Check goal allocation summary
+2. Verify percentage",Percentage = (Allocated/Total) * 100,P2,Functional,Yes,Both
+CV_OVW_040,Overview Tab,Goal Allocation Summary,Show goals count,Verify number of goals displayed,Customer with goals,"1. Check goal allocation summary
+2. Find goals count",Count matches actual goals for customer,P2,Functional,Yes,Both
+CV_OVW_041,Overview Tab,Holdings Grid,Display holdings grid,Verify holdings grid renders with scheme cards,Customer with holdings,"1. Navigate to Overview tab
+2. Scroll to holdings section",Holdings grid displays with SchemeCard components,P1,Functional,Yes,Both
+CV_OVW_042,Overview Tab,Holdings Grid,Grid responsive columns,Verify grid auto-fits columns (min 320px),Customer with holdings,"1. Check holdings grid
+2. Resize window",Grid adjusts columns based on viewport width,P2,UI,No,Both
+CV_OVW_043,Overview Tab,Holdings Grid,Holdings grid scrollable,Verify grid scrolls when many holdings,Customer with >10 holdings,"1. Check holdings section
+2. Scroll within grid",Grid scrolls vertically (max-height 600px),P2,UI,Yes,Both
+CV_OVW_044,Overview Tab,Holdings Grid,Scheme card click action,Verify clicking scheme card shows details,Customer with holdings,"1. Click on a SchemeCard
+2. Observe action",Scheme details modal/page opens or expands,P2,Functional,Yes,Both
+CV_OVW_045,Overview Tab,Empty State,Display empty state when no portfolio,Verify empty state message shows,Customer without portfolio,"1. Navigate to customer without transactions
+2. Check Overview tab",Shows 'Portfolio Data Not Available' message,P1,Functional,Yes,Both
+CV_OVW_046,Overview Tab,Empty State,Import transactions button in empty state,Verify import button shows in empty state,Customer without portfolio,"1. Check empty state message
+2. Find action button",'Import Transactions' button visible and clickable,P1,Functional,Yes,Both
+CV_OVW_047,Overview Tab,Loading State,Display loading spinner,Verify spinner shows while data loads,Fresh page load,"1. Navigate to CustomerView
+2. Observe Overview tab during load",Loading spinner or skeleton displays,P2,UI,No,Both
+CV_PORT_001,Portfolio Tab,Snapshots Table,Display snapshots table,Verify portfolio snapshots table renders,Customer with snapshot data,"1. Click Portfolio Snapshots tab
+2. Observe table",Expandable table with schemes and months displays,P1,Functional,Yes,Both
+CV_PORT_002,Portfolio Tab,Snapshots Table,Display 12 months columns,Verify table shows 12 months of data,Customer with 12+ months history,"1. Check table columns
+2. Count month columns",12 month columns displayed (recent first),P1,Functional,Yes,Both
+CV_PORT_003,Portfolio Tab,Snapshots Table,Month column format,Verify month columns formatted correctly,Customer with snapshot data,"1. Check month column headers
+2. Observe format",Format: Nov'24 Oct'24 Sep'24 etc.,P2,Functional,Yes,Both
+CV_PORT_004,Portfolio Tab,Snapshots Table,Schemes listed alphabetically,Verify schemes sorted alphabetically,Customer with multiple schemes,"1. Check scheme rows
+2. Verify order",Schemes listed in alphabetical order by name,P2,Functional,Yes,Both
+CV_PORT_005,Portfolio Tab,Snapshots Table,Scheme row expandable,Verify scheme rows can expand,Customer with snapshot data,"1. Click on scheme row
+2. Observe expansion",Row expands to show Units NAV Market Value Performance sections,P1,Functional,Yes,Both
+CV_PORT_006,Portfolio Tab,Snapshots Table,Units section display,Verify Units section shows correctly,Expanded scheme row,"1. Expand scheme row
+2. Check Units section",Units displayed for each month with 3 decimal places,P1,Functional,Yes,Both
+CV_PORT_007,Portfolio Tab,Snapshots Table,NAV section display,Verify NAV section shows correctly,Expanded scheme row,"1. Expand scheme row
+2. Check NAV section",NAV displayed as ₹XX.XX format for each month,P1,Functional,Yes,Both
+CV_PORT_008,Portfolio Tab,Snapshots Table,Market Value section display,Verify Market Value section shows correctly,Expanded scheme row,"1. Expand scheme row
+2. Check Market Value section",Market Value displayed as ₹XL format for each month,P1,Functional,Yes,Both
+CV_PORT_009,Portfolio Tab,Snapshots Table,Performance section display,Verify Performance section shows correctly,Expanded scheme row,"1. Expand scheme row
+2. Check Performance section",Performance displayed as +/-XX.XX% format,P1,Functional,Yes,Both
+CV_PORT_010,Portfolio Tab,Snapshots Table,Expand All button,Verify Expand All button works,On Portfolio tab,"1. Click 'Expand All' button
+2. Observe all rows",All scheme rows expand simultaneously,P2,Functional,Yes,Both
+CV_PORT_011,Portfolio Tab,Snapshots Table,Collapse All button,Verify Collapse All button works,All rows expanded,"1. Click 'Collapse All' button
+2. Observe all rows",All scheme rows collapse simultaneously,P2,Functional,Yes,Both
+CV_PORT_012,Portfolio Tab,Snapshots Table,Chart modal per scheme,Verify clicking scheme opens chart modal,On Portfolio tab,"1. Click scheme name
+2. Observe modal",Chart modal opens showing scheme historical performance,P2,Functional,Yes,Both
+CV_PORT_013,Portfolio Tab,Gap Alert,Display bookmark gap alert,Verify gap alert shows when applicable,Customer with bookmark gaps,"1. Navigate to Portfolio tab
+2. Check for gap alert",Gap alert banner/card displays with affected schemes,P2,Functional,Yes,Both
+CV_PORT_014,Portfolio Tab,Empty State,No snapshot data message,Verify message shows when no snapshots,Customer without snapshots,"1. Navigate to Portfolio tab
+2. Check display",Appropriate message shown when no snapshot data available,P2,Functional,Yes,Both
+CV_PORT_015,Portfolio Tab,Loading,Loading state during fetch,Verify loading indicator during data fetch,Fresh tab load,"1. Click Portfolio tab
+2. Observe during load",Loading spinner or skeleton displays,P2,UI,No,Both
+CV_GOAL_001,Goals Tab,Layout,Two-column layout,Verify goals tab has 2-column layout,On Goals tab,"1. Click Goals Management tab
+2. Observe layout",Left column (main content 1fr) and right column (sidebar 420px),P2,UI,No,Both
+CV_GOAL_002,Goals Tab,Summary Header,Goals summary in header,Verify header shows goals summary,Customer with goals,"1. Navigate to Goals tab
+2. Check header area",Shows 'X active X on track X behind' summary,P1,Functional,Yes,Both
+CV_GOAL_003,Goals Tab,Goal Cards,Display goal cards,Verify goal cards render for each goal,Customer with goals,"1. Navigate to Goals tab
+2. Check left column",Goal card displayed for each active goal,P1,Functional,Yes,Both
+CV_GOAL_004,Goals Tab,Goal Cards,Goal card - type icon,Verify goal type icon displays,Customer with goals,"1. Check goal card
+2. Find type icon",Appropriate icon for goal type (retirement education etc.),P2,UI,Yes,Both
+CV_GOAL_005,Goals Tab,Goal Cards,Goal card - title,Verify goal title displays,Customer with goals,"1. Check goal card
+2. Find title",Goal name/title prominently displayed,P1,Functional,Yes,Both
+CV_GOAL_006,Goals Tab,Goal Cards,Goal card - status badge On Track,Verify On Track badge styling,Goal that is on track,"1. Find on-track goal card
+2. Check status badge",Green 'On Track' badge displayed,P1,Functional,Yes,Both
+CV_GOAL_007,Goals Tab,Goal Cards,Goal card - status badge Behind,Verify Behind badge styling,Goal that is behind,"1. Find behind goal card
+2. Check status badge",Red/Orange 'Behind' badge displayed,P1,Functional,Yes,Both
+CV_GOAL_008,Goals Tab,Goal Cards,Goal card - status badge Ahead,Verify Ahead badge styling,Goal that is ahead,"1. Find ahead goal card
+2. Check status badge",Green/Blue 'Ahead' badge displayed,P1,Functional,Yes,Both
+CV_GOAL_009,Goals Tab,Goal Cards,Goal card - priority badge,Verify priority badge displays,Goal with priority set,"1. Check goal card
+2. Find priority indicator",Priority badge (High/Medium/Low) with appropriate color,P2,Functional,Yes,Both
+CV_GOAL_010,Goals Tab,Goal Cards,Goal card - asset allocation pie,Verify mini pie chart in card,Goal with allocations,"1. Check goal card center area
+2. Find pie chart",80x80px donut chart showing asset allocation,P2,Functional,Yes,Both
+CV_GOAL_011,Goals Tab,Goal Cards,Goal card - timeline slider,Verify timeline shows date range,Goal with target date,"1. Check goal card right side
+2. Find timeline",Timeline slider showing current position vs target date,P2,Functional,Yes,Both
+CV_GOAL_012,Goals Tab,Goal Cards,Goal card - progress bar,Verify progress bar displays,Goal with progress data,"1. Check goal card full width
+2. Find progress bar",Progress bar showing % completion toward target,P1,Functional,Yes,Both
+CV_GOAL_013,Goals Tab,Goal Cards,Goal card - current vs target values,Verify values display,Goal with calculations,"1. Check goal card
+2. Find current/target values",Current value and target amount both displayed in ₹ format,P1,Functional,Yes,Both
+CV_GOAL_014,Goals Tab,Goal Cards,Goal card - risk level,Verify risk level displays,Goal with risk assessment,"1. Check goal card
+2. Find risk level",Risk level indicator (Low/Medium/High) displayed,P2,Functional,Yes,Both
+CV_GOAL_015,Goals Tab,Goal Cards,Goal card - monthly SIP required,Verify SIP amount displays,Goal needing contributions,"1. Check goal card
+2. Find SIP section",Monthly SIP required amount in ₹ format,P1,Functional,Yes,Both
+CV_GOAL_016,Goals Tab,Goal Cards,Watchlist toggle - add,Verify can add goal to watchlist,Goal not in watchlist,"1. Find star icon on goal card
+2. Click to add",Star fills and goal added to watchlist (toast confirmation),P1,Functional,Yes,Both
+CV_GOAL_017,Goals Tab,Goal Cards,Watchlist toggle - remove,Verify can remove goal from watchlist,Goal in watchlist,"1. Find filled star on goal card
+2. Click to remove",Star unfills and goal removed from watchlist,P1,Functional,Yes,Both
+CV_GOAL_018,Goals Tab,Goal Cards,Recalculate button,Verify recalculate triggers calculation,Goal exists,"1. Find recalculate (refresh) button
+2. Click button
+3. Wait for completion",GoalRecalculationModal shows with new values,P1,Functional,Yes,Both
+CV_GOAL_019,Goals Tab,Goal Cards,View Details button,Verify view details navigates,Goal exists,"1. Find View Details button
+2. Click button",Navigates to /customers/{id}/goals/{goalId},P1,Functional,Yes,Both
+CV_GOAL_020,Goals Tab,Goal Cards,Delete button - opens modal,Verify delete shows confirmation,Goal exists,"1. Find delete (trash) button
+2. Click button",Delete confirmation modal opens,P1,Functional,Yes,Both
+CV_GOAL_021,Goals Tab,Goal Cards,Delete button - confirm delete,Verify confirming deletes goal,Delete modal open,"1. Click Confirm in delete modal
+2. Observe goal list",Goal removed from list (toast confirmation),P1,Functional,Yes,Both
+CV_GOAL_022,Goals Tab,Goal Cards,Delete button - cancel,Verify canceling keeps goal,Delete modal open,"1. Click Cancel in delete modal
+2. Observe goal list",Modal closes goal remains in list,P2,Functional,Yes,Both
+CV_GOAL_023,Goals Tab,Metrics Sidebar,Display 4 metric cards,Verify 2x2 metrics grid in sidebar,Customer with goals,"1. Check right sidebar
+2. Count metric cards",4 cards: Active Goals Total Target Current Value Goal SIPs,P1,Functional,Yes,Both
+CV_GOAL_024,Goals Tab,Metrics Sidebar,Active Goals card,Verify active goals count,Customer with goals,"1. Check Active Goals card
+2. Verify count",Count matches number of active goals,P1,Functional,Yes,Both
+CV_GOAL_025,Goals Tab,Metrics Sidebar,Active Goals gradient styling,Verify gradient background on card,On Goals tab,"1. Check Active Goals card styling
+2. Observe background",Card has gradient background (primary color),P3,UI,No,Both
+CV_GOAL_026,Goals Tab,Metrics Sidebar,Total Target card,Verify total target sum,Customer with goals,"1. Check Total Target card
+2. Verify amount",Amount equals sum of all goal targets,P1,Functional,Yes,Both
+CV_GOAL_027,Goals Tab,Metrics Sidebar,Current Value card,Verify current value sum,Customer with goals,"1. Check Current Value card
+2. Verify amount and percentage",Shows total current value and % of target,P1,Functional,Yes,Both
+CV_GOAL_028,Goals Tab,Metrics Sidebar,Goal SIPs card,Verify total monthly SIP,Customer with goals,"1. Check Goal SIPs card
+2. Verify amount",Amount equals sum of all goal monthly SIPs,P1,Functional,Yes,Both
+CV_GOAL_029,Goals Tab,Alerts Section,Display Alerts & Reminders,Verify JTBD list displays below goals,Customer with JTBDs,"1. Scroll down in Goals tab
+2. Find Alerts section",JTBDList component displays with customer alerts,P1,Functional,Yes,Both
+CV_GOAL_030,Goals Tab,Alerts Section,Filter excludes goal_tracking,Verify goal_tracking type hidden,Customer with various JTBDs,"1. Check Alerts section
+2. Verify visible types",goal_tracking type JTBDs not shown in this list,P2,Functional,Yes,Both
+CV_GOAL_031,Goals Tab,Alerts Section,Filter by type,Verify type filter works,Multiple JTBD types exist,"1. Use type filter dropdown
+2. Select specific type",Only selected type JTBDs shown,P2,Functional,Yes,Both
+CV_GOAL_032,Goals Tab,Alerts Section,Filter by priority,Verify priority filter works,JTBDs with various priorities,"1. Use priority filter dropdown
+2. Select High",Only High priority JTBDs shown,P2,Functional,Yes,Both
+CV_GOAL_033,Goals Tab,Alerts Section,Filter by status,Verify status filter works,Active and inactive JTBDs,"1. Use status filter dropdown
+2. Select Active",Only Active JTBDs shown,P2,Functional,Yes,Both
+CV_GOAL_034,Goals Tab,Quick Actions,Create Goal button,Verify Create Goal button works,On Goals tab,"1. Find Create Goal in quick actions
+2. Click button",Navigates to goal creation page,P1,Functional,Yes,Both
+CV_GOAL_035,Goals Tab,Empty State,No goals empty state,Verify empty state when no goals,Customer without goals,"1. Navigate to Goals tab for customer without goals
+2. Observe display",'No Goals Set' message with 'Create First Goal' button,P1,Functional,Yes,Both
+CV_GOAL_036,Goals Tab,Empty State,Create First Goal button,Verify empty state button works,No goals empty state showing,"1. Click 'Create First Goal' button
+2. Observe navigation",Navigates to goal creation page,P1,Functional,Yes,Both
+CV_AST_001,Assets Tab,Layout,Display CustomerAssetManager,Verify asset manager component loads,On Assets tab,"1. Click Asset Types tab
+2. Observe content",CustomerAssetManager component displays,P1,Functional,Yes,Both
+CV_AST_002,Assets Tab,Plan List,Display investment plans list,Verify investment plans are listed,Customer with investment plans,"1. Navigate to Assets tab
+2. Observe plan list",All investment plans displayed as cards,P1,Functional,Yes,Both
+CV_AST_003,Assets Tab,Plan Cards,Plan card - name,Verify plan name displays,Investment plan exists,"1. Check plan card
+2. Find name",Plan name prominently displayed,P1,Functional,Yes,Both
+CV_AST_004,Assets Tab,Plan Cards,Plan card - asset type,Verify asset type displays,Investment plan with asset type,"1. Check plan card
+2. Find asset type",Asset type label/badge displayed,P1,Functional,Yes,Both
+CV_AST_005,Assets Tab,Plan Cards,Plan card - dates,Verify created/updated dates display,Investment plan exists,"1. Check plan card
+2. Find dates",Created and/or updated dates shown,P2,Functional,Yes,Both
+CV_AST_006,Assets Tab,Plan Cards,Plan card - goal allocations,Verify GoalAllocationInfo shows,Plan with goal allocations,"1. Check plan card
+2. Find goal section",Goals allocated to this plan displayed,P2,Functional,Yes,Both
+CV_AST_007,Assets Tab,Plan Cards,Plan card - alert status,Verify alert toggle displays,Investment plan exists,"1. Check plan card
+2. Find alert toggle",Alert enabled/disabled toggle visible,P1,Functional,Yes,Both
+CV_AST_008,Assets Tab,Actions,Add New Plan button,Verify Add New Plan opens form,On Assets tab,"1. Find 'Add New Plan' button
+2. Click button",InvestmentPlanForm modal/page opens,P1,Functional,Yes,Both
+CV_AST_009,Assets Tab,Actions,Edit plan button,Verify edit opens plan for editing,Investment plan exists,"1. Find Edit button on plan card
+2. Click button",Plan opens in edit mode,P1,Functional,Yes,Both
+CV_AST_010,Assets Tab,Actions,Delete plan - opens confirmation,Verify delete shows confirmation modal,Investment plan exists,"1. Find Delete button on plan card
+2. Click button",Delete confirmation modal opens,P1,Functional,Yes,Both
+CV_AST_011,Assets Tab,Actions,Delete plan - confirm,Verify confirming deletes plan,Delete modal open,"1. Click Confirm in modal
+2. Observe plan list",Plan removed from list,P1,Functional,Yes,Both
+CV_AST_012,Assets Tab,Actions,Toggle alerts on,Verify can enable alerts for plan,Plan with alerts disabled,"1. Find alert toggle
+2. Toggle ON",Alerts enabled for plan (toast confirmation),P1,Functional,Yes,Both
+CV_AST_013,Assets Tab,Actions,Toggle alerts off,Verify can disable alerts for plan,Plan with alerts enabled,"1. Find alert toggle
+2. Toggle OFF",Alerts disabled for plan (toast confirmation),P1,Functional,Yes,Both
+CV_AST_014,Assets Tab,Empty State,No plans empty state,Verify empty state when no plans,Customer without investment plans,"1. Navigate to Assets tab for customer without plans
+2. Observe display",Empty state message with Add Plan button,P1,Functional,Yes,Both
+CV_AST_015,Assets Tab,Loading,Loading state,Verify loading indicator during fetch,Fresh tab load,"1. Click Assets tab
+2. Observe during load",Loading spinner displays,P2,UI,No,Both
+CV_JOB_001,Jobs Tab,Layout,Display JTBDExecutionTimeline,Verify timeline component loads,On Jobs tab,"1. Click Jobs To Do tab
+2. Observe content",JTBDExecutionTimeline component displays,P1,Functional,Yes,Both
+CV_JOB_002,Jobs Tab,Timeline,Execution items grouped,Verify items grouped by date/status,Customer with JTBD executions,"1. Navigate to Jobs tab
+2. Check item grouping",Items grouped logically (by date or status),P1,Functional,Yes,Both
+CV_JOB_003,Jobs Tab,Timeline,Planned items display,Verify planned/upcoming items show,JTBD with future dates,"1. Check timeline
+2. Find Planned section",Planned items displayed with upcoming dates,P1,Functional,Yes,Both
+CV_JOB_004,Jobs Tab,Timeline,Due items display,Verify due items highlighted,JTBD due today,"1. Check timeline
+2. Find Due section",Due items prominently displayed/highlighted,P1,Functional,Yes,Both
+CV_JOB_005,Jobs Tab,Timeline,Overdue items display,Verify overdue items show with warning,JTBD past due date,"1. Check timeline
+2. Find Overdue section",Overdue items displayed with warning styling (red),P1,Functional,Yes,Both
+CV_JOB_006,Jobs Tab,Timeline,Completed items display,Verify completed items show,Completed JTBD executions,"1. Check timeline
+2. Find Completed section",Completed items displayed with checkmark,P2,Functional,Yes,Both
+CV_JOB_007,Jobs Tab,Actions,Mark as complete,Verify can mark execution complete,Due or overdue JTBD,"1. Find Mark Complete button
+2. Click button",Execution marked complete moves to completed section,P1,Functional,Yes,Both
+CV_JOB_008,Jobs Tab,Actions,Reschedule,Verify can reschedule execution,JTBD execution exists,"1. Find Reschedule option
+2. Select new date
+3. Confirm",Execution rescheduled to new date,P2,Functional,Yes,Both
+CV_JOB_009,Jobs Tab,Actions,Cancel with reason,Verify can cancel with reason,JTBD execution exists,"1. Find Cancel option
+2. Enter cancellation reason
+3. Confirm",Execution cancelled with reason recorded,P2,Functional,Yes,Both
+CV_JOB_010,Jobs Tab,Actions,View details,Verify can view execution details,JTBD execution exists,"1. Click on execution item
+2. Observe details",Execution details modal/panel opens,P2,Functional,Yes,Both
+CV_JOB_011,Jobs Tab,Filters,Filter by type,Verify type filter works,Multiple JTBD types,"1. Use type filter
+2. Select specific type",Only selected type executions shown,P2,Functional,Yes,Both
+CV_JOB_012,Jobs Tab,Filters,Filter by priority,Verify priority filter works,Various priority JTBDs,"1. Use priority filter
+2. Select Critical",Only Critical priority executions shown,P2,Functional,Yes,Both
+CV_JOB_013,Jobs Tab,Filters,Filter by status,Verify status filter works,Various status JTBDs,"1. Use status filter
+2. Select Overdue",Only Overdue executions shown,P2,Functional,Yes,Both
+CV_JOB_014,Jobs Tab,Empty State,No jobs empty state,Verify empty state when no jobs,Customer without JTBDs,"1. Navigate to Jobs tab without jobs
+2. Observe display",Empty state message displayed,P2,Functional,Yes,Both
+CV_TXN_001,Transactions Tab,Layout,Display TransactionTable,Verify transaction table renders,On Transactions tab,"1. Click Transactions tab
+2. Observe content",TransactionTable component displays,P1,Functional,Yes,Both
+CV_TXN_002,Transactions Tab,Table Columns,All columns present,Verify all expected columns display,Customer with transactions,"1. Check table headers
+2. Verify columns",Columns: Date Scheme Folio Type Amount Units NAV Portfolio Flag Actions,P1,Functional,Yes,Both
+CV_TXN_003,Transactions Tab,Table Data,Date column sortable,Verify can sort by date,Customer with transactions,"1. Click Date column header
+2. Click again for reverse",Transactions sort by date ASC then DESC,P1,Functional,Yes,Both
+CV_TXN_004,Transactions Tab,Table Data,Date format,Verify date displays correctly,Customer with transactions,"1. Check Date column
+2. Observe format",Dates display in readable format (DD/MM/YYYY or similar),P2,Functional,Yes,Both
+CV_TXN_005,Transactions Tab,Table Data,Scheme name display,Verify scheme name shows,Customer with transactions,"1. Check Scheme column
+2. Observe display",Scheme name displayed clearly,P1,Functional,Yes,Both
+CV_TXN_006,Transactions Tab,Table Data,Folio number display,Verify folio number shows,Customer with transactions,"1. Check Folio column
+2. Observe display",Folio number displayed,P2,Functional,Yes,Both
+CV_TXN_007,Transactions Tab,Table Data,Transaction type - Addition green,Verify addition types in green,Purchase/SIP transaction,"1. Check Type column for purchase
+2. Observe color",Addition transactions displayed in green,P2,UI,Yes,Both
+CV_TXN_008,Transactions Tab,Table Data,Transaction type - Deduction red,Verify deduction types in red,Redemption/SWP transaction,"1. Check Type column for redemption
+2. Observe color",Deduction transactions displayed in red,P2,UI,Yes,Both
+CV_TXN_009,Transactions Tab,Table Data,Amount format,Verify amount in ₹ format,Customer with transactions,"1. Check Amount column
+2. Observe format",Amounts display as ₹X,XXX.XX,P2,Functional,Yes,Both
+CV_TXN_010,Transactions Tab,Table Data,Units format,Verify units with decimals,Customer with transactions,"1. Check Units column
+2. Observe format",Units display with appropriate decimal places,P2,Functional,Yes,Both
+CV_TXN_011,Transactions Tab,Table Data,NAV format,Verify NAV in ₹ format,Customer with transactions,"1. Check NAV column
+2. Observe format",NAV displays as ₹XX.XXXX,P2,Functional,Yes,Both
+CV_TXN_012,Transactions Tab,Portfolio Flag,Portfolio flag checkbox display,Verify checkbox shows,Customer with transactions,"1. Check Portfolio Flag column
+2. Observe checkbox",Checkbox displayed for each row,P1,Functional,Yes,Both
+CV_TXN_013,Transactions Tab,Portfolio Flag,Toggle portfolio flag ON,Verify can include in portfolio,Transaction excluded,"1. Find excluded transaction
+2. Check the checkbox",Transaction included in portfolio calculations (checkbox checked),P1,Functional,Yes,Both
+CV_TXN_014,Transactions Tab,Portfolio Flag,Toggle portfolio flag OFF,Verify can exclude from portfolio,Transaction included,"1. Find included transaction
+2. Uncheck the checkbox",Transaction excluded from portfolio calculations,P1,Functional,Yes,Both
+CV_TXN_015,Transactions Tab,Actions,View transaction button,Verify can view transaction details,Transaction exists,"1. Find View button in Actions
+2. Click button",Navigates to transaction details page,P2,Functional,Yes,Both
+CV_TXN_016,Transactions Tab,Actions,Delete transaction - opens modal,Verify delete shows confirmation,Transaction exists,"1. Find Delete button in Actions
+2. Click button",Delete confirmation modal opens,P1,Functional,Yes,Both
+CV_TXN_017,Transactions Tab,Actions,Delete transaction - confirm,Verify confirming deletes transaction,Delete modal open,"1. Click Confirm in modal
+2. Observe table",Transaction removed from table,P1,Functional,Yes,Both
+CV_TXN_018,Transactions Tab,Pagination,Page size 20,Verify 20 transactions per page,Customer with >20 transactions,"1. Count rows on first page
+2. Check pagination info",20 rows displayed on page,P2,Functional,Yes,Both
+CV_TXN_019,Transactions Tab,Pagination,Total count display,Verify total count shows,Customer with transactions,"1. Check pagination area
+2. Find total count",Total transaction count displayed,P2,Functional,Yes,Both
+CV_TXN_020,Transactions Tab,Pagination,Next page navigation,Verify can go to next page,Multiple pages exist,"1. Click Next button
+2. Observe table",Page 2 transactions load,P1,Functional,Yes,Both
+CV_TXN_021,Transactions Tab,Pagination,Previous page navigation,Verify can go to previous page,On page 2+,"1. Click Previous button
+2. Observe table",Previous page transactions load,P1,Functional,Yes,Both
+CV_TXN_022,Transactions Tab,Pagination,Page indicator,Verify page indicator updates,Navigate between pages,"1. Navigate pages
+2. Observe indicator",Page indicator shows current page (e.g. 'Page 2 of 5'),P2,Functional,Yes,Both
+CV_TXN_023,Transactions Tab,Sorting,Default sort by date DESC,Verify default sort order,Fresh page load,"1. Navigate to Transactions tab
+2. Check order",Transactions sorted by date descending (newest first),P2,Functional,Yes,Both
+CV_TXN_024,Transactions Tab,Sorting,Toggle sort order,Verify clicking column toggles order,Transactions displayed,"1. Click Date header once
+2. Click again",Order toggles between ASC and DESC,P2,Functional,Yes,Both
+CV_TXN_025,Transactions Tab,Empty State,No transactions message,Verify empty state shows,Customer without transactions,"1. Navigate to Transactions tab for customer without transactions
+2. Observe display",'No Transactions Found' message displayed,P1,Functional,Yes,Both
+CV_TXN_026,Transactions Tab,Loading,Loading state,Verify loading indicator during fetch,Fresh tab load,"1. Click Transactions tab
+2. Observe during load",Loading spinner displays,P2,UI,No,Both
+CV_FAM_001,Family View,Switch,Activate family view,Verify switching to family view,Customer with family_code,"1. Click Family in toggle
+2. Observe changes",View switches to family mode URL updated,P1,Functional,Yes,Both
+CV_FAM_002,Family View,Header,Family Networth in metrics,Verify metrics show family data,In family view,"1. Check metrics bar
+2. Observe title and values",Title shows 'Family Networth' with aggregated values,P1,Functional,Yes,Both
+CV_FAM_003,Family View,Tabs,Only Overview tab visible,Verify other tabs hidden,In family view,"1. Check tab navigation
+2. Count visible tabs",Only 'Portfolio Overview' tab visible,P1,Functional,Yes,Both
+CV_FAM_004,Family View,Content,FamilyPortfolioView displays,Verify family content loads,In family view on Overview,"1. Check Overview tab content
+2. Observe component",FamilyPortfolioView component displays,P1,Functional,Yes,Both
+CV_FAM_005,Family View,Chart,Family networth projection chart,Verify chart shows family data,In family view,"1. Check networth chart
+2. Verify data",Chart shows aggregated family networth,P1,Functional,Yes,Both
+CV_FAM_006,Family View,Members,Member tabs display,Verify tabs for each member,Family with multiple members,"1. Check member navigation
+2. Count tabs",Tab for each family member visible,P1,Functional,Yes,Both
+CV_FAM_007,Family View,Members,Family head indicator,Verify head is marked,Family with head,"1. Check member tabs
+2. Find head indicator",Family head has distinct indicator/badge,P2,Functional,Yes,Both
+CV_FAM_008,Family View,Members,Member selection updates chart,Verify selecting member filters chart,Multiple family members,"1. Click different member tabs
+2. Observe chart",Chart updates to show selected member's data,P1,Functional,Yes,Both
+CV_FAM_009,Family View,Navigation,Navigate to member dashboard,Verify can navigate to member view,Member tab selected,"1. Find 'View Dashboard' button
+2. Click button",Navigates to /customers/{memberId} with individual view,P1,Functional,Yes,Both
+CV_FAM_010,Family View,Data,Family portfolio aggregation,Verify totals are aggregated,Family with multiple members with portfolios,"1. Check family total
+2. Compare with sum of members",Family total equals sum of all member portfolios,P1,Functional,Yes,Both
+CV_FAM_011,Family View,Switch Back,Return to individual view,Verify can switch back,In family view,"1. Click Individual in toggle
+2. Observe changes",View returns to individual mode all tabs visible,P1,Functional,Yes,Both
+CV_FAM_012,Family View,URL,URL parameter persists,Verify view=family in URL,In family view,"1. Check URL
+2. Refresh page",URL contains ?view=family and state persists after refresh,P2,Functional,No,Both
+CV_MOD_001,Modals,JTBD Setup,Modal opens correctly,Verify JTBDSetupModal opens,Click New Alert,"1. Click 'New Alert' button
+2. Observe modal",Modal opens with alert type options,P1,Functional,Yes,Both
+CV_MOD_002,Modals,JTBD Setup,Portfolio Alert form,Verify Portfolio Alert form displays,Select Portfolio Alert type,"1. Open JTBD modal
+2. Select Portfolio Alert (if visible)",Form shows: Scheme Transaction type Frequency etc.,P1,Functional,Yes,Both
+CV_MOD_003,Modals,JTBD Setup,Time-Based form,Verify Time-Based form displays,Select Time-Based type,"1. Open JTBD modal
+2. Select Time-Based",Form shows: Date picker Recurring option Description,P1,Functional,Yes,Both
+CV_MOD_004,Modals,JTBD Setup,Profile Trigger form,Verify Profile Trigger form displays,Select Profile Trigger type,"1. Open JTBD modal
+2. Select Profile Trigger",Form shows: Trigger type (birthday/anniversary) Days before,P1,Functional,Yes,Both
+CV_MOD_005,Modals,JTBD Setup,Goal Tracking redirects,Verify Goal Tracking redirects to goal page,Select Goal Tracking type,"1. Open JTBD modal
+2. Select Goal Tracking",Redirects to goal creation page,P2,Functional,Yes,Both
+CV_MOD_006,Modals,JTBD Setup,Form validation,Verify required fields validated,Incomplete form submission,"1. Try to submit with missing required fields
+2. Observe validation",Validation errors shown for required fields,P1,Functional,No,Both
+CV_MOD_007,Modals,JTBD Setup,Successful creation,Verify JTBD created successfully,Complete valid form,"1. Fill all required fields
+2. Submit form",JTBD created success toast shown modal closes,P1,Functional,Yes,Both
+CV_MOD_008,Modals,JTBD Setup,Cancel closes modal,Verify cancel button closes modal,Modal open,"1. Click Cancel button
+2. Observe modal",Modal closes no JTBD created,P2,Functional,No,Both
+CV_MOD_009,Modals,Goal Recalculation,Modal shows calculation results,Verify recalculation modal displays results,After recalculate click,"1. Click Recalculate on goal
+2. Wait for calculation
+3. Observe modal",Modal shows: Previous corpus New corpus Status,P1,Functional,Yes,Both
+CV_MOD_010,Modals,Goal Recalculation,Previous corpus display,Verify previous value shown,Recalculation complete,"1. Check modal content
+2. Find previous corpus",Previous corpus value displayed,P2,Functional,Yes,Both
+CV_MOD_011,Modals,Goal Recalculation,New corpus display,Verify new value shown,Recalculation complete,"1. Check modal content
+2. Find new corpus",New corpus value displayed,P2,Functional,Yes,Both
+CV_MOD_012,Modals,Goal Recalculation,Status indicator,Verify status shows improved/declined,Recalculation complete,"1. Check modal content
+2. Find status",Status indicator (improved/declined/unchanged) shown,P2,Functional,Yes,Both
+CV_MOD_013,Modals,Create Meeting,Modal opens with fields,Verify meeting modal has all fields,Click Meeting button,"1. Click 'Meeting' button
+2. Observe modal",Modal shows: Date Time Mode Location Agenda fields,P1,Functional,Yes,Both
+CV_MOD_014,Modals,Create Meeting,Date picker works,Verify can select meeting date,Modal open,"1. Click date field
+2. Select date",Date picker opens and selection works,P1,Functional,No,Both
+CV_MOD_015,Modals,Create Meeting,Time picker works,Verify can select meeting time,Modal open,"1. Click time field
+2. Select time",Time picker opens and selection works,P1,Functional,No,Both
+CV_MOD_016,Modals,Create Meeting,Mode selection,Verify mode options available,Modal open,"1. Click mode dropdown
+2. Check options",Options: In-person Video Phone available,P2,Functional,No,Both
+CV_MOD_017,Modals,Create Meeting,Location field,Verify location can be entered,Modal open,"1. Enter location text
+2. Observe field",Location text accepted,P2,Functional,No,Both
+CV_MOD_018,Modals,Create Meeting,Agenda field,Verify agenda can be entered,Modal open,"1. Enter agenda text
+2. Observe field",Agenda text accepted (multiline),P2,Functional,No,Both
+CV_MOD_019,Modals,Create Meeting,Successful creation,Verify meeting created,Complete valid form,"1. Fill all fields
+2. Submit form",Meeting created success toast modal closes,P1,Functional,Yes,Both
+CV_MOD_020,Modals,Delete Confirmation,Modal styling,Verify delete modal is prominent,Delete action triggered,"1. Click any delete button
+2. Observe modal",Modal centered with backdrop blur,P2,UI,No,Both
+CV_MOD_021,Modals,Delete Confirmation,Confirm and Cancel buttons,Verify both buttons present,Delete modal open,"1. Check modal buttons
+2. Verify presence",Both Confirm and Cancel buttons visible,P1,Functional,No,Both
+CV_MOD_022,Modals,Delete Confirmation,Escape key closes,Verify Escape closes modal,Delete modal open,"1. Press Escape key
+2. Observe modal",Modal closes without deletion,P2,Functional,No,Both
+CV_MOD_023,Modals,Delete Confirmation,Click outside closes,Verify clicking backdrop closes modal,Delete modal open,"1. Click outside modal
+2. Observe modal",Modal closes without deletion,P2,Functional,No,Both
+CV_ERR_001,Error States,Customer Load,Invalid customer ID error,Verify error for invalid ID,Navigate to non-existent customer,"1. Navigate to /customers/99999
+2. Observe display",Error message: Customer not found or invalid,P1,Functional,Yes,Both
+CV_ERR_002,Error States,Customer Load,Failed to load customer,Verify error with retry on API failure,API returns error,"1. Simulate API failure
+2. Observe display",Error message with Retry button,P1,Functional,No,Both
+CV_ERR_003,Error States,Portfolio,No portfolio data message,Verify empty state for no portfolio,Customer without transactions,"1. Navigate to customer without portfolio
+2. Check Overview tab",'Portfolio Data Not Available' with import link,P1,Functional,Yes,Both
+CV_ERR_004,Error States,Transactions,No transactions message,Verify empty state for no transactions,Customer without transactions,"1. Navigate to Transactions tab
+2. Check display",'No Transactions Found' message,P1,Functional,Yes,Both
+CV_ERR_005,Error States,Goals,No goals message,Verify empty state for no goals,Customer without goals,"1. Navigate to Goals tab
+2. Check display",'No Goals Set' with create button,P1,Functional,Yes,Both
+CV_ERR_006,Error States,JTBD,Failed JTBD load,Verify error handling for JTBD failure,JTBD API fails,"1. Simulate JTBD API failure
+2. Check Jobs tab",Error message displayed,P2,Functional,No,Both
+CV_ERR_007,Error States,User Friendly,All errors user-friendly,Verify no technical errors shown to user,Various error scenarios,"1. Trigger various errors
+2. Check messages",All error messages are user-friendly not technical,P1,Functional,No,Both
+CV_ERR_008,Error States,Retry,Retry functionality works,Verify retry button works,Error with retry button shown,"1. Click Retry button
+2. Observe behavior",Data fetch retried and loads if successful,P2,Functional,No,Both
+CV_PERF_001,Performance,Chart Resize,Charts resize on window resize,Verify charts are responsive,Charts displayed,"1. Resize browser window
+2. Observe charts",Charts resize without distortion or overflow,P2,UI,No,Both
+CV_PERF_002,Performance,Tab Switch,Tab switching performance,Verify tabs switch quickly,Multiple tabs visited,"1. Click between tabs rapidly
+2. Observe performance",Tab content loads within 1-2 seconds,P2,Performance,No,Both
+CV_PERF_003,Performance,Data Refetch,Data refetches on return,Verify stale data refreshed,Navigate away and back,"1. Navigate away from CustomerView
+2. Return to CustomerView",Data is refreshed/current not stale,P2,Functional,No,Both
+CV_PERF_004,Performance,Memory,No memory leaks on tab switch,Verify memory stable,Extended tab switching,"1. Switch between tabs many times
+2. Monitor memory",Memory usage remains stable,P2,Performance,No,Both
+CV_PERF_005,Performance,Modal,Modal opens/closes smoothly,Verify modal animations smooth,Modal interactions,"1. Open and close modals
+2. Observe transitions",Smooth open/close animations no jank,P3,UI,No,Both
+CV_PERF_006,Performance,Pagination,Pagination loads correctly,Verify page changes are quick,Large transaction list,"1. Navigate through pages
+2. Observe load times",Each page loads within 1-2 seconds,P2,Performance,Yes,Both
+CV_PERF_007,Performance,Export,Chart export completes,Verify PNG export works,Chart displayed,"1. Click Export button
+2. Wait for download",PNG file downloads within 3-5 seconds,P2,Functional,No,Both
+CV_PERF_008,Performance,Fullscreen,Fullscreen mode works,Verify fullscreen enter/exit,Chart displayed,"1. Enter fullscreen
+2. Exit fullscreen",Fullscreen toggles smoothly,P2,Functional,No,Both
+CV_DARK_001,Dark Mode,Colors,Colors adapt to dark mode,Verify color scheme changes,Toggle dark mode,"1. Enable dark mode
+2. Check all elements",All colors adapt appropriately for dark background,P2,UI,No,Both
+CV_DARK_002,Dark Mode,Text,Text contrast in dark mode,Verify text readable,In dark mode,"1. Check text elements
+2. Verify contrast",Text has sufficient contrast against dark background,P2,UI,No,Both
+CV_DARK_003,Dark Mode,Charts,Charts display in dark mode,Verify charts adapt,In dark mode,"1. Check all charts
+2. Verify visibility",Charts display correctly with appropriate colors,P2,UI,No,Both
+CV_DARK_004,Dark Mode,Badges,Badges visible in dark mode,Verify badges stand out,In dark mode,"1. Check status badges
+2. Verify visibility",Badges remain visible and color-coded,P2,UI,No,Both
+CV_DARK_005,Dark Mode,Tables,Tables readable in dark mode,Verify table styling,In dark mode,"1. Check table elements
+2. Verify styling",Table borders rows headers all visible,P2,UI,No,Both
+CV_RESP_001,Responsive,Mobile,CustomerView on mobile,Verify layout on mobile viewport,Mobile viewport (<768px),"1. Resize to mobile width
+2. Check layout",Layout adapts - stacking navigation adjustments,P2,UI,No,Both
+CV_RESP_002,Responsive,Tablet,CustomerView on tablet,Verify layout on tablet viewport,Tablet viewport (768-1024px),"1. Resize to tablet width
+2. Check layout",Layout adapts - 2 columns may stack,P2,UI,No,Both
+CV_RESP_003,Responsive,Charts Mobile,Charts on mobile,Verify charts work on mobile,Mobile viewport,"1. Check charts on mobile
+2. Verify interactions",Charts display and respond to touch,P2,UI,No,Both
+CV_RESP_004,Responsive,Tables Mobile,Tables on mobile,Verify tables scroll on mobile,Mobile viewport,"1. Check transaction table
+2. Verify scroll",Table scrolls horizontally all columns accessible,P2,UI,No,Both
+CV_RESP_005,Responsive,Modals Mobile,Modals on mobile,Verify modals fit mobile screen,Mobile viewport,"1. Open modals
+2. Check display",Modals fit screen and are usable,P2,UI,No,Both
+CV_NAV_001,Navigation,Deep Link,Direct URL to tab works,Verify deep link to specific tab,Direct URL navigation,"1. Navigate to /customers/123?tab=transactions
+2. Observe state",Transactions tab is active and loaded,P1,Functional,No,Both
+CV_NAV_002,Navigation,Deep Link,Direct URL to family view,Verify deep link to family view,Direct URL navigation,"1. Navigate to /customers/123?view=family
+2. Observe state",Family view is active,P1,Functional,No,Both
+CV_NAV_003,Navigation,Deep Link,Combined URL parameters,Verify multiple params work,Direct URL navigation,"1. Navigate to /customers/123?tab=goals&view=family
+2. Observe state",Correct tab and view mode active,P1,Functional,No,Both
+CV_NAV_004,Navigation,Browser Back,Back button works,Verify browser back navigates correctly,After tab changes,"1. Change tabs several times
+2. Click browser back",Returns to previous tab/state,P2,Functional,No,Both
+CV_NAV_005,Navigation,Refresh,Page refresh preserves state,Verify state persists after refresh,On specific tab,"1. Navigate to Goals tab
+2. Refresh page",Goals tab still active after refresh,P2,Functional,No,Both
+CV_INT_001,Integration,Portfolio Refresh,Portfolio updates after transaction,Verify portfolio reflects new transaction,New transaction added,"1. Add new transaction
+2. Navigate to Overview tab",Portfolio values updated with new transaction,P1,Integration,Yes,Both
+CV_INT_002,Integration,Goal Allocation,Goal updates after investment allocation,Verify goal progress after allocation,Investment allocated to goal,"1. Allocate investment to goal
+2. Check goal card",Goal progress reflects allocation,P1,Integration,Yes,Both
+CV_INT_003,Integration,NAV Update,Portfolio updates with new NAV,Verify values update after NAV refresh,New NAV data available,"1. Update NAV for scheme
+2. Check portfolio values",Portfolio current values reflect new NAV,P1,Integration,Yes,Both
+CV_INT_004,Integration,Alert Toggle,Investment alert affects JTBD,Verify toggling investment alerts,Investment with alerts,"1. Toggle alerts off on investment plan
+2. Check JTBD list",Related alerts disabled/hidden,P1,Integration,Yes,Both
+CV_INT_005,Integration,Meeting Creation,Meeting appears in calendar,Verify created meeting is tracked,Create meeting via modal,"1. Create meeting
+2. Check Jobs tab",Meeting appears in execution timeline,P1,Integration,Yes,Both
+CV_API_001,API Calls,Customer,Customer data loads,Verify /api/customers/{id} called,Fresh page load,"1. Open network tab
+2. Navigate to CustomerView",API call made and customer data received,P1,Integration,Yes,Both
+CV_API_002,API Calls,Portfolio,Portfolio data loads,Verify /api/customers/{id}/portfolio called,Fresh page load,"1. Check network requests
+2. Find portfolio call",Portfolio API called with customer ID,P1,Integration,Yes,Both
+CV_API_003,API Calls,Goals,Goals data loads,Verify /api/customers/{id}/goals called,Navigate to Goals tab,"1. Click Goals tab
+2. Check network",Goals API called,P1,Integration,Yes,Both
+CV_API_004,API Calls,Transactions,Transactions data loads,Verify transactions API called,Navigate to Transactions tab,"1. Click Transactions tab
+2. Check network",Transactions API called with pagination params,P1,Integration,Yes,Both
+CV_API_005,API Calls,JTBD,JTBD data loads,Verify JTBD API called,Page load or Jobs tab,"1. Check network requests
+2. Find JTBD call",JTBD configurations API called,P1,Integration,Yes,Both
+CV_API_006,API Calls,Family,Family data loads in family view,Verify family API called,Switch to family view,"1. Switch to Family view
+2. Check network",Family portfolio/members API called,P1,Integration,Yes,Both
+CV_API_007,API Calls,Market Index,Comparison index loads,Verify market index API called,Show index comparison,"1. Enable index comparison
+2. Check network",Market index data API called,P2,Integration,Yes,Both
+CV_API_008,API Calls,Mutations,Create JTBD API called,Verify POST on JTBD creation,Create new alert,"1. Create new alert via modal
+2. Check network",POST /api/jtbds called with correct payload,P1,Integration,Yes,Both
+CV_API_009,API Calls,Mutations,Delete transaction API called,Verify DELETE on transaction removal,Delete transaction,"1. Delete a transaction
+2. Check network",DELETE /api/transactions/{id} called,P1,Integration,Yes,Both
+CV_API_010,API Calls,Mutations,Toggle portfolio flag API called,Verify PATCH on flag toggle,Toggle portfolio flag,"1. Toggle portfolio flag on transaction
+2. Check network",PATCH /api/transactions/{id}/portfolio-flag called,P1,Integration,Yes,Both
