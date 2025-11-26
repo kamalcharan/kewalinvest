@@ -185,9 +185,10 @@ const CustomerViewPage: React.FC = () => {
           endDate
         );
 
-        if (monthlyDataResponse.success && monthlyDataResponse.data) {
+        if (monthlyDataResponse.success && monthlyDataResponse.data && monthlyDataResponse.data.length > 0) {
           // Data is already in {date, value} format
           setComparisonIndexData(monthlyDataResponse.data);
+          setShowComparison(true); // Enable comparison when data is loaded
         }
       } catch (error) {
         console.error('Error loading index comparison:', error);

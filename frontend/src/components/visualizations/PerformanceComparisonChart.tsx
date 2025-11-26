@@ -509,16 +509,20 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
             strokeWidth={2.5}
             dot={(props: any) => {
               const { cx, cy, payload, index } = props;
-              if (cx === undefined || cy === undefined) return null;
+              // Return empty group if coordinates are invalid (fixes TS error)
+              if (cx === undefined || cy === undefined) {
+                return <g key={`empty-${index}`} />;
+              }
 
               // Get MoM for this point to determine color
               const mom = payload?.momChangePercentage;
               const isSignificant = payload?.isSignificantInvestment;
 
               // Determine dot color based on MoM
+              // Green = positive returns, Red = negative returns
               let dotColor = portfolioColor; // Default/first point
               if (mom !== null && mom !== undefined) {
-                dotColor = mom >= 0 ? '#10B981' : '#EF4444'; // Green for positive, red for negative
+                dotColor = mom >= 0 ? '#10B981' : '#EF4444';
               }
 
               // Larger dot for significant investment
