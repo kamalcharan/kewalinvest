@@ -562,7 +562,7 @@ const CustomerDashboardPage: React.FC = () => {
             )}
 
             {/* Asset Allocation */}
-            {selectedPortfolio && selectedPortfolio.allocation && selectedPortfolio.allocation.length > 0 && (
+            {selectedCustomerId && (
               <div style={{
                 backgroundColor: colors.utility.secondaryBackground,
                 borderRadius: '12px',
@@ -579,7 +579,7 @@ const CustomerDashboardPage: React.FC = () => {
                   Asset Allocation
                 </h4>
                 <PortfolioDonutChart
-                  allocation={selectedPortfolio.allocation}
+                  customerId={selectedCustomerId}
                   size={160}
                   strokeWidth={24}
                   showLegend={true}
