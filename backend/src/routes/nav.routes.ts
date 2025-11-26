@@ -339,6 +339,15 @@ router.get('/timeseries/:schemeId', navController.getNavTimeSeries);
 router.post('/download/daily', downloadRateLimit, navController.triggerDailyDownload);
 
 /**
+ * Download NAV for a single scheme (from AMFI daily data)
+ * POST /api/nav/download/scheme/:schemeCode
+ *
+ * Used by "Update NAV" button in Cruise Control
+ * Downloads latest NAV from AMFI for the specified scheme
+ */
+router.post('/download/scheme/:schemeCode', downloadRateLimit, navController.downloadSchemeNav);
+
+/**
  * Trigger historical NAV download (heavy operation)
  * POST /api/nav/download/historical
  * Body: { 

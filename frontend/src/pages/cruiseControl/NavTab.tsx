@@ -98,12 +98,15 @@ export const NavTab: React.FC = () => {
       setError(null);
       const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.NAV_STATISTICS) as any;
       if (response.success && response.data) {
+        // Map backend field names to frontend state
+        // Backend returns: total_schemes_tracked, schemes_with_daily_download,
+        // schemes_with_historical_data, schemes_without_calculations, failed_downloads_today
         setStats({
-          totalActive: response.data.total_active_navs || 0,
-          pendingDownloads: response.data.pending_downloads || 0,
-          failedDownloads: response.data.failed_downloads || 0,
-          pendingBeyondDaily: response.data.pending_beyond_daily || 0,
-          metricsPending: response.data.metrics_pending || 0
+          totalActive: response.data.total_schemes_tracked || 0,
+          pendingDownloads: response.data.schemes_with_daily_download || 0,  // Schemes with daily download enabled
+          failedDownloads: response.data.failed_downloads_today || 0,
+          pendingBeyondDaily: (response.data.total_schemes_tracked || 0) - (response.data.schemes_with_historical_data || 0),  // Schemes without any NAV data
+          metricsPending: response.data.schemes_without_calculations || 0
         });
       }
     } catch (err: any) {
