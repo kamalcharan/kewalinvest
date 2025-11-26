@@ -46,7 +46,7 @@ export class N8NIntegrationService {
     this.importService = new ImportService();
     this.N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678';
     this.N8N_API_KEY = process.env.N8N_API_KEY;
-    this.WEBHOOK_TIMEOUT = parseInt(process.env.N8N_WEBHOOK_TIMEOUT || '30000');
+    this.WEBHOOK_TIMEOUT = parseInt(process.env.N8N_WEBHOOK_TIMEOUT || '1800000');
   }
 
   /**
@@ -422,7 +422,7 @@ export class N8NIntegrationService {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 1800000);
 
       const response = await fetch(
         `${this.N8N_BASE_URL}/healthz`,
@@ -452,7 +452,7 @@ export class N8NIntegrationService {
       if (error.name === 'AbortError') {
         return {
           success: false,
-          message: 'N8N connection timeout (5s)',
+          message: 'N8N connection timeout (30min)',
           latency
         };
       }

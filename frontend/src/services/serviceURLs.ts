@@ -613,7 +613,7 @@ export const getAPIErrorMessage = (error: any): string => {
 
 // Request configuration
 export const API_CONFIG = {
-  timeout: 300000, // 5 minutes (for long-running operations like metric calculations)
+  timeout: 1800000, // 30 minutes (for long-running operations like metric calculations)
   retryAttempts: 3,
   retryDelay: 1000,
 } as const;

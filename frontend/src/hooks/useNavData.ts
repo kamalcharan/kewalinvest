@@ -1049,7 +1049,7 @@ export const useDownloadProgress = (): UseDownloadProgressReturn => {
 
     return new Promise((resolve, reject) => {
       let pollAttempts = 0;
-      const maxAttempts = 150;
+      const maxAttempts = 600; // 30 minutes with 3-second intervals
 
       const poll = async () => {
         try {
