@@ -16,8 +16,8 @@ export const pool = new Pool({
   // Connection Pool Settings
   max: 20,                         // Maximum number of clients in the pool
   min: 2,                          // Minimum number of clients in the pool
-  idleTimeoutMillis: 30000,        // 30 seconds - how long a client can be idle before being removed
-  connectionTimeoutMillis: 10000,  // 10 seconds - how long to wait for a connection
+  idleTimeoutMillis: 1800000,        // 30 minutes - how long a client can be idle before being removed
+  connectionTimeoutMillis: 1800000,  // 30 minutes - how long to wait for a connection
 
   // Statement Timeout
   statement_timeout: 0,            // No timeout - managed per operation for flexibility
@@ -170,7 +170,7 @@ export const executeWithTimeout = async (
   client: PoolClient,
   query: string,
   params: any[] = [],
-  timeoutMs: number = 30000
+  timeoutMs: number = 1800000
 ): Promise<any> => {
   try {
     await setStatementTimeout(client, timeoutMs);

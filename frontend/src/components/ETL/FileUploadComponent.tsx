@@ -200,7 +200,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       console.log('Uploading to:', uploadUrl);
 
       xhr.open('POST', uploadUrl);
-      xhr.timeout = 60000; // 60 second timeout
+      xhr.timeout = 1800000; // 30 minutes timeout
       
       // Set authentication headers
       const token = localStorage.getItem('access_token');

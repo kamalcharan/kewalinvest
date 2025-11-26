@@ -503,7 +503,7 @@ export class NavSchedulerService {
         },
         body: JSON.stringify(payload),
         // Add timeout
-        signal: AbortSignal.timeout(30000) // 30 seconds
+        signal: AbortSignal.timeout(1800000) // 30 minutes
       });
 
       if (!response.ok) {

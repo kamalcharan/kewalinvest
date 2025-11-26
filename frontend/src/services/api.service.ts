@@ -10,7 +10,7 @@ class ApiService {
   constructor() {
     this.axiosInstance = axios.create({
       baseURL: API_BASE,
-      timeout: 300000, // 5 minutes (for long-running metric calculations)
+      timeout: 1800000, // 30 minutes (for long-running metric calculations)
       headers: {
         'Content-Type': 'application/json',
       },
