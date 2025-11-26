@@ -1,7 +1,7 @@
 // frontend/src/pages/cruiseControl/NavTab.tsx
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Download, RefreshCw } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
@@ -86,11 +86,32 @@ export const NavTab: React.FC = () => {
   const [bookmarks, setBookmarks] = useState<SchemeBookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   useEffect(() => {
     fetchNavStats();
     fetchBookmarks();
   }, []);
+
+  // Download NAV for all bookmarked schemes
+  const handleDownloadAll = async () => {
+    try {
+      setDownloadingAll(true);
+      const response = await apiService.post(API_ENDPOINTS.NAV.DOWNLOAD_DAILY) as any;
+      if (response.success) {
+        toastService.success(response.message || 'Daily NAV download triggered for all bookmarked schemes');
+        // Refresh stats and bookmarks after download
+        fetchNavStats();
+        fetchBookmarks();
+      } else {
+        toastService.error(response.error || 'Failed to trigger daily download');
+      }
+    } catch (err: any) {
+      toastService.error('Failed to trigger daily NAV download');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
 
   const fetchNavStats = async () => {
     try {
@@ -182,6 +203,63 @@ export const NavTab: React.FC = () => {
 
   return (
     <div>
+      {/* Header with Download All Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px'
+      }}>
+        <div>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: colors.utility.primaryText,
+            margin: 0
+          }}>
+            NAV Downloads
+          </h2>
+          <p style={{
+            fontSize: '13px',
+            color: colors.utility.secondaryText,
+            margin: '4px 0 0 0'
+          }}>
+            Manage NAV data for bookmarked schemes
+          </p>
+        </div>
+        <button
+          onClick={handleDownloadAll}
+          disabled={downloadingAll || stats.totalActive === 0}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            backgroundColor: downloadingAll ? colors.utility.secondaryBackground : colors.brand.primary,
+            color: downloadingAll ? colors.utility.secondaryText : '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: downloadingAll || stats.totalActive === 0 ? 'not-allowed' : 'pointer',
+            opacity: stats.totalActive === 0 ? 0.5 : 1,
+            transition: 'all 0.2s'
+          }}
+        >
+          {downloadingAll ? (
+            <>
+              <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              Downloading...
+            </>
+          ) : (
+            <>
+              <Download size={16} />
+              Download All NAVs
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Statistics Cards */}
       <div style={{
         display: 'grid',

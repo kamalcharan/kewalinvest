@@ -73,34 +73,26 @@ export class PortfolioSnapshotExecutor implements JobExecutor {
       executionData.customers_processed = customers.length;
       SimpleLogger.info('PortfolioSnapshotJob', `Processing ${customers.length} customers`, 'execute');
 
-      // Step 2: Generate snapshots for each customer
-      for (const customer of customers) {
-        try {
-          const result = await this.snapshotService.generateSnapshotForCustomer(
-            context.tenant_id,
-            context.is_live,
-            customer.id,
-            executionData.snapshot_month_end
-          );
+      // Step 2: Generate snapshots using the service's batch method
+      const result = await this.snapshotService.generateSnapshots({
+        tenant_id: context.tenant_id,
+        is_live: context.is_live,
+        snapshot_month_end: executionData.snapshot_month_end,
+        customer_ids: customers.map(c => c.id)
+      });
 
-          if (result.created) {
-            executionData.snapshots_created++;
-          } else {
-            executionData.snapshots_updated++;
-          }
-        } catch (customerError: any) {
-          executionData.customers_failed++;
-          executionData.errors?.push({
-            customer_id: customer.id,
-            customer_name: customer.display_name,
-            error_message: customerError.message
-          });
+      // Update execution data from result
+      executionData.customers_processed = result.customers_processed;
+      executionData.customers_failed = result.customers_failed;
+      executionData.snapshots_created = result.snapshots_created;
+      executionData.snapshots_updated = result.snapshots_updated;
 
-          SimpleLogger.warn('PortfolioSnapshotJob', 'Customer snapshot failed', 'execute', {
-            customer_id: customer.id,
-            error: customerError.message
-          });
-        }
+      if (result.errors && result.errors.length > 0) {
+        executionData.errors = result.errors.map(e => ({
+          customer_id: e.customer_id,
+          customer_name: e.customer_name || 'Unknown',
+          error_message: e.error_message
+        }));
       }
 
       SimpleLogger.info('PortfolioSnapshotJob', 'Portfolio snapshot generation completed', 'execute', {
@@ -112,7 +104,9 @@ export class PortfolioSnapshotExecutor implements JobExecutor {
       });
 
       // Consider job successful if more than 80% succeeded
-      const successRate = (executionData.customers_processed - executionData.customers_failed) / executionData.customers_processed;
+      const successRate = executionData.customers_processed > 0
+        ? (executionData.customers_processed - executionData.customers_failed) / executionData.customers_processed
+        : 1;
 
       return {
         success: successRate >= 0.8,

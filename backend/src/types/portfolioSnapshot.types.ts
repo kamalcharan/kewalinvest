@@ -121,7 +121,7 @@ export interface SnapshotExecution {
   is_live: boolean;
   execution_time: Date;
   status: 'success' | 'failed' | 'running' | 'retrying' | 'skipped';
-  trigger_source: 'scheduled' | 'manual';
+  trigger_source: 'scheduled' | 'manual' | 'failover';
   snapshot_month_end: Date;
   customers_processed: number;
   customers_failed: number;
@@ -154,7 +154,7 @@ export interface SnapshotGenerationRequest {
   tenant_id: number;
   is_live: boolean;
   snapshot_month_end?: Date;  // Defaults to end of previous month
-  trigger_source: 'scheduled' | 'manual';
+  trigger_source?: 'scheduled' | 'manual' | 'failover';  // Optional, defaults to 'manual'
   scheduler_config_id?: number;
   customer_ids?: number[];  // Optional: specific customers only
 }

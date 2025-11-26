@@ -2,6 +2,7 @@
 // UPDATED: Added time-series endpoint for chart visualization
 
 import { Request, Response } from 'express';
+import { pool } from '../config/database';
 import { NavService } from '../services/nav.service';
 import { NavDownloadService } from '../services/navDownload.service';
 import { NavSchedulerService } from '../services/navScheduler.service';
@@ -855,7 +856,7 @@ export class NavController {
       const schemeQuery = `
         SELECT id, scheme_name FROM m_schemes WHERE scheme_code = $1
       `;
-      const schemeResult = await this.navService.db.query(schemeQuery, [schemeCode]);
+      const schemeResult = await pool.query(schemeQuery, [schemeCode]);
 
       if (schemeResult.rows.length === 0) {
         res.status(404).json({
@@ -877,7 +878,7 @@ export class NavController {
         ORDER BY nav_date DESC
         LIMIT 1
       `;
-      const existingNav = await this.navService.db.query(existingNavQuery, [schemeId, today]);
+      const existingNav = await pool.query(existingNavQuery, [schemeId, today]);
 
       if (existingNav.rows.length > 0) {
         // Today's NAV already exists (downloaded by another tenant) - return success
@@ -957,7 +958,7 @@ export class NavController {
           records_inserted: upsertResult.inserted,
           records_updated: upsertResult.updated,
           nav_date: schemeNavData[0]?.nav_date,
-          nav_value: schemeNavData[0]?.nav,
+          nav_value: schemeNavData[0]?.nav_value,
           source: 'downloaded'
         },
         message: `NAV updated for ${schemeName}`

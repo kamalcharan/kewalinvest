@@ -2,6 +2,7 @@
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DefaultIndexSettings } from '../../components/performance/DefaultIndexSettings';
+import { SchedulerSettings } from '../../components/cruiseControl/SchedulerSettings';
 
 export const SettingsTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
@@ -24,28 +25,16 @@ export const SettingsTab: React.FC = () => {
           color: colors.utility.secondaryText,
           margin: 0
         }}>
-          Configure your preferences and default settings
+          Configure your preferences and view scheduled jobs
         </p>
       </div>
 
-      {/* Default Index Settings */}
-      <DefaultIndexSettings />
+      {/* Scheduler Settings - Shows all scheduled jobs */}
+      <SchedulerSettings />
 
-      {/* Future Settings Can Be Added Here */}
-      <div style={{
-        marginTop: '24px',
-        padding: '20px',
-        backgroundColor: colors.utility.secondaryBackground,
-        border: `1px dashed ${colors.utility.primaryText}15`,
-        borderRadius: '12px',
-        textAlign: 'center'
-      }}>
-        <div style={{
-          fontSize: '14px',
-          color: colors.utility.secondaryText
-        }}>
-          More settings will be available here soon
-        </div>
+      {/* Default Index Settings */}
+      <div style={{ marginTop: '24px' }}>
+        <DefaultIndexSettings />
       </div>
     </div>
   );
