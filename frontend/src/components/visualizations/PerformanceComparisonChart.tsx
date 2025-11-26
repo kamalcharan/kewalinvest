@@ -53,9 +53,6 @@ export interface PerformanceComparisonChartProps {
   // Colors (optional - uses theme by default)
   primaryColor?: string;
   comparisonColor?: string;
-
-  // Interaction
-  onDataPointClick?: (data: PerformanceDataPoint, index: number) => void;
 }
 
 // ============================================================================
@@ -294,8 +291,7 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
   height = 400,
   primaryLabel = 'Portfolio',
   primaryColor,
-  comparisonColor,
-  onDataPointClick
+  comparisonColor
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -388,12 +384,6 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
         <LineChart
           data={chartData}
           margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-          onClick={(e) => {
-            if (e && e.activePayload && onDataPointClick) {
-              const index = e.activeTooltipIndex || 0;
-              onDataPointClick(data[index], index);
-            }
-          }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
