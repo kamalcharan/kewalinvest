@@ -798,13 +798,14 @@ const CustomerViewPage: React.FC = () => {
                       // Build performance data from networth history
                       const dates = networthHistoryData.data!.chart_ready.dates;
 
-                      // Find the first index where this asset type has actual data (non-zero value)
-                      const firstNonZeroIndex = assetType.values.findIndex(v => v > 0);
-                      if (firstNonZeroIndex === -1) return null; // No data for this asset type
+                      // Find the first index where this asset type has meaningful data
+                      // Use threshold of 100 to filter out any tiny calculated/rounding values
+                      const firstMeaningfulIndex = assetType.values.findIndex(v => v >= 100);
+                      if (firstMeaningfulIndex === -1) return null; // No meaningful data for this asset type
 
                       // Filter to only include dates from when asset has data
-                      const filteredDates = dates.slice(firstNonZeroIndex);
-                      const filteredValues = assetType.values.slice(firstNonZeroIndex);
+                      const filteredDates = dates.slice(firstMeaningfulIndex);
+                      const filteredValues = assetType.values.slice(firstMeaningfulIndex);
                       const startValue = filteredValues[0] || 0;
 
                       const performanceData = filteredDates.map((date, index) => ({
