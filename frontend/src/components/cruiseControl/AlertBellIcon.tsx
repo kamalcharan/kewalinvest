@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, ChevronRight, X, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { JTBD_TYPE_ICONS, JTBD_TYPE_COLORS } from '../../constants/jtbd.constants';
+import { JTBD_TYPE_ICONS } from '../../constants/jtbd.constants';
+import apiService from '../../services/api.service';
 
 interface Alert {
   id: number;
@@ -35,7 +36,7 @@ interface AlertBellIconProps {
 export const AlertBellIcon: React.FC<AlertBellIconProps> = ({ alertCount = 0 }) => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
-  const { token, environment } = useAuth();
+  const { isAuthenticated } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [isOpen, setIsOpen] = useState(false);
@@ -47,10 +48,10 @@ export const AlertBellIcon: React.FC<AlertBellIconProps> = ({ alertCount = 0 }) 
 
   // Fetch latest alerts when dropdown opens
   useEffect(() => {
-    if (isOpen && token) {
+    if (isOpen && isAuthenticated) {
       fetchLatestAlerts();
     }
-  }, [isOpen, token]);
+  }, [isOpen, isAuthenticated]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -72,21 +73,10 @@ export const AlertBellIcon: React.FC<AlertBellIconProps> = ({ alertCount = 0 }) 
   const fetchLatestAlerts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `/api/jtbd/dashboard/latest-alerts?limit=10`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'X-Environment': environment || 'live'
-          }
-        }
-      );
+      const response = await apiService.get('/jtbd/dashboard/latest-alerts?limit=10');
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setAlerts(data.data || []);
-        }
+      if (response.data?.success) {
+        setAlerts(response.data.data || []);
       }
     } catch (error) {
       console.error('Error fetching latest alerts:', error);
