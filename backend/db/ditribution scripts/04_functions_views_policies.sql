@@ -48,6 +48,114 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 COMMENT ON FUNCTION current_environment IS 'Get current environment (live/test) from session';
 
+-- ============================================================================
+-- SECTION 1.1: ALERT VISIBILITY FUNCTIONS (Migration 023)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: get_alert_visibility_settings
+-- Description: Returns visibility settings for a specific alert type
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION get_alert_visibility_settings(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_jtbd_type VARCHAR(50)
+)
+RETURNS TABLE (
+    days_before INTEGER,
+    days_after INTEGER,
+    auto_expire_hours INTEGER
+) AS $$
+BEGIN
+    -- First try tenant-specific setting for this type
+    RETURN QUERY
+    SELECT s.days_before, s.days_after, s.auto_expire_hours
+    FROM m_alert_settings s
+    WHERE s.tenant_id = p_tenant_id
+      AND s.is_live = p_is_live
+      AND s.is_active = true
+      AND (s.applies_to_types IS NULL OR p_jtbd_type = ANY(s.applies_to_types))
+    ORDER BY
+        CASE WHEN s.applies_to_types IS NOT NULL THEN 0 ELSE 1 END  -- Specific types first
+    LIMIT 1;
+
+    -- If no tenant-specific, use global defaults
+    IF NOT FOUND THEN
+        RETURN QUERY
+        SELECT s.days_before, s.days_after, s.auto_expire_hours
+        FROM m_alert_settings s
+        WHERE s.tenant_id IS NULL
+          AND s.is_active = true
+          AND (s.applies_to_types IS NULL OR p_jtbd_type = ANY(s.applies_to_types))
+        ORDER BY
+            CASE WHEN s.applies_to_types IS NOT NULL THEN 0 ELSE 1 END
+        LIMIT 1;
+    END IF;
+
+    -- Final fallback: return hardcoded defaults
+    IF NOT FOUND THEN
+        RETURN QUERY SELECT 3::INTEGER, 10::INTEGER, NULL::INTEGER;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION get_alert_visibility_settings IS 'Returns visibility settings for a specific alert type, checking tenant overrides first, then global defaults';
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: is_alert_visible
+-- Description: Checks if an alert should be visible based on visibility settings
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION is_alert_visible(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_jtbd_type VARCHAR(50),
+    p_next_alert_date DATE,
+    p_created_at TIMESTAMP,
+    p_auto_expire_at TIMESTAMP,
+    p_completed_at TIMESTAMP
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_days_before INTEGER;
+    v_days_after INTEGER;
+    v_auto_expire_hours INTEGER;
+    v_today DATE := CURRENT_DATE;
+BEGIN
+    -- Already completed = not visible
+    IF p_completed_at IS NOT NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Check auto-expire timestamp
+    IF p_auto_expire_at IS NOT NULL AND p_auto_expire_at <= NOW() THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Get visibility settings
+    SELECT * INTO v_days_before, v_days_after, v_auto_expire_hours
+    FROM get_alert_visibility_settings(p_tenant_id, p_is_live, p_jtbd_type);
+
+    -- For import notifications with auto_expire_hours, check creation time
+    IF v_auto_expire_hours IS NOT NULL AND p_created_at IS NOT NULL THEN
+        IF p_created_at + (v_auto_expire_hours || ' hours')::INTERVAL <= NOW() THEN
+            RETURN FALSE;
+        END IF;
+    END IF;
+
+    -- Check date window if next_alert_date is set
+    IF p_next_alert_date IS NOT NULL THEN
+        -- Alert is visible if: (next_alert_date - days_before) <= today <= (next_alert_date + days_after)
+        RETURN (p_next_alert_date - v_days_before) <= v_today
+           AND v_today <= (p_next_alert_date + v_days_after);
+    END IF;
+
+    -- No date constraint = always visible (until expired or completed)
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION is_alert_visible IS 'Checks if an alert should be visible based on visibility settings, expiry, and completion status';
+
 -- ----------------------------------------------------------------------------
 -- FUNCTION: normalize_customer_name (Migration 006)
 -- ----------------------------------------------------------------------------

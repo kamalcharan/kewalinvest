@@ -161,7 +161,127 @@ export class InvestmentPlanService {
     ];
 
     const result = await pool.query(query, values);
-    return result.rows[0];
+    const createdPlan = result.rows[0];
+
+    // Auto-create SIP/recurring alert if investment type is sip or recurring
+    if (data.investment_type === 'sip' || data.investment_type === 'recurring') {
+      await this.createSIPAlert(createdPlan, tenantId, isLive, userId);
+    }
+
+    return createdPlan;
+  }
+
+  /**
+   * Create SIP/Recurring payment alert for an investment plan
+   * Automatically called when creating SIP or recurring investment plans
+   */
+  private async createSIPAlert(
+    investmentPlan: InvestmentPlan,
+    tenantId: number,
+    isLive: boolean,
+    userId: number
+  ): Promise<void> {
+    try {
+      // Calculate next payment date based on start_date and frequency
+      const nextPaymentDate = this.calculateNextPaymentDate(
+        investmentPlan.start_date,
+        investmentPlan.investment_frequency || 'monthly'
+      );
+
+      // Get customer name for alert title
+      const customerQuery = `
+        SELECT c.name
+        FROM t_contacts c
+        JOIN t_customers cust ON cust.contact_id = c.id
+        WHERE cust.id = $1
+      `;
+      const customerResult = await pool.query(customerQuery, [investmentPlan.customer_id]);
+      const customerName = customerResult.rows[0]?.name || 'Customer';
+
+      // Get asset type name
+      const assetQuery = `SELECT asset_type_name FROM m_asset_types WHERE id = $1`;
+      const assetResult = await pool.query(assetQuery, [investmentPlan.asset_type_id]);
+      const assetTypeName = assetResult.rows[0]?.asset_type_name || 'Investment';
+
+      // Build alert title
+      const frequency = investmentPlan.investment_frequency || 'monthly';
+      const frequencyLabel = frequency.charAt(0).toUpperCase() + frequency.slice(1);
+      const title = `${frequencyLabel} ${investmentPlan.investment_type?.toUpperCase()} Payment Due - ${investmentPlan.notes || assetTypeName}`;
+
+      // Build config_data JSONB
+      const configData = {
+        investment_plan_id: investmentPlan.id,
+        customer_name: customerName,
+        asset_type: assetTypeName,
+        recurring_amount: investmentPlan.recurring_amount,
+        frequency: investmentPlan.investment_frequency,
+        scheme_code: investmentPlan.scheme_code || null,
+        auto_generated: true,
+        source: 'investment_plan_creation'
+      };
+
+      // Insert the alert
+      const alertQuery = `
+        INSERT INTO t_jtbd_configurations (
+          tenant_id, is_live, customer_id, jtbd_type, jtbd_category,
+          title, description, priority, is_active, config_data,
+          next_alert_date, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `;
+
+      const alertValues = [
+        tenantId,
+        isLive,
+        investmentPlan.customer_id,
+        'goal_sip_plan',           // jtbd_type
+        'alert',                   // jtbd_category
+        title,
+        `${frequencyLabel} payment of ₹${investmentPlan.recurring_amount?.toLocaleString('en-IN')} for ${investmentPlan.notes || assetTypeName}`,
+        'medium',                  // priority
+        true,                      // is_active
+        JSON.stringify(configData),
+        nextPaymentDate,
+        userId
+      ];
+
+      await pool.query(alertQuery, alertValues);
+      console.log(`✅ Created SIP alert for investment plan ${investmentPlan.id}`);
+    } catch (error) {
+      // Log error but don't fail the investment plan creation
+      console.error('⚠️ Failed to create SIP alert:', error);
+    }
+  }
+
+  /**
+   * Calculate the next payment date based on start date and frequency
+   */
+  private calculateNextPaymentDate(
+    startDate: string | Date | undefined,
+    frequency: string
+  ): string {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let baseDate = startDate ? new Date(startDate) : today;
+    baseDate.setHours(0, 0, 0, 0);
+
+    // If start date is in the future, that's the next payment date
+    if (baseDate > today) {
+      return baseDate.toISOString().split('T')[0];
+    }
+
+    // Calculate interval in months
+    let intervalMonths = 1; // monthly default
+    if (frequency === 'quarterly') intervalMonths = 3;
+    if (frequency === 'yearly') intervalMonths = 12;
+
+    // Find the next payment date after today
+    let nextDate = new Date(baseDate);
+    while (nextDate <= today) {
+      nextDate.setMonth(nextDate.getMonth() + intervalMonths);
+    }
+
+    return nextDate.toISOString().split('T')[0];
   }
 
   /**

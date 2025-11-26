@@ -1,118 +1,160 @@
 // frontend/src/pages/cruiseControl/AlertsTab.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Bell, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Bell, CheckCircle, XCircle, Clock, RefreshCw, AlertCircle, User } from 'lucide-react';
+import { JTBD_TYPE_ICONS, JTBD_TYPE_LABELS, JTBD_TYPE_COLORS } from '../../constants/jtbd.constants';
+import apiService from '../../services/api.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 
 interface Alert {
   id: number;
-  type: 'jtbd_trigger' | 'goal_progress' | 'goal_due';
+  customer_id: number;
   customer_name: string;
-  message: string;
+  jtbd_type: string;
+  jtbd_category: string;
+  title: string;
+  description: string;
+  priority: string;
+  next_alert_date: string | null;
+  is_active: boolean;
+  config_data: any;
+  created_at: string;
+  completed_at: string | null;
   status: 'active' | 'acknowledged' | 'dismissed';
-  triggered_at: string;
+  notification_type?: string;
+  scheme_name?: string;
+  is_new?: boolean;
 }
 
-// Dummy alert data
-const DUMMY_ALERTS: Alert[] = [
-  {
-    id: 1,
-    type: 'goal_due',
-    customer_name: 'Rajesh Kumar',
-    message: 'Goal "Retirement Planning" is due in 30 days',
-    status: 'active',
-    triggered_at: '2025-01-23T10:00:00Z'
-  },
-  {
-    id: 2,
-    type: 'jtbd_trigger',
-    customer_name: 'Priya Sharma',
-    message: 'Profile trigger: Review portfolio performance',
-    status: 'active',
-    triggered_at: '2025-01-23T09:30:00Z'
-  },
-  {
-    id: 3,
-    type: 'goal_progress',
-    customer_name: 'Amit Patel',
-    message: 'Goal "Child Education" is behind by 15%',
-    status: 'active',
-    triggered_at: '2025-01-23T08:45:00Z'
-  },
-  {
-    id: 4,
-    type: 'goal_due',
-    customer_name: 'Sunita Mehta',
-    message: 'Goal "Home Purchase" is due in 60 days',
-    status: 'active',
-    triggered_at: '2025-01-22T15:20:00Z'
-  },
-  {
-    id: 5,
-    type: 'jtbd_trigger',
-    customer_name: 'Vikram Singh',
-    message: 'Profile trigger: Tax planning consultation',
-    status: 'active',
-    triggered_at: '2025-01-22T11:00:00Z'
-  },
-  {
-    id: 6,
-    type: 'goal_progress',
-    customer_name: 'Anjali Reddy',
-    message: 'Goal "Emergency Fund" completed! 🎉',
-    status: 'acknowledged',
-    triggered_at: '2025-01-21T14:30:00Z'
-  },
-  {
-    id: 7,
-    type: 'goal_due',
-    customer_name: 'Rahul Verma',
-    message: 'Goal "Vehicle Purchase" is due in 15 days',
-    status: 'active',
-    triggered_at: '2025-01-21T10:15:00Z'
-  }
-];
+interface VisibleAlertsResponse {
+  success: boolean;
+  data: Alert[];
+  meta?: {
+    count: number;
+    status: string;
+    limit: number;
+  };
+}
 
 export const AlertsTab: React.FC = () => {
+  const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
+  const { isAuthenticated } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [filter, setFilter] = useState<'all' | 'active' | 'acknowledged' | 'dismissed'>('active');
-  const [alerts, setAlerts] = useState<Alert[]>(DUMMY_ALERTS);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredAlerts = alerts.filter(alert => {
-    if (filter === 'all') return true;
-    return alert.status === filter;
-  });
+  // Fetch alerts from API
+  const fetchAlerts = useCallback(async () => {
+    if (!isAuthenticated) return;
 
-  const alertTypeBadgeConfig = {
-    jtbd_trigger: { label: 'JTBD Trigger', color: colors.brand.secondary },
-    goal_progress: { label: 'Goal Progress', color: colors.semantic.warning },
-    goal_due: { label: 'Goal Due', color: colors.semantic.error }
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiService.get<VisibleAlertsResponse>(
+        `${API_ENDPOINTS.JTBD.VISIBLE_ALERTS}?status=${filter}&limit=100`
+      );
+
+      if (response.success) {
+        setAlerts(response.data || []);
+      } else {
+        setError('Failed to load alerts');
+      }
+    } catch (err) {
+      console.error('Error fetching alerts:', err);
+      setError('Failed to load alerts. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, filter]);
+
+  // Fetch alerts on mount and when filter changes
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  // Get badge config based on jtbd_type
+  const getBadgeConfig = (jtbdType: string) => {
+    const typeColors = JTBD_TYPE_COLORS[jtbdType as keyof typeof JTBD_TYPE_COLORS];
+    const defaultColor = colors.brand.secondary;
+
+    return {
+      label: JTBD_TYPE_LABELS[jtbdType as keyof typeof JTBD_TYPE_LABELS] || jtbdType,
+      icon: JTBD_TYPE_ICONS[jtbdType as keyof typeof JTBD_TYPE_ICONS] || '📋',
+      color: typeColors?.border || defaultColor
+    };
   };
 
-  const handleAcknowledge = (alertId: number) => {
-    setAlerts(prevAlerts =>
-      prevAlerts.map(alert =>
-        alert.id === alertId ? { ...alert, status: 'acknowledged' } : alert
-      )
-    );
+  const handleAcknowledge = async (alertId: number) => {
+    try {
+      const response = await apiService.patch(
+        API_ENDPOINTS.JTBD.ACKNOWLEDGE_ALERT(alertId)
+      );
+
+      if (response.success) {
+        // Update local state
+        setAlerts(prevAlerts =>
+          prevAlerts.map(alert =>
+            alert.id === alertId ? { ...alert, status: 'acknowledged' as const } : alert
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Error acknowledging alert:', err);
+    }
   };
 
-  const handleDismiss = (alertId: number) => {
-    setAlerts(prevAlerts =>
-      prevAlerts.map(alert =>
-        alert.id === alertId ? { ...alert, status: 'dismissed' } : alert
-      )
-    );
+  const handleDismiss = async (alertId: number) => {
+    try {
+      const response = await apiService.patch(
+        API_ENDPOINTS.JTBD.DISMISS_ALERT(alertId)
+      );
+
+      if (response.success) {
+        // Update local state
+        setAlerts(prevAlerts =>
+          prevAlerts.map(alert =>
+            alert.id === alertId ? { ...alert, status: 'dismissed' as const } : alert
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Error dismissing alert:', err);
+    }
   };
 
-  const formatDate = (dateString: string): string => {
+  const handleViewCustomer = (customerId: number) => {
+    navigate(`/customers/${customerId}`);
+  };
+
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString) return 'No date';
+
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 0) {
+      // Future date
+      const futureDays = Math.abs(diffDays);
+      if (futureDays === 0) return 'Today';
+      if (futureDays === 1) return 'Tomorrow';
+      if (futureDays < 7) return `In ${futureDays}d`;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    }
 
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
@@ -126,21 +168,31 @@ export const AlertsTab: React.FC = () => {
     });
   };
 
+  // Filter alerts by status (for counting)
+  const getStatusCount = (status: 'all' | 'active' | 'acknowledged' | 'dismissed') => {
+    if (status === 'all') return alerts.length;
+    return alerts.filter(a => a.status === status).length;
+  };
+
   return (
     <div>
-      {/* Filter Tabs */}
+      {/* Header with Refresh */}
       <div style={{
         display: 'flex',
-        gap: '8px',
-        marginBottom: '24px',
-        padding: '4px',
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '8px',
-        width: 'fit-content'
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px'
       }}>
-        {(['all', 'active', 'acknowledged', 'dismissed'] as const).map(status => {
-          const count = alerts.filter(a => status === 'all' || a.status === status).length;
-          return (
+        {/* Filter Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          padding: '4px',
+          backgroundColor: colors.utility.secondaryBackground,
+          borderRadius: '8px',
+          width: 'fit-content'
+        }}>
+          {(['all', 'active', 'acknowledged', 'dismissed'] as const).map(status => (
             <button
               key={status}
               onClick={() => setFilter(status)}
@@ -157,14 +209,68 @@ export const AlertsTab: React.FC = () => {
                 textTransform: 'capitalize'
               }}
             >
-              {status} ({count})
+              {status} ({status === filter ? alerts.length : '...'})
             </button>
-          );
-        })}
+          ))}
+        </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={fetchAlerts}
+          disabled={loading}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            backgroundColor: colors.utility.secondaryBackground,
+            color: colors.utility.primaryText,
+            border: `1px solid ${colors.utility.primaryText}20`,
+            borderRadius: '6px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
+            transition: 'all 0.2s'
+          }}
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
       </div>
 
-      {/* Alert List */}
-      {filteredAlerts.length === 0 ? (
+      {/* Error Message */}
+      {error && (
+        <div style={{
+          padding: '16px',
+          marginBottom: '16px',
+          backgroundColor: `${colors.semantic.error}15`,
+          border: `1px solid ${colors.semantic.error}40`,
+          borderRadius: '8px',
+          color: colors.semantic.error,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <AlertCircle size={20} />
+          {error}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && alerts.length === 0 ? (
+        <div style={{
+          padding: '64px',
+          textAlign: 'center',
+          backgroundColor: colors.utility.secondaryBackground,
+          borderRadius: '12px'
+        }}>
+          <RefreshCw size={48} className="animate-spin" style={{ color: colors.brand.primary, marginBottom: '16px' }} />
+          <div style={{ fontSize: '16px', color: colors.utility.secondaryText }}>
+            Loading alerts...
+          </div>
+        </div>
+      ) : alerts.length === 0 ? (
         <div style={{
           padding: '64px',
           textAlign: 'center',
@@ -175,7 +281,7 @@ export const AlertsTab: React.FC = () => {
             fontSize: '64px',
             marginBottom: '16px'
           }}>
-            🎉
+            {filter === 'active' ? '🎉' : '📭'}
           </div>
           <div style={{
             fontSize: '20px',
@@ -189,7 +295,9 @@ export const AlertsTab: React.FC = () => {
             fontSize: '14px',
             color: colors.utility.secondaryText
           }}>
-            All caught up! No alerts require your attention.
+            {filter === 'active'
+              ? 'All caught up! No alerts require your attention.'
+              : `No ${filter} alerts found.`}
           </div>
         </div>
       ) : (
@@ -198,8 +306,9 @@ export const AlertsTab: React.FC = () => {
           flexDirection: 'column',
           gap: '12px'
         }}>
-          {filteredAlerts.map(alert => {
-            const badgeConfig = alertTypeBadgeConfig[alert.type];
+          {alerts.map(alert => {
+            const badgeConfig = getBadgeConfig(alert.jtbd_type);
+            const isActive = alert.status === 'active';
 
             return (
               <div
@@ -207,20 +316,20 @@ export const AlertsTab: React.FC = () => {
                 style={{
                   padding: '16px',
                   backgroundColor: colors.utility.primaryBackground,
-                  border: `1px solid ${alert.status === 'active' ? `${badgeConfig.color}40` : `${colors.utility.primaryText}10`}`,
+                  border: `1px solid ${isActive ? `${badgeConfig.color}40` : `${colors.utility.primaryText}10`}`,
                   borderRadius: '10px',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: '16px',
                   transition: 'all 0.2s',
-                  opacity: alert.status === 'active' ? 1 : 0.6
+                  opacity: isActive ? 1 : 0.6
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = `${badgeConfig.color}60`;
                   e.currentTarget.style.boxShadow = `0 2px 8px ${badgeConfig.color}15`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = alert.status === 'active' ? `${badgeConfig.color}40` : `${colors.utility.primaryText}10`;
+                  e.currentTarget.style.borderColor = isActive ? `${badgeConfig.color}40` : `${colors.utility.primaryText}10`;
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
@@ -233,48 +342,83 @@ export const AlertsTab: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  flexShrink: 0
+                  flexShrink: 0,
+                  fontSize: '20px'
                 }}>
-                  {alert.status === 'active' && <Bell size={20} color={badgeConfig.color} />}
+                  {alert.status === 'active' && badgeConfig.icon}
                   {alert.status === 'acknowledged' && <CheckCircle size={20} color={colors.semantic.success} />}
                   {alert.status === 'dismissed' && <XCircle size={20} color={colors.utility.secondaryText} />}
                 </div>
 
                 {/* Alert Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Alert Type Badge */}
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '3px 8px',
-                    backgroundColor: `${badgeConfig.color}15`,
-                    color: badgeConfig.color,
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    marginBottom: '8px'
-                  }}>
-                    {badgeConfig.label}
+                  {/* Alert Type Badge + New Badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{
+                      display: 'inline-block',
+                      padding: '3px 8px',
+                      backgroundColor: `${badgeConfig.color}15`,
+                      color: badgeConfig.color,
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '600'
+                    }}>
+                      {badgeConfig.label}
+                    </div>
+                    {alert.is_new && (
+                      <div style={{
+                        display: 'inline-block',
+                        padding: '3px 8px',
+                        backgroundColor: colors.semantic.success,
+                        color: 'white',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        fontWeight: '700'
+                      }}>
+                        NEW
+                      </div>
+                    )}
                   </div>
 
-                  {/* Customer Name */}
-                  <div style={{
-                    fontSize: '15px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText,
-                    marginBottom: '4px'
-                  }}>
+                  {/* Customer Name - Clickable */}
+                  <div
+                    onClick={() => handleViewCustomer(alert.customer_id)}
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      color: colors.brand.primary,
+                      marginBottom: '4px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <User size={14} />
                     {alert.customer_name}
                   </div>
 
-                  {/* Alert Message */}
+                  {/* Alert Title */}
                   <div style={{
                     fontSize: '14px',
-                    color: colors.utility.secondaryText,
-                    lineHeight: '1.5',
-                    marginBottom: '8px'
+                    fontWeight: '500',
+                    color: colors.utility.primaryText,
+                    marginBottom: '4px'
                   }}>
-                    {alert.message}
+                    {alert.title}
                   </div>
+
+                  {/* Alert Description */}
+                  {alert.description && (
+                    <div style={{
+                      fontSize: '13px',
+                      color: colors.utility.secondaryText,
+                      lineHeight: '1.5',
+                      marginBottom: '8px'
+                    }}>
+                      {alert.description}
+                    </div>
+                  )}
 
                   {/* Time */}
                   <div style={{
@@ -285,12 +429,14 @@ export const AlertsTab: React.FC = () => {
                     gap: '4px'
                   }}>
                     <Clock size={12} />
-                    {formatDate(alert.triggered_at)}
+                    {alert.next_alert_date
+                      ? `Due: ${formatDate(alert.next_alert_date)}`
+                      : `Created: ${formatDate(alert.created_at)}`}
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                {alert.status === 'active' && (
+                {isActive && (
                   <div style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -319,7 +465,7 @@ export const AlertsTab: React.FC = () => {
                         e.currentTarget.style.boxShadow = 'none';
                       }}
                     >
-                      ✓ Acknowledge
+                      Acknowledge
                     </button>
                     <button
                       onClick={() => handleDismiss(alert.id)}
@@ -343,7 +489,7 @@ export const AlertsTab: React.FC = () => {
                         e.currentTarget.style.boxShadow = 'none';
                       }}
                     >
-                      ✕ Dismiss
+                      Dismiss
                     </button>
                   </div>
                 )}
