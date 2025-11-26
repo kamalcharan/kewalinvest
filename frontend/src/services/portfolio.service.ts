@@ -2,6 +2,7 @@
 
 import apiService from './api.service';
 import { API_ENDPOINTS } from './serviceURLs';
+import { getAssetTypeColor as getAssetColor } from '../constants/assetTypes';
 import {
   PortfolioFilters,
   PortfolioHolding,
@@ -345,20 +346,10 @@ export class PortfolioService {
 
   /**
    * Helper: Get asset type color
+   * @deprecated Use getAssetTypeColor from constants/assetTypes.ts directly
    */
   static getAssetTypeColor(assetTypeCode: string): string {
-    const colors: Record<string, string> = {
-      MF: '#3B82F6',      // Blue - Mutual Funds
-      GOLD: '#EAB308',    // Gold
-      SILVER: '#9CA3AF',  // Silver/Gray
-      RE: '#10B981',      // Green - Real Estate
-      FD: '#6366F1',      // Indigo - Fixed Deposits
-      PPF: '#8B5CF6',     // Purple - PPF
-      NSC: '#F59E0B',     // Amber - NSC
-      EQUITY: '#14B8A6',  // Teal - Direct Equity
-      DEFAULT: '#6B7280'  // Gray
-    };
-    return colors[assetTypeCode] || colors.DEFAULT;
+    return getAssetColor(assetTypeCode);
   }
 }
 

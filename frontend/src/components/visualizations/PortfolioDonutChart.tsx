@@ -4,6 +4,7 @@
 import React, { useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNetworthSummary } from '../../hooks/usePortfolioData';
+import { getAssetTypeColor } from '../../constants/assetTypes';
 
 interface PortfolioDonutChartProps {
   customerId: number;
@@ -32,24 +33,6 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
     { customerId },
     { enabled: customerId > 0 }
   );
-
-  // Asset type colors
-  const assetTypeColors: Record<string, string> = {
-    'MF': '#3B82F6',      // Blue - Mutual Funds
-    'GOLD': '#EAB308',    // Gold
-    'SILVER': '#9CA3AF',  // Silver/Gray
-    'RE': '#10B981',      // Green - Real Estate
-    'FD': '#6366F1',      // Indigo - Fixed Deposits
-    'PPF': '#8B5CF6',     // Purple - PPF
-    'NSC': '#F59E0B',     // Amber - NSC
-    'EQUITY': '#14B8A6',  // Teal - Direct Equity
-    'BONDS': '#EC4899',   // Pink - Bonds
-    'Other': '#6B7280'    // Gray
-  };
-
-  const getAssetTypeColor = (assetTypeCode: string): string => {
-    return assetTypeColors[assetTypeCode] || assetTypeColors['Other'];
-  };
 
   // Get asset type data from networth summary
   const assetTypeData = useMemo(() => {

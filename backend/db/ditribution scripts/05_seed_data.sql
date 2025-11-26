@@ -667,7 +667,7 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
--- Insert 9 asset types with default growth rate assumptions
+-- Insert 10 asset types with default growth rate assumptions
 INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
 VALUES
     ('MF', 'Mutual Fund', 'equity', 12.00, 1, true,
@@ -676,25 +676,28 @@ VALUES
     ('GOLD', 'Gold', 'commodity', 8.00, 2, true,
      'Physical gold, gold ETFs, sovereign gold bonds, and gold mutual funds'),
 
-    ('EQUITY', 'Equity', 'equity', 15.00, 3, true,
+    ('SILVER', 'Silver', 'commodity', 7.00, 3, true,
+     'Physical silver, silver ETFs, and silver-backed investment products'),
+
+    ('EQUITY', 'Equity', 'equity', 15.00, 4, true,
      'Direct equity investments in stocks and shares'),
 
-    ('FD', 'Fixed Deposit', 'fixed_income', 6.50, 4, true,
+    ('FD', 'Fixed Deposit', 'fixed_income', 6.50, 5, true,
      'Bank and corporate fixed deposits with guaranteed returns'),
 
-    ('PPF', 'Public Provident Fund', 'fixed_income', 7.10, 5, true,
+    ('PPF', 'Public Provident Fund', 'fixed_income', 7.10, 6, true,
      'Government-backed long-term savings scheme with tax benefits'),
 
-    ('EPF', 'Employee Provident Fund', 'fixed_income', 8.25, 6, true,
+    ('EPF', 'Employee Provident Fund', 'fixed_income', 8.25, 7, true,
      'Mandatory retirement savings scheme for salaried employees'),
 
-    ('NPS', 'National Pension System', 'equity', 10.00, 7, true,
+    ('NPS', 'National Pension System', 'equity', 10.00, 8, true,
      'Government-sponsored pension scheme with equity and debt options'),
 
-    ('REAL_ESTATE', 'Real Estate', 'real_estate', 8.00, 8, true,
+    ('REAL_ESTATE', 'Real Estate', 'real_estate', 8.00, 9, true,
      'Property investments including residential and commercial real estate'),
 
-    ('INSURANCE', 'Insurance', 'insurance', 5.00, 9, true,
+    ('INSURANCE', 'Insurance', 'insurance', 5.00, 10, true,
      'Life insurance, term insurance, and insurance-linked investment products')
 ON CONFLICT (asset_type_code) DO NOTHING;
 
