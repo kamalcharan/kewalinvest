@@ -231,11 +231,24 @@ const CustomerViewPage: React.FC = () => {
     return calculatePortfolioMoM(portfolio.performance);
   }, [portfolio?.performance]);
 
-  // Get latest MoM change for badge
-  const latestMoM = useMemo(() => {
+  // Get latest MoM data for badge (returns-based MoM and investment detection)
+  const latestMoMData = useMemo(() => {
     if (portfolioWithMoM.length < 2) return null;
-    return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
+    const latest = portfolioWithMoM[portfolioWithMoM.length - 1];
+    return {
+      // Use returns_mom_percentage for true market growth (excludes new investments)
+      returnsMoM: latest.returns_mom_percentage,
+      // Portfolio value MoM (for reference, includes new investments)
+      valueMoM: latest.mom_change_percentage,
+      // Flag for significant new investment (>10% of portfolio)
+      isSignificantInvestment: latest.is_significant_investment,
+      // Investment change amount
+      investmentChange: latest.investment_change
+    };
   }, [portfolioWithMoM]);
+
+  // For backward compatibility - use returns MoM for the badge
+  const latestMoM = latestMoMData?.returnsMoM ?? null;
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -759,38 +772,70 @@ const CustomerViewPage: React.FC = () => {
                       </h3>
 
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        {/* MoM Badge - Now in header row */}
-                        {latestMoM !== null && portfolioWithMoM.length > 1 && (
-                          <div
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              backgroundColor: latestMoM >= 0
-                                ? colors.semantic.success + '20'
-                                : colors.semantic.error + '20',
-                              border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              fontSize: '12px',
-                              fontWeight: '600'
-                            }}
-                          >
-                            <span style={{ fontSize: '12px' }}>
-                              {latestMoM >= 0 ? '📈' : '📉'}
-                            </span>
-                            <span style={{
-                              color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
-                            }}>
-                              {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
-                            </span>
-                            <span style={{
-                              fontSize: '10px',
-                              color: colors.utility.secondaryText
-                            }}>
-                              vs last month
-                            </span>
-                          </div>
+                        {/* MoM Badge - Shows returns-based MoM (true market growth) */}
+                        {latestMoMData && portfolioWithMoM.length > 1 && (
+                          <>
+                            {/* Returns MoM Badge */}
+                            {latestMoM !== null && (
+                              <div
+                                style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  backgroundColor: latestMoM >= 0
+                                    ? colors.semantic.success + '20'
+                                    : colors.semantic.error + '20',
+                                  border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: '600'
+                                }}
+                              >
+                                <span style={{ fontSize: '12px' }}>
+                                  {latestMoM >= 0 ? '📈' : '📉'}
+                                </span>
+                                <span style={{
+                                  color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
+                                }}>
+                                  {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
+                                </span>
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: colors.utility.secondaryText
+                                }}>
+                                  returns MoM
+                                </span>
+                              </div>
+                            )}
+                            {/* New Investment Badge - shown when significant new investment detected */}
+                            {latestMoMData.isSignificantInvestment && latestMoMData.investmentChange && (
+                              <div
+                                style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  backgroundColor: colors.brand.primary + '15',
+                                  border: `1px solid ${colors.brand.primary}30`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: '500'
+                                }}
+                              >
+                                <span style={{ fontSize: '12px' }}>💰</span>
+                                <span style={{ color: colors.brand.primary }}>
+                                  +{formatCurrency(latestMoMData.investmentChange)}
+                                </span>
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: colors.utility.secondaryText
+                                }}>
+                                  new investment
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
                         {/* FIXED: Proper comparison toggle with state check */}
                         {!isLoadingIndexComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
@@ -859,17 +904,18 @@ const CustomerViewPage: React.FC = () => {
                       justifyContent: 'center',
                       minHeight: isFullscreenMode ? '400px' : 'auto'
                     }}>
-                      {portfolio.performance && portfolio.performance.length > 1 ? (
+                      {portfolioWithMoM && portfolioWithMoM.length > 1 ? (
                         <div style={{ width: '100%', height: '100%' }}>
                           {/* NEW: Recharts-based comparison chart with % normalization */}
                           <PerformanceComparisonChart
-                            data={portfolio.performance.map(p => ({
+                            data={portfolioWithMoM.map(p => ({
                               date: p.date,
                               value: p.current_value ?? 0,
                               invested: p.invested,
                               returns: p.returns,
                               returnPercentage: p.return_percentage,
-                              momChangePercentage: p.mom_change_percentage
+                              momChangePercentage: p.returns_mom_percentage, // Use returns-based MoM
+                              isSignificantInvestment: p.is_significant_investment
                             }))}
                             comparisonData={comparisonIndexData}
                             comparisonName={defaultComparisonIndex?.index_name || 'Index'}
@@ -884,7 +930,7 @@ const CustomerViewPage: React.FC = () => {
                             textAlign: 'center',
                             marginTop: '8px'
                           }}>
-                            Showing cumulative % returns from start ({portfolio.performance.length} months)
+                            Showing cumulative % returns from start ({portfolioWithMoM.length} months)
                             {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
                               <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
                                 • vs {defaultComparisonIndex.index_name}

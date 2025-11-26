@@ -26,7 +26,8 @@ export interface PerformanceDataPoint {
   invested?: number;
   returns?: number;
   returnPercentage?: number;
-  momChangePercentage?: number | null;
+  momChangePercentage?: number | null;  // Returns-based MoM (true market growth)
+  isSignificantInvestment?: boolean;     // Flag when new investment > 10% of portfolio
 }
 
 export interface ComparisonDataPoint {

@@ -397,14 +397,30 @@ export function validateChartData(data: ChartDataPoint[]): {
 
 /**
  * Calculate month-over-month changes for portfolio performance data
- * Adds mom_change_percentage and mom_change_absolute fields to each data point
- * 
+ *
+ * Calculates TWO types of MoM:
+ * 1. mom_change_percentage: Portfolio VALUE change (includes new investments)
+ * 2. returns_mom_percentage: True RETURNS change (excludes new investment impact)
+ *
+ * Also detects significant new investments (>10% of portfolio) and flags them
+ *
  * @param performanceData - Portfolio performance data from API
  * @returns Performance data with MoM calculations
  */
-export function calculatePortfolioMoM<T extends { current_value?: number | null; date: string }>(
+export function calculatePortfolioMoM<T extends {
+  current_value?: number | null;
+  invested?: number | null;
+  returns?: number | null;
+  date: string
+}>(
   performanceData: T[]
-): (T & { mom_change_percentage: number | null; mom_change_absolute: number | null })[] {
+): (T & {
+  mom_change_percentage: number | null;
+  mom_change_absolute: number | null;
+  returns_mom_percentage: number | null;
+  investment_change: number | null;
+  is_significant_investment: boolean;
+})[] {
   if (!performanceData || performanceData.length === 0) return [];
 
   // Sort by date ascending
@@ -419,29 +435,57 @@ export function calculatePortfolioMoM<T extends { current_value?: number | null;
         ...point,
         mom_change_percentage: null,
         mom_change_absolute: null,
+        returns_mom_percentage: null,
+        investment_change: null,
+        is_significant_investment: false,
       };
     }
 
     const currentValue = point.current_value ?? 0;
     const previousValue = sorted[index - 1].current_value ?? 0;
+    const currentInvested = (point as any).invested ?? 0;
+    const previousInvested = (sorted[index - 1] as any).invested ?? 0;
+    const currentReturns = (point as any).returns ?? 0;
+    const previousReturns = (sorted[index - 1] as any).returns ?? 0;
 
-    // Handle division by zero
+    // Calculate investment change
+    const investmentChange = currentInvested - previousInvested;
+
+    // Detect significant new investment (>10% of previous portfolio value)
+    const isSignificantInvestment = previousValue > 0
+      ? Math.abs(investmentChange) > (previousValue * 0.10)
+      : false;
+
+    // Handle division by zero for portfolio value MoM
     if (previousValue === 0) {
       return {
         ...point,
         mom_change_percentage: null,
         mom_change_absolute: currentValue - previousValue,
+        returns_mom_percentage: null,
+        investment_change: investmentChange,
+        is_significant_investment: isSignificantInvestment,
       };
     }
 
-    // Calculate MoM change
+    // Calculate portfolio VALUE MoM (traditional calculation)
     const momChangeAbsolute = currentValue - previousValue;
     const momChangePercentage = (momChangeAbsolute / previousValue) * 100;
+
+    // Calculate RETURNS-based MoM (true market growth)
+    // This measures how much the RETURNS changed relative to previous portfolio value
+    // Returns MoM = (current_returns - previous_returns) / previous_value * 100
+    // This excludes the impact of new money added
+    const returnsChange = currentReturns - previousReturns;
+    const returnsMomPercentage = (returnsChange / previousValue) * 100;
 
     return {
       ...point,
       mom_change_percentage: parseFloat(momChangePercentage.toFixed(2)),
       mom_change_absolute: parseFloat(momChangeAbsolute.toFixed(2)),
+      returns_mom_percentage: parseFloat(returnsMomPercentage.toFixed(2)),
+      investment_change: parseFloat(investmentChange.toFixed(2)),
+      is_significant_investment: isSignificantInvestment,
     };
   });
 }
