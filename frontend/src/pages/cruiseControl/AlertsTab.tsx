@@ -188,7 +188,7 @@ export const AlertsTab: React.FC = () => {
 
   const handleAcknowledge = async (alertId: number) => {
     try {
-      const response = await apiService.patch(
+      const response = await apiService.patch<{ success: boolean }>(
         API_ENDPOINTS.JTBD.ACKNOWLEDGE_ALERT(alertId)
       );
 
@@ -206,7 +206,7 @@ export const AlertsTab: React.FC = () => {
 
   const handleDismiss = async (alertId: number) => {
     try {
-      const response = await apiService.patch(
+      const response = await apiService.patch<{ success: boolean }>(
         API_ENDPOINTS.JTBD.DISMISS_ALERT(alertId)
       );
 
