@@ -733,55 +733,64 @@ const CustomerViewPage: React.FC = () => {
                     id={performanceChartId}
                     style={{
                       backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '12px',
+                      borderRadius: isFullscreenMode ? '0' : '12px',
                       padding: '24px',
-                      position: 'relative'
+                      position: 'relative',
+                      ...(isFullscreenMode && {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: '100vh',
+                        width: '100vw'
+                      })
                     }}
                   >
-                    {/* MoM Badge - Top Right Corner */}
-                    {latestMoM !== null && portfolioWithMoM.length > 1 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '20px',
-                          right: '20px',
-                          zIndex: 10,
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          backgroundColor: latestMoM >= 0
-                            ? colors.semantic.success + '20'
-                            : colors.semantic.error + '20',
-                          border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <span style={{ fontSize: '14px' }}>
-                          {latestMoM >= 0 ? '📈' : '📉'}
-                        </span>
-                        <span style={{
-                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
-                        }}>
-                          {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
-                        </span>
-                        <span style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText
-                        }}>
-                          vs last month
-                        </span>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    {/* Header Row - Title, MoM Badge, and Action Buttons */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '20px',
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}>
                       <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
                         Portfolio Performance
                       </h3>
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* MoM Badge - Now in header row */}
+                        {latestMoM !== null && portfolioWithMoM.length > 1 && (
+                          <div
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              backgroundColor: latestMoM >= 0
+                                ? colors.semantic.success + '20'
+                                : colors.semantic.error + '20',
+                              border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <span style={{ fontSize: '12px' }}>
+                              {latestMoM >= 0 ? '📈' : '📉'}
+                            </span>
+                            <span style={{
+                              color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
+                            }}>
+                              {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
+                            </span>
+                            <span style={{
+                              fontSize: '10px',
+                              color: colors.utility.secondaryText
+                            }}>
+                              vs last month
+                            </span>
+                          </div>
+                        )}
                         {/* FIXED: Proper comparison toggle with state check */}
                         {!isLoadingIndexComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
                           <button
@@ -841,25 +850,39 @@ const CustomerViewPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{
+                      height: isFullscreenMode ? 'auto' : '300px',
+                      flex: isFullscreenMode ? 1 : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: isFullscreenMode ? '400px' : 'auto'
+                    }}>
                       {portfolio.performance && portfolio.performance.length > 1 ? (
-                        <div style={{ width: '100%', height: '100%' }}>
-                          {/* FIXED: Proper props with comparison data */}
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {/* Responsive chart sizing */}
                           <PerformanceSparkline
-  performanceData={portfolioWithMoM}
-  data={portfolio.performance.map(p => p.current_value ?? 0)}
-  width={600}
-  height={250}
-  showArea={true}
-  showDots={true}
-  interactive={true}
-  timeframe={selectedTimeframe}
-  showTimelineMarkers={true}
-  timelineMarkerSize={5}
-  showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-comparisonData={comparisonIndexData}
-  comparisonIndexName={defaultComparisonIndex?.index_name}
-/>
+                            performanceData={portfolioWithMoM}
+                            data={portfolio.performance.map(p => p.current_value ?? 0)}
+                            width={isFullscreenMode ? window.innerWidth - 100 : 600}
+                            height={isFullscreenMode ? window.innerHeight - 200 : 250}
+                            showArea={true}
+                            showDots={true}
+                            interactive={true}
+                            timeframe={selectedTimeframe}
+                            showTimelineMarkers={true}
+                            timelineMarkerSize={isFullscreenMode ? 8 : 5}
+                            showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
+                            comparisonData={comparisonIndexData}
+                            comparisonIndexName={defaultComparisonIndex?.index_name}
+                          />
                           <div style={{
                             fontSize: '12px',
                             color: colors.utility.secondaryText,
