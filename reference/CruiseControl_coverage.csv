@@ -1,0 +1,505 @@
+TC_ID,Section,Sub_Section,Test_Case_Title,Description,Pre_Conditions,Test_Steps,Expected_Result,Priority,Test_Type,Risk_Level
+CC_NAV_001,CruiseControl Page,Navigation,Display all 5 tabs,Verify all tabs are visible in tab navigation,User logged in,"1. Navigate to Cruise Control page
+2. Observe tab navigation",5 tabs visible: NAV Downloads Market Downloads Alerts Portfolio Snapshots Settings,P1,Functional,Low
+CC_NAV_002,CruiseControl Page,Navigation,Tab icons display correctly,Verify each tab has correct icon,On CruiseControl page,"1. Check each tab icon
+2. Verify icons match",📊 NAV 📈 Market 🔔 Alerts 📸 Portfolio ⚙️ Settings,P2,UI,Low
+CC_NAV_003,CruiseControl Page,Navigation,Default tab selection,Verify NAV Downloads tab is active by default,Fresh navigation,"1. Navigate to Cruise Control
+2. Check active tab",NAV Downloads tab is selected/highlighted,P1,Functional,Low
+CC_NAV_004,CruiseControl Page,Navigation,Tab click switches content,Verify clicking tab changes content area,On CruiseControl page,"1. Click different tabs
+2. Observe content changes",Content updates to match selected tab,P1,Functional,Low
+CC_NAV_005,CruiseControl Page,Header,Display page title,Verify header shows correct title and subtitle,On CruiseControl page,"1. Check page header
+2. Observe title",Title: '🎛️ Cruise Control' with subtitle about monitoring,P2,UI,Low
+CC_NAV_006,CruiseControl Page,Header,Admin role detection,Verify admin users see full interface,Admin user logged in,"1. Login as admin
+2. Navigate to Cruise Control",Full interface with all action buttons visible,P1,Functional,Low
+CC_NAV_007,CruiseControl Page,Header,Non-admin read-only banner,Verify non-admin users see read-only banner,Non-admin user logged in,"1. Login as regular user
+2. Navigate to Cruise Control",Read-only banner displayed operations disabled,P1,Security,Medium
+CC_NAV_008,CruiseControl Page,Responsive,Tab navigation on mobile,Verify tabs work on mobile viewport,Mobile viewport (<768px),"1. Resize to mobile
+2. Check tab navigation",Tabs scrollable or dropdown menu appears,P2,UI,Low
+CC_NAV_009,CruiseControl Page,Theme,Dark mode support,Verify page adapts to dark mode,Dark mode enabled,"1. Toggle dark mode
+2. Check all elements",All elements adapt with proper contrast,P2,UI,Low
+CC_NAVT_001,NAV Tab,Statistics,Display 5 statistics cards,Verify all 5 stat cards display,Schemes exist in system,"1. Navigate to NAV tab
+2. Check statistics section",5 cards: Total Active Pending Failed No Data Metrics Pending,P1,Functional,Low
+CC_NAVT_002,NAV Tab,Statistics,Total Active NAVs count,Verify total count is accurate,NAV bookmarks exist,"1. Check Total Active card
+2. Compare with database",Count matches total active NAV bookmarks,P1,Functional,Low
+CC_NAVT_003,NAV Tab,Statistics,Pending Downloads count,Verify pending count is accurate,Some NAVs pending download,"1. Check Pending Downloads card
+2. Compare with actual pending",Count matches schemes awaiting daily download,P1,Functional,Low
+CC_NAVT_004,NAV Tab,Statistics,Failed Downloads count,Verify failed count is accurate,Some downloads failed,"1. Check Failed Downloads card
+2. Compare with failed status records",Count matches schemes with failed status,P1,Functional,Low
+CC_NAVT_005,NAV Tab,Statistics,No NAV Data count,Verify no-data count is accurate,Some schemes without history,"1. Check No NAV Data card
+2. Compare with schemes without data",Count matches schemes without historical data,P1,Functional,Low
+CC_NAVT_006,NAV Tab,Statistics,Metrics Pending count,Verify metrics pending count,Some schemes without metrics,"1. Check Metrics Pending card
+2. Compare with schemes needing calculations",Count matches schemes with data but no metrics,P1,Functional,Low
+CC_NAVT_007,NAV Tab,Statistics,Stat card click filters list,Verify clicking stat card shows filtered list,On NAV tab,"1. Click 'Pending Downloads' card
+2. Observe list below",List shows only pending schemes,P1,Functional,Low
+CC_NAVT_008,NAV Tab,Statistics,Filter by failed status,Verify failed filter works,Failed downloads exist,"1. Click 'Failed Downloads' card
+2. Check list",Only schemes with failed status shown,P1,Functional,Low
+CC_NAVT_009,NAV Tab,Statistics,Filter by no-data status,Verify no-data filter works,Schemes without data exist,"1. Click 'No NAV Data' card
+2. Check list",Only schemes without historical data shown,P1,Functional,Low
+CC_NAVT_010,NAV Tab,Statistics,Filter by metrics pending,Verify metrics filter works,Schemes needing metrics exist,"1. Click 'Metrics Pending' card
+2. Check list",Only schemes with data but no metrics shown,P1,Functional,Low
+CC_NAVT_011,NAV Tab,Scheme List,Display scheme cards,Verify scheme cards render correctly,Schemes exist and filter applied,"1. Click any stat card
+2. Observe scheme cards",EnhancedBookmarkCard displays for each scheme,P1,Functional,Low
+CC_NAVT_012,NAV Tab,Scheme List,Scheme card info display,Verify card shows all required info,Scheme card visible,"1. Check scheme card content
+2. Verify fields",Shows: Scheme name AMC Category Latest NAV date Status badge,P1,Functional,Low
+CC_NAVT_013,NAV Tab,Scheme List,Download NAV button,Verify individual download button works,Scheme card visible,"1. Find 'Download NAV' button
+2. Click button",Download triggered toast shows success/failure,P1,Functional,Medium
+CC_NAVT_014,NAV Tab,Scheme List,View Details link,Verify view details navigates correctly,Scheme card visible,"1. Click 'View Details' link
+2. Observe navigation",Navigates to scheme details page,P2,Functional,Low
+CC_NAVT_015,NAV Tab,Scheme List,Historical Download modal,Verify historical download modal opens,Scheme card visible,"1. Click 'Historical Download' button
+2. Observe modal",Modal opens with date range selection,P2,Functional,Low
+CC_NAVT_016,NAV Tab,Scheme List,Calculate Metrics modal,Verify metrics calculation modal opens,Scheme card visible,"1. Click 'Calculate Metrics' button
+2. Observe modal",Modal opens for metrics calculation,P2,Functional,Low
+CC_NAVT_017,NAV Tab,Download All,Download All button visible,Verify Download All button displays,Schemes available,"1. Navigate to NAV tab
+2. Find Download All button",Button visible in header area,P1,Functional,Low
+CC_NAVT_018,NAV Tab,Download All,Download All triggers bulk job,Verify bulk download works,Multiple pending schemes,"1. Click 'Download All' button
+2. Observe behavior",Bulk NAV download job starts shows progress,P1,Functional,High
+CC_NAVT_019,NAV Tab,Download All,Download All disabled when empty,Verify button disabled when no schemes,No schemes available,"1. Check Download All button state
+2. Observe disabled state",Button disabled with appropriate tooltip,P2,Functional,Low
+CC_NAVT_020,NAV Tab,Download All,Loading spinner during download,Verify spinner shows during download,Download in progress,"1. Trigger Download All
+2. Observe button state",Loading spinner replaces button text,P2,UI,Low
+CC_NAVT_021,NAV Tab,Pagination,Page size 25 items,Verify 25 items per page,More than 25 schemes,"1. Apply filter with >25 results
+2. Count items on page",25 items displayed per page,P2,Functional,Low
+CC_NAVT_022,NAV Tab,Pagination,Showing X-Y of Z display,Verify pagination info correct,"Multiple pages exist,"1. Check pagination area
+2. Verify count text",Shows 'Showing 1-25 of 100' format,P2,Functional,Low
+CC_NAVT_023,NAV Tab,Pagination,Next page navigation,Verify next button works,Multiple pages exist,"1. Click Next button
+2. Observe list",Page 2 items load,P1,Functional,Low
+CC_NAVT_024,NAV Tab,Pagination,Previous page navigation,Verify previous button works,On page 2+,"1. Click Previous button
+2. Observe list",Previous page items load,P1,Functional,Low
+CC_NAVT_025,NAV Tab,Pagination,Scroll to top on page change,Verify smooth scroll on pagination,Multiple pages,"1. Scroll down on page 1
+2. Click Next",Page scrolls smoothly to top (y:300),P3,UI,Low
+CC_NAVT_026,NAV Tab,Close Button,Close returns to statistics,Verify close button works,Viewing filtered list,"1. Click Close button
+2. Observe view",Returns to statistics view,P2,Functional,Low
+CC_NAVT_027,NAV Tab,Loading,Loading state display,Verify loading state shows,Fresh tab load,"1. Navigate to NAV tab
+2. Observe during load",Loading spinner or skeleton displays,P2,UI,Low
+CC_NAVT_028,NAV Tab,Empty State,No schemes empty state,Verify empty state message,No schemes in filter,"1. Apply filter with no results
+2. Observe display",Empty state message displayed,P2,Functional,Low
+CC_NAVT_029,NAV Tab,Error,Failed load error display,Verify error handling,API returns error,"1. Simulate API failure
+2. Observe display",Error banner with retry button,P1,Functional,Medium
+CC_NAVT_030,NAV Tab,Auto-refresh,Stats refresh on mount,Verify statistics auto-refresh,Component mounted,"1. Navigate away then back
+2. Check stats",Statistics refreshed with latest data,P2,Functional,Low
+CC_MKT_001,Market Tab,Statistics,Display 5 statistics cards,Verify all stat cards display,Market indices exist,"1. Navigate to Market tab
+2. Check statistics section",5 cards: Total Indices Completed Pending>1Day Failed Metrics Pending,P1,Functional,Low
+CC_MKT_002,Market Tab,Statistics,Total Indices count,Verify total count accurate,Indices configured,"1. Check Total Indices card
+2. Compare with database",Count matches active market indices,P1,Functional,Low
+CC_MKT_003,Market Tab,Statistics,Download Completed count,Verify completed count,Some indices downloaded today,"1. Check Download Completed card
+2. Verify against today's downloads",Count matches indices downloaded today,P1,Functional,Low
+CC_MKT_004,Market Tab,Statistics,Pending >1 Day count,Verify stale data count,Some indices with old data,"1. Check Pending >1 Day card
+2. Compare with stale indices",Count matches indices with data >1 day old,P1,Functional,Low
+CC_MKT_005,Market Tab,Statistics,Failed Downloads count,Verify failed count,Some downloads failed,"1. Check Failed Downloads card
+2. Compare with failed records",Count matches indices with failed status,P1,Functional,Low
+CC_MKT_006,Market Tab,Index Cards,Display index cards,Verify index cards render,Indices exist,"1. Navigate to Market tab
+2. Observe index cards",IndexCard displays for each market index,P1,Functional,Low
+CC_MKT_007,Market Tab,Index Cards,Card info display,Verify card shows all info,Index card visible,"1. Check index card content
+2. Verify fields",Shows: Index name Symbol Exchange Latest EOD date Status,P1,Functional,Low
+CC_MKT_008,Market Tab,Index Cards,Download EOD button,Verify EOD download works,Index card visible,"1. Click 'Download EOD' button
+2. Observe result",EOD download triggers shows success/failure toast,P1,Functional,Medium
+CC_MKT_009,Market Tab,Index Cards,View Chart button,Verify chart navigation,Index card visible,"1. Click 'View Chart' button
+2. Observe action",Opens chart modal or navigates to chart page,P2,Functional,Low
+CC_MKT_010,Market Tab,Index Cards,Delete Data button placeholder,Verify delete button state,Index card visible,"1. Click 'Delete Data' button
+2. Observe behavior",Shows 'Coming Soon' message or disabled,P3,Functional,Low
+CC_MKT_011,Market Tab,Filters,All filter shows all indices,Verify all filter,Indices exist,"1. Select 'All' filter
+2. Check list",All indices displayed,P1,Functional,Low
+CC_MKT_012,Market Tab,Filters,Pending filter works,Verify pending filter,Stale indices exist,"1. Select 'Pending' filter
+2. Check list",Only indices with last_date < yesterday shown,P1,Functional,Low
+CC_MKT_013,Market Tab,Filters,Failed filter works,Verify failed filter,Failed indices exist,"1. Select 'Failed' filter
+2. Check list",Only indices with failed status shown,P1,Functional,Low
+CC_MKT_014,Market Tab,Filters,No-data filter works,Verify no-data filter,Indices without data exist,"1. Select 'No Data' filter
+2. Check list",Only indices without historical data shown,P1,Functional,Low
+CC_MKT_015,Market Tab,Loading,Loading state display,Verify loading indicator,Fresh tab load,"1. Navigate to Market tab
+2. Observe during load",Loading spinner displays,P2,UI,Low
+CC_MKT_016,Market Tab,Empty State,No indices message,Verify empty state,No indices match filter,"1. Apply filter with no results
+2. Observe display",Empty state message shown,P2,Functional,Low
+CC_MKT_017,Market Tab,Error,API error handling,Verify error display,API returns error,"1. Simulate API failure
+2. Observe display",Error message with retry option,P1,Functional,Medium
+CC_ALT_001,Alerts Tab,Layout,Two-column grid layout,Verify compact grid layout,Alerts exist,"1. Navigate to Alerts tab
+2. Observe layout",2-column responsive grid of alert cards,P2,UI,Low
+CC_ALT_002,Alerts Tab,Filters,Display filter tabs,Verify 4 filter tabs exist,On Alerts tab,"1. Check filter tabs
+2. Count options",4 tabs: All Active Acknowledged Dismissed,P1,Functional,Low
+CC_ALT_003,Alerts Tab,Filters,Active filter default,Verify Active is default selection,Fresh tab load,"1. Navigate to Alerts tab
+2. Check selected filter",Active filter selected by default,P1,Functional,Low
+CC_ALT_004,Alerts Tab,Filters,Filter shows count badge,Verify count shows on filter tabs,Alerts exist,"1. Check filter tab badges
+2. Verify counts",Each tab shows count of alerts in that status,P1,Functional,Low
+CC_ALT_005,Alerts Tab,Filters,All filter shows all alerts,Verify All filter works,Various alert statuses,"1. Click 'All' filter
+2. Check list",All alerts regardless of status shown,P1,Functional,Low
+CC_ALT_006,Alerts Tab,Filters,Active filter works,Verify Active filter,Active alerts exist,"1. Click 'Active' filter
+2. Check list",Only active alerts shown,P1,Functional,Low
+CC_ALT_007,Alerts Tab,Filters,Acknowledged filter works,Verify Acknowledged filter,Acknowledged alerts exist,"1. Click 'Acknowledged' filter
+2. Check list",Only acknowledged alerts shown,P1,Functional,Low
+CC_ALT_008,Alerts Tab,Filters,Dismissed filter works,Verify Dismissed filter,Dismissed alerts exist,"1. Click 'Dismissed' filter
+2. Check list",Only dismissed alerts shown,P1,Functional,Low
+CC_ALT_009,Alerts Tab,Alert Cards,Card layout correct,Verify card displays all info,Alert exists,"1. Check alert card
+2. Verify sections",Left: Customer/Title/Date Right: Action buttons,P1,Functional,Low
+CC_ALT_010,Alerts Tab,Alert Cards,Customer name clickable,Verify customer link works,Alert with customer,"1. Click customer name
+2. Observe navigation",Navigates to customer view page,P1,Functional,Low
+CC_ALT_011,Alerts Tab,Alert Cards,Alert title display,Verify title shows with icon,Alert exists,"1. Check alert title
+2. Verify icon",Title displays with appropriate type icon,P1,Functional,Low
+CC_ALT_012,Alerts Tab,Alert Cards,Status badge display,Verify status badge for non-active,Acknowledged/Dismissed alert,"1. Find acknowledged alert
+2. Check badge",Shows DONE or DISMISSED badge,P2,UI,Low
+CC_ALT_013,Alerts Tab,Alert Cards,Next alert date formatting,Verify date format,Alert with next_alert_date,"1. Check next alert date
+2. Verify format",Shows: Today Tomorrow Mon 15 Nov etc.,P2,Functional,Low
+CC_ALT_014,Alerts Tab,Alert Cards,Priority badge color,Verify priority colors,Alerts with various priorities,"1. Check priority badges
+2. Verify colors",Critical=Red High=Orange Medium=Yellow Low=Blue,P2,UI,Low
+CC_ALT_015,Alerts Tab,Alert Types,Portfolio Alert icon,Verify Portfolio Alert displays correctly,Portfolio alert exists,"1. Find Portfolio Alert
+2. Check icon and label",💰 Investment Due icon and label,P2,UI,Low
+CC_ALT_016,Alerts Tab,Alert Types,Goal SIP Plan icon,Verify Goal SIP displays correctly,Goal SIP alert exists,"1. Find Goal SIP alert
+2. Check display",💰 Recurring Investment Due label,P2,UI,Low
+CC_ALT_017,Alerts Tab,Alert Types,Time-Based alert icon,Verify Time-Based displays correctly,Time-based alert exists,"1. Find Time-Based alert
+2. Check display",📅 One-time or 🔔 Recurring Reminder,P2,UI,Low
+CC_ALT_018,Alerts Tab,Alert Types,Profile Trigger icon,Verify Profile Trigger displays,Birthday/Anniversary alert exists,"1. Find Profile Trigger alert
+2. Check display",🎂 Birthday or 💑 Anniversary icon,P2,UI,Low
+CC_ALT_019,Alerts Tab,Alert Types,Import Notification icon,Verify Import Notification displays,Import notification exists,"1. Find Import Notification
+2. Check display",🆕 New MF Added or ⏭️ Duplicate Skipped,P2,UI,Low
+CC_ALT_020,Alerts Tab,Actions,Acknowledge button visible,Verify acknowledge button for active,Active alert,"1. Find active alert
+2. Check action buttons",Green ✓ acknowledge button visible,P1,Functional,Low
+CC_ALT_021,Alerts Tab,Actions,Dismiss button visible,Verify dismiss button for active,Active alert,"1. Find active alert
+2. Check action buttons",Gray ✗ dismiss button visible,P1,Functional,Low
+CC_ALT_022,Alerts Tab,Actions,Acknowledge alert,Verify acknowledge action works,Active alert exists,"1. Click acknowledge button
+2. Observe changes",Alert status changes to acknowledged toast shown,P1,Functional,Medium
+CC_ALT_023,Alerts Tab,Actions,Dismiss alert,Verify dismiss action works,Active alert exists,"1. Click dismiss button
+2. Observe changes",Alert status changes to dismissed toast shown,P1,Functional,Medium
+CC_ALT_024,Alerts Tab,Actions,Actions hidden for non-active,Verify no actions for acknowledged/dismissed,Non-active alert,"1. Find acknowledged alert
+2. Check right section",No action buttons shown,P2,Functional,Low
+CC_ALT_025,Alerts Tab,Empty State,Active empty state message,Verify empty message for active,No active alerts,"1. Check Active filter with no alerts
+2. Observe message",🎉 'All caught up! No alerts require attention',P2,UI,Low
+CC_ALT_026,Alerts Tab,Empty State,Other tabs empty message,Verify empty for other filters,No alerts in filter,"1. Check other filter with no alerts
+2. Observe message",📭 'No {status} alerts found',P2,UI,Low
+CC_ALT_027,Alerts Tab,Loading,Skeleton loaders display,Verify loading state,Fresh tab load,"1. Navigate to Alerts tab
+2. Observe during load",6 skeleton placeholder cards with pulse animation,P2,UI,Low
+CC_ALT_028,Alerts Tab,Refresh,Refresh button works,Verify manual refresh,On Alerts tab,"1. Click refresh button
+2. Observe list",Alerts list refreshes with latest data,P2,Functional,Low
+CC_ALT_029,Alerts Tab,Error,Error state display,Verify error handling,API returns error,"1. Simulate API failure
+2. Observe display",Error message displayed,P1,Functional,Medium
+CC_ALT_030,Alerts Tab,Responsive,Grid responsive on mobile,Verify single column on mobile,Mobile viewport,"1. Resize to mobile
+2. Check grid",Single column layout on mobile,P2,UI,Low
+CC_PS_001,Portfolio Snapshots Tab,Dashboard,Display 4 statistics cards,Verify dashboard stats cards,Executions exist,"1. Navigate to Portfolio Snapshots tab
+2. Check top section",4 cards: Last Run Next Scheduled Success Rate Total Executions,P1,Functional,Low
+CC_PS_002,Portfolio Snapshots Tab,Dashboard,Last Run card info,Verify last run details,Previous execution exists,"1. Check Last Run card
+2. Verify content",Shows date/time with status badge (Success/Failed),P1,Functional,Low
+CC_PS_003,Portfolio Snapshots Tab,Dashboard,Last Run status badge color,Verify status badge colors,Executions exist,"1. Check Last Run status badge
+2. Verify color",Green for success Red for failed,P2,UI,Low
+CC_PS_004,Portfolio Snapshots Tab,Dashboard,Next Scheduled card,Verify next scheduled time,Scheduler enabled,"1. Check Next Scheduled card
+2. Verify content",Shows next execution date/time,P1,Functional,Low
+CC_PS_005,Portfolio Snapshots Tab,Dashboard,Next Scheduled disabled state,Verify disabled scheduler display,Scheduler disabled,"1. Check Next Scheduled when disabled
+2. Observe display",Shows 'Disabled' or 'Not Scheduled' message,P2,Functional,Low
+CC_PS_006,Portfolio Snapshots Tab,Dashboard,Success Rate percentage,Verify success rate calculation,Multiple executions exist,"1. Check Success Rate card
+2. Verify calculation",Percentage = (successful / total) * 100,P1,Functional,Low
+CC_PS_007,Portfolio Snapshots Tab,Dashboard,Total Executions count,Verify total and average duration,Executions exist,"1. Check Total Executions card
+2. Verify content",Shows count + average duration,P1,Functional,Low
+CC_PS_008,Portfolio Snapshots Tab,Scheduler Config,Display scheduler configuration,Verify config section displays,Config exists,"1. Scroll to scheduler config
+2. Check display",Shows: Schedule Type Cron Expression Enabled status,P2,Functional,Low
+CC_PS_009,Portfolio Snapshots Tab,Scheduler Config,Schedule type display,Verify schedule type shows,Config exists,"1. Check Schedule Type
+2. Verify value",Shows Weekly/Monthly/Custom,P2,Functional,Low
+CC_PS_010,Portfolio Snapshots Tab,Scheduler Config,Cron expression display,Verify cron shows,Config exists,"1. Check Cron Expression
+2. Verify display",Cron expression visible,P2,Functional,Low
+CC_PS_011,Portfolio Snapshots Tab,Scheduler Config,Is Enabled toggle display,Verify enabled status,Config exists,"1. Check Is Enabled
+2. Verify display",Toggle or badge showing enabled/disabled,P2,Functional,Low
+CC_PS_012,Portfolio Snapshots Tab,Scheduler Config,Execution count display,Verify execution count,Config exists,"1. Check Execution Count
+2. Verify value",Matches total executions for this config,P2,Functional,Low
+CC_PS_013,Portfolio Snapshots Tab,Scheduler Config,Failure count display,Verify failure count,Config exists,"1. Check Failure Count
+2. Verify value",Matches failed executions count,P2,Functional,Low
+CC_PS_014,Portfolio Snapshots Tab,Operations Button,Dropdown button visible,Verify operations dropdown exists,On Portfolio Snapshots tab,"1. Find Snapshot Operations button
+2. Verify presence",Single dropdown button with arrow visible,P1,Functional,Low
+CC_PS_015,Portfolio Snapshots Tab,Operations Button,Dropdown opens on click,Verify dropdown opens,Operations button visible,"1. Click operations button
+2. Observe dropdown",Dropdown menu opens with 4 options,P1,Functional,Low
+CC_PS_016,Portfolio Snapshots Tab,Operations Button,4 operations listed,Verify all 4 operations available,Dropdown open,"1. Check dropdown options
+2. Count items",4 items: Generate Missing Update All Regenerate All Drop All,P1,Functional,Low
+CC_PS_017,Portfolio Snapshots Tab,Operations Button,Operation icons correct,Verify each operation has icon,Dropdown open,"1. Check each option icon
+2. Verify icons",➕ Generate 🔄 Update ♻️ Regenerate 🗑️ Drop,P2,UI,Low
+CC_PS_018,Portfolio Snapshots Tab,Operations Button,Operation descriptions correct,Verify descriptions show,Dropdown open,"1. Check option descriptions
+2. Verify text",Each has description: Safe/Medium/Dangerous,P2,UI,Low
+CC_PS_019,Portfolio Snapshots Tab,Operations Button,Dropdown closes on outside click,Verify close behavior,Dropdown open,"1. Click outside dropdown
+2. Observe dropdown",Dropdown closes,P2,Functional,Low
+CC_PS_020,Portfolio Snapshots Tab,Operations Button,Button disabled during operation,Verify disabled during execution,Operation running,"1. Start an operation
+2. Check button state",Button disabled shows 'Processing...',P1,Functional,Medium
+CC_OP_001,Snapshot Operations,Generate Missing,Generate Missing shows confirmation,Verify confirmation modal,Admin user,"1. Click Generate Missing
+2. Observe modal",Confirmation modal appears with safe operation message,P1,Functional,Low
+CC_OP_002,Snapshot Operations,Generate Missing,Confirmation message text,Verify message is correct,Modal open,"1. Read confirmation message
+2. Verify text",'Creates snapshots only for missing months. Existing NOT modified. Safe operation.',P2,UI,Low
+CC_OP_003,Snapshot Operations,Generate Missing,Confirm executes operation,Verify operation runs,Modal open,"1. Click Confirm button
+2. Observe execution",Operation starts processing indicator shows,P1,Functional,High
+CC_OP_004,Snapshot Operations,Generate Missing,Cancel closes modal,Verify cancel works,Modal open,"1. Click Cancel button
+2. Observe modal",Modal closes no operation executed,P2,Functional,Low
+CC_OP_005,Snapshot Operations,Generate Missing,Creates only missing snapshots,Verify behavior creates only new,Customer with missing months,"1. Execute Generate Missing
+2. Check database",Only missing months get new snapshots existing unchanged,P1,Functional,High
+CC_OP_006,Snapshot Operations,Generate Missing,Result shows new/existing counts,Verify result message,Operation completed,"1. Check execution result
+2. Verify format",'X new Y existing' format displayed,P1,Functional,Low
+CC_OP_007,Snapshot Operations,Generate Missing,All up-to-date message,Verify no-work message,No missing snapshots,"1. Execute when all exist
+2. Check result",'All up-to-date (Y)' message shown,P2,Functional,Low
+CC_OP_008,Snapshot Operations,Update All,Update All shows confirmation,Verify confirmation modal,Admin user,"1. Click Update All
+2. Observe modal",Confirmation modal appears with medium risk message,P1,Functional,Low
+CC_OP_009,Snapshot Operations,Update All,Confirmation message text,Verify message correct,Modal open,"1. Read confirmation message
+2. Verify text",'Creates missing AND updates existing with latest values',P2,UI,Low
+CC_OP_010,Snapshot Operations,Update All,Creates and updates snapshots,Verify behavior creates and updates,Mix of missing and existing,"1. Execute Update All
+2. Check database",Missing created existing recalculated,P1,Functional,High
+CC_OP_011,Snapshot Operations,Update All,Result shows C/U counts,Verify result format,Operation completed,"1. Check execution result
+2. Verify format",'XC / YU' (X Created Y Updated) format,P1,Functional,Low
+CC_OP_012,Snapshot Operations,Update All,Takes longer than Generate Missing,Verify reasonable duration,Large dataset,"1. Execute Update All
+2. Measure time",Takes longer due to update calculations,P2,Performance,Low
+CC_OP_013,Snapshot Operations,Regenerate All,Regenerate All shows warning modal,Verify warning modal,Admin user,"1. Click Regenerate All
+2. Observe modal",Warning modal with ⚠️ icon appears,P1,Functional,Medium
+CC_OP_014,Snapshot Operations,Regenerate All,Warning message text,Verify warning content,Modal open,"1. Read warning message
+2. Verify text",'⚠️ WARNING: DELETE all existing snapshots and recreate from scratch',P1,UI,Low
+CC_OP_015,Snapshot Operations,Regenerate All,Confirm button orange/yellow,Verify button color,Modal open,"1. Check Confirm button color
+2. Verify styling",Button is orange (#F59E0B) not green,P2,UI,Low
+CC_OP_016,Snapshot Operations,Regenerate All,Deletes then creates,Verify operation behavior,Existing snapshots,"1. Execute Regenerate All
+2. Check database sequence",All deleted first then fresh snapshots created,P1,Functional,High
+CC_OP_017,Snapshot Operations,Regenerate All,Result shows D→C format,Verify result message,Operation completed,"1. Check execution result
+2. Verify format",'XD → YC' (X Deleted Y Created) format,P1,Functional,Low
+CC_OP_018,Snapshot Operations,Regenerate All,Significant execution time,Verify duration,Large dataset,"1. Execute Regenerate All
+2. Measure time",Takes 5-10 minutes for large dataset,P2,Performance,Medium
+CC_OP_019,Snapshot Operations,Drop All,Drop All shows danger modal,Verify danger modal,Admin user,"1. Click Drop All
+2. Observe modal",Danger modal with 🚨 icon appears,P1,Functional,High
+CC_OP_020,Snapshot Operations,Drop All,Danger message text,Verify danger content,Modal open,"1. Read danger message
+2. Verify text",'🚨 DANGER: Permanently DELETE all snapshots. Cannot be undone!',P1,UI,Low
+CC_OP_021,Snapshot Operations,Drop All,Confirm button red,Verify button color,Modal open,"1. Check Confirm button color
+2. Verify styling",Button is red (#EF4444),P1,UI,Low
+CC_OP_022,Snapshot Operations,Drop All,Permanently deletes all,Verify deletion,Existing snapshots,"1. Execute Drop All
+2. Check database",All snapshots permanently deleted,P1,Functional,High
+CC_OP_023,Snapshot Operations,Drop All,Result shows deleted count,Verify result message,Operation completed,"1. Check execution result
+2. Verify format",'X snapshots deleted' message,P1,Functional,Low
+CC_OP_024,Snapshot Operations,Drop All,No snapshots found warning,Verify empty case,No snapshots exist,"1. Execute Drop All when empty
+2. Check result",'No snapshots found' warning message,P2,Functional,Low
+CC_OP_025,Snapshot Operations,All Operations,Execution tracked in history,Verify history entry,Any operation completed,"1. Execute any operation
+2. Check execution history",New entry appears in history table,P1,Functional,Low
+CC_OP_026,Snapshot Operations,All Operations,Non-admin cannot execute,Verify admin restriction,Non-admin user,"1. Login as regular user
+2. Try to execute operation",Operation blocked or button disabled,P1,Security,High
+CC_EH_001,Execution History,Table,Display execution history table,Verify table renders,Executions exist,"1. Scroll to Execution History
+2. Observe table",Table with execution rows displayed,P1,Functional,Low
+CC_EH_002,Execution History,Table,All columns present,Verify all columns display,Executions exist,"1. Check table headers
+2. Count columns",9 columns: Date/Time Operation Status Result Trigger Customers Snapshots Duration Retry,P1,Functional,Low
+CC_EH_003,Execution History,Columns,Date/Time formatted correctly,Verify date format,Executions exist,"1. Check Date/Time column
+2. Verify format",'Nov 26 2025 2:30 PM' format,P2,Functional,Low
+CC_EH_004,Execution History,Columns,Operation shows icon and label,Verify operation display,Various operations,"1. Check Operation column
+2. Verify display",Icon + label (📸 Snapshot 🗑️ Drop All etc.),P2,UI,Low
+CC_EH_005,Execution History,Columns,Status badge colors,Verify status badge styling,Various statuses,"1. Check Status column
+2. Verify colors",🟢 Success 🔴 Failed 🔵 Running 🟡 Retrying,P2,UI,Low
+CC_EH_006,Execution History,Columns,Success status badge,Verify success display,Successful execution,"1. Find successful execution
+2. Check status",Green badge with checkmark icon,P2,UI,Low
+CC_EH_007,Execution History,Columns,Failed status badge,Verify failed display,Failed execution,"1. Find failed execution
+2. Check status",Red badge with X icon,P2,UI,Low
+CC_EH_008,Execution History,Columns,Running status badge,Verify running display,Running execution,"1. Find running execution
+2. Check status",Blue badge with spinner icon,P2,UI,Low
+CC_EH_009,Execution History,Columns,Retrying status badge,Verify retrying display,Retrying execution,"1. Find retrying execution
+2. Check status",Orange badge indicating retry,P2,UI,Low
+CC_EH_010,Execution History,Columns,Result message accurate,Verify result messages,Various operations,"1. Check Result column for different ops
+2. Verify accuracy",Messages match operation type and counts,P1,Functional,Low
+CC_EH_011,Execution History,Columns,Trigger shows Manual/Scheduled,Verify trigger display,Mixed triggers,"1. Check Trigger column
+2. Verify icons",👤 Manual or ⏰ Scheduled,P2,UI,Low
+CC_EH_012,Execution History,Columns,Customers count with failures,Verify customer counts,Execution with failures,"1. Check Customers column
+2. Verify format",Total count (failures in red),P1,Functional,Low
+CC_EH_013,Execution History,Columns,Snapshots C/U breakdown,Verify snapshot counts,Update operation,"1. Check Snapshots column
+2. Verify format",Created/Updated breakdown displayed,P1,Functional,Low
+CC_EH_014,Execution History,Columns,Duration formatted,Verify duration format,Executions exist,"1. Check Duration column
+2. Verify format",'2m 30s' human-readable format,P2,Functional,Low
+CC_EH_015,Execution History,Columns,Retry attempt shows,Verify retry column,Retried execution,"1. Check Retry column
+2. Verify value",Shows attempt number or '-' if first,P2,Functional,Low
+CC_EH_016,Execution History,Pagination,25 results per page,Verify page size,More than 25 executions,"1. Count rows on page
+2. Verify count",25 rows maximum per page,P2,Functional,Low
+CC_EH_017,Execution History,Pagination,Page indicator display,Verify pagination info,Multiple pages,"1. Check pagination area
+2. Verify display",'Page X of Y' indicator,P2,Functional,Low
+CC_EH_018,Execution History,Pagination,Next page works,Verify navigation,Multiple pages,"1. Click Next button
+2. Observe table",Page 2 data loads,P1,Functional,Low
+CC_EH_019,Execution History,Pagination,Previous page works,Verify navigation,On page 2+,"1. Click Previous button
+2. Observe table",Previous page data loads,P1,Functional,Low
+CC_EH_020,Execution History,Refresh,Refresh button updates data,Verify manual refresh,On Portfolio Snapshots tab,"1. Click Refresh button
+2. Observe table",Execution history refreshes,P2,Functional,Low
+CC_EH_021,Execution History,Auto-refresh,Auto-refresh every 30 seconds,Verify auto-refresh,Long-running operation,"1. Wait 30 seconds
+2. Observe statistics",Data automatically refreshes,P2,Functional,Low
+CC_EH_022,Execution History,Order,Reverse chronological order,Verify sort order,Multiple executions,"1. Check row order
+2. Verify sequence",Newest executions first,P2,Functional,Low
+CC_EH_023,Execution History,Empty State,No executions message,Verify empty state,No executions exist,"1. Check history with no data
+2. Observe display",Empty state message displayed,P2,Functional,Low
+CC_SET_001,Settings Tab,Scheduler Settings,Display job type list,Verify all job types shown,On Settings tab,"1. Navigate to Settings tab
+2. Check job list",All job types listed with icons,P1,Functional,Low
+CC_SET_002,Settings Tab,Scheduler Settings,Job type icons correct,Verify icons per job type,Jobs configured,"1. Check each job type
+2. Verify icons",📊 NAV 📈 Market 📸 Portfolio 🎯 Goal 🔔 Alerts,P2,UI,Low
+CC_SET_003,Settings Tab,Scheduler Settings,Job status badge,Verify active/inactive badge,Jobs with various status,"1. Check job status
+2. Verify badge",🟢 Active or ⚪ Inactive badge,P2,UI,Low
+CC_SET_004,Settings Tab,Scheduler Settings,Cron human-readable,Verify cron conversion,Job with cron expression,"1. Check schedule info
+2. Verify format",Cron converted to readable (e.g. 'Daily at 6:00 AM'),P2,Functional,Low
+CC_SET_005,Settings Tab,Scheduler Settings,Failover schedule display,Verify failover shows,Job with failover,"1. Find job with failover
+2. Check display",Failover schedule visible when enabled,P2,Functional,Low
+CC_SET_006,Settings Tab,Scheduler Settings,Retry count display,Verify retry info,Job with retries,"1. Check job retry config
+2. Verify display",Max retry count shown,P2,Functional,Low
+CC_SET_007,Settings Tab,Scheduler Settings,Global vs Per-Tenant badge,Verify scope badge,Various job types,"1. Check job scope badges
+2. Verify display",🌐 Global or 👤 Per-Tenant badge,P2,UI,Low
+CC_SET_008,Settings Tab,Scheduler Settings,Refresh button works,Verify refresh,On Settings tab,"1. Click Refresh button
+2. Observe list",Job types list refreshes,P2,Functional,Low
+CC_SET_009,Settings Tab,Default Index,Current index display,Verify current selection,Index configured,"1. Check default index section
+2. Observe display",Current benchmark index shown,P2,Functional,Low
+CC_SET_010,Settings Tab,Default Index,Dropdown shows all indices,Verify dropdown options,On Settings tab,"1. Open index dropdown
+2. Check options",All NSE/BSE indices available,P2,Functional,Low
+CC_SET_011,Settings Tab,Default Index,Save new selection,Verify save works,Select different index,"1. Select new index
+2. Click Save",New index saved success toast,P1,Functional,Medium
+CC_SET_012,Settings Tab,Default Index,Selection persists,Verify persistence,Index saved,"1. Save index selection
+2. Refresh page",Selected index still shows as current,P1,Functional,Low
+CC_BELL_001,Alert Bell Icon,Display,Bell icon in header,Verify bell icon visible,On any page,"1. Check header area
+2. Find bell icon",Bell icon displayed in header,P1,Functional,Low
+CC_BELL_002,Alert Bell Icon,Badge,Count badge displays,Verify count badge,Active alerts exist,"1. Check bell icon
+2. Observe badge",Red badge with alert count (e.g. '42'),P1,Functional,Low
+CC_BELL_003,Alert Bell Icon,Badge,No badge when zero alerts,Verify no badge,No active alerts,"1. Check bell when no alerts
+2. Observe badge",No badge displayed,P2,Functional,Low
+CC_BELL_004,Alert Bell Icon,Animation,Bell animates when alerts,Verify animation,Active alerts exist,"1. Check bell icon
+2. Observe animation",Bell-ring animation plays,P2,UI,Low
+CC_BELL_005,Alert Bell Icon,Animation,Background highlights red,Verify highlight,Active alerts exist,"1. Check bell background
+2. Observe color",Background has red highlight,P2,UI,Low
+CC_BELL_006,Alert Bell Icon,Dropdown,Dropdown opens on click,Verify dropdown,Bell icon visible,"1. Click bell icon
+2. Observe dropdown",Dropdown panel opens (380px wide),P1,Functional,Low
+CC_BELL_007,Alert Bell Icon,Dropdown,Shows latest 10 alerts,Verify alert count,More than 10 alerts,"1. Open dropdown
+2. Count items",Maximum 10 alerts displayed,P1,Functional,Low
+CC_BELL_008,Alert Bell Icon,Dropdown,Alert item layout,Verify item display,Alerts in dropdown,"1. Check alert items
+2. Verify content",Icon title timestamp priority shown,P1,Functional,Low
+CC_BELL_009,Alert Bell Icon,Dropdown,NEW badge for recent,Verify new indicator,Recently created alert,"1. Find recent alert
+2. Check badge",'NEW' badge displayed,P2,UI,Low
+CC_BELL_010,Alert Bell Icon,Dropdown,Click navigates to customer,Verify navigation,Alert item clicked,"1. Click alert item
+2. Observe navigation",Navigates to customer view with alert context,P1,Functional,Low
+CC_BELL_011,Alert Bell Icon,Dropdown,View All Alerts button,Verify footer button,Dropdown open,"1. Find footer button
+2. Click it",'View All Alerts' navigates to Alerts tab,P1,Functional,Low
+CC_BELL_012,Alert Bell Icon,Dropdown,Dropdown closes on outside click,Verify close behavior,Dropdown open,"1. Click outside dropdown
+2. Observe dropdown",Dropdown closes,P2,Functional,Low
+CC_BELL_013,Alert Bell Icon,Dropdown,Loading state display,Verify loading,Fresh dropdown open,"1. Open dropdown
+2. Observe during fetch",Loading indicator shown,P2,UI,Low
+CC_BELL_014,Alert Bell Icon,Dropdown,Max height scroll,Verify scrolling,Many alerts,"1. Open dropdown with many alerts
+2. Scroll",Dropdown scrolls (max-height 480px),P2,UI,Low
+CC_API_001,API Integration,Snapshots,GET config returns config,Verify config endpoint,Config exists,"1. Call GET /api/cruise-control/snapshots/config
+2. Check response",Returns scheduler configuration,P1,Integration,Low
+CC_API_002,API Integration,Snapshots,POST execute starts job,Verify execute endpoint,Admin user,"1. Call POST /api/cruise-control/snapshots/execute
+2. Check response",Job starts returns execution ID,P1,Integration,Medium
+CC_API_003,API Integration,Snapshots,GET executions paginated,Verify executions endpoint,Executions exist,"1. Call GET /api/cruise-control/snapshots/executions?page=1
+2. Check response",Paginated execution list returned,P1,Integration,Low
+CC_API_004,API Integration,Snapshots,GET statistics aggregates,Verify statistics endpoint,Executions exist,"1. Call GET /api/cruise-control/snapshots/statistics
+2. Check response",Aggregated statistics returned,P1,Integration,Low
+CC_API_005,API Integration,Snapshots,POST drop-all works,Verify drop endpoint,Admin user snapshots exist,"1. Call POST /api/cruise-control/snapshots/operations/drop-all
+2. Check response",Returns deleted count,P1,Integration,High
+CC_API_006,API Integration,Snapshots,POST generate-missing works,Verify generate endpoint,Admin user,"1. Call POST /api/cruise-control/snapshots/operations/generate-missing
+2. Check response",Returns created/skipped counts,P1,Integration,Medium
+CC_API_007,API Integration,Snapshots,POST update-all works,Verify update endpoint,Admin user,"1. Call POST /api/cruise-control/snapshots/operations/update-all
+2. Check response",Returns created/updated counts,P1,Integration,Medium
+CC_API_008,API Integration,Snapshots,POST regenerate-all works,Verify regenerate endpoint,Admin user snapshots exist,"1. Call POST /api/cruise-control/snapshots/operations/regenerate-all
+2. Check response",Returns deleted/created counts,P1,Integration,High
+CC_API_009,API Integration,NAV,GET statistics works,Verify NAV stats,NAV bookmarks exist,"1. Call GET /api/nav/statistics
+2. Check response",Returns NAV statistics,P1,Integration,Low
+CC_API_010,API Integration,NAV,GET bookmarks paginated,Verify bookmarks endpoint,Bookmarks exist,"1. Call GET /api/nav/bookmarks?page=1&page_size=25
+2. Check response",Paginated bookmarks returned,P1,Integration,Low
+CC_API_011,API Integration,Market,GET indices works,Verify indices endpoint,Indices configured,"1. Call GET /api/market/indices
+2. Check response",Market indices list returned,P1,Integration,Low
+CC_API_012,API Integration,Alerts,GET visible-alerts works,Verify alerts endpoint,Alerts exist,"1. Call GET /api/jtbd/visible-alerts?status=active
+2. Check response",Active alerts returned,P1,Integration,Low
+CC_API_013,API Integration,Alerts,PATCH acknowledge works,Verify acknowledge endpoint,Active alert exists,"1. Call PATCH /api/jtbd/alerts/{id}/acknowledge
+2. Check response",Alert status updated to acknowledged,P1,Integration,Medium
+CC_API_014,API Integration,Alerts,PATCH dismiss works,Verify dismiss endpoint,Active alert exists,"1. Call PATCH /api/jtbd/alerts/{id}/dismiss
+2. Check response",Alert status updated to dismissed,P1,Integration,Medium
+CC_API_015,API Integration,Auth,401 without token,Verify auth required,No auth token,"1. Call any endpoint without token
+2. Check response",Returns 401 Unauthorized,P1,Security,High
+CC_API_016,API Integration,Auth,403 for non-admin operations,Verify admin restriction,Non-admin user,"1. Call operation endpoint as non-admin
+2. Check response",Returns 403 Forbidden or blocked,P1,Security,High
+CC_ERR_001,Error Handling,Snapshots,No active customers error,Verify empty customer handling,No active customers,"1. Execute operation with no customers
+2. Check result",Warning message 'No active customers',P2,Functional,Low
+CC_ERR_002,Error Handling,Snapshots,Partial failure handling,Verify partial failure,Some customers fail,"1. Execute with customer that will fail
+2. Check result",Continues processing tracks customers_failed,P1,Functional,Medium
+CC_ERR_003,Error Handling,Snapshots,Database connection error,Verify DB error handling,DB connection issue,"1. Simulate DB failure
+2. Check response",Returns 500 error with message,P1,Functional,High
+CC_ERR_004,Error Handling,NAV Tab,Failed statistics load,Verify error display,Stats API fails,"1. Simulate stats API failure
+2. Check display",Error banner with retry button,P1,Functional,Medium
+CC_ERR_005,Error Handling,Market Tab,Failed indices load,Verify error display,Indices API fails,"1. Simulate indices API failure
+2. Check display",Error message displayed,P1,Functional,Medium
+CC_ERR_006,Error Handling,Alerts Tab,Failed alerts load,Verify error display,Alerts API fails,"1. Simulate alerts API failure
+2. Check display",Error banner displayed,P1,Functional,Medium
+CC_ERR_007,Error Handling,Alerts Tab,Failed acknowledge,Verify action error,Acknowledge fails,"1. Acknowledge with API failure
+2. Check result",Toast error notification shown,P1,Functional,Medium
+CC_ERR_008,Error Handling,Alerts Tab,Failed dismiss,Verify action error,Dismiss fails,"1. Dismiss with API failure
+2. Check result",Toast error notification shown,P1,Functional,Medium
+CC_ERR_009,Error Handling,Operations,Operation timeout handling,Verify timeout,Long-running operation,"1. Start operation that times out
+2. Check handling",Timeout error handled gracefully,P2,Functional,Medium
+CC_ERR_010,Error Handling,Network,Network failure retry,Verify retry logic,Network intermittent,"1. Trigger operation with network issue
+2. Check retry",Retries up to max_retries with exponential backoff,P2,Functional,Medium
+CC_PERF_001,Performance,Pagination,Fast page load,Verify pagination speed,Large dataset,"1. Navigate pages
+2. Measure load time",Each page loads within 500ms,P2,Performance,Low
+CC_PERF_002,Performance,Statistics,Stats load quickly,Verify stats speed,Fresh tab load,"1. Navigate to tab
+2. Measure stats load",Statistics load within 2 seconds,P2,Performance,Low
+CC_PERF_003,Performance,Dropdown,Instant dropdown open,Verify UI responsiveness,Click dropdown,"1. Click dropdown button
+2. Measure open time",Dropdown opens instantly (<100ms),P3,Performance,Low
+CC_PERF_004,Performance,Modal,Fast modal open,Verify modal speed,Trigger modal,"1. Click operation button
+2. Measure modal open",Modal opens without delay,P3,Performance,Low
+CC_PERF_005,Performance,Large Dataset,Handle 1000+ executions,Verify scalability,1000+ execution records,"1. Load execution history
+2. Observe pagination",Loads smoothly with pagination,P2,Performance,Low
+CC_PERF_006,Performance,Snapshot Generation,Reasonable duration,Verify operation time,500 customers,"1. Execute snapshot operation
+2. Measure time",Completes within 5 minutes for 500 customers,P2,Performance,Medium
+CC_PERF_007,Performance,Memory,No memory leaks on tab switch,Verify memory stability,Extended use,"1. Switch tabs repeatedly
+2. Monitor memory",Memory usage remains stable,P2,Performance,Low
+CC_PERF_008,Performance,Auto-refresh,No UI flicker on refresh,Verify smooth refresh,Auto-refresh active,"1. Wait for auto-refresh
+2. Observe UI",Data updates without flickering,P3,Performance,Low
+CC_SEC_001,Security,Admin Only,Operations require admin,Verify admin restriction,Non-admin user,"1. Login as regular user
+2. Try operations",Operations disabled or blocked,P1,Security,High
+CC_SEC_002,Security,Admin Only,Read-only for non-admin,Verify read-only mode,Non-admin user,"1. Login as regular user
+2. Check interface",Read-only banner all actions disabled,P1,Security,High
+CC_SEC_003,Security,Tenant Isolation,Data filtered by tenant,Verify tenant isolation,Multiple tenants,"1. Login as tenant A
+2. Check data",Only tenant A data visible,P1,Security,High
+CC_SEC_004,Security,Tenant Isolation,Cannot access other tenant snapshots,Verify cross-tenant blocked,Multiple tenants,"1. Try to access tenant B snapshot
+2. Check result",Access denied or 404,P1,Security,High
+CC_SEC_005,Security,JWT,Token validated on all endpoints,Verify auth middleware,Valid token,"1. Make API calls
+2. Check auth",All endpoints validate JWT token,P1,Security,High
+CC_SEC_006,Security,JWT,Invalid token rejected,Verify token validation,Invalid/expired token,"1. Make API call with bad token
+2. Check response",Returns 401 Unauthorized,P1,Security,High
+CC_SEC_007,Security,Environment,Environment header sets is_live,Verify environment isolation,Test vs Live,"1. Set X-Environment header
+2. Check data filter",Data filtered by is_live flag,P1,Security,High
+CC_SEC_008,Security,Sensitive Data,No secrets in URLs,Verify URL safety,Any navigation,"1. Check all URLs
+2. Look for sensitive data",No tokens passwords or PII in URLs,P1,Security,High
+CC_RESP_001,Responsive,Mobile,Tab navigation mobile,Verify tabs on mobile,Mobile viewport,"1. Resize to mobile
+2. Check tabs",Tabs scrollable or collapsible menu,P2,UI,Low
+CC_RESP_002,Responsive,Mobile,Statistics cards stack,Verify card layout,Mobile viewport,"1. Check stat cards
+2. Observe stacking",Cards stack vertically on mobile,P2,UI,Low
+CC_RESP_003,Responsive,Mobile,Table horizontal scroll,Verify table scroll,Mobile viewport,"1. Check execution history table
+2. Scroll horizontally",Table scrolls all columns accessible,P2,UI,Low
+CC_RESP_004,Responsive,Tablet,Two-column layout,Verify tablet layout,Tablet viewport (768-1024px),"1. Check layout
+2. Observe columns",Appropriate 2-column layout,P2,UI,Low
+CC_RESP_005,Responsive,Desktop,Full layout displayed,Verify desktop layout,Desktop viewport (1920px),"1. Check layout
+2. Observe spacing",Full layout with proper spacing,P2,UI,Low
+CC_RESP_006,Responsive,Modal,Modal centered all sizes,Verify modal positioning,Various viewports,"1. Open modal on different screens
+2. Check position",Modal centered on all screen sizes,P2,UI,Low
+CC_RESP_007,Responsive,Dropdown,Dropdown positioned correctly,Verify dropdown position,Edge of screen,"1. Open dropdown near edge
+2. Check position",Dropdown adjusts to stay on screen,P2,UI,Low
+CC_DARK_001,Dark Mode,Colors,All elements adapt,Verify color scheme,Dark mode enabled,"1. Toggle dark mode
+2. Check all elements",All colors adapt for dark background,P2,UI,Low
+CC_DARK_002,Dark Mode,Tables,Table readable in dark,Verify table styling,Dark mode enabled,"1. Check execution history
+2. Verify readability",Table borders rows headers visible,P2,UI,Low
+CC_DARK_003,Dark Mode,Badges,Status badges visible,Verify badge colors,Dark mode enabled,"1. Check status badges
+2. Verify visibility",Badges maintain visibility and color coding,P2,UI,Low
+CC_DARK_004,Dark Mode,Charts,No chart artifacts,Verify chart display,Dark mode enabled,"1. Check any charts
+2. Verify display",Charts display without artifacts,P2,UI,Low
+CC_EDGE_001,Edge Cases,Empty,No snapshots exist,Verify empty handling,Fresh system,"1. Check Portfolio Snapshots tab
+2. Observe display",Empty state messages no errors,P2,Functional,Low
+CC_EDGE_002,Edge Cases,Empty,No NAV bookmarks,Verify empty NAV tab,No bookmarks,"1. Check NAV tab
+2. Observe display",Empty state message displayed,P2,Functional,Low
+CC_EDGE_003,Edge Cases,Empty,No market indices,Verify empty Market tab,No indices configured,"1. Check Market tab
+2. Observe display",Empty state message displayed,P2,Functional,Low
+CC_EDGE_004,Edge Cases,Empty,No alerts exist,Verify empty Alerts tab,No alerts,"1. Check Alerts tab
+2. Observe display",Empty state 'All caught up' message,P2,Functional,Low
+CC_EDGE_005,Edge Cases,Data,Very long scheme names,Verify truncation,Long scheme names,"1. Check NAV cards with long names
+2. Verify display",Names truncated with ellipsis,P3,UI,Low
+CC_EDGE_006,Edge Cases,Data,Large numbers formatting,Verify number format,Large counts,"1. Check large values
+2. Verify format",Numbers formatted with commas/K/M,P3,UI,Low
+CC_EDGE_007,Edge Cases,Data,Null dates handling,Verify null date display,Missing dates,"1. Check items with null dates
+2. Verify display",'N/A' or '-' displayed no errors,P2,Functional,Low
+CC_EDGE_008,Edge Cases,Concurrent,Two tabs simultaneously,Verify concurrent access,Two browser tabs,"1. Open CruiseControl in 2 tabs
+2. Make changes in both",Both tabs work independently,P2,Functional,Low
+CC_EDGE_009,Edge Cases,Concurrent,Rapid filter clicks,Verify rapid interaction,Fast clicks,"1. Click filters rapidly
+2. Observe behavior",No crashes or duplicates final filter applies,P2,Functional,Low
+CC_EDGE_010,Edge Cases,Concurrent,Operation during refresh,Verify race condition,Auto-refresh timing,"1. Start operation just before refresh
+2. Observe behavior",Both complete correctly no conflicts,P2,Functional,Medium
+CC_INT_001,Integration,End-to-End,Complete snapshot workflow,Verify full workflow,Admin user customers exist,"1. Configure scheduler
+2. Execute Generate Missing
+3. Verify executions
+4. Check history",Full workflow completes successfully,P1,Integration,Medium
+CC_INT_002,Integration,End-to-End,NAV download to metrics,Verify NAV pipeline,NAV bookmarks exist,"1. Download NAV
+2. Calculate metrics
+3. Verify results",NAV downloaded and metrics calculated,P1,Integration,Medium
+CC_INT_003,Integration,End-to-End,Alert acknowledge to dismiss,Verify alert lifecycle,Active alert exists,"1. View alert
+2. Acknowledge
+3. Dismiss
+4. Check history",Alert moves through states correctly,P1,Integration,Low
+CC_INT_004,Integration,Data Consistency,Snapshot counts accurate,Verify counts match,After operation,"1. Execute operation
+2. Compare counts with database",UI counts match database records,P1,Integration,Medium
+CC_INT_005,Integration,Data Consistency,Execution duration accurate,Verify timing,After operation,"1. Execute operation
+2. Measure actual time
+3. Compare with recorded",Recorded duration matches actual,P2,Integration,Low
