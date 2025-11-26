@@ -448,6 +448,7 @@ export const API_ENDPOINTS = {
     GET: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
     UPDATE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
     DELETE: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}`,
+    TOGGLE_ALERTS: (customerId: number, id: number) => `${API_BASE}/customers/${customerId}/investments/${id}/toggle-alerts`,
 
     // Family Investment Plans
     FAMILY_SUMMARY: (familyHeadId: string) => `${API_BASE}/family/${familyHeadId}/investments`,

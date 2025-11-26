@@ -117,6 +117,24 @@ export class InvestmentPlanService {
   }
 
   /**
+   * Toggle alerts enabled/disabled for investment plan
+   */
+  static async toggleAlerts(customerId: number, id: number): Promise<{ id: number; alerts_enabled: boolean }> {
+    try {
+      const response = await apiService.patch<ApiResponse<{ id: number; alerts_enabled: boolean }>>(
+        API_ENDPOINTS.INVESTMENT_PLANS.TOGGLE_ALERTS(customerId, id)
+      );
+      if (!response.data) {
+        throw new Error('Failed to toggle alerts');
+      }
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to toggle alerts:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get family investment summary
    */
   static async getFamilyInvestmentSummary(familyHeadIwellCode: string): Promise<FamilyInvestmentSummary> {
@@ -161,6 +179,7 @@ export const investmentPlanService = {
   createInvestmentPlan: InvestmentPlanService.createInvestmentPlan,
   updateInvestmentPlan: InvestmentPlanService.updateInvestmentPlan,
   deleteInvestmentPlan: InvestmentPlanService.deleteInvestmentPlan,
+  toggleAlerts: InvestmentPlanService.toggleAlerts,
   getFamilyInvestmentSummary: InvestmentPlanService.getFamilyInvestmentSummary,
   bulkAssignToFamily: InvestmentPlanService.bulkAssignToFamily
 };

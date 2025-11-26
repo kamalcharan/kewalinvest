@@ -458,6 +458,30 @@ export class InvestmentPlanService {
   }
 
   /**
+   * Toggle alerts enabled/disabled for an investment plan
+   */
+  async toggleAlerts(
+    id: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ id: number; alerts_enabled: boolean }> {
+    const query = `
+      UPDATE t_customer_asset_assignments
+      SET alerts_enabled = NOT COALESCE(alerts_enabled, true),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND tenant_id = $2 AND is_live = $3 AND is_active = true
+      RETURNING id, alerts_enabled
+    `;
+
+    const result = await pool.query(query, [id, tenantId, isLive]);
+    if (result.rowCount === 0) {
+      throw new Error('Investment plan not found');
+    }
+
+    return result.rows[0];
+  }
+
+  /**
    * Get family investment summary
    */
   async getFamilyInvestmentSummary(

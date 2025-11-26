@@ -26,7 +26,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const { plans, loading, error, createPlan, updatePlan, deletePlan } = useInvestmentPlans(customerId);
+  const { plans, loading, error, createPlan, updatePlan, deletePlan, toggleAlerts } = useInvestmentPlans(customerId);
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
   const [deletingPlan, setDeletingPlan] = useState<InvestmentPlan | null>(null);
@@ -77,6 +77,14 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
     if (!deletingPlan) return;
     await deletePlan(deletingPlan.id);
     setDeletingPlan(null);
+  };
+
+  const handleToggleAlerts = async (plan: InvestmentPlan) => {
+    try {
+      await toggleAlerts(plan.id);
+    } catch (err) {
+      console.error('Error toggling alerts:', err);
+    }
   };
 
   const openEditForm = (plan: InvestmentPlan) => {
@@ -280,6 +288,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
               plan={plan}
               onEdit={openEditForm}
               onDelete={setDeletingPlan}
+              onToggleAlerts={handleToggleAlerts}
               goalAllocations={goalAllocations[plan.id] || []}
             />
           ))
