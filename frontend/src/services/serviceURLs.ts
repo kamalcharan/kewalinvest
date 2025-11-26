@@ -261,7 +261,7 @@ export const API_ENDPOINTS = {
     ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
 
     // Manual Triggers (using existing endpoints)
-    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/historical?scheme_code=${schemeCode}`,
+    NAV_DOWNLOAD: (schemeCode: string) => `${API_BASE}/nav/download/scheme/${schemeCode}`,
     MARKET_DOWNLOAD: (indexId: number) => `${API_BASE}/market/download/eod?index_id=${indexId}`,
 
     // Market Downloads (using existing market endpoints)

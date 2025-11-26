@@ -127,12 +127,13 @@ export const NavTab: React.FC = () => {
     }
   };
 
-  const handleDownloadNow = async (schemeCode: string) => {
+  const handleDownloadNow = async (schemeCode: string, schemeName?: string) => {
     try {
       const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.NAV_DOWNLOAD(schemeCode)) as any;
       if (response.success) {
-        toastService.success(response.message || 'NAV download triggered');
+        toastService.success(response.message || `NAV updated for ${schemeName || schemeCode}`);
         fetchNavStats();
+        fetchBookmarks();
       } else {
         toastService.error(response.error || 'Failed to trigger NAV download');
       }
@@ -320,7 +321,7 @@ export const NavTab: React.FC = () => {
                   key={bookmark.id}
                   bookmark={bookmark}
                   showActions
-                  onHistoricalDownload={(b) => handleDownloadNow(b.scheme_code)}
+                  onHistoricalDownload={(b) => handleDownloadNow(b.scheme_code, b.scheme_name)}
                   onCalculateMetrics={(b) => toastService.info('Metrics calculation feature coming soon')}
                 />
               ))}
