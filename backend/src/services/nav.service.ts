@@ -626,7 +626,7 @@ export class NavService {
         scheme.amc_name || null,
         request.alias_name || null,
         isLive,
-        request.daily_download_enabled || false,
+        request.daily_download_enabled ?? true,  // Default to true - auto-enable daily download
         request.download_time || '22:00'
       ]);
 
