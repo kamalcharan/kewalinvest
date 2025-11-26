@@ -7,14 +7,13 @@ export const FILE_IMPORT_TYPES = {
 
 export type FileImportType = typeof FILE_IMPORT_TYPES[keyof typeof FILE_IMPORT_TYPES];
 
+// Simplified folder structure - files stay in upload location, tracked by database
 export const IMPORT_FOLDER_STRUCTURE = {
   [FILE_IMPORT_TYPES.CUSTOMER_DATA]: {
-    pending: 'UserFiles/customers/pending',
-    processed: 'UserFiles/customers/processed'
+    upload: 'UserFiles/customers'
   },
   [FILE_IMPORT_TYPES.TRANSACTION_DATA]: {
-    pending: 'UserFiles/transactions/pending', 
-    processed: 'UserFiles/transactions/processed'
+    upload: 'UserFiles/transactions'
   }
 } as const;
 

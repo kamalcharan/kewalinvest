@@ -912,21 +912,13 @@ app.listen(PORT, async () => {
     const fs = require('fs');
     const path = require('path');
     
-    // Define all required directories
+    // Define all required directories (simplified - no pending/processed subfolders)
     const directories = [
       'UserFiles',
-      'UserFiles/bookmarks',           
-      'UserFiles/bookmarks/pending',   
-      'UserFiles/bookmarks/processed', 
+      'UserFiles/bookmarks',
       'UserFiles/customers',
-      'UserFiles/customers/pending',
-      'UserFiles/customers/processed',
       'UserFiles/transactions',
-      'UserFiles/transactions/pending',
-      'UserFiles/transactions/processed',
       'UserFiles/schemes',
-      'UserFiles/schemes/pending',
-      'UserFiles/schemes/processed',
       'uploads',
       'uploads/bookmarks'
     ];

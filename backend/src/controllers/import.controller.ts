@@ -63,9 +63,9 @@ export class ImportController {
         );
       } catch (dbError: any) {
         // Fallback to filesystem
-        const customerPath = 'UserFiles/customers/pending';
-        const transactionPath = 'UserFiles/transactions/pending';
-        const schemePath = 'UserFiles/schemes/pending';
+        const customerPath = 'UserFiles/customers';
+        const transactionPath = 'UserFiles/transactions';
+        const schemePath = 'UserFiles/schemes';
         
         let foundFile = null;
         let originalFilename = null;
@@ -155,7 +155,7 @@ export class ImportController {
         filePath = fileRecord.file_path;
       } catch (dbError: any) {
         // Fallback to filesystem search
-        const dirs = ['UserFiles/customers/pending', 'UserFiles/transactions/pending', 'UserFiles/schemes/pending'];
+        const dirs = ['UserFiles/customers', 'UserFiles/transactions', 'UserFiles/schemes'];
         for (const dir of dirs) {
           try {
             const files = await fs.readdir(dir);
@@ -279,9 +279,9 @@ export class ImportController {
       // If not in database, search filesystem
       if (!filePath) {
         const syncFs = require('fs');
-        const customerPath = 'UserFiles/customers/pending';
-        const transactionPath = 'UserFiles/transactions/pending';
-        const schemePath = 'UserFiles/schemes/pending';
+        const customerPath = 'UserFiles/customers';
+        const transactionPath = 'UserFiles/transactions';
+        const schemePath = 'UserFiles/schemes';
         
         // Check customers folder
         if (syncFs.existsSync(customerPath)) {
