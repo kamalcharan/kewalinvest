@@ -161,6 +161,16 @@ interface CustomTooltipProps {
   comparisonName?: string;
 }
 
+/**
+ * Format currency in Indian format (L/Cr)
+ */
+function formatCurrencyShort(value: number): string {
+  if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)}Cr`;
+  if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`;
+  if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
+  return `₹${value.toLocaleString('en-IN')}`;
+}
+
 const CustomTooltip: React.FC<CustomTooltipProps> = ({
   active,
   payload,
@@ -178,6 +188,12 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
     year: 'numeric'
   });
 
+  // Get MoM and investment data from payload
+  const dataPoint = payload[0]?.payload;
+  const momChange = dataPoint?.momChangePercentage;
+  const isSignificantInvestment = dataPoint?.isSignificantInvestment;
+  const invested = dataPoint?.invested;
+
   return (
     <div
       style={{
@@ -186,20 +202,61 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
         borderRadius: '8px',
         padding: '12px 16px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        minWidth: '180px'
+        minWidth: '200px'
       }}
     >
+      {/* Date Header */}
       <div
         style={{
           fontSize: '12px',
           color: colors.utility.secondaryText,
           marginBottom: '8px',
-          fontWeight: '500'
+          fontWeight: '500',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}
       >
-        {formattedDate}
+        <span>{formattedDate}</span>
+        {/* MoM Badge */}
+        {momChange !== null && momChange !== undefined && (
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '600',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: momChange >= 0 ? '#10B98120' : '#EF444420',
+              color: momChange >= 0 ? '#10B981' : '#EF4444'
+            }}
+          >
+            {momChange >= 0 ? '▲' : '▼'} {Math.abs(momChange).toFixed(1)}%
+          </span>
+        )}
       </div>
 
+      {/* Significant Investment Alert */}
+      {isSignificantInvestment && invested && (
+        <div
+          style={{
+            fontSize: '11px',
+            padding: '6px 8px',
+            marginBottom: '8px',
+            borderRadius: '6px',
+            backgroundColor: '#3B82F620',
+            border: '1px solid #3B82F640',
+            color: '#3B82F6',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span>💰</span>
+          <span>New investment: {formatCurrencyShort(invested)}</span>
+        </div>
+      )}
+
+      {/* Value Entries */}
       {payload.map((entry: any, index: number) => (
         <div
           key={index}
@@ -262,7 +319,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
             }}
           >
             <span style={{ color: colors.utility.secondaryText }}>
-              Difference
+              Alpha (vs Index)
             </span>
             <span
               style={{
@@ -330,10 +387,15 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
         : matchedComparison;
     }
 
-    // Combine into chart data format
+    // Combine into chart data format - include MoM data for tooltip and dots
     return normalizedPrimary.map((primary, index) => ({
       date: primary.date,
       portfolio: primary.value,
+      // Include original MoM data for tooltip and dot coloring
+      momChangePercentage: data[index]?.momChangePercentage ?? null,
+      isSignificantInvestment: data[index]?.isSignificantInvestment ?? false,
+      invested: data[index]?.invested,
+      returns: data[index]?.returns,
       ...(normalizedComparison.length > index && {
         comparison: normalizedComparison[index].value
       })
@@ -438,16 +500,44 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
             }}
           />
 
-          {/* Portfolio/Asset Line */}
+          {/* Portfolio/Asset Line with MoM-colored dots */}
           <Line
             type="monotone"
             dataKey="portfolio"
             name={primaryLabel}
             stroke={portfolioColor}
             strokeWidth={2.5}
-            dot={false}
+            dot={(props: any) => {
+              const { cx, cy, payload, index } = props;
+              if (cx === undefined || cy === undefined) return null;
+
+              // Get MoM for this point to determine color
+              const mom = payload?.momChangePercentage;
+              const isSignificant = payload?.isSignificantInvestment;
+
+              // Determine dot color based on MoM
+              let dotColor = portfolioColor; // Default/first point
+              if (mom !== null && mom !== undefined) {
+                dotColor = mom >= 0 ? '#10B981' : '#EF4444'; // Green for positive, red for negative
+              }
+
+              // Larger dot for significant investment
+              const dotRadius = isSignificant ? 6 : 4;
+
+              return (
+                <circle
+                  key={`dot-${index}`}
+                  cx={cx}
+                  cy={cy}
+                  r={dotRadius}
+                  fill={dotColor}
+                  stroke={colors.utility.secondaryBackground}
+                  strokeWidth={isSignificant ? 2 : 1}
+                />
+              );
+            }}
             activeDot={{
-              r: 6,
+              r: 8,
               fill: portfolioColor,
               stroke: colors.utility.secondaryBackground,
               strokeWidth: 2

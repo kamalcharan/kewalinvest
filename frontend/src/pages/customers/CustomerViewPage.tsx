@@ -28,6 +28,7 @@ import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
+import { IndexSelector } from '../../components/performance/IndexSelector';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
 import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
@@ -197,6 +198,46 @@ const CustomerViewPage: React.FC = () => {
 
     loadDefaultIndexComparison();
   }, [portfolio?.performance]);
+
+  // Handler for when user selects a different comparison index
+  const handleIndexSelect = async (index: MarketIndex | null) => {
+    if (!index) {
+      setDefaultComparisonIndex(null);
+      setComparisonIndexData([]);
+      setShowComparison(false);
+      return;
+    }
+
+    if (!portfolio?.performance || portfolio.performance.length === 0) {
+      return;
+    }
+
+    try {
+      setIsLoadingIndexComparison(true);
+      setDefaultComparisonIndex(index);
+
+      // Get date range from portfolio performance
+      const performanceDates = portfolio.performance.map(p => p.date);
+      const startDate = performanceDates[0];
+      const endDate = performanceDates[performanceDates.length - 1];
+
+      // Fetch index monthly data for comparison
+      const monthlyDataResponse = await MarketService.getIndexMonthlyDataForComparison(
+        index.id,
+        startDate,
+        endDate
+      );
+
+      if (monthlyDataResponse.success && monthlyDataResponse.data) {
+        setComparisonIndexData(monthlyDataResponse.data);
+        setShowComparison(true);
+      }
+    } catch (error) {
+      console.error('Error loading index comparison:', error);
+    } finally {
+      setIsLoadingIndexComparison(false);
+    }
+  };
 
   // Listen for fullscreen changes
   useEffect(() => {
@@ -837,28 +878,34 @@ const CustomerViewPage: React.FC = () => {
                             )}
                           </>
                         )}
-                        {/* FIXED: Proper comparison toggle with state check */}
-                        {!isLoadingIndexComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
+                        {/* Index Selector for comparison */}
+                        <div style={{ minWidth: '180px' }}>
+                          <IndexSelector
+                            selectedIndexId={defaultComparisonIndex?.id || null}
+                            onIndexSelect={handleIndexSelect}
+                            disabled={isLoadingIndexComparison}
+                            placeholder="Compare with index..."
+                          />
+                        </div>
+
+                        {/* Toggle visibility when index is selected */}
+                        {defaultComparisonIndex && comparisonIndexData.length > 0 && (
                           <button
                             onClick={() => setShowComparison(!showComparison)}
-                            title={showComparison ? 'Hide index comparison' : 'Show index comparison'}
+                            title={showComparison ? 'Hide comparison' : 'Show comparison'}
                             style={{
-                              padding: '6px 12px',
+                              padding: '6px 10px',
                               backgroundColor: showComparison ? colors.brand.primary + '20' : 'transparent',
                               color: showComparison ? colors.brand.primary : colors.utility.secondaryText,
                               border: `1px solid ${showComparison ? colors.brand.primary : colors.utility.primaryText + '20'}`,
                               borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px',
                               transition: 'all 0.2s ease'
                             }}
                           >
                             {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {showComparison ? 'Hide' : 'Show'} {defaultComparisonIndex.index_name}
                           </button>
                         )}
 
