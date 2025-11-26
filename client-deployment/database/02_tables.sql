@@ -770,23 +770,45 @@ CREATE TABLE t_transaction_table (
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
 
 -- TABLE: t_monthly_portfolio_snapshots
+-- Extended for multi-asset support (NetworthViewer feature)
 CREATE TABLE t_monthly_portfolio_snapshots (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     is_live BOOLEAN NOT NULL,
     customer_id INTEGER NOT NULL,
     snapshot_month_end DATE NOT NULL,
+
+    -- Value columns
     total_invested NUMERIC(18,2),
     current_value NUMERIC(18,2),
     total_returns NUMERIC(18,2),
     return_percentage NUMERIC(10,2),
-    total_units NUMERIC(18,4),
-    total_schemes INTEGER,
+
+    -- MF-specific columns (nullable for non-MF assets)
+    total_units NUMERIC(18,4),           -- Only for MF: sum of units
+    total_schemes INTEGER,                -- Only for MF: count of schemes
+
+    -- Multi-asset support columns
+    asset_type_code VARCHAR(50) DEFAULT 'MF',  -- MF, RE, GOLD, FD, etc.
+    investment_plan_id INTEGER,                 -- FK to t_customer_asset_assignments (NULL for MF aggregated)
+    calculation_method VARCHAR(20) DEFAULT 'NAV',  -- NAV or ASSUMPTION
+    growth_rate_applied NUMERIC(5,2),           -- Rate used for assumption-based calculation
+    actual_amount NUMERIC(18,2),                -- User-entered override value
+
+    -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT chk_calculation_method CHECK (calculation_method IN ('NAV', 'ASSUMPTION'))
 );
 
-COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio snapshots for tracking performance';
+COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio/networth snapshots for tracking performance across all asset types';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.asset_type_code IS 'Asset type code (MF, RE, GOLD, FD, etc.). Default MF for backward compatibility.';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.investment_plan_id IS 'Reference to t_customer_asset_assignments. NULL for MF aggregated snapshots.';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.calculation_method IS 'How current_value was calculated: NAV (units × nav_value) or ASSUMPTION (principal × growth_rate).';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.growth_rate_applied IS 'Annual growth rate used for assumption-based calculations (e.g., 8.00 for 8%).';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.actual_amount IS 'User-entered actual market value. When set, overrides calculated current_value for display.';
 
 -- TABLE: t_portfolio_snapshot_configs
 CREATE TABLE t_portfolio_snapshot_configs (
@@ -832,7 +854,7 @@ CREATE TABLE t_portfolio_snapshot_executions (
     completed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
-    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual', 'failover'))
 );
 
 COMMENT ON TABLE t_portfolio_snapshot_executions IS 'Execution history for portfolio snapshot jobs';
@@ -845,11 +867,19 @@ CREATE TABLE m_job_types (
     default_cron_expression VARCHAR(100),
     default_max_retries INTEGER DEFAULT 3,
     is_active BOOLEAN DEFAULT true,
+    default_schedule_type VARCHAR(20) DEFAULT 'daily',  -- daily, weekly, monthly
+    failover_enabled BOOLEAN DEFAULT false,
+    failover_cron_expression VARCHAR(50),
+    is_global BOOLEAN DEFAULT false,  -- True for NAV/Market jobs that run once for all tenants
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE m_job_types IS 'Registry of all available job types in the system';
+COMMENT ON COLUMN m_job_types.default_schedule_type IS 'Default schedule type: daily, weekly, monthly';
+COMMENT ON COLUMN m_job_types.failover_enabled IS 'Default failover enabled setting';
+COMMENT ON COLUMN m_job_types.failover_cron_expression IS 'Default failover cron expression';
+COMMENT ON COLUMN m_job_types.is_global IS 'If true, job runs once globally (not per-tenant) - e.g., NAV/Market downloads';
 
 -- TABLE: t_job_scheduler_configs
 CREATE TABLE t_job_scheduler_configs (
@@ -858,13 +888,18 @@ CREATE TABLE t_job_scheduler_configs (
     job_type VARCHAR(50) NOT NULL REFERENCES m_job_types(code),
     user_id INTEGER NOT NULL REFERENCES t_users(id),
     is_live BOOLEAN NOT NULL,
-    schedule_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+    schedule_type VARCHAR(20) NOT NULL DEFAULT 'daily',
     cron_expression VARCHAR(100) NOT NULL,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     max_retries INTEGER NOT NULL DEFAULT 3,
     job_config JSONB,
+    -- Failover support
+    failover_enabled BOOLEAN DEFAULT false,
+    failover_cron_expression VARCHAR(50),
+    -- Tracking
     last_executed_at TIMESTAMP,
     next_execution_at TIMESTAMP,
+    last_success_at TIMESTAMP,
     execution_count INTEGER DEFAULT 0,
     failure_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -874,6 +909,9 @@ CREATE TABLE t_job_scheduler_configs (
 );
 
 COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types';
+COMMENT ON COLUMN t_job_scheduler_configs.failover_enabled IS 'Enable failover execution if primary fails';
+COMMENT ON COLUMN t_job_scheduler_configs.failover_cron_expression IS 'Cron for failover time (e.g., 0 22 * * * for 10 PM)';
+COMMENT ON COLUMN t_job_scheduler_configs.last_success_at IS 'Timestamp of last successful execution';
 
 -- TABLE: t_job_executions
 CREATE TABLE t_job_executions (
@@ -894,7 +932,7 @@ CREATE TABLE t_job_executions (
     completed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT valid_status CHECK (status IN ('success', 'failed', 'running', 'retrying', 'skipped')),
-    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual'))
+    CONSTRAINT valid_trigger_source CHECK (trigger_source IN ('scheduled', 'manual', 'failover'))
 );
 
 COMMENT ON TABLE t_job_executions IS 'Execution history for all job types';
@@ -1026,7 +1064,13 @@ CREATE TABLE t_goal_progress_snapshots (
 
 COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement over time';
 
--- TABLE: t_goal_scheme_allocations
+-- ============================================================================
+-- DEPRECATED: t_goal_scheme_allocations (Replaced by t_goal_investment_allocations in Phase 2)
+-- ============================================================================
+-- TABLE: t_goal_scheme_allocations (OLD - Phase 1)
+-- DEPRECATED: This table is replaced by t_goal_investment_allocations in Release 1.1 Phase 2
+-- Kept commented for reference. Will be dropped after Phase 2 deployment.
+/*
 CREATE TABLE t_goal_scheme_allocations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -1041,6 +1085,139 @@ CREATE TABLE t_goal_scheme_allocations (
 );
 
 COMMENT ON TABLE t_goal_scheme_allocations IS 'Goal scheme allocation tracking for portfolio recommendations';
+*/
+
+-- ============================================================================
+-- SECTION: MULTI-ASSET PORTFOLIO TABLES (Release 1.1 - Phase 1)
+-- Note: Must be created BEFORE t_goal_investment_allocations which references t_customer_asset_assignments
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Multi-Asset Portfolio Tables...';
+END $$;
+
+-- TABLE: m_asset_types
+-- Description: Global master data for all supported asset types
+-- Note: This is NOT tenant-isolated (master data shared across all tenants)
+CREATE TABLE IF NOT EXISTS m_asset_types (
+    id SERIAL PRIMARY KEY,
+    asset_type_code VARCHAR(50) NOT NULL UNIQUE,
+    asset_type_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50), -- equity, debt, commodity, real_estate, fixed_income
+    default_assumption_rate DECIMAL(5,2), -- Default expected growth rate (e.g., 8.00 for 8% per year)
+    is_active BOOLEAN DEFAULT true,
+    display_order INTEGER DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE m_asset_types IS 'Master data table for all supported asset types - global across all tenants';
+COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., MF, GOLD, EQUITY, FD)';
+COMMENT ON COLUMN m_asset_types.asset_type_name IS 'Display name for the asset type';
+COMMENT ON COLUMN m_asset_types.category IS 'Asset category: equity, debt, commodity, real_estate, fixed_income';
+COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected annual growth rate percentage (e.g., 8.00 for 8%)';
+COMMENT ON COLUMN m_asset_types.display_order IS 'Display order in UI (lower numbers first)';
+
+-- TABLE: t_customer_asset_assignments
+-- Description: Tracks detailed investment plans for each customer's asset assignments
+-- Note: Tenant-isolated table
+CREATE TABLE IF NOT EXISTS t_customer_asset_assignments (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    asset_type_id INTEGER NOT NULL REFERENCES m_asset_types(id),
+
+    -- Investment Plan Details
+    principal_amount DECIMAL(15,2),
+    start_date DATE,
+    has_started BOOLEAN DEFAULT false,
+    duration_months INTEGER,
+    duration_years INTEGER,
+
+    -- Investment Type & Frequency
+    investment_type VARCHAR(20) CHECK (investment_type IN ('one_time', 'sip', 'recurring')),
+    recurring_amount DECIMAL(15,2),
+    investment_frequency VARCHAR(20) CHECK (investment_frequency IS NULL OR investment_frequency IN ('monthly', 'quarterly', 'yearly')),
+
+    -- Growth & Returns
+    custom_assumption_rate DECIMAL(5,2),
+
+    -- MF Specific
+    scheme_code VARCHAR(50),
+
+    -- Metadata
+    is_active BOOLEAN DEFAULT true,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_by INTEGER REFERENCES t_users(id),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_duration CHECK (
+        (duration_months IS NOT NULL AND duration_years IS NULL) OR
+        (duration_months IS NULL AND duration_years IS NOT NULL) OR
+        (duration_months IS NULL AND duration_years IS NULL)
+    )
+);
+
+COMMENT ON TABLE t_customer_asset_assignments IS 'Tracks customer investment plans with detailed information including principal, duration, investment type, and growth assumptions';
+COMMENT ON COLUMN t_customer_asset_assignments.customer_id IS 'Reference to customer in t_customers';
+COMMENT ON COLUMN t_customer_asset_assignments.asset_type_id IS 'Reference to asset type in m_asset_types (master data)';
+COMMENT ON COLUMN t_customer_asset_assignments.principal_amount IS 'Initial investment amount or current principal value';
+COMMENT ON COLUMN t_customer_asset_assignments.start_date IS 'Date when the investment starts or started';
+COMMENT ON COLUMN t_customer_asset_assignments.has_started IS 'Whether the investment has actually started (vs planned)';
+COMMENT ON COLUMN t_customer_asset_assignments.duration_months IS 'Investment duration in months (use either months or years, not both)';
+COMMENT ON COLUMN t_customer_asset_assignments.duration_years IS 'Investment duration in years (use either months or years, not both)';
+COMMENT ON COLUMN t_customer_asset_assignments.investment_type IS 'Type of investment: one_time, sip, or recurring';
+COMMENT ON COLUMN t_customer_asset_assignments.recurring_amount IS 'For SIP/recurring: amount invested per period';
+COMMENT ON COLUMN t_customer_asset_assignments.investment_frequency IS 'For SIP/recurring: monthly, quarterly, or yearly';
+COMMENT ON COLUMN t_customer_asset_assignments.custom_assumption_rate IS 'Custom growth rate percentage (overrides asset type default)';
+COMMENT ON COLUMN t_customer_asset_assignments.scheme_code IS 'For MF: scheme code from bookmarked funds';
+COMMENT ON COLUMN t_customer_asset_assignments.is_active IS 'Whether this assignment is currently active';
+COMMENT ON COLUMN t_customer_asset_assignments.assigned_by IS 'User who made the assignment';
+COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about the investment plan';
+
+-- ============================================================================
+-- TABLE: t_goal_investment_allocations (NEW - Phase 2)
+-- ============================================================================
+-- Links goals to investment plans (multi-asset support)
+-- Replaces t_goal_scheme_allocations to enable tracking goals across all asset types
+CREATE TABLE t_goal_investment_allocations (
+    id SERIAL PRIMARY KEY,
+
+    -- Multi-tenancy
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+
+    -- Goal reference (stored in t_jtbd_configurations)
+    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
+
+    -- Investment Plan reference (from Phase 1 - t_customer_asset_assignments)
+    investment_plan_id INTEGER NOT NULL REFERENCES t_customer_asset_assignments(id) ON DELETE CASCADE,
+
+    -- Allocation details
+    allocated_percentage DECIMAL(5,2) CHECK (allocated_percentage >= 0 AND allocated_percentage <= 100),
+    allocated_amount DECIMAL(15,2),
+
+    -- Notes
+    notes TEXT,
+
+    -- Audit fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES t_users(id),
+
+    -- Constraints
+    CONSTRAINT unique_goal_investment_allocation UNIQUE (goal_id, investment_plan_id)
+);
+
+COMMENT ON TABLE t_goal_investment_allocations IS 'Phase 2: Links goals to investment plans (multi-asset support). Replaces t_goal_scheme_allocations.';
+COMMENT ON COLUMN t_goal_investment_allocations.goal_id IS 'Reference to goal in t_jtbd_configurations (where jtbd_category = ''transactional'')';
+COMMENT ON COLUMN t_goal_investment_allocations.investment_plan_id IS 'Reference to investment plan in t_customer_asset_assignments (Phase 1)';
+COMMENT ON COLUMN t_goal_investment_allocations.allocated_percentage IS 'Percentage of this investment allocated to goal (0-100%). Allows partial allocations.';
+COMMENT ON COLUMN t_goal_investment_allocations.allocated_amount IS 'Fixed amount allocated (alternative to percentage). Usually NULL if percentage is used.';
 
 -- ============================================================================
 -- SECTION 8: BOOKMARK TABLES & REASON MASTERS
