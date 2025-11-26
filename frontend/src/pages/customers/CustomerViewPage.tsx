@@ -1141,56 +1141,21 @@ const CustomerViewPage: React.FC = () => {
                     borderRadius: '12px',
                     padding: '24px'
                   }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
+                    <h3 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText,
                       margin: 0,
                       marginBottom: '20px'
                     }}>
                       Asset Allocation
                     </h3>
-                    {portfolio.allocation && portfolio.allocation.length > 0 ? (
-                      <PortfolioDonutChart
-                        allocation={portfolio.allocation}
-                        size={240}
-                        strokeWidth={35}
-                        showLegend={true}
-                        totalValue={portfolio.summary.current_value}
-                      />
-                    ) : (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '40px 20px',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{
-                          color: colors.brand.primary,
-                          marginBottom: '16px',
-                          opacity: 0.4
-                        }}>
-                          <PieChartIcon />
-                        </div>
-                        <div style={{
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          color: colors.utility.primaryText,
-                          marginBottom: '6px'
-                        }}>
-                          No Asset Allocation Data
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: colors.utility.secondaryText,
-                          lineHeight: '1.5'
-                        }}>
-                          Asset distribution will appear once portfolio holdings are available
-                        </div>
-                      </div>
-                    )}
+                    <PortfolioDonutChart
+                      customerId={customerId!}
+                      size={240}
+                      strokeWidth={35}
+                      showLegend={true}
+                    />
                   </div>
 
                   {/* Portfolio Goal Allocation Summary */}
