@@ -29,6 +29,15 @@ interface Alert {
   is_new?: boolean;
 }
 
+interface LatestAlertsResponse {
+  success: boolean;
+  data: Alert[];
+  meta?: {
+    count: number;
+    limit: number;
+  };
+}
+
 interface AlertBellIconProps {
   alertCount?: number;
 }
@@ -73,10 +82,10 @@ export const AlertBellIcon: React.FC<AlertBellIconProps> = ({ alertCount = 0 }) 
   const fetchLatestAlerts = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get('/jtbd/dashboard/latest-alerts?limit=10');
+      const response = await apiService.get<LatestAlertsResponse>('/jtbd/dashboard/latest-alerts?limit=10');
 
-      if (response.data?.success) {
-        setAlerts(response.data.data || []);
+      if (response.success) {
+        setAlerts(response.data || []);
       }
     } catch (error) {
       console.error('Error fetching latest alerts:', error);
