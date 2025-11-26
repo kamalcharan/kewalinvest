@@ -157,6 +157,67 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION is_alert_visible IS 'Checks if an alert should be visible based on visibility settings, expiry, and completion status';
 
 -- ----------------------------------------------------------------------------
+-- FUNCTION: mark_sip_alert_complete_on_transaction
+-- Description: Marks matching SIP alerts as complete when transaction is imported
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION mark_sip_alert_complete_on_transaction(
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN,
+    p_customer_id INTEGER,
+    p_scheme_code VARCHAR(50),
+    p_transaction_date DATE,
+    p_transaction_amount NUMERIC
+)
+RETURNS INTEGER AS $$
+DECLARE
+    v_alert_id INTEGER;
+    v_alerts_marked INTEGER := 0;
+    v_alert_record RECORD;
+BEGIN
+    -- Find active SIP alerts for this customer/scheme that are due around this transaction date
+    -- Window: transaction_date should be within 7 days before to 7 days after the next_alert_date
+    FOR v_alert_record IN
+        SELECT j.id, j.next_alert_date, j.config_data
+        FROM t_jtbd_configurations j
+        WHERE j.tenant_id = p_tenant_id
+          AND j.is_live = p_is_live
+          AND j.customer_id = p_customer_id
+          AND j.is_active = true
+          AND j.completed_at IS NULL
+          AND j.jtbd_type IN ('goal_sip_plan', 'portfolio_alert')
+          -- Match scheme from config_data
+          AND (
+              j.config_data->>'scheme_code' = p_scheme_code
+              OR j.config_data->>'fund_code' = p_scheme_code
+              OR j.config_data->'asset_assignment'->>'scheme_code' = p_scheme_code
+          )
+          -- Match date window: 7 days before to 7 days after
+          AND j.next_alert_date IS NOT NULL
+          AND p_transaction_date BETWEEN (j.next_alert_date - 7) AND (j.next_alert_date + 7)
+        ORDER BY ABS(j.next_alert_date - p_transaction_date)  -- Closest match first
+        LIMIT 1  -- Only mark one alert per transaction
+    LOOP
+        -- Mark the alert as completed
+        UPDATE t_jtbd_configurations
+        SET completed_at = NOW(),
+            completed_by = NULL,  -- System completion
+            completion_source = 'transaction_import',
+            updated_at = NOW()
+        WHERE id = v_alert_record.id;
+
+        v_alerts_marked := v_alerts_marked + 1;
+
+        RAISE NOTICE 'Marked SIP alert % as complete (scheme: %, txn_date: %, alert_date: %)',
+            v_alert_record.id, p_scheme_code, p_transaction_date, v_alert_record.next_alert_date;
+    END LOOP;
+
+    RETURN v_alerts_marked;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION mark_sip_alert_complete_on_transaction IS 'Marks matching SIP alerts as complete when a transaction is imported for the same scheme/customer within date window';
+
+-- ----------------------------------------------------------------------------
 -- FUNCTION: normalize_customer_name (Migration 006)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION normalize_customer_name(p_name TEXT)
@@ -1377,6 +1438,18 @@ BEGIN
                 NOW(),
                 NOW()
             ) RETURNING id INTO v_txn_id;
+
+            -- ============================================================================
+            -- MARK SIP ALERTS AS COMPLETE (if matching transaction)
+            -- ============================================================================
+            PERFORM mark_sip_alert_complete_on_transaction(
+                v_staging_record.tenant_id,
+                v_staging_record.is_live,
+                v_customer_id,
+                v_scheme_code,
+                (v_staging_record.mapped_data->>'txn_date')::DATE,
+                v_txn_amount
+            );
 
             -- ============================================================================
             -- AUTO-CREATE INVESTMENT PLAN (MF) AND ALERTS
