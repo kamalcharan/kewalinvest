@@ -174,7 +174,7 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
           endDate
         );
 
-        if (monthlyDataResponse.success && monthlyDataResponse.data?.length > 0) {
+        if (monthlyDataResponse.success && monthlyDataResponse.data && monthlyDataResponse.data.length > 0) {
           setComparisonIndexData(monthlyDataResponse.data);
           setShowComparison(true);
         }
