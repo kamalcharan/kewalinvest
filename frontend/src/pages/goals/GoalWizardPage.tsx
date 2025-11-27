@@ -30,9 +30,6 @@ interface FormData {
   // Step 3 - Withdrawals
   has_withdrawals: boolean;
   withdrawals: GoalWithdrawal[];
-
-  // Step 4 - Asset Type Allocation
-  asset_allocations: AssetTypeAllocation[];
 }
 
 const GoalWizardPage: React.FC = () => {
@@ -51,8 +48,7 @@ const GoalWizardPage: React.FC = () => {
     current_value: 0,
     priority: 'high',
     has_withdrawals: false,
-    withdrawals: [],
-    asset_allocations: []
+    withdrawals: []
   });
 
   const [validationDialog, setValidationDialog] = useState<{
@@ -192,14 +188,7 @@ const GoalWizardPage: React.FC = () => {
           current_value: formData.current_value,
           monthly_contribution: 0, // Phase 2: Placeholder for backward compatibility
           has_withdrawals: formData.has_withdrawals,
-          withdrawals: formData.has_withdrawals ? formData.withdrawals : [],
-          // Phase 2: Asset type allocations for display (pie chart)
-          asset_allocations: formData.asset_allocations.map(a => ({
-            asset_type_code: a.asset_type_code,
-            asset_type_name: a.asset_type_name,
-            allocation_percentage: a.allocation_percentage,
-            default_assumption_rate: a.default_assumption_rate
-          }))
+          withdrawals: formData.has_withdrawals ? formData.withdrawals : []
         }
       };
 
