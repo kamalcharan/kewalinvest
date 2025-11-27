@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KewalInvest User Manual</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #06b6d4;
+            --bg-color: #ffffff;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --sidebar-bg: #f8fafc;
+            --card-bg: #ffffff;
+            --code-bg: #f1f5f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+        }
+
+        /* Layout */
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 280px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px 0;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .nav-section {
+            margin-bottom: 15px;
+        }
+
+        .nav-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            padding: 10px 20px 5px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 8px 20px;
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background-color: var(--border-color);
+            color: var(--primary-color);
+        }
+
+        .nav-link.active {
+            background-color: #dbeafe;
+            color: var(--primary-color);
+            border-left-color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .nav-link.sub {
+            padding-left: 35px;
+            font-size: 0.85rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 40px 60px;
+            max-width: 900px;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-color);
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            margin-top: 30px;
+            color: var(--primary-dark);
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            margin-top: 25px;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-bottom: 1rem;
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--sidebar-bg);
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        /* Alert Boxes */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background-color: #ecfeff;
+            border-color: var(--info-color);
+            color: #0e7490;
+        }
+
+        .alert-success {
+            background-color: #ecfdf5;
+            border-color: var(--success-color);
+            color: #047857;
+        }
+
+        .alert-warning {
+            background-color: #fffbeb;
+            border-color: var(--warning-color);
+            color: #b45309;
+        }
+
+        .alert-danger {
+            background-color: #fef2f2;
+            border-color: var(--danger-color);
+            color: #b91c1c;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Steps */
+        .steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+            margin: 20px 0;
+        }
+
+        .steps li {
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 20px;
+            min-height: 40px;
+        }
+
+        .steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 32px;
+            height: 32px;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* Code */
+        code {
+            background-color: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.85em;
+            color: var(--danger-color);
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            padding: 15px 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-color);
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .card-header {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background-color: var(--sidebar-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-item h5 {
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        .feature-item p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-primary {
+            background-color: #dbeafe;
+            color: var(--primary-color);
+        }
+
+        .badge-success {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+
+        .badge-admin {
+            background-color: #fae8ff;
+            color: #a21caf;
+        }
+
+        /* Workflow Diagram */
+        .workflow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: var(--sidebar-bg);
+            border-radius: 8px;
+        }
+
+        .workflow-step {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .workflow-arrow {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        /* Back to top */
+        .back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background-color: var(--primary-color);
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.3s;
+            font-size: 1.2rem;
+        }
+
+        .back-to-top:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-3px);
+        }
+
+        /* Keyboard shortcuts */
+        kbd {
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.85em;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sidebar {
+                width: 240px;
+            }
+            .main-content {
+                margin-left: 240px;
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .sidebar, .back-to-top {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+                max-width: 100%;
+            }
+            h2 {
+                page-break-before: always;
+            }
+            .alert, .card {
+                break-inside: avoid;
+            }
+        }
+
+        /* Section anchor offset for fixed header */
+        section[id] {
+            scroll-margin-top: 20px;
+        }
+
+        /* Icon styles */
+        .icon {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h1>KewalInvest</h1>
+                <p>User Manual v1.0</p>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Getting Started</div>
+                <a href="#introduction" class="nav-link">Introduction</a>
+                <a href="#getting-started" class="nav-link">Getting Started</a>
+                <a href="#navigation" class="nav-link sub">Navigation Overview</a>
+                <a href="#dashboard" class="nav-link">Dashboard</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Core Features</div>
+                <a href="#contacts" class="nav-link">Contact Management</a>
+                <a href="#customers" class="nav-link">Customer Management</a>
+                <a href="#customer-profile" class="nav-link sub">Customer Profile</a>
+                <a href="#addresses" class="nav-link sub">Addresses</a>
+                <a href="#family" class="nav-link sub">Family Relationships</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Portfolio</div>
+                <a href="#portfolio" class="nav-link">Portfolio Management</a>
+                <a href="#asset-types" class="nav-link sub">Asset Types</a>
+                <a href="#investment-plans" class="nav-link sub">Investment Plans</a>
+                <a href="#snapshots" class="nav-link sub">Portfolio Snapshots</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Goals & Planning</div>
+                <a href="#goals" class="nav-link">Goals Management</a>
+                <a href="#goal-types" class="nav-link sub">Goal Types</a>
+                <a href="#goal-allocation" class="nav-link sub">Investment Allocation</a>
+                <a href="#goal-tracking" class="nav-link sub">Progress Tracking</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Transactions & Data</div>
+                <a href="#transactions" class="nav-link">Transactions</a>
+                <a href="#data-import" class="nav-link">Data Import</a>
+                <a href="#import-wizard" class="nav-link sub">Import Wizard</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Market & Analysis</div>
+                <a href="#nav-tracking" class="nav-link">NAV Tracking</a>
+                <a href="#market-analysis" class="nav-link">Market Analysis</a>
+                <a href="#cruise-control" class="nav-link">Cruise Control</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Administration</div>
+                <a href="#admin" class="nav-link">System Admin</a>
+                <a href="#logs" class="nav-link sub">System Logs</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Reference</div>
+                <a href="#glossary" class="nav-link">Glossary</a>
+                <a href="#shortcuts" class="nav-link">Keyboard Shortcuts</a>
+                <a href="#faq" class="nav-link">FAQ</a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Introduction -->
+            <section id="introduction">
+                <h1>KewalInvest User Manual</h1>
+
+                <p>Welcome to <strong>KewalInvest</strong>, a comprehensive financial portfolio management system designed for wealth managers, financial advisors, and investment professionals. This manual will guide you through all features and functionalities of the application.</p>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">ℹ️</span> About This Manual</div>
+                    This user manual covers all features available in KewalInvest. Features marked with <span class="badge badge-admin">Admin</span> require administrator privileges.
+                </div>
+
+                <h3>Key Capabilities</h3>
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <h5>Multi-Asset Portfolio</h5>
+                        <p>Track 9 different asset types including MF, Equity, Gold, FD, PPF, EPF, NPS, Real Estate & Insurance</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Goal-Based Planning</h5>
+                        <p>Create and track financial goals with smart investment allocation and progress monitoring</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Customer Management</h5>
+                        <p>Complete customer lifecycle from contact to portfolio with family relationship tracking</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Market Intelligence</h5>
+                        <p>Real-time NAV tracking, market index analysis, and performance benchmarking</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Data Import</h5>
+                        <p>Bulk import customers, transactions, and market data via CSV/Excel files</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Alerts & Monitoring</h5>
+                        <p>Cruise Control dashboard for portfolio alerts and automated monitoring</p>
+                    </div>
+                </div>
+
+                <h3>Supported Asset Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Asset Type</th>
+                            <th>Code</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mutual Funds</td>
+                            <td><code>MF</code></td>
+                            <td>All mutual fund schemes with NAV tracking</td>
+                        </tr>
+                        <tr>
+                            <td>Equity</td>
+                            <td><code>EQUITY</code></td>
+                            <td>Direct stock investments</td>
+                        </tr>
+                        <tr>
+                            <td>Gold</td>
+                            <td><code>GOLD</code></td>
+                            <td>Physical gold, Gold ETFs, Sovereign Gold Bonds</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Deposits</td>
+                            <td><code>FD</code></td>
+                            <td>Bank and corporate fixed deposits</td>
+                        </tr>
+                        <tr>
+                            <td>Public Provident Fund</td>
+                            <td><code>PPF</code></td>
+                            <td>PPF account investments</td>
+                        </tr>
+                        <tr>
+                            <td>Employee Provident Fund</td>
+                            <td><code>EPF</code></td>
+                            <td>EPF/PF contributions and balance</td>
+                        </tr>
+                        <tr>
+                            <td>National Pension System</td>
+                            <td><code>NPS</code></td>
+                            <td>NPS Tier I and Tier II accounts</td>
+                        </tr>
+                        <tr>
+                            <td>Real Estate</td>
+                            <td><code>REAL_ESTATE</code></td>
+                            <td>Property investments</td>
+                        </tr>
+                        <tr>
+                            <td>Insurance</td>
+                            <td><code>INSURANCE</code></td>
+                            <td>Life insurance policies with investment component</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Getting Started -->
+            <section id="getting-started">
+                <h2>Getting Started</h2>
+
+                <h3>Logging In</h3>
+                <p>To access KewalInvest, navigate to your organization's application URL and enter your credentials:</p>
+
+                <ol class="steps">
+                    <li><strong>Enter your email address</strong> - Use the email provided by your administrator</li>
+                    <li><strong>Enter your password</strong> - Passwords are case-sensitive</li>
+                    <li><strong>Click "Sign In"</strong> - You will be redirected to the dashboard</li>
+                </ol>
+
+                <div class="alert alert-warning">
+                    <div class="alert-title"><span class="icon">⚠️</span> Security Note</div>
+                    Never share your login credentials. If you suspect unauthorized access, contact your administrator immediately.
+                </div>
+
+                <h3 id="navigation">Navigation Overview</h3>
+                <p>KewalInvest uses a sidebar navigation system organized into logical sections:</p>
+
+                <div class="card">
+                    <div class="card-header">Navigation Sections</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Section</th>
+                                <th>Contains</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Main</strong></td>
+                                <td>Dashboard</td>
+                                <td>Overview and quick access to key metrics</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Contacts</strong></td>
+                                <td>Contacts, Customers, Transactions</td>
+                                <td>Manage people and their financial activities</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Data Operations</strong></td>
+                                <td>Import Dashboard, Import Data, NAV History, Cruise Control</td>
+                                <td>Data management and monitoring</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Portfolio</strong></td>
+                                <td>NAV Tracking, Index Analysis, Market Data</td>
+                                <td>Investment tracking and market analysis</td>
+                            </tr>
+                            <tr>
+                                <td><strong>System</strong></td>
+                                <td>System Logs</td>
+                                <td>Administrative functions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Theme Settings</h3>
+                <p>KewalInvest supports both light and dark themes. To switch themes:</p>
+                <ul>
+                    <li>Click on your profile icon in the header</li>
+                    <li>Select "Toggle Theme" or use the theme switch</li>
+                    <li>Your preference is saved automatically</li>
+                </ul>
+            </section>
+
+            <!-- Dashboard -->
+            <section id="dashboard">
+                <h2>Dashboard</h2>
+
+                <p>The Dashboard provides a high-level overview of your portfolio management activities. It displays key metrics, recent activities, and quick access to common tasks.</p>
+
+                <h3>Dashboard Widgets</h3>
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <h5>Portfolio Summary</h5>
+                        <p>Total AUM, number of customers, and portfolio distribution</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Networth Chart</h5>
+                        <p>Visual representation of portfolio growth over time</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Recent Activities</h5>
+                        <p>Latest transactions and customer interactions</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Alerts</h5>
+                        <p>Important notifications requiring attention</p>
+                    </div>
+                </div>
+
+                <h3>Quick Actions</h3>
+                <p>From the dashboard, you can quickly:</p>
+                <ul>
+                    <li>Add a new customer</li>
+                    <li>Record a transaction</li>
+                    <li>Import data</li>
+                    <li>View portfolio snapshots</li>
+                </ul>
+            </section>
+
+            <!-- Contact Management -->
+            <section id="contacts">
+                <h2>Contact Management</h2>
+
+                <p>Contacts are the foundation of customer relationships in KewalInvest. Every customer starts as a contact before being onboarded as a full customer.</p>
+
+                <h3>Creating a Contact</h3>
+                <ol class="steps">
+                    <li><strong>Navigate to Contacts</strong> - Click "Contacts" in the sidebar under the Contacts section</li>
+                    <li><strong>Click "Add Contact"</strong> - Opens the contact creation form</li>
+                    <li><strong>Fill in basic information</strong> - Name, primary email, phone number</li>
+                    <li><strong>Add communication channels</strong> - Additional emails, phone numbers, social media</li>
+                    <li><strong>Save the contact</strong> - Click "Create Contact" to save</li>
+                </ol>
+
+                <h3>Contact Fields</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>First Name</td>
+                            <td>Yes</td>
+                            <td>Contact's first name</td>
+                        </tr>
+                        <tr>
+                            <td>Last Name</td>
+                            <td>Yes</td>
+                            <td>Contact's last name</td>
+                        </tr>
+                        <tr>
+                            <td>Email</td>
+                            <td>Yes</td>
+                            <td>Primary email address</td>
+                        </tr>
+                        <tr>
+                            <td>Phone</td>
+                            <td>No</td>
+                            <td>Primary phone number</td>
+                        </tr>
+                        <tr>
+                            <td>Notes</td>
+                            <td>No</td>
+                            <td>Additional information about the contact</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Communication Channels</h3>
+                <p>Each contact can have multiple communication channels. Set one channel as primary for default communications.</p>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">💡</span> Tip</div>
+                    Mark the most frequently used contact method as "Primary" to ensure important communications reach the contact efficiently.
+                </div>
+            </section>
+
+            <!-- Customer Management -->
+            <section id="customers">
+                <h2>Customer Management</h2>
+
+                <p>Customers are contacts who have been onboarded for portfolio management. Customer records contain detailed financial and personal information.</p>
+
+                <h3>Converting Contact to Customer</h3>
+                <div class="workflow">
+                    <span class="workflow-step">Contact Created</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">Add Details</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">Complete Onboarding</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">Active Customer</span>
+                </div>
+
+                <h3 id="customer-profile">Customer Profile</h3>
+                <p>The customer profile contains comprehensive information organized in tabs:</p>
+
+                <div class="card">
+                    <div class="card-header">Profile Tabs</div>
+                    <ul>
+                        <li><strong>Overview</strong> - Summary of customer information and portfolio</li>
+                        <li><strong>Portfolio</strong> - Detailed asset holdings and allocation</li>
+                        <li><strong>Goals</strong> - Financial goals and progress tracking</li>
+                        <li><strong>Transactions</strong> - Transaction history</li>
+                        <li><strong>Documents</strong> - Uploaded documents and KYC</li>
+                        <li><strong>Family</strong> - Family relationships and linked accounts</li>
+                    </ul>
+                </div>
+
+                <h4>Customer Details</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>PAN Number</td>
+                            <td>Permanent Account Number for tax identification</td>
+                        </tr>
+                        <tr>
+                            <td>Date of Birth</td>
+                            <td>Used for age-based investment planning</td>
+                        </tr>
+                        <tr>
+                            <td>Anniversary</td>
+                            <td>Wedding anniversary for relationship management</td>
+                        </tr>
+                        <tr>
+                            <td>Onboarding Status</td>
+                            <td>Current status in the onboarding workflow</td>
+                        </tr>
+                        <tr>
+                            <td>Survival Status</td>
+                            <td>Active status of the customer</td>
+                        </tr>
+                        <tr>
+                            <td>Referral Source</td>
+                            <td>How the customer was acquired</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 id="addresses">Managing Addresses</h3>
+                <p>Customers can have multiple addresses of different types:</p>
+                <ul>
+                    <li><strong>Home Address</strong> - Primary residence</li>
+                    <li><strong>Office Address</strong> - Work location</li>
+                    <li><strong>Mailing Address</strong> - For correspondence</li>
+                    <li><strong>Permanent Address</strong> - As per official records</li>
+                    <li><strong>Temporary Address</strong> - Current temporary residence</li>
+                </ul>
+
+                <h3 id="family">Family Relationships</h3>
+                <p>Track family relationships to understand household finances and enable family-level reporting:</p>
+
+                <ol class="steps">
+                    <li><strong>Open customer profile</strong> - Navigate to the customer's detail page</li>
+                    <li><strong>Go to Family tab</strong> - Click on the "Family" tab</li>
+                    <li><strong>Add relationship</strong> - Click "Add Family Member"</li>
+                    <li><strong>Select relationship type</strong> - Choose from: Spouse, Child, Parent, Sibling, etc.</li>
+                    <li><strong>Link to existing customer</strong> - Search and select an existing customer or create new</li>
+                </ol>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">ℹ️</span> Note</div>
+                    Family relationships are bidirectional. When you link Customer A as the spouse of Customer B, the reverse relationship is automatically created.
+                </div>
+
+                <h3>Customer Bookmarks</h3>
+                <p>Bookmark customers for quick access or to flag them for follow-up:</p>
+                <ul>
+                    <li>Click the bookmark icon on any customer card or profile</li>
+                    <li>Add a reason for bookmarking (e.g., "Pending KYC", "Review portfolio")</li>
+                    <li>View all bookmarked customers from the Bookmarks filter</li>
+                </ul>
+            </section>
+
+            <!-- Portfolio Management -->
+            <section id="portfolio">
+                <h2>Portfolio Management</h2>
+
+                <p>KewalInvest provides comprehensive portfolio tracking across multiple asset classes, enabling a holistic view of customer investments.</p>
+
+                <h3 id="asset-types">Asset Types Overview</h3>
+                <p>The system supports 9 asset types, each with specific tracking capabilities:</p>
+
+                <div class="card">
+                    <div class="card-header">Asset Type Details</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asset Type</th>
+                                <th>Tracking Features</th>
+                                <th>Valuation Method</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Mutual Funds</strong></td>
+                                <td>Units, NAV, SIP tracking, scheme details</td>
+                                <td>Units × Current NAV</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Equity</strong></td>
+                                <td>Shares, purchase price, current price</td>
+                                <td>Shares × Market Price</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Gold</strong></td>
+                                <td>Weight, purchase rate, current rate</td>
+                                <td>Weight × Current Gold Rate</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Fixed Deposits</strong></td>
+                                <td>Principal, interest rate, maturity date</td>
+                                <td>Principal + Accrued Interest</td>
+                            </tr>
+                            <tr>
+                                <td><strong>PPF</strong></td>
+                                <td>Balance, yearly contributions</td>
+                                <td>Current Balance</td>
+                            </tr>
+                            <tr>
+                                <td><strong>EPF</strong></td>
+                                <td>Balance, monthly contributions</td>
+                                <td>Current Balance</td>
+                            </tr>
+                            <tr>
+                                <td><strong>NPS</strong></td>
+                                <td>Units, NAV by fund type</td>
+                                <td>Units × NAV</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Real Estate</strong></td>
+                                <td>Property details, purchase price, current value</td>
+                                <td>Estimated Market Value</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Insurance</strong></td>
+                                <td>Premium, sum assured, fund value</td>
+                                <td>Fund Value (for ULIPs)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 id="investment-plans">Investment Plans</h3>
+                <p>Investment plans represent systematic or lump-sum investment commitments:</p>
+
+                <h4>Creating an Investment Plan</h4>
+                <ol class="steps">
+                    <li><strong>Go to customer portfolio</strong> - Open the customer's detail page and navigate to Portfolio tab</li>
+                    <li><strong>Click "Add Investment Plan"</strong> - Opens the investment plan form</li>
+                    <li><strong>Select asset type</strong> - Choose from the 9 supported asset types</li>
+                    <li><strong>Enter investment details</strong> - Amount, frequency (SIP/Lump-sum), start date</li>
+                    <li><strong>Configure tracking</strong> - Link to specific scheme (for MF) or add custom details</li>
+                    <li><strong>Save the plan</strong> - The plan appears in the customer's portfolio</li>
+                </ol>
+
+                <h4>Investment Plan Types</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Use Case</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>SIP</strong></td>
+                            <td>Systematic Investment Plan</td>
+                            <td>Regular monthly/quarterly investments</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Lump Sum</strong></td>
+                            <td>One-time investment</td>
+                            <td>Single large investments</td>
+                        </tr>
+                        <tr>
+                            <td><strong>STP</strong></td>
+                            <td>Systematic Transfer Plan</td>
+                            <td>Periodic transfers between funds</td>
+                        </tr>
+                        <tr>
+                            <td><strong>SWP</strong></td>
+                            <td>Systematic Withdrawal Plan</td>
+                            <td>Regular withdrawals from investments</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 id="snapshots">Portfolio Snapshots</h3>
+                <p>Portfolio snapshots capture the state of a customer's portfolio at a specific point in time, enabling historical analysis and networth tracking.</p>
+
+                <h4>Automatic Snapshots</h4>
+                <p>The system automatically creates monthly portfolio snapshots on the last day of each month, capturing:</p>
+                <ul>
+                    <li>Total portfolio value</li>
+                    <li>Asset allocation breakdown</li>
+                    <li>Individual holding values</li>
+                    <li>Performance metrics</li>
+                </ul>
+
+                <h4>Manual Snapshots</h4>
+                <p>Administrators can trigger manual snapshots from the Cruise Control dashboard:</p>
+                <ol class="steps">
+                    <li>Navigate to <strong>Cruise Control</strong> in the sidebar</li>
+                    <li>Go to the <strong>Snapshots</strong> tab</li>
+                    <li>Click <strong>"Trigger Snapshot"</strong></li>
+                    <li>Confirm the action</li>
+                </ol>
+
+                <h4>Networth Projections</h4>
+                <p>Based on historical snapshots and growth rates, the system projects future networth:</p>
+                <ul>
+                    <li>View projected growth over 1, 3, 5, 10 years</li>
+                    <li>Compare actual vs. projected performance</li>
+                    <li>Identify trends and anomalies</li>
+                </ul>
+            </section>
+
+            <!-- Goals Management -->
+            <section id="goals">
+                <h2>Goals Management</h2>
+
+                <p>Goal-based financial planning is at the heart of KewalInvest. Create financial goals for customers and track progress with smart investment allocation.</p>
+
+                <h3 id="goal-types">Goal Types</h3>
+                <p>KewalInvest supports three types of financial goals:</p>
+
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <h5>Time-Based Goals</h5>
+                        <p>Goals with a target date but flexible target amount. Example: "Retirement by age 60"</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Price-Based Goals</h5>
+                        <p>Goals with a target amount but flexible timeline. Example: "Save ₹50 lakhs"</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Time + Price Goals</h5>
+                        <p>Goals with both target date and amount. Example: "₹1 Crore for child's education by 2030"</p>
+                    </div>
+                </div>
+
+                <h3>Creating a Goal</h3>
+                <ol class="steps">
+                    <li><strong>Navigate to customer profile</strong> - Open the customer's detail page</li>
+                    <li><strong>Go to Goals tab</strong> - Click on the "Goals" tab</li>
+                    <li><strong>Click "Add Goal"</strong> - Opens the goal creation wizard</li>
+                    <li><strong>Enter goal details</strong> - Name, type, target amount, target date</li>
+                    <li><strong>Set priority</strong> - High, Medium, or Low priority</li>
+                    <li><strong>Save the goal</strong> - Goal appears in the goals list</li>
+                </ol>
+
+                <h4>Goal Configuration</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Goal Name</td>
+                            <td>Descriptive name for the goal</td>
+                            <td>"Child's Higher Education"</td>
+                        </tr>
+                        <tr>
+                            <td>Target Amount</td>
+                            <td>Desired amount to achieve</td>
+                            <td>₹50,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Target Date</td>
+                            <td>When the goal should be achieved</td>
+                            <td>March 2030</td>
+                        </tr>
+                        <tr>
+                            <td>Priority</td>
+                            <td>Importance level</td>
+                            <td>High</td>
+                        </tr>
+                        <tr>
+                            <td>Notes</td>
+                            <td>Additional context or requirements</td>
+                            <td>"Include inflation adjustment"</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 id="goal-allocation">Investment Allocation</h3>
+                <p>Link investment plans to goals to track dedicated progress:</p>
+
+                <ol class="steps">
+                    <li><strong>Open goal details</strong> - Click on a goal to view details</li>
+                    <li><strong>Click "Allocate Investments"</strong> - Opens the allocation modal</li>
+                    <li><strong>Select investment plans</strong> - Choose from customer's existing investment plans</li>
+                    <li><strong>Set allocation percentage</strong> - Specify what percentage of each plan goes to this goal</li>
+                    <li><strong>Save allocations</strong> - System calculates goal progress based on allocations</li>
+                </ol>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">💡</span> Smart Allocation</div>
+                    The system suggests optimal allocations based on goal timeline, risk profile, and asset type suitability. Review suggestions but customize as needed.
+                </div>
+
+                <h4>Allocation Rules</h4>
+                <ul>
+                    <li>Each investment plan can be allocated across multiple goals</li>
+                    <li>Total allocation per plan cannot exceed 100%</li>
+                    <li>Unallocated portions are tracked separately</li>
+                    <li>Changes to allocations immediately update goal progress</li>
+                </ul>
+
+                <h3 id="goal-tracking">Progress Tracking</h3>
+                <p>Monitor goal progress with real-time calculations:</p>
+
+                <h4>Progress Metrics</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Current Value</strong></td>
+                            <td>Current value of all investments allocated to the goal</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Progress %</strong></td>
+                            <td>Percentage of target amount achieved</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Projected Value</strong></td>
+                            <td>Estimated value at target date based on growth rate</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Status</strong></td>
+                            <td>On-track or Off-track indicator</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Shortfall/Surplus</strong></td>
+                            <td>Difference between projected and target amounts</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Monthly SIP Required</strong></td>
+                            <td>Additional monthly investment needed to get on track</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Risk Levels</h4>
+                <p>Goals are assigned risk levels based on asset allocation:</p>
+                <ul>
+                    <li><span class="badge badge-success">Low Risk</span> - Primarily debt instruments (FD, PPF, EPF)</li>
+                    <li><span class="badge badge-warning">Medium Risk</span> - Balanced allocation (Hybrid funds, mix of equity/debt)</li>
+                    <li><span class="badge badge-primary">High Risk</span> - Primarily equity (MF equity, direct stocks)</li>
+                </ul>
+
+                <h4>Goal Status Indicators</h4>
+                <div class="card">
+                    <div class="card-header">Understanding Goal Status</div>
+                    <table>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge badge-success">On Track</span></td>
+                                <td>Projected value meets or exceeds target amount by target date</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-warning">Off Track</span></td>
+                                <td>Projected value falls short of target - action recommended</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-primary">Achieved</span></td>
+                                <td>Goal has been successfully completed</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Transactions -->
+            <section id="transactions">
+                <h2>Transaction Management</h2>
+
+                <p>Track all investment transactions including purchases, sales, dividends, and switches.</p>
+
+                <h3>Transaction Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Impact</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Buy/Purchase</strong></td>
+                            <td>New investment or additional purchase</td>
+                            <td>Increases holdings</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Sell/Redemption</strong></td>
+                            <td>Partial or full redemption</td>
+                            <td>Decreases holdings</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Switch In</strong></td>
+                            <td>Units received from another scheme</td>
+                            <td>Increases holdings</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Switch Out</strong></td>
+                            <td>Units transferred to another scheme</td>
+                            <td>Decreases holdings</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Dividend</strong></td>
+                            <td>Dividend payout or reinvestment</td>
+                            <td>May increase holdings (reinvestment)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Recording Transactions</h3>
+                <ol class="steps">
+                    <li><strong>Navigate to Transactions</strong> - Click "Transactions" in the sidebar</li>
+                    <li><strong>Click "Add Transaction"</strong> - Opens the transaction form</li>
+                    <li><strong>Select customer</strong> - Search and select the customer</li>
+                    <li><strong>Choose transaction type</strong> - Buy, Sell, Switch, etc.</li>
+                    <li><strong>Enter details</strong> - Amount, units, NAV, date</li>
+                    <li><strong>Save transaction</strong> - Transaction is recorded and portfolio updated</li>
+                </ol>
+
+                <h3>Duplicate Detection</h3>
+                <p>The system automatically detects potential duplicate transactions during data import:</p>
+
+                <div class="alert alert-warning">
+                    <div class="alert-title"><span class="icon">⚠️</span> Duplicate Review</div>
+                    When duplicates are detected, review them in the Duplicate Review Panel before confirming. You can merge duplicates or mark them as separate transactions.
+                </div>
+
+                <h4>Using the Duplicate Review Panel</h4>
+                <ol class="steps">
+                    <li><strong>Go to Transactions page</strong> - Navigate to the transactions list</li>
+                    <li><strong>Click "Review Duplicates"</strong> - Opens the duplicate review panel</li>
+                    <li><strong>Review each group</strong> - System shows transactions that appear similar</li>
+                    <li><strong>Take action</strong> - Keep all, merge, or delete duplicates</li>
+                    <li><strong>Confirm changes</strong> - Apply your decisions</li>
+                </ol>
+            </section>
+
+            <!-- Data Import -->
+            <section id="data-import">
+                <h2>Data Import</h2>
+
+                <p>KewalInvest provides a powerful data import system for bulk uploading customers, transactions, and market data.</p>
+
+                <h3>Supported Import Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Import Type</th>
+                            <th>File Formats</th>
+                            <th>Use Case</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Customers</strong></td>
+                            <td>CSV, Excel</td>
+                            <td>Bulk customer onboarding</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Transactions</strong></td>
+                            <td>CSV, Excel</td>
+                            <td>Historical transaction import</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Schemes</strong></td>
+                            <td>CSV</td>
+                            <td>Mutual fund scheme master data</td>
+                        </tr>
+                        <tr>
+                            <td><strong>NAV Data</strong></td>
+                            <td>CSV</td>
+                            <td>Historical NAV data</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bookmarks</strong></td>
+                            <td>CSV</td>
+                            <td>Scheme bookmarks and watchlists</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 id="import-wizard">Import Wizard</h3>
+                <p>The multi-step import wizard guides you through the data import process:</p>
+
+                <div class="workflow">
+                    <span class="workflow-step">1. Upload File</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">2. Select Type</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">3. Map Fields</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">4. Validate</span>
+                    <span class="workflow-arrow">→</span>
+                    <span class="workflow-step">5. Import</span>
+                </div>
+
+                <h4>Step 1: Upload File</h4>
+                <ol class="steps">
+                    <li><strong>Navigate to Data Import</strong> - Click "Import Data" in the sidebar</li>
+                    <li><strong>Select file</strong> - Click "Choose File" or drag and drop</li>
+                    <li><strong>Verify preview</strong> - Check that data appears correctly</li>
+                </ol>
+
+                <h4>Step 2: Select Import Type</h4>
+                <p>Choose what type of data you're importing. The system will adjust field mappings accordingly.</p>
+
+                <h4>Step 3: Field Mapping</h4>
+                <p>Map columns from your file to database fields:</p>
+                <ul>
+                    <li>System auto-detects common field names</li>
+                    <li>Review and adjust mappings as needed</li>
+                    <li>Required fields must be mapped</li>
+                    <li>Unmapped columns are ignored</li>
+                </ul>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">💡</span> Tip</div>
+                    Save field mappings as templates for recurring imports with the same file format.
+                </div>
+
+                <h4>Step 4: Validation</h4>
+                <p>The system validates your data before import:</p>
+                <ul>
+                    <li>Required field checks</li>
+                    <li>Data type validation</li>
+                    <li>Duplicate detection</li>
+                    <li>Reference integrity (e.g., valid scheme codes)</li>
+                </ul>
+
+                <h4>Step 5: Execute Import</h4>
+                <p>Review the validation summary and execute the import:</p>
+                <ul>
+                    <li>View records to be imported</li>
+                    <li>Review warnings and errors</li>
+                    <li>Click "Import" to proceed</li>
+                    <li>Monitor progress in real-time</li>
+                </ul>
+
+                <h3>Import Dashboard</h3>
+                <p>Monitor all import sessions from the Import Dashboard:</p>
+                <ul>
+                    <li>View active and completed imports</li>
+                    <li>Check success/failure counts</li>
+                    <li>Download error logs</li>
+                    <li>Rollback failed imports (if supported)</li>
+                </ul>
+
+                <div class="alert alert-danger">
+                    <div class="alert-title"><span class="icon">⚠️</span> Important</div>
+                    Always backup your data before performing large imports. Some import operations cannot be undone.
+                </div>
+            </section>
+
+            <!-- NAV Tracking -->
+            <section id="nav-tracking">
+                <h2>NAV Tracking</h2>
+
+                <p>Track Net Asset Values (NAV) for mutual fund schemes to maintain accurate portfolio valuations.</p>
+
+                <h3>NAV Search</h3>
+                <p>Search and discover mutual fund schemes:</p>
+                <ol class="steps">
+                    <li><strong>Navigate to NAV Search</strong> - Click "NAV Tracking" → "Search" in sidebar</li>
+                    <li><strong>Enter search criteria</strong> - Scheme name, AMC, category</li>
+                    <li><strong>Apply filters</strong> - Filter by fund type, category, returns</li>
+                    <li><strong>View results</strong> - Browse matching schemes with key metrics</li>
+                </ol>
+
+                <h3>Bookmarking Schemes</h3>
+                <p>Save frequently accessed schemes for quick reference:</p>
+                <ul>
+                    <li>Click the bookmark icon on any scheme</li>
+                    <li>Organize bookmarks by category</li>
+                    <li>Access bookmarks from the NAV Bookmarks page</li>
+                </ul>
+
+                <h3>NAV Scheduler</h3>
+                <p>Configure automatic NAV updates:</p>
+                <ol class="steps">
+                    <li><strong>Go to NAV Scheduler</strong> - Navigate to the scheduler page</li>
+                    <li><strong>Create schedule</strong> - Set frequency (daily, weekly)</li>
+                    <li><strong>Select schemes</strong> - Choose schemes to update</li>
+                    <li><strong>Activate schedule</strong> - Enable automatic updates</li>
+                </ol>
+
+                <h3>NAV History <span class="badge badge-admin">Admin</span></h3>
+                <p>Administrators can manage historical NAV data:</p>
+                <ul>
+                    <li>View NAV history for any scheme</li>
+                    <li>Download historical data</li>
+                    <li>Regenerate missing NAV data</li>
+                    <li>Fix data inconsistencies</li>
+                </ul>
+            </section>
+
+            <!-- Market Analysis -->
+            <section id="market-analysis">
+                <h2>Market Analysis</h2>
+
+                <p>Analyze market trends and index performance to inform investment decisions.</p>
+
+                <h3>Index Analysis</h3>
+                <p>Track major market indices:</p>
+                <ul>
+                    <li><strong>Nifty 50</strong> - Large cap index</li>
+                    <li><strong>Sensex</strong> - BSE benchmark</li>
+                    <li><strong>Nifty Bank</strong> - Banking sector index</li>
+                    <li><strong>Nifty Midcap</strong> - Mid cap stocks</li>
+                    <li>And more...</li>
+                </ul>
+
+                <h4>Index Detail View</h4>
+                <p>Click on any index to view detailed analysis:</p>
+                <ul>
+                    <li>Historical performance chart</li>
+                    <li>Period returns (1D, 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y)</li>
+                    <li>Volatility metrics</li>
+                    <li>Comparison with other indices</li>
+                </ul>
+
+                <h3>Market History <span class="badge badge-admin">Admin</span></h3>
+                <p>Administrators can access and manage market historical data:</p>
+                <ul>
+                    <li>Download market history</li>
+                    <li>Bulk update market data</li>
+                    <li>Calculate bulk metrics</li>
+                </ul>
+            </section>
+
+            <!-- Cruise Control -->
+            <section id="cruise-control">
+                <h2>Cruise Control</h2>
+
+                <p>Cruise Control is KewalInvest's monitoring and alerts dashboard, providing automated oversight of portfolios and market conditions.</p>
+
+                <h3>Dashboard Tabs</h3>
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <h5>Alerts</h5>
+                        <p>Active alerts requiring attention</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Portfolio Alerts</h5>
+                        <p>Customer portfolio notifications</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Market Alerts</h5>
+                        <p>Market condition triggers</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Snapshots</h5>
+                        <p>Portfolio snapshot management</p>
+                    </div>
+                    <div class="feature-item">
+                        <h5>Settings</h5>
+                        <p>Configure alert thresholds</p>
+                    </div>
+                </div>
+
+                <h3>Alert Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Alert Type</th>
+                            <th>Trigger</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Goal Off-Track</strong></td>
+                            <td>Goal projected to miss target</td>
+                            <td>Review allocation, increase SIP</td>
+                        </tr>
+                        <tr>
+                            <td><strong>NAV Alert</strong></td>
+                            <td>Significant NAV movement</td>
+                            <td>Review affected portfolios</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Rebalance Due</strong></td>
+                            <td>Portfolio drift from target allocation</td>
+                            <td>Rebalance portfolio</td>
+                        </tr>
+                        <tr>
+                            <td><strong>SIP Missed</strong></td>
+                            <td>Expected SIP not processed</td>
+                            <td>Follow up with customer</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Market Alert</strong></td>
+                            <td>Index crosses threshold</td>
+                            <td>Review market exposure</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Configuring Alerts</h3>
+                <ol class="steps">
+                    <li><strong>Go to Cruise Control</strong> - Navigate to the Cruise Control dashboard</li>
+                    <li><strong>Click Settings tab</strong> - Access alert configuration</li>
+                    <li><strong>Set thresholds</strong> - Define trigger conditions</li>
+                    <li><strong>Configure notifications</strong> - Choose how to be notified</li>
+                    <li><strong>Save settings</strong> - Activate your alert configuration</li>
+                </ol>
+            </section>
+
+            <!-- System Administration -->
+            <section id="admin">
+                <h2>System Administration <span class="badge badge-admin">Admin</span></h2>
+
+                <p>Administrative functions for system management and maintenance.</p>
+
+                <h3 id="logs">System Logs</h3>
+                <p>View application logs for troubleshooting and auditing:</p>
+                <ul>
+                    <li><strong>Activity Logs</strong> - User actions and system events</li>
+                    <li><strong>Error Logs</strong> - Application errors and exceptions</li>
+                    <li><strong>Import Logs</strong> - Data import session details</li>
+                    <li><strong>Audit Trail</strong> - Security-related events</li>
+                </ul>
+
+                <h4>Filtering Logs</h4>
+                <ul>
+                    <li>Filter by date range</li>
+                    <li>Filter by log level (Info, Warning, Error)</li>
+                    <li>Filter by user</li>
+                    <li>Search log messages</li>
+                </ul>
+
+                <h3>Scheme Alias Management</h3>
+                <p>Map different scheme codes and names to canonical schemes:</p>
+                <ol class="steps">
+                    <li><strong>Navigate to Scheme Aliases</strong> - Access via admin menu</li>
+                    <li><strong>Search for scheme</strong> - Find the canonical scheme</li>
+                    <li><strong>Add alias</strong> - Enter alternative code or name</li>
+                    <li><strong>Save mapping</strong> - Alias is now recognized during imports</li>
+                </ol>
+
+                <div class="alert alert-info">
+                    <div class="alert-title"><span class="icon">ℹ️</span> Why Use Aliases?</div>
+                    Different data sources may use different codes for the same scheme. Aliases ensure consistent mapping during data imports.
+                </div>
+
+                <h3>User Management</h3>
+                <p>Manage user accounts and permissions:</p>
+                <ul>
+                    <li>Create new user accounts</li>
+                    <li>Assign roles (Admin, User)</li>
+                    <li>Reset passwords</li>
+                    <li>Deactivate accounts</li>
+                </ul>
+
+                <h3>Tenant Management</h3>
+                <p>For multi-tenant deployments, manage tenant configurations:</p>
+                <ul>
+                    <li>View tenant details</li>
+                    <li>Configure tenant settings</li>
+                    <li>Monitor tenant usage</li>
+                </ul>
+            </section>
+
+            <!-- Glossary -->
+            <section id="glossary">
+                <h2>Glossary</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Term</th>
+                            <th>Definition</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>AUM</strong></td>
+                            <td>Assets Under Management - Total value of investments managed</td>
+                        </tr>
+                        <tr>
+                            <td><strong>NAV</strong></td>
+                            <td>Net Asset Value - Price per unit of a mutual fund</td>
+                        </tr>
+                        <tr>
+                            <td><strong>SIP</strong></td>
+                            <td>Systematic Investment Plan - Regular periodic investment</td>
+                        </tr>
+                        <tr>
+                            <td><strong>STP</strong></td>
+                            <td>Systematic Transfer Plan - Periodic transfer between funds</td>
+                        </tr>
+                        <tr>
+                            <td><strong>SWP</strong></td>
+                            <td>Systematic Withdrawal Plan - Regular withdrawals from investment</td>
+                        </tr>
+                        <tr>
+                            <td><strong>JTBD</strong></td>
+                            <td>Jobs To Be Done - Framework for tracking goals and tasks</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PAN</strong></td>
+                            <td>Permanent Account Number - Tax identification number</td>
+                        </tr>
+                        <tr>
+                            <td><strong>KYC</strong></td>
+                            <td>Know Your Customer - Identity verification process</td>
+                        </tr>
+                        <tr>
+                            <td><strong>AMC</strong></td>
+                            <td>Asset Management Company - Mutual fund house</td>
+                        </tr>
+                        <tr>
+                            <td><strong>ULIP</strong></td>
+                            <td>Unit Linked Insurance Plan - Insurance + investment product</td>
+                        </tr>
+                        <tr>
+                            <td><strong>ETF</strong></td>
+                            <td>Exchange Traded Fund - Fund traded like stocks</td>
+                        </tr>
+                        <tr>
+                            <td><strong>XIRR</strong></td>
+                            <td>Extended Internal Rate of Return - Returns calculation method</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CAGR</strong></td>
+                            <td>Compound Annual Growth Rate - Annualized return metric</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Keyboard Shortcuts -->
+            <section id="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Shortcut</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>K</kbd></td>
+                            <td>Open search</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>/</kbd></td>
+                            <td>Toggle sidebar</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Esc</kbd></td>
+                            <td>Close modal/dialog</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>?</kbd></td>
+                            <td>Show keyboard shortcuts</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- FAQ -->
+            <section id="faq">
+                <h2>Frequently Asked Questions</h2>
+
+                <div class="card">
+                    <div class="card-header">General Questions</div>
+
+                    <h4>How do I reset my password?</h4>
+                    <p>Click "Forgot Password" on the login page and enter your email. You'll receive a password reset link. If you don't receive the email, contact your administrator.</p>
+
+                    <h4>Can I access KewalInvest on mobile?</h4>
+                    <p>Yes, KewalInvest is responsive and works on mobile browsers. For the best experience, we recommend using a tablet or desktop.</p>
+
+                    <h4>How often is NAV data updated?</h4>
+                    <p>NAV data can be updated daily via the NAV Scheduler or manually through the NAV History page. The frequency depends on your organization's configuration.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Portfolio Questions</div>
+
+                    <h4>Why is my portfolio value different from my broker statement?</h4>
+                    <p>Differences may occur due to: (1) NAV data timing differences, (2) Pending transactions not yet recorded, (3) Different valuation methods. Ensure all transactions are imported and NAV data is current.</p>
+
+                    <h4>How are goal progress calculations made?</h4>
+                    <p>Goal progress is calculated based on current values of allocated investments, projected growth rates, and target amounts. The system uses historical returns and expected growth to project future values.</p>
+
+                    <h4>Can I track assets not held through you?</h4>
+                    <p>Yes, you can manually add any asset type including real estate, insurance, and direct equity holdings. These will be included in the customer's total portfolio view.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Data Import Questions</div>
+
+                    <h4>What file formats are supported for import?</h4>
+                    <p>KewalInvest supports CSV and Excel (.xlsx) formats. Ensure your file has headers in the first row and data starts from the second row.</p>
+
+                    <h4>How do I handle import errors?</h4>
+                    <p>After import, check the Import Dashboard for error details. Common issues include: missing required fields, invalid data formats, and duplicate records. Fix the source file and re-import.</p>
+
+                    <h4>Can I undo an import?</h4>
+                    <p>Some imports support rollback. Check the Import Dashboard for the rollback option. For safety, always backup data before large imports.</p>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer style="margin-top: 60px; padding-top: 30px; border-top: 1px solid var(--border-color); text-align: center; color: var(--text-muted);">
+                <p><strong>KewalInvest User Manual</strong> | Version 1.0</p>
+                <p>For support, contact your system administrator</p>
+                <p style="margin-top: 20px; font-size: 0.85rem;">&copy; 2024 KewalInvest. All rights reserved.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Back to Top Button -->
+    <a href="#introduction" class="back-to-top" title="Back to top">↑</a>
+
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Active navigation highlighting
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        function updateActiveNav() {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav();
+
+        // Show/hide back to top button
+        const backToTop = document.querySelector('.back-to-top');
+        window.addEventListener('scroll', () => {
+            if (scrollY > 300) {
+                backToTop.style.display = 'flex';
+            } else {
+                backToTop.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
