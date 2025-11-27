@@ -150,7 +150,7 @@ router.post('/register', async (req: Request, res: Response): Promise<Response> 
         updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) 
       RETURNING id, tenant_code, tenant_name, is_active, is_admin, subscription_plan, settings, created_at`,
-      [tenantCode, business_name.trim(), true, false, 'basic', JSON.stringify(subscriptionSettings)]
+      [tenantCode, business_name.trim(), true, true, 'basic', JSON.stringify(subscriptionSettings)]
     );
 
     const tenant = tenantResult.rows[0];
