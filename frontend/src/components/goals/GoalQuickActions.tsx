@@ -1,7 +1,7 @@
 // frontend/src/components/goals/GoalQuickActions.tsx
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ConfirmationDialog } from '../common/ConfirmationDialog';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface GoalQuickActionsProps {
   onCreateGoal: () => void;
