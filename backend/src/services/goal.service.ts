@@ -1279,12 +1279,11 @@ private async getGoalPortfolioValue(
     const query = `
       SELECT
         ip.id as plan_id,
-        ip.plan_name as scheme_name,
-        COALESCE(ip.plan_name, at.name) as scheme_code,
-        at.name as asset_type_name,
+        COALESCE(ip.notes, at.asset_type_name) as scheme_name,
+        COALESCE(ip.scheme_code, at.asset_type_code, 'PLAN-' || ip.id::text) as scheme_code,
+        at.asset_type_name,
         ip.principal_amount,
-        ip.current_value,
-        COALESCE(ip.current_value, ip.principal_amount) as total_portfolio_value,
+        ip.principal_amount as total_portfolio_value,
         COALESCE(
           (SELECT SUM(gia.allocated_percentage)
            FROM t_goal_investment_allocations gia
@@ -1297,7 +1296,7 @@ private async getGoalPortfolioValue(
         AND ip.is_live = $2
         AND ip.customer_id = $3
         AND ip.is_active = true
-      ORDER BY ip.plan_name
+      ORDER BY at.display_order, ip.assigned_at DESC
     `;
 
     const plansResult = await this.db.query(query, [tenantId, isLive, customerId]);
