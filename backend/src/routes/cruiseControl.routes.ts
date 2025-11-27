@@ -36,4 +36,7 @@ router.post('/snapshots/operations/generate-missing', controller.generateMissing
 router.post('/snapshots/operations/update-all', controller.updateAllSnapshots);
 router.post('/snapshots/operations/regenerate-all', controller.regenerateAllSnapshots);
 
+// ==================== CUSTOMER SNAPSHOT STATUS ====================
+router.get('/snapshots/customer/:customerId/status', controller.getCustomerSnapshotStatus);
+
 export default router;
