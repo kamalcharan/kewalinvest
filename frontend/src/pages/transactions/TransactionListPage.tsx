@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { TransactionService, TransactionFilters as TransactionFiltersType } from '../../services/transaction.service';
 import { TransactionListResponse, TransactionSummary, TransactionWithDetails } from '../../types/transaction.types';
@@ -11,6 +12,7 @@ import TransactionDetails from '../../components/transactions/TransactionDetails
 
 const TransactionListPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id: transactionIdParam } = useParams<{ id: string }>();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -105,6 +107,9 @@ const TransactionListPage: React.FC = () => {
       await TransactionService.deleteTransaction(transactionId);
       fetchTransactions();
       fetchSummary();
+      // Invalidate networth/portfolio queries to refresh charts
+      queryClient.invalidateQueries({ queryKey: ['networth'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     } catch (err: any) {
       console.error('Failed to delete transaction:', err);
     }
@@ -116,6 +121,9 @@ const TransactionListPage: React.FC = () => {
       await TransactionService.updatePortfolioFlag(transactionId, !currentFlag);
       fetchTransactions();
       fetchSummary();
+      // Invalidate networth/portfolio queries to refresh charts
+      queryClient.invalidateQueries({ queryKey: ['networth'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     } catch (err: any) {
       console.error('Failed to toggle portfolio flag:', err);
     }

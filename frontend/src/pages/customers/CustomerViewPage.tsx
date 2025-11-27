@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -47,6 +48,7 @@ import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { customerId: id } = useParams<{ customerId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
@@ -1415,6 +1417,9 @@ const CustomerViewPage: React.FC = () => {
                       await TransactionService.deleteTransaction(transactionId);
                       fetchTransactions(transactionsPagination.page);
                       refetchPortfolio();
+                      // Invalidate networth/portfolio queries to refresh charts
+                      queryClient.invalidateQueries({ queryKey: ['networth'] });
+                      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
                     } catch (error) {
                       console.error('Failed to delete transaction:', error);
                     }
@@ -1424,6 +1429,9 @@ const CustomerViewPage: React.FC = () => {
                       await TransactionService.updatePortfolioFlag(transactionId, !currentFlag);
                       fetchTransactions(transactionsPagination.page);
                       refetchPortfolio();
+                      // Invalidate networth/portfolio queries to refresh charts
+                      queryClient.invalidateQueries({ queryKey: ['networth'] });
+                      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
                     } catch (error) {
                       console.error('Failed to toggle portfolio flag:', error);
                     }

@@ -1,6 +1,7 @@
 // frontend/src/components/transactions/DuplicateReviewPanel.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { TransactionService, TransactionFilters } from '../../services/transaction.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -27,6 +28,7 @@ const DuplicateReviewPanel: React.FC<DuplicateReviewPanelProps> = ({
   schemeCode,
   onUpdate
 }) => {
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -131,6 +133,9 @@ const DuplicateReviewPanel: React.FC<DuplicateReviewPanelProps> = ({
       await TransactionService.updatePortfolioFlag(transactionId, !currentFlag);
       await fetchDuplicates();
       onUpdate?.();
+      // Invalidate networth/portfolio queries to refresh charts
+      queryClient.invalidateQueries({ queryKey: ['networth'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     } catch (err) {
       console.error('Failed to toggle portfolio flag:', err);
     }
@@ -147,6 +152,9 @@ const DuplicateReviewPanel: React.FC<DuplicateReviewPanelProps> = ({
       );
       await fetchDuplicates();
       onUpdate?.();
+      // Invalidate networth/portfolio queries to refresh charts
+      queryClient.invalidateQueries({ queryKey: ['networth'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     } catch (err) {
       console.error('Failed to bulk exclude:', err);
     }
@@ -163,6 +171,9 @@ const DuplicateReviewPanel: React.FC<DuplicateReviewPanelProps> = ({
       );
       await fetchDuplicates();
       onUpdate?.();
+      // Invalidate networth/portfolio queries to refresh charts
+      queryClient.invalidateQueries({ queryKey: ['networth'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     } catch (err) {
       console.error('Failed to bulk include:', err);
     }

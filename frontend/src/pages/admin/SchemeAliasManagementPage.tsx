@@ -1,12 +1,14 @@
 // frontend/src/pages/admin/SchemeAliasManagementPage.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SchemeAliasService, SchemeAliasWithScheme, SchemeAliasFilters } from '../../services/schemeAlias.service';
 import { toastService } from '../../services/toast.service';
 import BackfillProgressModal from '../../components/admin/BackfillProgressModal';
 
 const SchemeAliasManagementPage: React.FC = () => {
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -101,6 +103,9 @@ const SchemeAliasManagementPage: React.FC = () => {
         setFormData({ scheme_code: '', alias_name: '', source: 'manual' });
         fetchAliases();
         fetchStatistics();
+        // Invalidate alias queries to refresh lists
+        queryClient.invalidateQueries({ queryKey: ['aliases'] });
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
       } else {
         toastService.error(response.error || 'Failed to create alias');
       }
@@ -134,6 +139,9 @@ const SchemeAliasManagementPage: React.FC = () => {
         setBulkFormData({ scheme_code: '', aliases: '' });
         fetchAliases();
         fetchStatistics();
+        // Invalidate alias queries to refresh lists
+        queryClient.invalidateQueries({ queryKey: ['aliases'] });
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
       } else {
         toastService.error('Failed to bulk create aliases');
       }
@@ -158,6 +166,9 @@ const SchemeAliasManagementPage: React.FC = () => {
         setShowEditModal(false);
         setSelectedAlias(null);
         fetchAliases();
+        // Invalidate alias queries to refresh lists
+        queryClient.invalidateQueries({ queryKey: ['aliases'] });
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
       } else {
         toastService.error(response.error || 'Failed to update alias');
       }
@@ -178,6 +189,9 @@ const SchemeAliasManagementPage: React.FC = () => {
         toastService.success('Alias deleted successfully');
         fetchAliases();
         fetchStatistics();
+        // Invalidate alias queries to refresh lists
+        queryClient.invalidateQueries({ queryKey: ['aliases'] });
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
       } else {
         toastService.error(response.error || 'Failed to delete alias');
       }
