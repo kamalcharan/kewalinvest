@@ -2,11 +2,13 @@
 // React hook for Investment Plans (Release 1.1 - Phase 1)
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { InvestmentPlan, CreateInvestmentPlanRequest, UpdateInvestmentPlanRequest } from '../types/investmentPlan.types';
 import { investmentPlanService } from '../services/investmentPlan.service';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useInvestmentPlans = (customerId: number | null) => {
+  const queryClient = useQueryClient();
   const [plans, setPlans] = useState<InvestmentPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +33,22 @@ export const useInvestmentPlans = (customerId: number | null) => {
     loadPlans();
   }, [loadPlans]);
 
+  // Invalidate networth queries to refresh charts after investment plan changes
+  const invalidateNetworthQueries = useCallback(() => {
+    // Invalidate all networth-related queries for this customer
+    queryClient.invalidateQueries({ queryKey: ['networth', 'history', customerId] });
+    queryClient.invalidateQueries({ queryKey: ['networth', 'summary', customerId] });
+    // Also invalidate without customerId to catch family-based queries
+    queryClient.invalidateQueries({ queryKey: ['networth'] });
+  }, [queryClient, customerId]);
+
   const createPlan = async (data: CreateInvestmentPlanRequest): Promise<InvestmentPlan> => {
     if (!customerId) throw new Error('Customer ID is required');
 
     try {
       const plan = await investmentPlanService.createInvestmentPlan(customerId, data);
       await loadPlans(); // Reload after creation
+      invalidateNetworthQueries(); // Refresh charts with new asset type data
       return plan;
     } catch (err: any) {
       setError(err.message || 'Failed to create investment plan');
@@ -50,6 +62,7 @@ export const useInvestmentPlans = (customerId: number | null) => {
     try {
       const plan = await investmentPlanService.updateInvestmentPlan(customerId, id, data);
       await loadPlans(); // Reload after update
+      invalidateNetworthQueries(); // Refresh charts with updated asset type data
       return plan;
     } catch (err: any) {
       setError(err.message || 'Failed to update investment plan');
@@ -63,6 +76,7 @@ export const useInvestmentPlans = (customerId: number | null) => {
     try {
       await investmentPlanService.deleteInvestmentPlan(customerId, id);
       await loadPlans(); // Reload after deletion
+      invalidateNetworthQueries(); // Refresh charts after removing asset type
     } catch (err: any) {
       setError(err.message || 'Failed to delete investment plan');
       throw err;

@@ -93,8 +93,12 @@ export interface PortfolioPerformanceMetric {
   returns: number;
   return_percentage: number;
   // Month-over-Month change fields
-  mom_change_percentage?: number | null;
-  mom_change_absolute?: number | null;
+  mom_change_percentage?: number | null;        // Portfolio value MoM (includes new investments)
+  mom_change_absolute?: number | null;          // Portfolio value change in rupees
+  // Returns-based MoM (excludes new investment impact)
+  returns_mom_percentage?: number | null;       // True market returns MoM
+  investment_change?: number | null;            // Change in invested amount
+  is_significant_investment?: boolean;          // Flag when new investment > 10% of portfolio
 }
 
 export interface CustomerPortfolioResponse {

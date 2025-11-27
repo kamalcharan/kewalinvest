@@ -1,6 +1,7 @@
 // frontend/src/components/nav/AliasManagementModal.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { SchemeAliasService, type SchemeAlias } from '../../services/schemeAlias.service';
@@ -19,6 +20,7 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
   bookmark,
   onClose,
 }) => {
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const { user } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -94,6 +96,9 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
         toastService.success('Alias added successfully');
         setNewAlias('');
         await loadAliases(); // Reload aliases
+        // Invalidate bookmark/alias queries to refresh lists
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
+        queryClient.invalidateQueries({ queryKey: ['aliases'] });
         FrontendErrorLogger.info(
           'Alias added',
           'AliasManagementModal',
@@ -113,7 +118,7 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
     } finally {
       setIsAdding(false);
     }
-  }, [bookmark, user, newAlias, aliases, loadAliases]);
+  }, [bookmark, user, newAlias, aliases, loadAliases, queryClient]);
 
   const handleDeleteAlias = useCallback(
     async (aliasId: number, aliasName: string) => {
@@ -126,6 +131,9 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
         if (response.success) {
           toastService.success('Alias deleted successfully');
           await loadAliases(); // Reload aliases
+          // Invalidate bookmark/alias queries to refresh lists
+          queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
+          queryClient.invalidateQueries({ queryKey: ['aliases'] });
           FrontendErrorLogger.info(
             'Alias deleted',
             'AliasManagementModal',
@@ -150,7 +158,7 @@ export const AliasManagementModal: React.FC<AliasManagementModalProps> = ({
         });
       }
     },
-    [bookmark, loadAliases]
+    [bookmark, loadAliases, queryClient]
   );
 
   const handleKeyPress = useCallback(

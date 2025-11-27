@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext'; // ✅ ADD THIS
 import { useBookmarks, useBulkDownload, useDownloadProgress } from '../../hooks/useNavData';
@@ -26,7 +27,8 @@ type FilterType = 'all' | 'success' | 'failed';
 
 const NavHistoryPage: React.FC = () => {
   const navigate = useNavigate();
-  
+  const queryClient = useQueryClient();
+
 const { theme, isDarkMode } = useTheme(); // ✅ THIS MUST COME FIRST
 const { user } = useAuth(); // ✅ THEN THIS
 const isAdmin = user?.tenant?.is_admin === true; // ✅ THEN THIS
@@ -497,6 +499,10 @@ const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colo
           deletedCount: response.data?.deleted_count
         }
       );
+
+      // Invalidate bookmark queries to refresh bookmark lists
+      queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
 
       setShowDeleteDialog(false);
       setIsDeleting(false);

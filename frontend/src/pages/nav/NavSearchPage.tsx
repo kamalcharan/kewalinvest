@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { navService, SchemeSearchResult, CreateBookmarkRequest } from '../../services/nav.service';
 import { toastService } from '../../services/toast.service';
@@ -10,6 +11,7 @@ import { FrontendErrorLogger } from '../../services/errorLogger.service';
 
 const NavSearchPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -135,16 +137,20 @@ const NavSearchPage: React.FC = () => {
       const response = await navService.createBookmark(bookmarkRequest);
 
       if (response.success) {
-        setSchemes(prev => 
-          prev.map(s => 
-            s.id === scheme.id 
+        setSchemes(prev =>
+          prev.map(s =>
+            s.id === scheme.id
               ? { ...s, is_bookmarked: true }
               : s
           )
         );
 
+        // Invalidate bookmark queries to refresh bookmark lists
+        queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
+        queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+
         toastService.success(`${scheme.scheme_name} bookmarked successfully`);
-        
+
         setTimeout(() => {
           navigate('/nav/dashboard');
         }, 1500);

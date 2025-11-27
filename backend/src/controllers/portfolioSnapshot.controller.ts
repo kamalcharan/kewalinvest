@@ -893,6 +893,54 @@ export class PortfolioSnapshotController {
     }
   };
 
+  // ==================== CUSTOMER SNAPSHOT STATUS ENDPOINT ====================
+
+  /**
+   * GET /api/cruise-control/snapshots/customer/:customerId/status
+   * Get snapshot status for a specific customer
+   */
+  getCustomerSnapshotStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user?.tenant_id;
+      const isLive = req.headers['x-environment'] === 'live';
+      const customerId = parseInt(req.params.customerId);
+
+      if (!tenantId) {
+        res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+        return;
+      }
+
+      if (!customerId || isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Valid customer ID is required'
+        });
+        return;
+      }
+
+      const status = await this.snapshotService.getCustomerSnapshotStatus(
+        tenantId,
+        isLive,
+        customerId
+      );
+
+      res.status(200).json({
+        success: true,
+        data: status
+      });
+
+    } catch (error: any) {
+      console.error('[SnapshotController] Error getting customer snapshot status:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get customer snapshot status'
+      });
+    }
+  };
+
   // ==================== HELPER METHODS ====================
 
   /**

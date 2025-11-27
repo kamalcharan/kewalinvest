@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -12,23 +13,24 @@ import {
 } from '../../utils/fullscreenUtils';
 import ChartExport from '../../components/visualizations/chartViewer/export/ChartExport';
 import { useCustomer } from '../../hooks/useCustomers';
-import { usePortfolioData } from '../../hooks/usePortfolioData';
+import { usePortfolioData, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
 import { useCustomerGoals, useGoalSummary, useRecalculateGoal, useAddToWatchlist, useRemoveFromWatchlist } from '../../hooks/useGoals';
 import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
-import { calculatePortfolioMoM, getMoMColor, getMoMArrow } from '../../utils/dataTransformers';
-import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
+import { calculatePortfolioMoM, getMoMArrow } from '../../utils/dataTransformers';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
 import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
+import PerformanceComparisonChart from '../../components/visualizations/PerformanceComparisonChart';
+import AssetTypePerformanceChart from '../../components/visualizations/AssetTypePerformanceChart';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
-import FamilyMembersPopover from '../../components/customers/FamilyMembersPopover';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
+import { IndexSelector } from '../../components/performance/IndexSelector';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
 import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
@@ -38,7 +40,6 @@ import GoalCard from '../../components/goals/GoalCard';
 import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
-import { MeetingsList } from '../../components/meetings/MeetingsList';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
 import { JTBDExecutionTimeline } from '../../components/jtbd/JTBDExecutionTimeline';
 import { FamilyPortfolioView } from '../../components/family/FamilyPortfolioView';
@@ -47,6 +48,7 @@ import type { MarketIndex } from '../../types/market.types';
 
 const CustomerViewPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { customerId: id } = useParams<{ customerId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
@@ -105,6 +107,12 @@ const CustomerViewPage: React.FC = () => {
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
   const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
+
+  // Load networth history for asset type performance charts
+  const { data: networthHistoryData } = useNetworthHistory(
+    { customerId: customerId || undefined },
+    { enabled: !!customerId }
+  );
 
   const isLoading = customerLoading || portfolioLoading;
 
@@ -186,9 +194,10 @@ const CustomerViewPage: React.FC = () => {
           endDate
         );
 
-        if (monthlyDataResponse.success && monthlyDataResponse.data) {
+        if (monthlyDataResponse.success && monthlyDataResponse.data && monthlyDataResponse.data.length > 0) {
           // Data is already in {date, value} format
           setComparisonIndexData(monthlyDataResponse.data);
+          setShowComparison(true); // Enable comparison when data is loaded
         }
       } catch (error) {
         console.error('Error loading index comparison:', error);
@@ -199,6 +208,46 @@ const CustomerViewPage: React.FC = () => {
 
     loadDefaultIndexComparison();
   }, [portfolio?.performance]);
+
+  // Handler for when user selects a different comparison index
+  const handleIndexSelect = async (index: MarketIndex | null) => {
+    if (!index) {
+      setDefaultComparisonIndex(null);
+      setComparisonIndexData([]);
+      setShowComparison(false);
+      return;
+    }
+
+    if (!portfolio?.performance || portfolio.performance.length === 0) {
+      return;
+    }
+
+    try {
+      setIsLoadingIndexComparison(true);
+      setDefaultComparisonIndex(index);
+
+      // Get date range from portfolio performance
+      const performanceDates = portfolio.performance.map(p => p.date);
+      const startDate = performanceDates[0];
+      const endDate = performanceDates[performanceDates.length - 1];
+
+      // Fetch index monthly data for comparison
+      const monthlyDataResponse = await MarketService.getIndexMonthlyDataForComparison(
+        index.id,
+        startDate,
+        endDate
+      );
+
+      if (monthlyDataResponse.success && monthlyDataResponse.data) {
+        setComparisonIndexData(monthlyDataResponse.data);
+        setShowComparison(true);
+      }
+    } catch (error) {
+      console.error('Error loading index comparison:', error);
+    } finally {
+      setIsLoadingIndexComparison(false);
+    }
+  };
 
   // Listen for fullscreen changes
   useEffect(() => {
@@ -233,11 +282,24 @@ const CustomerViewPage: React.FC = () => {
     return calculatePortfolioMoM(portfolio.performance);
   }, [portfolio?.performance]);
 
-  // Get latest MoM change for badge
-  const latestMoM = useMemo(() => {
+  // Get latest MoM data for badge (returns-based MoM and investment detection)
+  const latestMoMData = useMemo(() => {
     if (portfolioWithMoM.length < 2) return null;
-    return portfolioWithMoM[portfolioWithMoM.length - 1].mom_change_percentage;
+    const latest = portfolioWithMoM[portfolioWithMoM.length - 1];
+    return {
+      // Use returns_mom_percentage for true market growth (excludes new investments)
+      returnsMoM: latest.returns_mom_percentage,
+      // Portfolio value MoM (for reference, includes new investments)
+      valueMoM: latest.mom_change_percentage,
+      // Flag for significant new investment (>10% of portfolio)
+      isSignificantInvestment: latest.is_significant_investment,
+      // Investment change amount
+      investmentChange: latest.investment_change
+    };
   }, [portfolioWithMoM]);
+
+  // For backward compatibility - use returns MoM for the badge
+  const latestMoM = latestMoMData?.returnsMoM ?? null;
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -264,41 +326,6 @@ const CustomerViewPage: React.FC = () => {
     if (value < 0) return '#EF4444';
     return colors.utility.secondaryText;
   };
-
-  const ArrowLeftIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12,19 5,12 12,5" />
-    </svg>
-  );
-
-  const DownloadIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-
-  const TrendUpIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="23,6 13.5,15.5 8.5,10.5 1,18" />
-      <polyline points="17,6 23,6 23,12" />
-    </svg>
-  );
-
-  const TrendDownIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="23,18 13.5,8.5 8.5,13.5 1,6" />
-      <polyline points="17,18 23,18 23,12" />
-    </svg>
-  );
-
-  const StarIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
 
   const AlertIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -586,10 +613,6 @@ const CustomerViewPage: React.FC = () => {
     />;
   }
 
-  const profitLoss = portfolio?.summary.total_returns ?? 0;
-  const dayChangePercentage = portfolio?.summary.day_change_percentage ?? 0;
-  const returnPercentage = portfolio?.summary.return_percentage ?? 0;
-  
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.utility.primaryBackground }}>
       {/* Header */}
@@ -770,181 +793,66 @@ const CustomerViewPage: React.FC = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Portfolio Performance Chart */}
-                  <div
-                    id={performanceChartId}
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '12px',
-                      padding: '24px',
-                      position: 'relative'
-                    }}
-                  >
-                    {/* MoM Badge - Top Right Corner */}
-                    {latestMoM !== null && portfolioWithMoM.length > 1 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '20px',
-                          right: '20px',
-                          zIndex: 10,
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          backgroundColor: latestMoM >= 0
-                            ? colors.semantic.success + '20'
-                            : colors.semantic.error + '20',
-                          border: `1px solid ${latestMoM >= 0 ? colors.semantic.success : colors.semantic.error}40`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <span style={{ fontSize: '14px' }}>
-                          {latestMoM >= 0 ? '📈' : '📉'}
-                        </span>
-                        <span style={{
-                          color: latestMoM >= 0 ? colors.semantic.success : colors.semantic.error
-                        }}>
-                          {getMoMArrow(latestMoM)} {Math.abs(latestMoM).toFixed(2)}%
-                        </span>
-                        <span style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText
-                        }}>
-                          vs last month
-                        </span>
-                      </div>
-                    )}
+                  {/* Asset Type Performance Charts - One chart per asset type */}
+                  {networthHistoryData?.data?.chart_ready?.by_asset_type &&
+                   networthHistoryData.data.chart_ready.by_asset_type.length > 0 ? (
+                    networthHistoryData.data.chart_ready.by_asset_type.map((assetType) => {
+                      // Use asset-specific dates if available, otherwise use global dates
+                      const assetDates = (assetType as any).dates || networthHistoryData.data!.chart_ready.dates;
+                      const assetValues = assetType.values;
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText, margin: 0 }}>
-                        Portfolio Performance
-                      </h3>
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        {/* FIXED: Proper comparison toggle with state check */}
-                        {!isLoadingIndexComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
-                          <button
-                            onClick={() => setShowComparison(!showComparison)}
-                            title={showComparison ? 'Hide index comparison' : 'Show index comparison'}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: showComparison ? colors.brand.primary + '20' : 'transparent',
-                              color: showComparison ? colors.brand.primary : colors.utility.secondaryText,
-                              border: `1px solid ${showComparison ? colors.brand.primary : colors.utility.primaryText + '20'}`,
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {showComparison ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {showComparison ? 'Hide' : 'Show'} {defaultComparisonIndex.index_name}
-                          </button>
-                        )}
+                      // Skip if no meaningful data
+                      if (!assetValues || assetValues.length === 0) return null;
 
-                        {/* Fullscreen Button */}
-                        {isFullscreenSupported() && (
-                          <button
-                            onClick={handleFullscreenToggle}
-                            title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: colors.utility.primaryBackground,
-                              color: colors.utility.primaryText,
-                              border: `1px solid ${colors.utility.primaryText}20`,
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {isFullscreenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            {isFullscreenMode ? 'Exit' : 'Fullscreen'}
-                          </button>
-                        )}
+                      // Double-check: find first meaningful value (in case backend didn't filter)
+                      const firstMeaningfulIndex = assetValues.findIndex(v => v >= 100);
+                      if (firstMeaningfulIndex === -1) return null;
 
-                        {/* Export Button */}
-                        <ChartExport
-                          elementId={performanceChartId}
-                          indexName={customer?.name || 'Portfolio'}
-                          colors={colors}
+                      // Use dates from the index of first meaningful value
+                      const effectiveDates = assetDates.slice(firstMeaningfulIndex);
+                      const effectiveValues = assetValues.slice(firstMeaningfulIndex);
+                      const startValue = effectiveValues[0] || 0;
+
+                      const performanceData = effectiveDates.map((date: string, index: number) => ({
+                        date,
+                        value: effectiveValues[index] || 0,
+                        invested: startValue,
+                        returns: (effectiveValues[index] || 0) - startValue,
+                        return_percentage: startValue > 0
+                          ? ((effectiveValues[index] - startValue) / startValue) * 100
+                          : 0
+                      }));
+
+                      return (
+                        <AssetTypePerformanceChart
+                          key={assetType.asset_type_code}
+                          customerId={customerId!}
+                          assetTypeCode={assetType.asset_type_code}
+                          assetTypeName={assetType.asset_type_name}
+                          performanceData={performanceData}
+                          color={assetType.color}
+                          height={280}
                         />
-                      </div>
-                    </div>
-                    
-                    <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {portfolio.performance && portfolio.performance.length > 1 ? (
-                        <div style={{ width: '100%', height: '100%' }}>
-                          {/* FIXED: Proper props with comparison data */}
-                          <PerformanceSparkline
-  performanceData={portfolioWithMoM}
-  data={portfolio.performance.map(p => p.current_value ?? 0)}
-  width={600}
-  height={250}
-  showArea={true}
-  showDots={true}
-  interactive={true}
-  timeframe={selectedTimeframe}
-  showTimelineMarkers={true}
-  timelineMarkerSize={5}
-  showComparison={showComparison && !isLoadingIndexComparison && comparisonIndexData.length > 0}
-comparisonData={comparisonIndexData}
-  comparisonIndexName={defaultComparisonIndex?.index_name}
-/>
-                          <div style={{
-                            fontSize: '12px',
-                            color: colors.utility.secondaryText,
-                            textAlign: 'center',
-                            marginTop: '12px'
-                          }}>
-                            Showing {portfolio.performance.length} data point{portfolio.performance.length !== 1 ? 's' : ''} ({selectedTimeframe})
-                            {showComparison && defaultComparisonIndex && comparisonIndexData.length > 0 && (
-                              <span style={{ marginLeft: '8px', color: '#FCD34D' }}>
-                                • Compared with {defaultComparisonIndex.index_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ 
-                            fontSize: '48px', 
-                            fontWeight: '700', 
-                            color: colors.brand.primary,
-                            marginBottom: '12px'
-                          }}>
-                            {formatCurrency(portfolio.summary.current_value)}
-                          </div>
-                          <div style={{ 
-                            fontSize: '14px', 
-                            color: colors.utility.secondaryText,
-                            marginBottom: '8px'
-                          }}>
-                            Current Portfolio Value
-                          </div>
-                          <div style={{ 
-                            fontSize: '12px', 
-                            color: colors.utility.secondaryText,
-                            fontStyle: 'italic'
-                          }}>
-                            Historical performance data will appear as more transactions are recorded
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
+                      );
+                    }).filter(Boolean)
+                  ) : (
+                    // Fallback to MF-only chart if no networth history
+                    portfolioWithMoM && portfolioWithMoM.length > 0 && (
+                      <AssetTypePerformanceChart
+                        customerId={customerId!}
+                        assetTypeCode="MF"
+                        assetTypeName="Mutual Funds"
+                        performanceData={portfolioWithMoM.map(p => ({
+                          date: p.date,
+                          value: p.current_value ?? 0,
+                          invested: p.invested,
+                          returns: p.returns,
+                          return_percentage: p.return_percentage
+                        }))}
+                        height={280}
+                      />
+                    )
+                  )}
 
                   {/* Fund-wise Performance */}
                   {portfolio.holdings && portfolio.holdings.length > 0 && (
@@ -1071,56 +979,21 @@ comparisonData={comparisonIndexData}
                     borderRadius: '12px',
                     padding: '24px'
                   }}>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      color: colors.utility.primaryText, 
+                    <h3 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: colors.utility.primaryText,
                       margin: 0,
                       marginBottom: '20px'
                     }}>
                       Asset Allocation
                     </h3>
-                    {portfolio.allocation && portfolio.allocation.length > 0 ? (
-                      <PortfolioDonutChart
-                        allocation={portfolio.allocation}
-                        size={240}
-                        strokeWidth={35}
-                        showLegend={true}
-                        totalValue={portfolio.summary.current_value}
-                      />
-                    ) : (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '40px 20px',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{
-                          color: colors.brand.primary,
-                          marginBottom: '16px',
-                          opacity: 0.4
-                        }}>
-                          <PieChartIcon />
-                        </div>
-                        <div style={{
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          color: colors.utility.primaryText,
-                          marginBottom: '6px'
-                        }}>
-                          No Asset Allocation Data
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: colors.utility.secondaryText,
-                          lineHeight: '1.5'
-                        }}>
-                          Asset distribution will appear once portfolio holdings are available
-                        </div>
-                      </div>
-                    )}
+                    <PortfolioDonutChart
+                      customerId={customerId!}
+                      size={240}
+                      strokeWidth={35}
+                      showLegend={true}
+                    />
                   </div>
 
                   {/* Portfolio Goal Allocation Summary */}
@@ -1544,6 +1417,9 @@ comparisonData={comparisonIndexData}
                       await TransactionService.deleteTransaction(transactionId);
                       fetchTransactions(transactionsPagination.page);
                       refetchPortfolio();
+                      // Invalidate networth/portfolio queries to refresh charts
+                      queryClient.invalidateQueries({ queryKey: ['networth'] });
+                      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
                     } catch (error) {
                       console.error('Failed to delete transaction:', error);
                     }
@@ -1553,6 +1429,9 @@ comparisonData={comparisonIndexData}
                       await TransactionService.updatePortfolioFlag(transactionId, !currentFlag);
                       fetchTransactions(transactionsPagination.page);
                       refetchPortfolio();
+                      // Invalidate networth/portfolio queries to refresh charts
+                      queryClient.invalidateQueries({ queryKey: ['networth'] });
+                      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
                     } catch (error) {
                       console.error('Failed to toggle portfolio flag:', error);
                     }

@@ -1,64 +1,60 @@
 // src/components/visualizations/PortfolioDonutChart.tsx
+// Shows asset allocation by asset type (MF, Gold, Silver, FD, etc.)
 
 import React, { useMemo } from 'react';
-import { AssetAllocation } from '../../types/portfolio.types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNetworthSummary } from '../../hooks/usePortfolioData';
+import { getAssetTypeColor } from '../../constants/assetTypes';
 
 interface PortfolioDonutChartProps {
-  allocation: AssetAllocation[];
+  customerId: number;
   size?: number;
   strokeWidth?: number;
   showLabels?: boolean;
   showLegend?: boolean;
   interactive?: boolean;
-  totalValue?: number; // ✅ NEW: Accept total from parent
 }
 
 const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
-  allocation,
+  customerId,
   size = 180,
   strokeWidth = 30,
   showLabels = true,
   showLegend = true,
-  interactive = true,
-  totalValue: propTotalValue // ✅ NEW: Get from props
+  interactive = true
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const [hoveredSegment, setHoveredSegment] = React.useState<string | null>(null);
 
-  // Asset type colors
-  const assetColors: Record<string, string> = {
-    'Equity': '#3B82F6',
-    'Debt': '#F59E0B',
-    'Hybrid': '#8B5CF6',
-    'Liquid': '#10B981',
-    'Money Market': '#10B981',
-    'Gold': '#EAB308',
-    'Other': '#6B7280'
-  };
+  // Fetch asset type data using networth summary
+  const { data: networthData, isLoading, error } = useNetworthSummary(
+    { customerId },
+    { enabled: customerId > 0 }
+  );
 
-  const getCategoryColor = (category: string): string => {
-    return assetColors[category] || assetColors['Other'];
-  };
+  // Get asset type data from networth summary
+  const assetTypeData = useMemo(() => {
+    if (!networthData?.data?.by_asset_type) return [];
+    return networthData.data.by_asset_type.filter(a => a.current_value > 0);
+  }, [networthData]);
 
-  // ✅ FIX: Use prop total if provided, otherwise calculate from allocation
-  const totalValue = propTotalValue ?? allocation.reduce((sum, item) => sum + item.current_value, 0);
+  const totalValue = networthData?.data?.total_networth || 0;
 
-  // Calculate segments from API data
+  // Calculate segments from asset type data
   const segments = useMemo(() => {
-    // Filter out zero/negative values
-    const data = allocation
-      .filter(item => item.percentage > 0 && item.current_value > 0)
-      .map(item => ({
-        name: item.category,
-        value: item.percentage,
-        amount: item.current_value,
-        color: getCategoryColor(item.category)
-      }));
+    if (assetTypeData.length === 0) return [];
 
-    // ✅ ENHANCEMENT: Sort by value descending for better visual hierarchy
+    const data = assetTypeData.map(item => ({
+      name: item.asset_type_name,
+      code: item.asset_type_code,
+      value: item.allocation_percentage,
+      amount: item.current_value,
+      color: getAssetTypeColor(item.asset_type_code)
+    }));
+
+    // Sort by value descending for better visual hierarchy
     const sortedData = data.sort((a, b) => b.value - a.value);
 
     let cumulativePercentage = 0;
@@ -68,7 +64,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
       const endAngle = (cumulativePercentage * 360) / 100;
       return { ...item, startAngle, endAngle };
     });
-  }, [allocation, propTotalValue]);
+  }, [assetTypeData]);
 
   // Format currency
   const formatCurrency = (value: number): string => {
@@ -80,14 +76,72 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
     return `₹${value.toLocaleString('en-IN')}`;
   };
 
-  // ✅ ENHANCEMENT: Calculate actual percentage sum for validation
-  const totalPercentage = segments.reduce((sum, s) => sum + s.value, 0);
-  const showPercentageWarning = Math.abs(totalPercentage - 100) > 0.5; // More than 0.5% off
+  // Loading state
+  if (isLoading) {
+    return (
+      <div style={{
+        width: size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: colors.utility.secondaryText,
+        fontSize: '12px'
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div style={{
+        width: size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: colors.semantic.error,
+        fontSize: '12px'
+      }}>
+        Failed to load
+      </div>
+    );
+  }
+
+  // No data state
+  if (segments.length === 0) {
+    return (
+      <div style={{
+        width: size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        color: colors.utility.secondaryText,
+        fontSize: '12px',
+        textAlign: 'center',
+        padding: '20px'
+      }}>
+        <div style={{ marginBottom: '8px', opacity: 0.5 }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+            <path d="M22 12A10 10 0 0 0 12 2v10z" />
+          </svg>
+        </div>
+        No asset data
+      </div>
+    );
+  }
+
+  const hoveredSegmentData = segments.find(s => s.name === hoveredSegment);
 
   return (
     <div style={{ position: 'relative' }}>
       {/* Donut Chart */}
-      <div style={{ position: 'relative', width: size, height: size }}>
+      <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
           {/* Background circle */}
           <circle
@@ -98,16 +152,16 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
             stroke={colors.utility.primaryText + '10'}
             strokeWidth={strokeWidth}
           />
-          
+
           {/* Segments */}
           {segments.map((segment) => {
             const isHovered = hoveredSegment === segment.name;
             const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
             const strokeDasharray = `${(segment.value / 100) * circumference} ${circumference}`;
             const strokeDashoffset = -((segment.startAngle / 360) * circumference);
-            
+
             return (
-              <g key={segment.name}>
+              <g key={segment.code}>
                 <circle
                   cx={size / 2}
                   cy={size / 2}
@@ -131,7 +185,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
             );
           })}
         </svg>
-        
+
         {/* Center text */}
         <div style={{
           position: 'absolute',
@@ -141,34 +195,34 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
           textAlign: 'center',
           pointerEvents: 'none'
         }}>
-          {hoveredSegment ? (
+          {hoveredSegmentData ? (
             <>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: colors.utility.secondaryText,
                 marginBottom: '4px'
               }}>
-                {hoveredSegment}
+                {hoveredSegmentData.name}
               </div>
               <div style={{
                 fontSize: '18px',
                 fontWeight: '700',
                 color: colors.utility.primaryText
               }}>
-                {segments.find(s => s.name === hoveredSegment)?.value.toFixed(1)}%
+                {hoveredSegmentData.value.toFixed(1)}%
               </div>
               <div style={{
-                fontSize: '12px',
+                fontSize: '11px',
                 color: colors.utility.secondaryText,
                 marginTop: '2px'
               }}>
-                {formatCurrency(segments.find(s => s.name === hoveredSegment)?.amount || 0)}
+                {formatCurrency(hoveredSegmentData.amount)}
               </div>
             </>
           ) : (
             <>
               <div style={{
-                fontSize: '12px',
+                fontSize: '11px',
                 color: colors.utility.secondaryText,
                 marginBottom: '4px'
               }}>
@@ -181,21 +235,18 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
               }}>
                 {formatCurrency(totalValue)}
               </div>
-              {/* ✅ DEBUG: Show if percentages don't add up (remove in production) */}
-              {showPercentageWarning && (
-                <div style={{
-                  fontSize: '9px',
-                  color: colors.semantic.warning,
-                  marginTop: '2px'
-                }}>
-                  {totalPercentage.toFixed(1)}%
-                </div>
-              )}
+              <div style={{
+                fontSize: '10px',
+                color: colors.utility.secondaryText,
+                marginTop: '2px'
+              }}>
+                {segments.length} Asset Type{segments.length > 1 ? 's' : ''}
+              </div>
             </>
           )}
         </div>
       </div>
-      
+
       {/* Legend */}
       {showLegend && (
         <div style={{
@@ -206,7 +257,7 @@ const PortfolioDonutChart: React.FC<PortfolioDonutChartProps> = ({
         }}>
           {segments.map(segment => (
             <div
-              key={segment.name}
+              key={segment.code}
               style={{
                 display: 'flex',
                 alignItems: 'center',

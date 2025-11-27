@@ -1,11 +1,15 @@
 // frontend/src/components/customers/CustomerViewHeader.tsx
-// UPDATED: Added New Alert button next to Meeting button
-import React from 'react';
+// UPDATED: Added snapshot status tag and regenerate button with ConfirmationDialog
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Calendar as CalendarIcon, Target as TargetIcon, Bell as BellIcon } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft as ArrowLeftIcon, Star as StarIcon, Calendar as CalendarIcon, Target as TargetIcon, Bell as BellIcon, RefreshCw as RefreshIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import FamilyMembersPopover from './FamilyMembersPopover';
 import { IndividualFamilySwitch } from './IndividualFamilySwitch';
+import { PortfolioSnapshotService } from '../../services/portfolioSnapshot.service';
+import { toastService } from '../../services/toast.service';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 import type { CustomerWithContact } from '../../types/customer.types';
 import type { CustomerPortfolioResponse } from '../../types/portfolio.types';
 
@@ -32,11 +36,79 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   onViewModeChange
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const returnPercentage = portfolio?.summary.return_percentage ?? 0;
   const isFamilyAccount = !!customer.family_code;
+
+  // Snapshot status state
+  const [snapshotStatus, setSnapshotStatus] = useState<{
+    latest_snapshot_date: string | null;
+    last_generated_at: string | null;
+    total_snapshots: number;
+    has_snapshots: boolean;
+  } | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+
+  // Fetch snapshot status on mount
+  useEffect(() => {
+    const fetchSnapshotStatus = async () => {
+      try {
+        const response = await PortfolioSnapshotService.getCustomerSnapshotStatus(customerId);
+        if (response.success && response.data) {
+          setSnapshotStatus(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch snapshot status:', error);
+      }
+    };
+
+    if (customerId) {
+      fetchSnapshotStatus();
+    }
+  }, [customerId]);
+
+  // Handle regenerate snapshots for this customer
+  const handleRegenerateClick = () => {
+    if (isRegenerating) return;
+    setShowRegenerateDialog(true);
+  };
+
+  const handleConfirmRegenerate = async () => {
+    setShowRegenerateDialog(false);
+    setIsRegenerating(true);
+    try {
+      const response = await PortfolioSnapshotService.regenerateAllSnapshots([customerId]);
+      if (response.success) {
+        toastService.success('Snapshot regeneration started. This may take a few minutes.');
+        // Invalidate related queries
+        queryClient.invalidateQueries({ queryKey: ['networth'] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      } else {
+        toastService.error(response.error || 'Failed to start snapshot regeneration');
+      }
+    } catch (error: any) {
+      toastService.error('Failed to regenerate snapshots: ' + error.message);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  // Format generation timestamp for display (shows date and time)
+  const formatGeneratedAt = (dateStr: string | null): string => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   return (
     <div style={{
@@ -134,6 +206,65 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
 
               {portfolio && <span>Schemes: {portfolio.summary.total_schemes ?? 0}</span>}
               <span>Member Since: 2016</span>
+
+              {/* Snapshot Status Tag */}
+              {snapshotStatus && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 8px',
+                  backgroundColor: snapshotStatus.has_snapshots
+                    ? colors.semantic.success + '15'
+                    : colors.semantic.warning + '15',
+                  color: snapshotStatus.has_snapshots
+                    ? colors.semantic.success
+                    : colors.semantic.warning,
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  <DatabaseIcon size={12} />
+                  <span>
+                    Last generated: {formatGeneratedAt(snapshotStatus.last_generated_at)}
+                  </span>
+                  <button
+                    onClick={handleRegenerateClick}
+                    disabled={isRegenerating}
+                    title="Regenerate snapshots for this customer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '2px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: isRegenerating ? 'not-allowed' : 'pointer',
+                      color: 'inherit',
+                      opacity: isRegenerating ? 0.5 : 1,
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isRegenerating) {
+                        e.currentTarget.style.backgroundColor = snapshotStatus.has_snapshots
+                          ? colors.semantic.success + '30'
+                          : colors.semantic.warning + '30';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <RefreshIcon
+                      size={12}
+                      style={{
+                        animation: isRegenerating ? 'spin 1s linear infinite' : 'none'
+                      }}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -233,6 +364,26 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* CSS for spin animation */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Regenerate Snapshots Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showRegenerateDialog}
+        onClose={() => setShowRegenerateDialog(false)}
+        onConfirm={handleConfirmRegenerate}
+        title="Regenerate Snapshots"
+        description={`This will regenerate all portfolio snapshots for ${customer.name}. This operation may take a few minutes. Do you want to continue?`}
+        confirmText="Regenerate"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 // frontend/src/components/transactions/TransactionDetails.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { TransactionService } from '../../services/transaction.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -17,6 +18,7 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
   onClose,
   onUpdate
 }) => {
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -55,12 +57,15 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
   // Handle delete
   const handleDeleteConfirm = async () => {
     if (!transaction) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await TransactionService.deleteTransaction(transaction.id);
       if (response.success) {
         onUpdate?.();
+        // Invalidate networth/portfolio queries to refresh charts
+        queryClient.invalidateQueries({ queryKey: ['networth'] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio'] });
         onClose();
       }
     } catch (err: any) {
@@ -72,7 +77,7 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
   // Handle portfolio flag toggle
   const handlePortfolioFlagConfirm = async () => {
     if (!transaction) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await TransactionService.updatePortfolioFlag(
@@ -83,6 +88,9 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
         setTransaction(prev => prev ? { ...prev, portfolio_flag: !prev.portfolio_flag } : null);
         setShowPortfolioFlagModal(false);
         onUpdate?.();
+        // Invalidate networth/portfolio queries to refresh charts
+        queryClient.invalidateQueries({ queryKey: ['networth'] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio'] });
       }
     } catch (err: any) {
       alert('Failed to update portfolio flag: ' + err.message);

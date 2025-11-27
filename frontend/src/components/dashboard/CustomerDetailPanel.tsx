@@ -479,31 +479,29 @@ const CustomerDetailPanel: React.FC<CustomerDetailPanelProps> = ({
         {activeTab === 'portfolio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Asset Allocation */}
-            {portfolio.allocation && portfolio.allocation.length > 0 && (
-              <div style={{
-                backgroundColor: colors.utility.primaryBackground,
-                borderRadius: '12px',
-                padding: '16px'
+            <div style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '12px',
+              padding: '16px'
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: 0,
+                marginBottom: '16px'
               }}>
-                <h3 style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  margin: 0,
-                  marginBottom: '16px'
-                }}>
-                  Asset Allocation
-                </h3>
-                <PortfolioDonutChart
-                  allocation={portfolio.allocation}
-                  size={180}
-                  strokeWidth={28}
-                  showLegend={true}
-                />
-              </div>
-            )}
+                Asset Allocation
+              </h3>
+              <PortfolioDonutChart
+                customerId={customer.id}
+                size={180}
+                strokeWidth={28}
+                showLegend={true}
+              />
+            </div>
 
             {/* Top Holdings */}
             {portfolio.holdings && portfolio.holdings.length > 0 && (
