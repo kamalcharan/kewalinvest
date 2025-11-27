@@ -14,6 +14,7 @@ import GoalRecalculationModal from '../../components/goals/GoalRecalculationModa
 import JTBDExecutionCard from '../../components/jtbd/JTBDExecutionCard';
 import GoalMetricsCard from '../../components/goals/GoalMetricsCard';
 import GoalInvestmentAllocator from '../../components/goals/GoalInvestmentAllocator';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { GoalActionItem } from '../../types/goal.types';
 import { JTBD_TYPE, EXECUTION_STATUS } from '../../constants/jtbd.constants';
 
@@ -28,6 +29,7 @@ const GoalDetailsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showRecalculationModal, setShowRecalculationModal] = useState(false);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
+  const [showRebalanceComingSoon, setShowRebalanceComingSoon] = useState(false);
 
   const goalIdNum = goalId ? parseInt(goalId) : 0;
   const customerIdNum = customerId ? parseInt(customerId) : 0;
@@ -283,7 +285,7 @@ const GoalDetailsPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => navigate(`/customers/${customerId}/goals/${goalId}/rebalance`)}
+                onClick={() => setShowRebalanceComingSoon(true)}
                 style={{
                   padding: '10px 16px',
                   backgroundColor: 'transparent',
@@ -608,6 +610,18 @@ const GoalDetailsPage: React.FC = () => {
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Rebalance Coming Soon Dialog */}
+      <ConfirmationDialog
+        isOpen={showRebalanceComingSoon}
+        onClose={() => setShowRebalanceComingSoon(false)}
+        onConfirm={() => setShowRebalanceComingSoon(false)}
+        title="Coming Soon"
+        description="The Rebalance feature is currently under development and will be available in a future release. This feature will help you optimize your portfolio allocation to better align with your goal."
+        confirmText="Got it"
+        cancelText=""
+        type="info"
+      />
     </div>
   );
 };
