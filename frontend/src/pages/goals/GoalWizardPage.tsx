@@ -1,26 +1,16 @@
 // frontend/src/pages/goals/GoalWizardPage.tsx
 // Full-page goal creation wizard with withdrawal support and asset type allocation
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreateGoalRequest, GoalTrackingType, GoalWithdrawal } from '../../types/goal.types';
-import { AssetType } from '../../types/assetType.types';
 import { useCreateGoal } from '../../hooks/useGoals';
-import { useAssetTypes } from '../../hooks/useAssetTypes';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 
 type GoalStatus = 'new' | 'existing';
 type WizardStep = 1 | 2 | 3 | 4 | 5;
-
-interface AssetTypeAllocation {
-  asset_type_id: number;
-  asset_type_code: string;
-  asset_type_name: string;
-  allocation_percentage: number;
-  default_assumption_rate: number;
-}
 
 interface FormData {
   // Step 1 & 2
@@ -72,7 +62,6 @@ const GoalWizardPage: React.FC = () => {
   }>({ isOpen: false, title: '', message: '' });
 
   const createGoalMutation = useCreateGoal();
-  const { assetTypes } = useAssetTypes();
 
   const getTodayDate = () => {
     const today = new Date();
@@ -175,14 +164,8 @@ const GoalWizardPage: React.FC = () => {
         }
         return true;
       case 5:
-        // Phase 2: Asset allocation is OPTIONAL - can skip for now
-        // Will be linked via investment plans later
-        const total = formData.asset_allocations.reduce((sum, a) => sum + a.allocation_percentage, 0);
-        if (formData.asset_allocations.length > 0 && Math.abs(total - 100) > 0.01) {
-          showValidationError('Invalid Allocation', `If allocating assets, total must equal 100% (currently ${total.toFixed(1)}%)`);
-          return false;
-        }
-        return true; // Allow proceeding even without allocations
+        // Review step - no validation needed, just confirm
+        return true;
       default:
         return true;
     }
@@ -259,37 +242,6 @@ const GoalWizardPage: React.FC = () => {
     }));
   };
 
-  // Asset allocation management
-  const toggleAssetType = (assetType: AssetType) => {
-    const exists = formData.asset_allocations.find(a => a.asset_type_id === assetType.id);
-    if (exists) {
-      setFormData(prev => ({
-        ...prev,
-        asset_allocations: prev.asset_allocations.filter(a => a.asset_type_id !== assetType.id)
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        asset_allocations: [...prev.asset_allocations, {
-          asset_type_id: assetType.id,
-          asset_type_code: assetType.asset_type_code,
-          asset_type_name: assetType.asset_type_name,
-          allocation_percentage: 0,
-          default_assumption_rate: assetType.default_assumption_rate || 8
-        }]
-      }));
-    }
-  };
-
-  const updateAllocation = (assetTypeId: number, percentage: number) => {
-    setFormData(prev => ({
-      ...prev,
-      asset_allocations: prev.asset_allocations.map(a =>
-        a.asset_type_id === assetTypeId ? { ...a, allocation_percentage: percentage } : a
-      )
-    }));
-  };
-
   const CheckIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
       <polyline points="20 6 9 17 4 12" />
@@ -301,13 +253,8 @@ const GoalWizardPage: React.FC = () => {
     { number: 2, label: 'Goal Status' },
     { number: 3, label: 'Configuration' },
     { number: 4, label: 'Withdrawals' },
-    { number: 5, label: 'Asset Allocation' }
+    { number: 5, label: 'Review & Create' }
   ];
-
-  const totalAllocation = formData.asset_allocations.reduce((sum, a) => sum + a.allocation_percentage, 0);
-  const weightedReturnRate = formData.asset_allocations.length > 0
-    ? formData.asset_allocations.reduce((sum, a) => sum + (a.allocation_percentage / 100) * a.default_assumption_rate, 0)
-    : 0;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.utility.primaryBackground }}>
@@ -1013,128 +960,193 @@ const GoalWizardPage: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 5: Asset Type Allocation */}
+        {/* STEP 5: Review & Create */}
         {currentStep === 5 && (
-          <div>
+          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '700', color: colors.utility.primaryText, margin: '0 0 8px 0' }}>
-              💼 Asset Type Allocation
+              ✅ Review Your Goal
             </h3>
-            <p style={{ fontSize: '14px', color: colors.utility.secondaryText, marginBottom: '20px' }}>
-              Select asset types and allocate percentage contribution. Total must equal 100%.
+            <p style={{ fontSize: '14px', color: colors.utility.secondaryText, marginBottom: '24px' }}>
+              Please review the goal details below before creating.
             </p>
 
+            {/* Goal Preview Card */}
             <div style={{
-              backgroundColor: colors.semantic.info + '15',
-              borderLeft: `3px solid ${colors.semantic.info}`,
-              padding: '12px 16px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              fontSize: '13px',
-              color: colors.utility.primaryText
+              backgroundColor: colors.utility.secondaryBackground,
+              borderRadius: '12px',
+              border: `1px solid ${colors.utility.primaryText}15`,
+              overflow: 'hidden'
             }}>
-              <strong>💡 Tip:</strong> Each asset type has its own expected return rate. Your goal's probability will be calculated based on this mix.
-            </div>
+              {/* Header with Goal Type Icon */}
+              <div style={{
+                padding: '20px 24px',
+                background: `linear-gradient(135deg, ${colors.brand.primary}15 0%, ${colors.brand.secondary}10 100%)`,
+                borderBottom: `1px solid ${colors.utility.primaryText}10`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px'
+              }}>
+                <div style={{
+                  fontSize: '40px'
+                }}>
+                  {formData.goalType === 'time_based_goal' ? '📅' :
+                   formData.goalType === 'price_based_goal' ? '💰' : '🎯'}
+                </div>
+                <div>
+                  <h4 style={{
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: colors.utility.primaryText,
+                    margin: 0
+                  }}>
+                    {formData.title || 'Untitled Goal'}
+                  </h4>
+                  <p style={{
+                    fontSize: '13px',
+                    color: colors.utility.secondaryText,
+                    margin: '4px 0 0 0'
+                  }}>
+                    {formData.goal_name}
+                  </p>
+                </div>
+              </div>
 
-            <div style={{
-              border: `1px solid ${colors.utility.primaryText}10`,
-              borderRadius: '8px',
-              overflow: 'hidden',
-              marginBottom: '16px'
-            }}>
-              {assetTypes.length > 0 ? assetTypes.map((assetType) => {
-                const isSelected = formData.asset_allocations.find(a => a.asset_type_id === assetType.id);
-                const allocation = isSelected?.allocation_percentage || 0;
+              {/* Goal Details */}
+              <div style={{ padding: '20px 24px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '16px'
+                }}>
+                  {/* Goal Type */}
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Goal Type
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      {formData.goalType === 'time_based_goal' ? 'Time-Based' :
+                       formData.goalType === 'price_based_goal' ? 'Price-Based' : 'Time & Price'}
+                    </div>
+                  </div>
 
-                return (
-                  <div
-                    key={assetType.id}
-                    style={{
-                      padding: '16px',
-                      borderBottom: `1px solid ${colors.utility.primaryText}10`,
-                      backgroundColor: colors.utility.secondaryBackground,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px'
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!!isSelected}
-                      onChange={() => toggleAssetType(assetType)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '4px' }}>
-                        {assetType.asset_type_name}
+                  {/* Status */}
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Status
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      {formData.goalStatus === 'new' ? '✨ New Goal' : '📥 Existing Goal'}
+                    </div>
+                  </div>
+
+                  {/* Target Amount (if applicable) */}
+                  {formData.target_amount && (
+                    <div style={{
+                      padding: '12px 16px',
+                      backgroundColor: colors.semantic.success + '10',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.semantic.success}30`
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Target Amount
                       </div>
-                      <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                        Expected Return: {assetType.default_assumption_rate}% p.a.
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: colors.semantic.success }}>
+                        ₹{formData.target_amount.toLocaleString('en-IN')}
                       </div>
                     </div>
-                    <input
-                      type="number"
-                      value={allocation || ''}
-                      onChange={(e) => updateAllocation(assetType.id, parseFloat(e.target.value) || 0)}
-                      disabled={!isSelected}
-                      placeholder="%"
-                      min="0"
-                      max="100"
-                      style={{
-                        width: '80px',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: `1px solid ${colors.utility.primaryText}20`,
-                        textAlign: 'right',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        backgroundColor: isSelected ? colors.utility.primaryBackground : colors.utility.primaryText + '10',
-                        color: colors.utility.primaryText,
-                        cursor: isSelected ? 'text' : 'not-allowed'
-                      }}
-                    />
-                  </div>
-                );
-              }) : (
-                <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
-                  No asset types available
-                </div>
-              )}
+                  )}
 
-              {/* Total Allocation */}
+                  {/* Target Date (if applicable) */}
+                  {formData.target_date && (
+                    <div style={{
+                      padding: '12px 16px',
+                      backgroundColor: colors.brand.primary + '10',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.brand.primary}30`
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Target Date
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: '700', color: colors.brand.primary }}>
+                        {new Date(formData.target_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Current Value (for existing goals) */}
+                  {formData.goalStatus === 'existing' && formData.current_value > 0 && (
+                    <div style={{
+                      padding: '12px 16px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Current Value
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
+                        ₹{formData.current_value.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Priority */}
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Priority
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
+                      {formData.priority === 'critical' ? '🔴 Critical' :
+                       formData.priority === 'high' ? '🟠 High' :
+                       formData.priority === 'medium' ? '🟡 Medium' : '🟢 Low'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Withdrawals Summary (if any) */}
+                {formData.has_withdrawals && formData.withdrawals.length > 0 && (
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '16px',
+                    backgroundColor: colors.semantic.warning + '10',
+                    borderRadius: '8px',
+                    border: `1px solid ${colors.semantic.warning}30`
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '8px' }}>
+                      💸 Planned Withdrawals ({formData.withdrawals.length})
+                    </div>
+                    <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
+                      Total: ₹{formData.withdrawals.reduce((sum, w) => sum + w.amount, 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Info Note */}
               <div style={{
-                padding: '16px',
-                backgroundColor: Math.abs(totalAllocation - 100) < 0.01 ? colors.semantic.success + '20' : totalAllocation > 0 ? colors.semantic.error + '20' : colors.utility.primaryBackground,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontWeight: '700',
-                fontSize: '15px',
-                color: Math.abs(totalAllocation - 100) < 0.01 ? colors.semantic.success : totalAllocation > 0 ? colors.semantic.error : colors.utility.primaryText
+                padding: '16px 24px',
+                backgroundColor: colors.semantic.info + '10',
+                borderTop: `1px solid ${colors.utility.primaryText}10`
               }}>
-                <span>Total Allocation</span>
-                <span>{totalAllocation.toFixed(1)}%</span>
+                <div style={{ fontSize: '13px', color: colors.utility.secondaryText, display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💡</span>
+                  <span>
+                    After creating the goal, you can allocate investments from the <strong>Assets Allocation</strong> tab to track progress.
+                  </span>
+                </div>
               </div>
             </div>
-
-            {/* Weighted Return Rate Display */}
-            {formData.asset_allocations.length > 0 && (
-              <div style={{
-                padding: '16px',
-                backgroundColor: colors.brand.primary + '10',
-                borderLeft: `3px solid ${colors.brand.primary}`,
-                borderRadius: '8px'
-              }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '4px' }}>
-                  Expected Weighted Return Rate
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: colors.brand.primary }}>
-                  {weightedReturnRate.toFixed(2)}% p.a.
-                </div>
-                <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                  Based on your asset allocation mix
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

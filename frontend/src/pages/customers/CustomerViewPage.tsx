@@ -668,7 +668,7 @@ const CustomerViewPage: React.FC = () => {
             { key: 'overview', label: 'Portfolio Overview', icon: BarChart3, showInFamily: true },
             { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp, showInFamily: false },
             { key: 'goals', label: 'Goals Management', icon: Target, showInFamily: false },
-            { key: 'assets', label: 'Asset Types', icon: Package, showInFamily: false },
+            { key: 'assets', label: 'Assets Allocation', icon: Package, showInFamily: false },
             { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare, showInFamily: false },
             { key: 'transactions', label: 'Transactions', icon: DollarSign, showInFamily: false }
           ]
