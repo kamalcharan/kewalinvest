@@ -1209,8 +1209,8 @@ const CustomerViewPage: React.FC = () => {
                       />
                     ))}
 
-                    {/* Asset Allocation Utilization */}
-                    <AssetAllocationUtilization customerId={customerId!} />
+                    {/* Asset Allocation Utilization - Hidden temporarily due to backend column issue */}
+                    {/* <AssetAllocationUtilization customerId={customerId!} /> */}
                   </>
                 )}
               </div>
