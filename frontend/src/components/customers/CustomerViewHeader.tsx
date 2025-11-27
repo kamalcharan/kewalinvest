@@ -1,5 +1,5 @@
 // frontend/src/components/customers/CustomerViewHeader.tsx
-// UPDATED: Added snapshot status tag and regenerate button
+// UPDATED: Added snapshot status tag and regenerate button with ConfirmationDialog
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import FamilyMembersPopover from './FamilyMembersPopover';
 import { IndividualFamilySwitch } from './IndividualFamilySwitch';
 import { PortfolioSnapshotService } from '../../services/portfolioSnapshot.service';
 import { toastService } from '../../services/toast.service';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 import type { CustomerWithContact } from '../../types/customer.types';
 import type { CustomerPortfolioResponse } from '../../types/portfolio.types';
 
@@ -45,10 +46,12 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   // Snapshot status state
   const [snapshotStatus, setSnapshotStatus] = useState<{
     latest_snapshot_date: string | null;
+    last_generated_at: string | null;
     total_snapshots: number;
     has_snapshots: boolean;
   } | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
 
   // Fetch snapshot status on mount
   useEffect(() => {
@@ -69,14 +72,13 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   }, [customerId]);
 
   // Handle regenerate snapshots for this customer
-  const handleRegenerateSnapshots = async () => {
+  const handleRegenerateClick = () => {
     if (isRegenerating) return;
+    setShowRegenerateDialog(true);
+  };
 
-    const confirmed = window.confirm(
-      `This will regenerate all portfolio snapshots for ${customer.name}. Continue?`
-    );
-    if (!confirmed) return;
-
+  const handleConfirmRegenerate = async () => {
+    setShowRegenerateDialog(false);
     setIsRegenerating(true);
     try {
       const response = await PortfolioSnapshotService.regenerateAllSnapshots([customerId]);
@@ -95,11 +97,17 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
     }
   };
 
-  // Format date for display
-  const formatSnapshotDate = (dateStr: string | null): string => {
+  // Format generation timestamp for display (shows date and time)
+  const formatGeneratedAt = (dateStr: string | null): string => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -218,10 +226,10 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
                 }}>
                   <DatabaseIcon size={12} />
                   <span>
-                    Snapshots: {formatSnapshotDate(snapshotStatus.latest_snapshot_date)}
+                    Last generated: {formatGeneratedAt(snapshotStatus.last_generated_at)}
                   </span>
                   <button
-                    onClick={handleRegenerateSnapshots}
+                    onClick={handleRegenerateClick}
                     disabled={isRegenerating}
                     title="Regenerate snapshots for this customer"
                     style={{
@@ -364,6 +372,18 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Regenerate Snapshots Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showRegenerateDialog}
+        onClose={() => setShowRegenerateDialog(false)}
+        onConfirm={handleConfirmRegenerate}
+        title="Regenerate Snapshots"
+        description={`This will regenerate all portfolio snapshots for ${customer.name}. This operation may take a few minutes. Do you want to continue?`}
+        confirmText="Regenerate"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   );
 };

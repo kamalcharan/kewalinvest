@@ -1303,7 +1303,7 @@ export class PortfolioSnapshotService {
 
   /**
    * Get snapshot status for a specific customer
-   * Returns latest snapshot date and count of snapshots
+   * Returns latest generation timestamp and count of snapshots
    */
   async getCustomerSnapshotStatus(
     tenantId: number,
@@ -1312,6 +1312,7 @@ export class PortfolioSnapshotService {
   ): Promise<{
     customer_id: number;
     latest_snapshot_date: string | null;
+    last_generated_at: string | null;
     total_snapshots: number;
     earliest_snapshot_date: string | null;
     has_snapshots: boolean;
@@ -1321,7 +1322,8 @@ export class PortfolioSnapshotService {
         SELECT
           MAX(snapshot_month_end) as latest_snapshot_date,
           MIN(snapshot_month_end) as earliest_snapshot_date,
-          COUNT(DISTINCT snapshot_month_end) as total_snapshots
+          COUNT(DISTINCT snapshot_month_end) as total_snapshots,
+          MAX(COALESCE(updated_at, created_at)) as last_generated_at
         FROM t_monthly_portfolio_snapshots
         WHERE tenant_id = $1
           AND is_live = $2
@@ -1338,6 +1340,9 @@ export class PortfolioSnapshotService {
           : null,
         earliest_snapshot_date: row.earliest_snapshot_date
           ? new Date(row.earliest_snapshot_date).toISOString().split('T')[0]
+          : null,
+        last_generated_at: row.last_generated_at
+          ? new Date(row.last_generated_at).toISOString()
           : null,
         total_snapshots: parseInt(row.total_snapshots) || 0,
         has_snapshots: parseInt(row.total_snapshots) > 0

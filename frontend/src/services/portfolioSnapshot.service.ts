@@ -365,6 +365,7 @@ export class PortfolioSnapshotService {
   static async getCustomerSnapshotStatus(customerId: number): Promise<ApiResponse<{
     customer_id: number;
     latest_snapshot_date: string | null;
+    last_generated_at: string | null;
     total_snapshots: number;
     earliest_snapshot_date: string | null;
     has_snapshots: boolean;
