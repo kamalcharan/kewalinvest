@@ -2,6 +2,7 @@
 // CORRECTED: Single button with dropdown menu for all operations
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Plus, RefreshCw, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
 import PortfolioSnapshotService from '../../services/portfolioSnapshot.service';
@@ -18,6 +19,7 @@ export const SnapshotOperationsButtonGroup: React.FC<SnapshotOperationsButtonGro
   onOperationComplete,
   isRunning
 }) => {
+  const queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
@@ -118,6 +120,12 @@ export const SnapshotOperationsButtonGroup: React.FC<SnapshotOperationsButtonGro
 
       if (response.success) {
         toastService.success(response.data?.message || 'Operation started successfully');
+
+        // Invalidate all networth queries to refresh charts with new snapshot data
+        // This ensures CustomerViewPage charts will show fresh data when user navigates back
+        queryClient.invalidateQueries({ queryKey: ['networth'] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+
         // Refresh after 2 seconds
         setTimeout(() => {
           if (onOperationComplete) {
