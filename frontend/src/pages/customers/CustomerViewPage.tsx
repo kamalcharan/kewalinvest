@@ -1213,28 +1213,6 @@ const CustomerViewPage: React.FC = () => {
                     <AssetAllocationUtilization customerId={customerId!} />
                   </>
                 )}
-
-                {/* Alerts & Reminders Section - excluding goals */}
-                {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
-                  <div>
-                    <h3 style={{
-                      fontSize: '18px',
-                      fontWeight: '600',
-                      color: colors.utility.primaryText,
-                      marginBottom: '16px'
-                    }}>
-                      Alerts & Reminders
-                    </h3>
-                    <JTBDList
-                      customerId={customerId}
-                      onSetupNew={() => setShowJTBDSetupModal(true)}
-                      onEdit={(jtbdId) => {
-                        console.log('Edit JTBD:', jtbdId);
-                      }}
-                      showFilters={true}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Right Column - Metrics (2x2 Grid) + Quick Actions */}
