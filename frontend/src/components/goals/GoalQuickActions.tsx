@@ -1,6 +1,7 @@
 // frontend/src/components/goals/GoalQuickActions.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 interface GoalQuickActionsProps {
   onCreateGoal: () => void;
@@ -9,6 +10,7 @@ interface GoalQuickActionsProps {
 export const GoalQuickActions: React.FC<GoalQuickActionsProps> = ({ onCreateGoal }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const [showComingSoon, setShowComingSoon] = useState<'rebalance' | 'report' | null>(null);
 
   const quickActions = [
     {
@@ -27,13 +29,13 @@ export const GoalQuickActions: React.FC<GoalQuickActionsProps> = ({ onCreateGoal
       icon: '⚖️',
       title: 'Rebalance Goals',
       description: 'Adjust allocations',
-      onClick: () => alert('Rebalancing feature coming soon!')
+      onClick: () => setShowComingSoon('rebalance')
     },
     {
       icon: '📊',
       title: 'Generate Report',
       description: 'Export goal summary',
-      onClick: () => alert('Report generation coming soon!')
+      onClick: () => setShowComingSoon('report')
     }
   ];
 
@@ -131,6 +133,22 @@ export const GoalQuickActions: React.FC<GoalQuickActionsProps> = ({ onCreateGoal
           </button>
         ))}
       </div>
+
+      {/* Coming Soon Modal */}
+      <ConfirmationDialog
+        isOpen={showComingSoon !== null}
+        onClose={() => setShowComingSoon(null)}
+        onConfirm={() => setShowComingSoon(null)}
+        title="Coming Soon"
+        description={
+          showComingSoon === 'rebalance'
+            ? 'The Rebalance Goals feature is currently under development and will be available in a future release.'
+            : 'The Generate Report feature is currently under development and will be available in a future release.'
+        }
+        confirmText="Got it"
+        cancelText=""
+        type="info"
+      />
     </div>
   );
 };

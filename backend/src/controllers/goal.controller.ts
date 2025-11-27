@@ -508,6 +508,46 @@ export class GoalController {
     }
   };
 
+  // ==================== ASSET ALLOCATION UTILIZATION ====================
+
+  /**
+   * Get asset allocation utilization for a customer
+   * Shows how investment plans are allocated across goals
+   * GET /api/goals/customer/:customerId/allocation-utilization
+   */
+  getAssetAllocationUtilization = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const customerId = parseInt(req.params.customerId);
+
+      if (isNaN(customerId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid customer ID'
+        });
+        return;
+      }
+
+      const utilization = await this.goalService.getAssetAllocationUtilization(
+        user!.tenant_id,
+        isLive,
+        customerId
+      );
+
+      res.json({
+        success: true,
+        data: utilization
+      });
+    } catch (error: any) {
+      console.error('Error getting asset allocation utilization:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get asset allocation utilization'
+      });
+    }
+  };
+
   // ==================== WATCHLIST ====================
 
   /**

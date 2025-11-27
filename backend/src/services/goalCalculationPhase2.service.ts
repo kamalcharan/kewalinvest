@@ -91,7 +91,10 @@ export class GoalCalculationPhase2Service {
   }
 
   /**
-   * Calculate goal progress
+   * Calculate goal progress - handles all three goal types:
+   * - time_based_goal: has target_date, calculates projected_corpus
+   * - price_based_goal: has target_amount, calculates projected_achievement_date
+   * - time_and_price_goal: has both, calculates if on track
    */
   async calculateGoalProgress(
     tenantId: number,
@@ -119,12 +122,20 @@ export class GoalCalculationPhase2Service {
     const goal = goalResult.rows[0];
     const configData = goal.config_data;
 
-    // Extract target amount and date from config
+    // Extract goal type and parameters from config
+    const goalType = configData.goal_type || 'time_and_price_goal';
     const targetAmount = configData.target_amount || 0;
     const targetDate = configData.target_date ? new Date(configData.target_date) : null;
 
-    if (!targetAmount || !targetDate) {
-      throw new Error('Goal must have target_amount and target_date');
+    // Validate based on goal type
+    if (goalType === 'time_based_goal' && !targetDate) {
+      throw new Error('Time-based goal must have target_date');
+    }
+    if (goalType === 'price_based_goal' && !targetAmount) {
+      throw new Error('Price-based goal must have target_amount');
+    }
+    if (goalType === 'time_and_price_goal' && (!targetAmount || !targetDate)) {
+      throw new Error('Time and price goal must have both target_amount and target_date');
     }
 
     // Get all investment allocations for this goal
@@ -151,30 +162,163 @@ export class GoalCalculationPhase2Service {
       }
     }
 
-    // Calculate progress percentage
-    const progressPercentage = (currentAmount / targetAmount) * 100;
+    // Calculate weighted average return rate from asset allocations
+    const weightedReturnRate = this.calculateWeightedReturnRate(allocations);
 
-    // Calculate time remaining
+    // Calculate risk level based on asset allocation
+    const riskLevel = this.calculateRiskLevel(assetBreakdown);
+
+    const now = new Date();
+
+    // Handle calculations based on goal type
+    if (goalType === 'time_based_goal') {
+      // Time-based: Calculate projected corpus at target date
+      return this.calculateTimeBasedGoal(
+        goalId,
+        currentAmount,
+        targetDate!,
+        allocations,
+        weightedReturnRate,
+        riskLevel,
+        configData.withdrawals || []
+      );
+    } else if (goalType === 'price_based_goal') {
+      // Price-based: Calculate when target amount will be reached
+      return this.calculatePriceBasedGoal(
+        goalId,
+        currentAmount,
+        targetAmount,
+        allocations,
+        weightedReturnRate,
+        riskLevel,
+        configData.monthly_contribution || 0
+      );
+    } else {
+      // Time and price goal: Standard calculation
+      return this.calculateTimeAndPriceGoal(
+        goalId,
+        currentAmount,
+        targetAmount,
+        targetDate!,
+        allocations,
+        weightedReturnRate,
+        riskLevel,
+        configData.withdrawals || []
+      );
+    }
+  }
+
+  /**
+   * Calculate time-based goal (only target_date, derive projected_corpus)
+   */
+  private async calculateTimeBasedGoal(
+    goalId: number,
+    currentAmount: number,
+    targetDate: Date,
+    allocations: GoalInvestmentAllocation[],
+    weightedReturnRate: number,
+    riskLevel: 'low' | 'medium' | 'high',
+    withdrawals: GoalWithdrawal[]
+  ): Promise<GoalCalculationResult> {
     const now = new Date();
     const timeRemainingMonths = this.getMonthsDifference(now, targetDate);
 
     // Project future value at target date
-    const projectedAmount = await this.projectFutureValue(
-      allocations,
-      targetDate
+    const projectedAmount = await this.projectFutureValue(allocations, targetDate);
+
+    // For time-based goals, we derive the target from projected corpus
+    // Progress is based on time elapsed vs total timeline
+    const progressPercentage = timeRemainingMonths <= 0 ? 100 :
+      Math.max(0, 100 - (timeRemainingMonths / (timeRemainingMonths + this.getMonthsElapsed(allocations)) * 100));
+
+    return {
+      goal_id: goalId,
+      current_amount: Math.round(currentAmount),
+      progress_percentage: Math.round(progressPercentage * 100) / 100,
+      projected_amount: Math.round(projectedAmount),
+      monthly_sip_required: 0, // No target amount, so no required SIP
+      is_on_track: true, // Always on track for time-based (no target to miss)
+      risk_level: riskLevel,
+      time_remaining_months: Math.max(0, timeRemainingMonths),
+      projected_completion_date: targetDate.toISOString().split('T')[0],
+      shortfall_surplus: 0 // No target to compare against
+    };
+  }
+
+  /**
+   * Calculate price-based goal (only target_amount, derive projected_achievement_date)
+   */
+  private async calculatePriceBasedGoal(
+    goalId: number,
+    currentAmount: number,
+    targetAmount: number,
+    allocations: GoalInvestmentAllocation[],
+    weightedReturnRate: number,
+    riskLevel: 'low' | 'medium' | 'high',
+    monthlyContribution: number
+  ): Promise<GoalCalculationResult> {
+    // Calculate progress percentage
+    const progressPercentage = (currentAmount / targetAmount) * 100;
+
+    // Calculate months to reach target using iterative approach
+    const monthsToTarget = this.calculateMonthsToTarget(
+      currentAmount,
+      targetAmount,
+      monthlyContribution,
+      weightedReturnRate
     );
+
+    // Calculate projected completion date
+    const projectedDate = new Date();
+    projectedDate.setMonth(projectedDate.getMonth() + Math.ceil(monthsToTarget));
+
+    // Already achieved?
+    const isOnTrack = currentAmount >= targetAmount || monthsToTarget < 600; // Less than 50 years
+
+    // For price-based, shortfall is current gap
+    const shortfallSurplus = currentAmount - targetAmount;
+
+    return {
+      goal_id: goalId,
+      current_amount: Math.round(currentAmount),
+      progress_percentage: Math.round(progressPercentage * 100) / 100,
+      projected_amount: Math.round(targetAmount), // Target is the projection
+      monthly_sip_required: Math.round(monthlyContribution),
+      is_on_track: isOnTrack,
+      risk_level: riskLevel,
+      time_remaining_months: Math.ceil(monthsToTarget),
+      projected_completion_date: projectedDate.toISOString().split('T')[0],
+      shortfall_surplus: Math.round(shortfallSurplus)
+    };
+  }
+
+  /**
+   * Calculate time and price goal (both target_amount and target_date)
+   */
+  private async calculateTimeAndPriceGoal(
+    goalId: number,
+    currentAmount: number,
+    targetAmount: number,
+    targetDate: Date,
+    allocations: GoalInvestmentAllocation[],
+    weightedReturnRate: number,
+    riskLevel: 'low' | 'medium' | 'high',
+    withdrawals: GoalWithdrawal[]
+  ): Promise<GoalCalculationResult> {
+    const now = new Date();
+    const timeRemainingMonths = this.getMonthsDifference(now, targetDate);
+
+    // Calculate progress percentage
+    const progressPercentage = (currentAmount / targetAmount) * 100;
+
+    // Project future value at target date
+    const projectedAmount = await this.projectFutureValue(allocations, targetDate);
 
     // Calculate shortfall or surplus
     const shortfallSurplus = projectedAmount - targetAmount;
 
     // Determine if on track
     const isOnTrack = projectedAmount >= targetAmount;
-
-    // Calculate weighted average return rate from asset allocations
-    const weightedReturnRate = this.calculateWeightedReturnRate(allocations);
-
-    // Extract withdrawals from config
-    const withdrawals = configData.withdrawals || [];
 
     // Calculate monthly SIP required to reach target (with withdrawals)
     const monthlyRequired = this.calculateRequiredMonthlySIPWithWithdrawals(
@@ -185,9 +329,6 @@ export class GoalCalculationPhase2Service {
       withdrawals,
       targetDate
     );
-
-    // Calculate risk level based on asset allocation
-    const riskLevel = this.calculateRiskLevel(assetBreakdown);
 
     return {
       goal_id: goalId,
@@ -201,6 +342,54 @@ export class GoalCalculationPhase2Service {
       projected_completion_date: isOnTrack ? this.calculateProjectedCompletionDate(currentAmount, targetAmount, monthlyRequired, 8) : null,
       shortfall_surplus: Math.round(shortfallSurplus)
     };
+  }
+
+  /**
+   * Calculate months needed to reach target amount using iterative approach
+   */
+  private calculateMonthsToTarget(
+    currentAmount: number,
+    targetAmount: number,
+    monthlyContribution: number,
+    annualReturnRate: number
+  ): number {
+    if (currentAmount >= targetAmount) {
+      return 0;
+    }
+
+    const monthlyRate = annualReturnRate / 100 / 12;
+    let corpus = currentAmount;
+    let months = 0;
+    const maxMonths = 1200; // Max 100 years
+
+    while (corpus < targetAmount && months < maxMonths) {
+      corpus = corpus * (1 + monthlyRate) + monthlyContribution;
+      months++;
+    }
+
+    return months;
+  }
+
+  /**
+   * Get months elapsed since first investment started
+   */
+  private getMonthsElapsed(allocations: GoalInvestmentAllocation[]): number {
+    let earliestStart: Date | null = null;
+
+    for (const allocation of allocations) {
+      if (allocation.investment_plan?.start_date) {
+        const startDate = new Date(allocation.investment_plan.start_date);
+        if (!earliestStart || startDate < earliestStart) {
+          earliestStart = startDate;
+        }
+      }
+    }
+
+    if (!earliestStart) {
+      return 0;
+    }
+
+    return this.getMonthsDifference(earliestStart, new Date());
   }
 
   /**

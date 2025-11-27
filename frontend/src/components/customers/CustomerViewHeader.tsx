@@ -83,18 +83,20 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
     try {
       const response = await PortfolioSnapshotService.regenerateAllSnapshots([customerId]);
       if (response.success) {
-        toastService.success('Snapshot regeneration started. This may take a few minutes.');
-        // Invalidate related queries
-        queryClient.invalidateQueries({ queryKey: ['networth'] });
-        queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+        toastService.success('Snapshots regenerated successfully! Refreshing page...');
+        // Refresh the entire page to show updated charts with latest data
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
-        toastService.error(response.error || 'Failed to start snapshot regeneration');
+        toastService.error(response.error || 'Failed to regenerate snapshots');
+        setIsRegenerating(false);
       }
     } catch (error: any) {
       toastService.error('Failed to regenerate snapshots: ' + error.message);
-    } finally {
       setIsRegenerating(false);
     }
+    // Note: Don't setIsRegenerating(false) on success since we're reloading the page
   };
 
   // Format generation timestamp for display (shows date and time)
@@ -384,6 +386,104 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
         cancelText="Cancel"
         type="warning"
       />
+
+      {/* Processing Modal - Shows during snapshot regeneration */}
+      {isRegenerating && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '16px',
+            padding: '40px 48px',
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            maxWidth: '400px'
+          }}>
+            {/* Animated Spinner */}
+            <div style={{
+              width: '64px',
+              height: '64px',
+              margin: '0 auto 24px',
+              border: `4px solid ${colors.brand.primary}20`,
+              borderTop: `4px solid ${colors.brand.primary}`,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              margin: '0 0 12px 0'
+            }}>
+              Calculating Snapshots
+            </h3>
+
+            <p style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              margin: '0 0 8px 0',
+              lineHeight: '1.5'
+            }}>
+              Regenerating portfolio snapshots for <strong>{customer.name}</strong>
+            </p>
+
+            <p style={{
+              fontSize: '13px',
+              color: colors.utility.secondaryText,
+              margin: 0,
+              opacity: 0.8
+            }}>
+              Please wait, this may take a few moments...
+            </p>
+
+            {/* Animated dots */}
+            <div style={{
+              marginTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '6px'
+            }}>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    backgroundColor: colors.brand.primary,
+                    borderRadius: '50%',
+                    animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Additional CSS for pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 80%, 100% {
+            transform: scale(0.6);
+            opacity: 0.4;
+          }
+          40% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 };

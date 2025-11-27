@@ -668,7 +668,7 @@ const CustomerViewPage: React.FC = () => {
             { key: 'overview', label: 'Portfolio Overview', icon: BarChart3, showInFamily: true },
             { key: 'portfolio', label: 'Portfolio Snapshots', icon: TrendingUp, showInFamily: false },
             { key: 'goals', label: 'Goals Management', icon: Target, showInFamily: false },
-            { key: 'assets', label: 'Asset Types', icon: Package, showInFamily: false },
+            { key: 'assets', label: 'Assets Allocation', icon: Package, showInFamily: false },
             { key: 'jobs', label: 'Jobs To Do', icon: CheckSquare, showInFamily: false },
             { key: 'transactions', label: 'Transactions', icon: DollarSign, showInFamily: false }
           ]
@@ -1209,31 +1209,9 @@ const CustomerViewPage: React.FC = () => {
                       />
                     ))}
 
-                    {/* Asset Allocation Utilization */}
-                    <AssetAllocationUtilization customerId={customerId!} />
+                    {/* Asset Allocation Utilization - Hidden temporarily due to backend column issue */}
+                    {/* <AssetAllocationUtilization customerId={customerId!} /> */}
                   </>
-                )}
-
-                {/* Alerts & Reminders Section - excluding goals */}
-                {jtbds && jtbds.filter(j => j.jtbd_type !== 'goal_tracking').length > 0 && (
-                  <div>
-                    <h3 style={{
-                      fontSize: '18px',
-                      fontWeight: '600',
-                      color: colors.utility.primaryText,
-                      marginBottom: '16px'
-                    }}>
-                      Alerts & Reminders
-                    </h3>
-                    <JTBDList
-                      customerId={customerId}
-                      onSetupNew={() => setShowJTBDSetupModal(true)}
-                      onEdit={(jtbdId) => {
-                        console.log('Edit JTBD:', jtbdId);
-                      }}
-                      showFilters={true}
-                    />
-                  </div>
                 )}
               </div>
 
