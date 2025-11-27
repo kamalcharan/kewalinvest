@@ -1264,6 +1264,91 @@ private async getGoalPortfolioValue(
     return years * 12 + months;
   }
 
+  // ==================== ASSET ALLOCATION UTILIZATION ====================
+
+  /**
+   * Get asset allocation utilization for a customer
+   * Shows how investment plans are allocated across goals
+   */
+  async getAssetAllocationUtilization(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<any[]> {
+    // Get all investment plans for the customer with their allocations
+    const query = `
+      SELECT
+        ip.id as plan_id,
+        ip.plan_name as scheme_name,
+        COALESCE(ip.plan_name, at.name) as scheme_code,
+        at.name as asset_type_name,
+        ip.principal_amount,
+        ip.current_value,
+        COALESCE(ip.current_value, ip.principal_amount) as total_portfolio_value,
+        COALESCE(
+          (SELECT SUM(gia.allocated_percentage)
+           FROM t_goal_investment_allocations gia
+           WHERE gia.investment_plan_id = ip.id AND gia.is_active = true),
+          0
+        ) as total_allocated_percentage
+      FROM t_customer_asset_assignments ip
+      JOIN m_asset_types at ON ip.asset_type_id = at.id
+      WHERE ip.tenant_id = $1
+        AND ip.is_live = $2
+        AND ip.customer_id = $3
+        AND ip.is_active = true
+      ORDER BY ip.plan_name
+    `;
+
+    const plansResult = await this.db.query(query, [tenantId, isLive, customerId]);
+
+    // Get allocation breakdown for each plan
+    const utilization = await Promise.all(
+      plansResult.rows.map(async (plan: any) => {
+        const totalValue = parseFloat(plan.total_portfolio_value) || 0;
+        const allocatedPercentage = parseFloat(plan.total_allocated_percentage) || 0;
+        const allocatedValue = (totalValue * allocatedPercentage) / 100;
+        const availablePercentage = Math.max(0, 100 - allocatedPercentage);
+        const availableValue = (totalValue * availablePercentage) / 100;
+
+        // Get goal allocations for this plan
+        const allocationQuery = `
+          SELECT
+            gia.goal_id,
+            jc.title as goal_name,
+            gia.allocated_percentage,
+            (gia.allocated_percentage / 100.0 * $1) as allocation_value
+          FROM t_goal_investment_allocations gia
+          JOIN t_jtbd_configurations jc ON jc.id = gia.goal_id
+          WHERE gia.investment_plan_id = $2
+            AND gia.is_active = true
+          ORDER BY gia.allocated_percentage DESC
+        `;
+
+        const allocationsResult = await this.db.query(allocationQuery, [totalValue, plan.plan_id]);
+
+        return {
+          scheme_code: plan.scheme_code,
+          scheme_name: plan.scheme_name || plan.asset_type_name,
+          total_portfolio_value: Math.round(totalValue),
+          allocated_value: Math.round(allocatedValue),
+          allocated_percentage: Math.round(allocatedPercentage * 100) / 100,
+          available_value: Math.round(availableValue),
+          available_percentage: Math.round(availablePercentage * 100) / 100,
+          is_fully_allocated: allocatedPercentage >= 100,
+          allocation_breakdown: allocationsResult.rows.map((alloc: any) => ({
+            goal_id: alloc.goal_id,
+            goal_name: alloc.goal_name,
+            allocation_percentage: parseFloat(alloc.allocated_percentage),
+            allocation_value: Math.round(parseFloat(alloc.allocation_value) || 0)
+          }))
+        };
+      })
+    );
+
+    return utilization;
+  }
+
   // ==================== WATCHLIST MANAGEMENT ====================
 
   /**
