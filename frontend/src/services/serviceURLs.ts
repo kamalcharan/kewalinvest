@@ -311,6 +311,7 @@ export const API_ENDPOINTS = {
       UPDATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/update-all`,
       REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
     },
+    CUSTOMER_STATUS: (customerId: number) => `${API_BASE}/cruise-control/snapshots/customer/${customerId}/status`,
   },
 
   // Data Import endpoints

@@ -136,4 +136,15 @@ router.post('/operations/update-all', authenticate, controller.updateAllSnapshot
  */
 router.post('/operations/regenerate-all', authenticate, controller.regenerateAllSnapshots);
 
+// ==================== CUSTOMER-SPECIFIC ROUTES ====================
+
+/**
+ * @route   GET /api/cruise-control/snapshots/customer/:customerId/status
+ * @desc    Get snapshot status for a specific customer
+ * @access  Private (Authenticated users)
+ * @query   environment - 'live' or 'test'
+ * @returns { customer_id, latest_snapshot_date, total_snapshots, earliest_snapshot_date, has_snapshots }
+ */
+router.get('/customer/:customerId/status', authenticate, controller.getCustomerSnapshotStatus);
+
 export default router;

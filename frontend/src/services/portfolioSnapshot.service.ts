@@ -357,6 +357,31 @@ export class PortfolioSnapshotService {
       };
     }
   }
+
+  /**
+   * Get snapshot status for a specific customer
+   * GET /api/cruise-control/snapshots/customer/:customerId/status
+   */
+  static async getCustomerSnapshotStatus(customerId: number): Promise<ApiResponse<{
+    customer_id: number;
+    latest_snapshot_date: string | null;
+    total_snapshots: number;
+    earliest_snapshot_date: string | null;
+    has_snapshots: boolean;
+  }>> {
+    try {
+      const response = await apiService.get<any>(
+        API_ENDPOINTS.PORTFOLIO_SNAPSHOTS.CUSTOMER_STATUS(customerId)
+      );
+      return response;
+    } catch (error: any) {
+      console.error('Failed to get customer snapshot status:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get customer snapshot status'
+      };
+    }
+  }
 }
 
 // Export default for convenience

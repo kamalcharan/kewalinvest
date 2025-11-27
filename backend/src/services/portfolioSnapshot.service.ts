@@ -1298,4 +1298,53 @@ export class PortfolioSnapshotService {
       return result;
     }
   }
+
+  // ==================== CUSTOMER SNAPSHOT STATUS ====================
+
+  /**
+   * Get snapshot status for a specific customer
+   * Returns latest snapshot date and count of snapshots
+   */
+  async getCustomerSnapshotStatus(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<{
+    customer_id: number;
+    latest_snapshot_date: string | null;
+    total_snapshots: number;
+    earliest_snapshot_date: string | null;
+    has_snapshots: boolean;
+  }> {
+    try {
+      const query = `
+        SELECT
+          MAX(snapshot_month_end) as latest_snapshot_date,
+          MIN(snapshot_month_end) as earliest_snapshot_date,
+          COUNT(DISTINCT snapshot_month_end) as total_snapshots
+        FROM t_monthly_portfolio_snapshots
+        WHERE tenant_id = $1
+          AND is_live = $2
+          AND customer_id = $3
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive, customerId]);
+      const row = result.rows[0];
+
+      return {
+        customer_id: customerId,
+        latest_snapshot_date: row.latest_snapshot_date
+          ? new Date(row.latest_snapshot_date).toISOString().split('T')[0]
+          : null,
+        earliest_snapshot_date: row.earliest_snapshot_date
+          ? new Date(row.earliest_snapshot_date).toISOString().split('T')[0]
+          : null,
+        total_snapshots: parseInt(row.total_snapshots) || 0,
+        has_snapshots: parseInt(row.total_snapshots) > 0
+      };
+    } catch (error: any) {
+      console.error(`[SnapshotService] Error getting snapshot status for customer ${customerId}:`, error);
+      throw error;
+    }
+  }
 }
