@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kewal Invest - Calculation Logic Documentation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding: 40px;
+            background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
+            color: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(37, 99, 235, 0.3);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .nav-section {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .nav-section h3 {
+            margin-bottom: 15px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .section {
+            background: var(--bg-primary);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .section h2 {
+            color: var(--primary);
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section h3 {
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            margin: 25px 0 15px 0;
+        }
+
+        .section h4 {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin: 20px 0 10px 0;
+        }
+
+        .formula-box {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .formula-box .formula {
+            font-size: 1.2rem;
+            color: var(--primary);
+            font-weight: bold;
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .formula-box .description {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 15px;
+        }
+
+        .example-box {
+            background: #fefce8;
+            border: 1px solid #fde047;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .example-box h5 {
+            color: var(--warning);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        .data-table th {
+            background: var(--bg-tertiary);
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .data-table tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .data-table .positive {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .data-table .negative {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .data-table .highlight {
+            background: #fef3c7;
+        }
+
+        .metric-card {
+            display: inline-block;
+            background: var(--bg-tertiary);
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin: 5px;
+            text-align: center;
+        }
+
+        .metric-card .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .metric-card .value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .metric-card.success .value { color: var(--success); }
+        .metric-card.danger .value { color: var(--danger); }
+        .metric-card.primary .value { color: var(--primary); }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .step-list {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .step-list li {
+            counter-increment: step-counter;
+            padding: 15px 15px 15px 60px;
+            position: relative;
+            margin-bottom: 10px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 30px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .info-callout {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .info-callout.warning {
+            background: #fefce8;
+            border-left-color: var(--warning);
+        }
+
+        .info-callout.success {
+            background: #f0fdf4;
+            border-left-color: var(--success);
+        }
+
+        .code-snippet {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin: 15px 0;
+        }
+
+        .code-snippet .comment { color: #64748b; }
+        .code-snippet .keyword { color: #f472b6; }
+        .code-snippet .string { color: #a3e635; }
+        .code-snippet .number { color: #fbbf24; }
+
+        .heatmap-demo {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .heatmap-cell {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .heatmap-cell .name {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .heatmap-cell .value {
+            font-size: 1.1rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge.success { background: #dcfce7; color: var(--success); }
+        .badge.danger { background: #fee2e2; color: var(--danger); }
+        .badge.primary { background: #dbeafe; color: var(--primary); }
+        .badge.warning { background: #fef3c7; color: var(--warning); }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .toc {
+            background: var(--bg-primary);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .toc h3 {
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc ul li {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .toc ul li:last-child {
+            border-bottom: none;
+        }
+
+        .toc ul li a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .toc ul li a:hover {
+            color: var(--primary);
+        }
+
+        .source-ref {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Kewal Invest - Calculation Logic Documentation</h1>
+            <p>Index Analysis &rarr; Market Analysis Dashboard</p>
+        </header>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#best-worst-performer">1. Best and Worst Performer</a></li>
+                <li><a href="#most-volatile">2. Most Volatile</a></li>
+                <li><a href="#heatmap">3. Index Performance Heatmap</a></li>
+                <li><a href="#index-returns">4. Index Returns (1M, 3M, 6M, 1Y, YTD, All)</a></li>
+                <li><a href="#volatility">5. Volatility (7D, 14D, 30D, 60D, 90D)</a></li>
+                <li><a href="#key-metrics">6. Key Metrics (CAGR, Sharpe, Max DD, Risk)</a></li>
+                <li><a href="#detailed-statistics">7. Detailed Statistics - All Values</a></li>
+            </ul>
+        </div>
+
+        <!-- Section 1: Best and Worst Performer -->
+        <section class="section" id="best-worst-performer">
+            <h2>1. Best and Worst Performer</h2>
+
+            <h3>What is it?</h3>
+            <p>The dashboard identifies which market index performed the best (highest return) and worst (lowest return) during the selected time period.</p>
+
+            <h3>How is it calculated?</h3>
+            <div class="formula-box">
+                <div class="formula">Best Performer = MAX(return_value) across all indices</div>
+                <div class="formula">Worst Performer = MIN(return_value) across all indices</div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>return_value</code> = The percentage return for the selected period (1M, 3M, 6M, or 1Y)<br>
+                    &bull; The system fetches the latest calculated metrics for each index<br>
+                    &bull; Indices without calculated metrics are excluded from comparison
+                </div>
+            </div>
+
+            <h4>Step-by-Step Process:</h4>
+            <ol class="step-list">
+                <li>Fetch all active market indices from the database</li>
+                <li>For each index, get the latest record with calculated metrics</li>
+                <li>Based on selected period (1M/3M/6M/1Y), extract the corresponding return field</li>
+                <li>Compare all return values - highest becomes "Best Performer"</li>
+                <li>Lowest becomes "Worst Performer" (derived from heatmap sorting)</li>
+            </ol>
+
+            <h3>Sample Data</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Index Name</th>
+                        <th>Index Code</th>
+                        <th>1M Return</th>
+                        <th>3M Return</th>
+                        <th>6M Return</th>
+                        <th>1Y Return</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="highlight">
+                        <td><strong>NIFTY IT</strong></td>
+                        <td>NIFTY_IT</td>
+                        <td class="positive">+8.45%</td>
+                        <td class="positive">+15.23%</td>
+                        <td class="positive">+22.67%</td>
+                        <td class="positive">+35.12%</td>
+                    </tr>
+                    <tr>
+                        <td>NIFTY 50</td>
+                        <td>NIFTY50</td>
+                        <td class="positive">+2.34%</td>
+                        <td class="positive">+5.67%</td>
+                        <td class="positive">+8.92%</td>
+                        <td class="positive">+12.45%</td>
+                    </tr>
+                    <tr>
+                        <td>NIFTY Bank</td>
+                        <td>NIFTYBANK</td>
+                        <td class="negative">-1.23%</td>
+                        <td class="positive">+3.45%</td>
+                        <td class="positive">+6.78%</td>
+                        <td class="positive">+9.34%</td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>NIFTY Metal</strong></td>
+                        <td>NIFTYMETAL</td>
+                        <td class="negative">-5.67%</td>
+                        <td class="negative">-8.92%</td>
+                        <td class="negative">-12.34%</td>
+                        <td class="negative">-15.67%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="example-box">
+                <h5>Example (3M Period Selected):</h5>
+                <div style="display: flex; gap: 30px; margin-top: 15px;">
+                    <div class="metric-card success">
+                        <div class="label">Best Performer</div>
+                        <div class="value">NIFTY IT</div>
+                        <div style="font-size: 0.9rem; color: var(--success);">+15.23%</div>
+                    </div>
+                    <div class="metric-card danger">
+                        <div class="label">Worst Performer</div>
+                        <div class="value">NIFTY Metal</div>
+                        <div style="font-size: 0.9rem; color: var(--danger);">-8.92%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/market.service.ts:992-1119 (getDashboardAggregateStats method)
+            </div>
+        </section>
+
+        <!-- Section 2: Most Volatile -->
+        <section class="section" id="most-volatile">
+            <h2>2. Most Volatile</h2>
+
+            <h3>What is it?</h3>
+            <p>Identifies the index with the highest price volatility (fluctuation) over the last 3 months. Higher volatility means larger price swings, indicating higher risk/reward potential.</p>
+
+            <h3>How is it calculated?</h3>
+            <div class="formula-box">
+                <div class="formula">Most Volatile = MAX(sd_3m) across all indices</div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>sd_3m</code> = 3-month Standard Deviation of daily returns<br>
+                    &bull; Standard Deviation measures how spread out the daily returns are from the mean
+                </div>
+            </div>
+
+            <h4>Standard Deviation Calculation:</h4>
+            <div class="formula-box">
+                <div class="formula">SD = &radic;(&Sigma;(r<sub>i</sub> - r&#772;)&sup2; / n)</div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>r<sub>i</sub></code> = Daily return for day i<br>
+                    &bull; <code>r&#772;</code> = Mean (average) of all daily returns<br>
+                    &bull; <code>n</code> = Number of trading days in the period<br>
+                    &bull; Daily Return = ((Close<sub>today</sub> - Close<sub>yesterday</sub>) / Close<sub>yesterday</sub>) &times; 100
+                </div>
+            </div>
+
+            <h3>Step-by-Step Calculation</h3>
+            <ol class="step-list">
+                <li>Collect last 90 trading days of closing prices</li>
+                <li>Calculate daily returns: ((today's close - yesterday's close) / yesterday's close) × 100</li>
+                <li>Calculate the mean (average) of all daily returns</li>
+                <li>For each daily return, calculate (return - mean)²</li>
+                <li>Sum all squared differences and divide by count</li>
+                <li>Take square root to get Standard Deviation</li>
+            </ol>
+
+            <h3>Sample Data - Calculating Volatility</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Close Price</th>
+                        <th>Daily Return (%)</th>
+                        <th>Deviation from Mean</th>
+                        <th>Squared Deviation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Day 1</td>
+                        <td>₹20,000</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Day 2</td>
+                        <td>₹20,200</td>
+                        <td class="positive">+1.00%</td>
+                        <td>+0.60%</td>
+                        <td>0.36</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>₹19,900</td>
+                        <td class="negative">-1.49%</td>
+                        <td>-1.89%</td>
+                        <td>3.57</td>
+                    </tr>
+                    <tr>
+                        <td>Day 4</td>
+                        <td>₹20,100</td>
+                        <td class="positive">+1.01%</td>
+                        <td>+0.61%</td>
+                        <td>0.37</td>
+                    </tr>
+                    <tr>
+                        <td>Day 5</td>
+                        <td>₹20,050</td>
+                        <td class="negative">-0.25%</td>
+                        <td>-0.65%</td>
+                        <td>0.42</td>
+                    </tr>
+                    <tr style="background: #f0fdf4;">
+                        <td colspan="2"><strong>Mean Return:</strong></td>
+                        <td><strong>+0.40%</strong></td>
+                        <td colspan="2"><strong>Sum: 4.72</strong></td>
+                    </tr>
+                    <tr style="background: #dbeafe;">
+                        <td colspan="3"><strong>Variance (Sum/n):</strong></td>
+                        <td colspan="2"><strong>4.72 / 4 = 1.18</strong></td>
+                    </tr>
+                    <tr style="background: #eff6ff;">
+                        <td colspan="3"><strong>Standard Deviation (√Variance):</strong></td>
+                        <td colspan="2"><strong>√1.18 = 1.09%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Comparison Across Indices</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Index</th>
+                        <th>7-Day SD</th>
+                        <th>14-Day SD</th>
+                        <th>30-Day SD</th>
+                        <th>3-Month SD</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>NIFTY 50</td>
+                        <td>0.85%</td>
+                        <td>0.92%</td>
+                        <td>1.05%</td>
+                        <td>1.15%</td>
+                        <td><span class="badge success">Low</span></td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>NIFTY Small Cap</strong></td>
+                        <td>2.45%</td>
+                        <td>2.78%</td>
+                        <td>3.12%</td>
+                        <td><strong>3.45%</strong></td>
+                        <td><span class="badge danger">Most Volatile</span></td>
+                    </tr>
+                    <tr>
+                        <td>NIFTY IT</td>
+                        <td>1.56%</td>
+                        <td>1.72%</td>
+                        <td>1.89%</td>
+                        <td>2.05%</td>
+                        <td><span class="badge warning">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>NIFTY Bank</td>
+                        <td>1.23%</td>
+                        <td>1.45%</td>
+                        <td>1.67%</td>
+                        <td>1.82%</td>
+                        <td><span class="badge warning">Medium</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout">
+                <strong>Interpretation:</strong><br>
+                A volatility of 3.45% means that on average, daily returns deviate by 3.45% from the mean return. Higher volatility = Higher risk and potential for larger gains/losses.
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/marketMetricsCalculator.service.ts:64-84 (calculateStandardDeviation method)
+            </div>
+        </section>
+
+        <!-- Section 3: Index Performance Heatmap -->
+        <section class="section" id="heatmap">
+            <h2>3. Index Performance Heatmap</h2>
+
+            <h3>What is it?</h3>
+            <p>A visual grid showing all market indices with color-coded returns. Green shades indicate positive returns, red shades indicate negative returns. The intensity of color reflects the magnitude of return.</p>
+
+            <h3>How is it generated?</h3>
+            <div class="formula-box">
+                <div class="formula">Color Intensity = |return_value| / max_absolute_return</div>
+                <div class="description">
+                    <strong>Logic:</strong><br>
+                    &bull; <code>return_value > 0</code> &rarr; Green shades (positive performance)<br>
+                    &bull; <code>return_value < 0</code> &rarr; Red shades (negative performance)<br>
+                    &bull; <code>return_value = 0</code> or null &rarr; Neutral/Gray<br>
+                    &bull; Darker shade = Higher magnitude of return
+                </div>
+            </div>
+
+            <h3>Sample Heatmap Visualization</h3>
+            <div class="heatmap-demo">
+                <div class="heatmap-cell" style="background: #15803d;">
+                    <div class="name">NIFTY IT</div>
+                    <div class="value">+15.23%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #22c55e;">
+                    <div class="name">NIFTY Pharma</div>
+                    <div class="value">+8.45%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #4ade80;">
+                    <div class="name">NIFTY 50</div>
+                    <div class="value">+5.67%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #86efac;">
+                    <div class="name">NIFTY Bank</div>
+                    <div class="value">+3.45%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #9ca3af; color: #374151;">
+                    <div class="name">NIFTY FMCG</div>
+                    <div class="value">+0.12%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #fca5a5; color: #7f1d1d;">
+                    <div class="name">NIFTY Auto</div>
+                    <div class="value">-2.34%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #f87171;">
+                    <div class="name">NIFTY Realty</div>
+                    <div class="value">-5.67%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #dc2626;">
+                    <div class="name">NIFTY Metal</div>
+                    <div class="value">-8.92%</div>
+                </div>
+            </div>
+
+            <h3>Data Structure</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>index_id</td>
+                        <td>number</td>
+                        <td>Unique identifier for the index</td>
+                    </tr>
+                    <tr>
+                        <td>index_name</td>
+                        <td>string</td>
+                        <td>Display name (e.g., "NIFTY 50")</td>
+                    </tr>
+                    <tr>
+                        <td>index_code</td>
+                        <td>string</td>
+                        <td>Short code (e.g., "NIFTY50")</td>
+                    </tr>
+                    <tr>
+                        <td>return_value</td>
+                        <td>number | null</td>
+                        <td>Percentage return for selected period</td>
+                    </tr>
+                    <tr>
+                        <td>volatility_value</td>
+                        <td>number | null</td>
+                        <td>3-month standard deviation</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="source-ref">
+                <strong>Source:</strong> frontend/src/pages/market/MarketAnalysisDashboard.tsx:91-105
+            </div>
+        </section>
+
+        <!-- Section 4: Index Returns -->
+        <section class="section" id="index-returns">
+            <h2>4. Index Returns (1M, 3M, 6M, 1Y, YTD, All)</h2>
+
+            <h3>What is it?</h3>
+            <p>Percentage change in the index value over different time periods. Shows how much an investment would have gained or lost if held for that duration.</p>
+
+            <h3>Return Calculation Formula</h3>
+            <div class="formula-box">
+                <div class="formula">Return % = ((End Price - Start Price) / Start Price) × 100</div>
+                <div class="description">
+                    <strong>Example:</strong><br>
+                    If NIFTY 50 was at ₹18,000 one month ago and is now at ₹18,540:<br>
+                    Return = ((18,540 - 18,000) / 18,000) × 100 = <strong>+3.00%</strong>
+                </div>
+            </div>
+
+            <h3>Period Definitions</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Field Name</th>
+                        <th>Start Date Logic</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Daily</strong></td>
+                        <td>daily_return</td>
+                        <td>Previous trading day</td>
+                        <td>Day-over-day change</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1 Week (1W)</strong></td>
+                        <td>return_1w</td>
+                        <td>7 trading days ago</td>
+                        <td>Skips weekends</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1 Month (1M)</strong></td>
+                        <td>return_1m</td>
+                        <td>Last day of previous month</td>
+                        <td>Month-end to current date</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3 Months (3M)</strong></td>
+                        <td>return_3m</td>
+                        <td>Last day of 3 months back</td>
+                        <td>Quarter comparison</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6 Months (6M)</strong></td>
+                        <td>return_6m</td>
+                        <td>Last day of 6 months back</td>
+                        <td>Half-year comparison</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1 Year (1Y)</strong></td>
+                        <td>return_1y</td>
+                        <td>Same date last year</td>
+                        <td>Annual comparison</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Year-to-Date (YTD)</strong></td>
+                        <td>return_ytd</td>
+                        <td>January 1st of current year</td>
+                        <td>Performance since year start</td>
+                    </tr>
+                    <tr>
+                        <td><strong>All Time</strong></td>
+                        <td>return_all</td>
+                        <td>First available data point</td>
+                        <td>Total historical return</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Sample Calculation - NIFTY 50</h3>
+            <div class="example-box">
+                <h5>Today's Date: November 28, 2025 | Current Price: ₹24,500</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Reference Date</th>
+                            <th>Price on That Date</th>
+                            <th>Calculation</th>
+                            <th>Return</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1M</td>
+                            <td>Oct 31, 2025</td>
+                            <td>₹23,800</td>
+                            <td>((24500-23800)/23800)×100</td>
+                            <td class="positive">+2.94%</td>
+                        </tr>
+                        <tr>
+                            <td>3M</td>
+                            <td>Aug 31, 2025</td>
+                            <td>₹23,200</td>
+                            <td>((24500-23200)/23200)×100</td>
+                            <td class="positive">+5.60%</td>
+                        </tr>
+                        <tr>
+                            <td>6M</td>
+                            <td>May 31, 2025</td>
+                            <td>₹22,100</td>
+                            <td>((24500-22100)/22100)×100</td>
+                            <td class="positive">+10.86%</td>
+                        </tr>
+                        <tr>
+                            <td>1Y</td>
+                            <td>Nov 28, 2024</td>
+                            <td>₹20,800</td>
+                            <td>((24500-20800)/20800)×100</td>
+                            <td class="positive">+17.79%</td>
+                        </tr>
+                        <tr>
+                            <td>YTD</td>
+                            <td>Jan 1, 2025</td>
+                            <td>₹21,500</td>
+                            <td>((24500-21500)/21500)×100</td>
+                            <td class="positive">+13.95%</td>
+                        </tr>
+                        <tr>
+                            <td>All</td>
+                            <td>Apr 22, 1996</td>
+                            <td>₹1,000</td>
+                            <td>((24500-1000)/1000)×100</td>
+                            <td class="positive">+2,350%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Returns Visualization</h3>
+            <div class="chart-container">
+                <canvas id="returnsChart"></canvas>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/marketMetricsCalculator.service.ts:52-59 (calculateReturn method)
+            </div>
+        </section>
+
+        <!-- Section 5: Volatility -->
+        <section class="section" id="volatility">
+            <h2>5. Volatility (7D, 14D, 30D, 60D, 90D)</h2>
+
+            <h3>What is it?</h3>
+            <p>Measures the degree of variation in the index's daily returns over different time windows. Higher volatility indicates greater price fluctuations and risk.</p>
+
+            <h3>Volatility Windows</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Field Name</th>
+                        <th>Trading Days</th>
+                        <th>Use Case</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>7-Day</strong></td>
+                        <td>sd_7d</td>
+                        <td>~5 trading days</td>
+                        <td>Very short-term volatility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>14-Day</strong></td>
+                        <td>sd_14d</td>
+                        <td>~10 trading days</td>
+                        <td>Short-term trend volatility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>21-Day (30D)</strong></td>
+                        <td>sd_21d</td>
+                        <td>~15 trading days</td>
+                        <td>Monthly volatility (approx 1 month)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>42-Day (60D)</strong></td>
+                        <td>sd_42d</td>
+                        <td>~30 trading days</td>
+                        <td>Bi-monthly volatility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3-Month (90D)</strong></td>
+                        <td>sd_3m</td>
+                        <td>~63 trading days</td>
+                        <td>Quarterly volatility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6-Month</strong></td>
+                        <td>sd_6m</td>
+                        <td>~126 trading days</td>
+                        <td>Semi-annual volatility</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Volatility Calculation Process</h3>
+            <div class="code-snippet">
+<span class="keyword">function</span> calculateStandardDeviation(prices) {
+  <span class="comment">// Step 1: Calculate daily returns</span>
+  <span class="keyword">const</span> returns = [];
+  <span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">1</span>; i < prices.length; i++) {
+    <span class="keyword">const</span> ret = ((prices[i] - prices[i-<span class="number">1</span>]) / prices[i-<span class="number">1</span>]) * <span class="number">100</span>;
+    returns.push(ret);
+  }
+
+  <span class="comment">// Step 2: Calculate mean of returns</span>
+  <span class="keyword">const</span> mean = returns.reduce((a, b) => a + b, <span class="number">0</span>) / returns.length;
+
+  <span class="comment">// Step 3: Calculate variance</span>
+  <span class="keyword">const</span> variance = returns.reduce((sq, n) =>
+    sq + Math.pow(n - mean, <span class="number">2</span>), <span class="number">0</span>) / returns.length;
+
+  <span class="comment">// Step 4: Return standard deviation</span>
+  <span class="keyword">return</span> Math.sqrt(variance);
+}
+            </div>
+
+            <h3>Volatility Comparison Chart</h3>
+            <div class="chart-container">
+                <canvas id="volatilityChart"></canvas>
+            </div>
+
+            <div class="info-callout">
+                <strong>Interpreting Volatility:</strong><br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li><strong>&lt; 1%</strong> - Low volatility (stable, defensive stocks)</li>
+                    <li><strong>1% - 2%</strong> - Moderate volatility (typical market conditions)</li>
+                    <li><strong>2% - 3%</strong> - High volatility (growth stocks, small caps)</li>
+                    <li><strong>&gt; 3%</strong> - Very high volatility (speculative, high risk)</li>
+                </ul>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/marketMetricsCalculator.service.ts:64-84
+            </div>
+        </section>
+
+        <!-- Section 6: Key Metrics -->
+        <section class="section" id="key-metrics">
+            <h2>6. Key Metrics (CAGR, Sharpe, Max DD, Risk)</h2>
+
+            <h3>6.1 CAGR (Compound Annual Growth Rate)</h3>
+            <div class="formula-box">
+                <div class="formula">CAGR = (End Value / Start Value)<sup>(1/Years)</sup> - 1</div>
+                <div class="description">
+                    <strong>What it tells you:</strong> The smoothed annual rate at which an investment would have grown if it had grown at a steady rate. Useful for comparing investments over different time periods.
+                </div>
+            </div>
+
+            <div class="example-box">
+                <h5>Example Calculation:</h5>
+                <p>If NIFTY 50 was at ₹15,000 five years ago and is now at ₹24,500:</p>
+                <p style="margin-top: 10px; font-family: monospace; font-size: 1.1rem;">
+                    CAGR = (24500 / 15000)<sup>(1/5)</sup> - 1 = 1.633<sup>0.2</sup> - 1 = <strong style="color: var(--success);">10.31%</strong>
+                </p>
+                <p style="margin-top: 10px; color: var(--text-secondary);">
+                    This means the index grew at an average rate of 10.31% per year over 5 years.
+                </p>
+            </div>
+
+            <h3>6.2 Sharpe Ratio</h3>
+            <div class="formula-box">
+                <div class="formula">Sharpe Ratio = (Return - Risk-Free Rate) / Standard Deviation</div>
+                <div class="description">
+                    <strong>What it tells you:</strong> How much excess return you receive for the extra volatility you endure. Higher Sharpe ratio = better risk-adjusted returns.<br><br>
+                    <strong>Risk-Free Rate:</strong> Default is 6.5% (configurable via RISK_FREE_RATE env variable)
+                </div>
+            </div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Sharpe Ratio</th>
+                        <th>Interpretation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="negative">&lt; 1.0</td>
+                        <td>Poor risk-adjusted returns</td>
+                    </tr>
+                    <tr>
+                        <td>1.0 - 2.0</td>
+                        <td>Good risk-adjusted returns</td>
+                    </tr>
+                    <tr>
+                        <td class="positive">&gt; 2.0</td>
+                        <td>Excellent risk-adjusted returns</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="example-box">
+                <h5>Example:</h5>
+                <p>1-Month Return = 3.00%, 30-Day Volatility = 1.20%, Risk-Free Rate = 6.5% (annualized, ~0.54% monthly)</p>
+                <p style="margin-top: 10px; font-family: monospace; font-size: 1.1rem;">
+                    Sharpe = (3.00 - 0.54) / 1.20 = <strong style="color: var(--success);">2.05</strong>
+                </p>
+            </div>
+
+            <h3>6.3 Maximum Drawdown (Max DD)</h3>
+            <div class="formula-box">
+                <div class="formula">Max Drawdown = ((Trough - Peak) / Peak) × 100</div>
+                <div class="description">
+                    <strong>What it tells you:</strong> The largest peak-to-trough decline in the index value. Shows the worst-case scenario an investor would have experienced.<br><br>
+                    The system calculates this over the last 252 trading days (~1 year).
+                </div>
+            </div>
+
+            <div class="chart-container" style="height: 250px;">
+                <canvas id="drawdownChart"></canvas>
+            </div>
+
+            <div class="example-box">
+                <h5>Example:</h5>
+                <p>If the index peaked at ₹25,000 and then fell to ₹21,250 before recovering:</p>
+                <p style="margin-top: 10px; font-family: monospace; font-size: 1.1rem;">
+                    Max Drawdown = ((21250 - 25000) / 25000) × 100 = <strong style="color: var(--danger);">-15.00%</strong>
+                </p>
+            </div>
+
+            <h3>6.4 Total Risk</h3>
+            <div class="formula-box">
+                <div class="formula">Total Risk = 30-Day Standard Deviation (sd_30d)</div>
+                <div class="description">
+                    <strong>What it tells you:</strong> A proxy for total portfolio risk, using the 30-day volatility as the measure. Higher values indicate higher risk.
+                </div>
+            </div>
+
+            <h3>Summary of Key Metrics</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px;">
+                <div class="metric-card primary">
+                    <div class="label">CAGR</div>
+                    <div class="value">12.45%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Annualized growth</div>
+                </div>
+                <div class="metric-card success">
+                    <div class="label">Sharpe Ratio</div>
+                    <div class="value">1.85</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Risk-adjusted return</div>
+                </div>
+                <div class="metric-card danger">
+                    <div class="label">Max Drawdown</div>
+                    <div class="value">-18.50%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Worst decline</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Risk</div>
+                    <div class="value">1.45%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">30-day volatility</div>
+                </div>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/marketMetricsCalculator.service.ts:86-133
+            </div>
+        </section>
+
+        <!-- Section 7: Detailed Statistics -->
+        <section class="section" id="detailed-statistics">
+            <h2>7. Detailed Statistics - All Values</h2>
+
+            <h3>Complete Metrics Table</h3>
+            <p>The Index Detail page displays all calculated metrics in a comprehensive table. Here's what each metric means:</p>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Field</th>
+                        <th>Formula/Logic</th>
+                        <th>Sample Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Daily Return</strong></td>
+                        <td>daily_return</td>
+                        <td>((today - yesterday) / yesterday) × 100</td>
+                        <td class="positive">+0.45%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1-Week Return</strong></td>
+                        <td>return_1w</td>
+                        <td>((today - week_ago) / week_ago) × 100</td>
+                        <td class="positive">+1.23%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1-Month Return</strong></td>
+                        <td>return_1m</td>
+                        <td>Return since last month end</td>
+                        <td class="positive">+2.94%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3-Month Return</strong></td>
+                        <td>return_3m</td>
+                        <td>Return since 3 months ago</td>
+                        <td class="positive">+5.60%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6-Month Return</strong></td>
+                        <td>return_6m</td>
+                        <td>Return since 6 months ago</td>
+                        <td class="positive">+10.86%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1-Year Return</strong></td>
+                        <td>return_1y</td>
+                        <td>Return since same date last year</td>
+                        <td class="positive">+17.79%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>YTD Return</strong></td>
+                        <td>return_ytd</td>
+                        <td>Return since January 1st</td>
+                        <td class="positive">+13.95%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>All-Time Return</strong></td>
+                        <td>return_all</td>
+                        <td>Return since first available data</td>
+                        <td class="positive">+2,350%</td>
+                    </tr>
+                    <tr style="background: var(--bg-tertiary);">
+                        <td colspan="4"><strong>Volatility Metrics</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>7-Day Volatility</strong></td>
+                        <td>sd_7d</td>
+                        <td>Std Dev of last 7 days returns</td>
+                        <td>0.85%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>14-Day Volatility</strong></td>
+                        <td>sd_14d</td>
+                        <td>Std Dev of last 14 days returns</td>
+                        <td>0.92%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>21-Day Volatility</strong></td>
+                        <td>sd_21d</td>
+                        <td>Std Dev of last 21 days returns</td>
+                        <td>1.05%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>42-Day Volatility</strong></td>
+                        <td>sd_42d</td>
+                        <td>Std Dev of last 42 days returns</td>
+                        <td>1.15%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3-Month Volatility</strong></td>
+                        <td>sd_3m</td>
+                        <td>Std Dev of last 90 days returns</td>
+                        <td>1.25%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6-Month Volatility</strong></td>
+                        <td>sd_6m</td>
+                        <td>Std Dev of last 180 days returns</td>
+                        <td>1.35%</td>
+                    </tr>
+                    <tr style="background: var(--bg-tertiary);">
+                        <td colspan="4"><strong>Risk Metrics</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>CAGR</strong></td>
+                        <td>cagr</td>
+                        <td>(End/Start)^(1/years) - 1</td>
+                        <td class="positive">+12.45%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sharpe Ratio</strong></td>
+                        <td>sharpe_ratio</td>
+                        <td>(Return - RiskFree) / StdDev</td>
+                        <td class="positive">1.85</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Max Drawdown</strong></td>
+                        <td>max_drawdown</td>
+                        <td>Largest peak-to-trough decline</td>
+                        <td class="negative">-18.50%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total Risk</strong></td>
+                        <td>total_risk</td>
+                        <td>30-day Standard Deviation</td>
+                        <td>1.45%</td>
+                    </tr>
+                    <tr style="background: var(--bg-tertiary);">
+                        <td colspan="4"><strong>Data Quality Metrics</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>3M Data Count</strong></td>
+                        <td>count_3m</td>
+                        <td>Number of data points in 3M window</td>
+                        <td>63</td>
+                    </tr>
+                    <tr>
+                        <td><strong>42D Data Count</strong></td>
+                        <td>count_42d</td>
+                        <td>Number of data points in 42D window</td>
+                        <td>42</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Metrics Sidebar Display</h3>
+            <p>The Index Detail page shows a 70/30 layout with the chart on the left and a metrics sidebar on the right:</p>
+
+            <div class="grid-2" style="margin-top: 20px;">
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px;">
+                    <h4 style="margin-bottom: 15px;">Returns Section</h4>
+                    <table class="data-table" style="font-size: 0.9rem;">
+                        <tr><td>1M Return</td><td class="positive">+2.94%</td></tr>
+                        <tr><td>3M Return</td><td class="positive">+5.60%</td></tr>
+                        <tr><td>6M Return</td><td class="positive">+10.86%</td></tr>
+                        <tr><td>1Y Return</td><td class="positive">+17.79%</td></tr>
+                        <tr><td>YTD Return</td><td class="positive">+13.95%</td></tr>
+                        <tr><td>All-Time</td><td class="positive">+2,350%</td></tr>
+                    </table>
+                </div>
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px;">
+                    <h4 style="margin-bottom: 15px;">Volatility & Risk</h4>
+                    <table class="data-table" style="font-size: 0.9rem;">
+                        <tr><td>7D Volatility</td><td>0.85%</td></tr>
+                        <tr><td>14D Volatility</td><td>0.92%</td></tr>
+                        <tr><td>30D Volatility</td><td>1.05%</td></tr>
+                        <tr><td>CAGR</td><td class="positive">+12.45%</td></tr>
+                        <tr><td>Sharpe Ratio</td><td class="positive">1.85</td></tr>
+                        <tr><td>Max Drawdown</td><td class="negative">-18.50%</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> frontend/src/pages/market/IndexDetailPage.tsx:666-758
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer style="text-align: center; padding: 40px; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 50px;">
+            <p><strong>Kewal Invest</strong> - Market Analysis Dashboard Documentation</p>
+            <p style="font-size: 0.9rem; margin-top: 10px;">
+                Generated on: <span id="generated-date"></span><br>
+                Document Version: 1.0 - Index Analysis Module
+            </p>
+        </footer>
+    </div>
+
+    <!-- Chart.js Scripts -->
+    <script>
+        // Set generated date
+        document.getElementById('generated-date').textContent = new Date().toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        // Returns Chart
+        const returnsCtx = document.getElementById('returnsChart').getContext('2d');
+        new Chart(returnsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['1M', '3M', '6M', '1Y', 'YTD'],
+                datasets: [{
+                    label: 'NIFTY 50 Returns',
+                    data: [2.94, 5.60, 10.86, 17.79, 13.95],
+                    backgroundColor: [
+                        'rgba(34, 197, 94, 0.7)',
+                        'rgba(34, 197, 94, 0.7)',
+                        'rgba(34, 197, 94, 0.7)',
+                        'rgba(34, 197, 94, 0.7)',
+                        'rgba(34, 197, 94, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgb(34, 197, 94)',
+                        'rgb(34, 197, 94)',
+                        'rgb(34, 197, 94)',
+                        'rgb(34, 197, 94)',
+                        'rgb(34, 197, 94)'
+                    ],
+                    borderWidth: 2,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'NIFTY 50 Returns by Period',
+                        font: { size: 16, weight: 'bold' }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return value + '%'; }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Volatility Comparison Chart
+        const volatilityCtx = document.getElementById('volatilityChart').getContext('2d');
+        new Chart(volatilityCtx, {
+            type: 'line',
+            data: {
+                labels: ['7D', '14D', '21D', '42D', '90D'],
+                datasets: [
+                    {
+                        label: 'NIFTY 50',
+                        data: [0.85, 0.92, 1.05, 1.15, 1.25],
+                        borderColor: 'rgb(37, 99, 235)',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'NIFTY Small Cap',
+                        data: [2.45, 2.78, 3.12, 3.28, 3.45],
+                        borderColor: 'rgb(220, 38, 38)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'NIFTY IT',
+                        data: [1.56, 1.72, 1.89, 1.95, 2.05],
+                        borderColor: 'rgb(234, 179, 8)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Volatility Comparison Across Indices',
+                        font: { size: 16, weight: 'bold' }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value) { return value + '%'; }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Drawdown Illustration Chart
+        const drawdownCtx = document.getElementById('drawdownChart').getContext('2d');
+        new Chart(drawdownCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Index Value',
+                    data: [22000, 23500, 25000, 24200, 22800, 21250, 22500, 23800, 24100, 23900, 24300, 24500],
+                    borderColor: 'rgb(37, 99, 235)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Maximum Drawdown Illustration (Peak: ₹25,000 → Trough: ₹21,250 = -15%)',
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    annotation: {
+                        annotations: {
+                            peak: {
+                                type: 'point',
+                                xValue: 'Mar',
+                                yValue: 25000,
+                                backgroundColor: 'rgb(34, 197, 94)',
+                                radius: 8
+                            },
+                            trough: {
+                                type: 'point',
+                                xValue: 'Jun',
+                                yValue: 21250,
+                                backgroundColor: 'rgb(220, 38, 38)',
+                                radius: 8
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value) { return '₹' + value.toLocaleString(); }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
