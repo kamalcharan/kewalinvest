@@ -633,7 +633,7 @@
                 <div class="nav-menu-item" onclick="toggleSubmenu(this)">
                     <span class="icon">💰</span>
                     Asset Allocation
-                    <span class="status pending">Pending</span>
+                    <span class="status done">Done</span>
                     <span class="arrow">▶</span>
                 </div>
                 <ul class="nav-submenu">
@@ -2682,6 +2682,674 @@
             </div>
         </section>
 
+        <!-- ========================================== -->
+        <!-- ASSET ALLOCATION SECTION                  -->
+        <!-- ========================================== -->
+
+        <div class="module-header" style="background: linear-gradient(135deg, #0d9488 0%, #047857 100%);">
+            <div class="breadcrumb">Home / Asset Allocation</div>
+            <h1>💰 Asset Allocation - Investment Plan Calculations</h1>
+            <p style="margin-top: 10px; opacity: 0.9;">Principal calculations, Future Value formulas, and Assumption Rate logic for all asset types</p>
+        </div>
+
+        <!-- Asset Allocation Section 1: Investment Current Value -->
+        <section class="section" id="asset-allocation">
+            <h2>1. Investment Plan Current Value Calculation</h2>
+
+            <h3>Overview</h3>
+            <p>Investment plans can be of different types: <strong>One-time</strong> (lump sum), <strong>SIP</strong> (Systematic Investment Plan), or <strong>Recurring</strong>. Each type has a different formula for calculating the current value.</p>
+
+            <div class="info-callout">
+                <strong>Supported Asset Types:</strong><br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li><strong>FD (Fixed Deposit)</strong> - Default rate: 6-7%</li>
+                    <li><strong>Gold</strong> - Default rate: 4-6%</li>
+                    <li><strong>Real Estate</strong> - Default rate: 5-7%</li>
+                    <li><strong>Mutual Funds (MF)</strong> - Default rate: 10-14%</li>
+                    <li><strong>PPF</strong> - Default rate: 7.1%</li>
+                    <li><strong>NPS</strong> - Default rate: 10-12%</li>
+                    <li><strong>Bonds</strong> - Default rate: 7-8%</li>
+                </ul>
+            </div>
+
+            <h3>One-Time Investment (Lump Sum)</h3>
+            <p>Uses compound interest formula:</p>
+            <div class="formula-box">
+                <div class="formula">FV = PV × (1 + r)<sup>t</sup></div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>FV</code> = Future Value (Current Value after t years)<br>
+                    &bull; <code>PV</code> = Principal Amount (Initial Investment)<br>
+                    &bull; <code>r</code> = Annual Growth Rate (assumption_rate / 100)<br>
+                    &bull; <code>t</code> = Years Elapsed since start_date
+                </div>
+            </div>
+
+            <div class="example-box">
+                <h5>One-Time Investment Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Asset Type</td>
+                            <td>Fixed Deposit (FD)</td>
+                        </tr>
+                        <tr>
+                            <td>Principal Amount (PV)</td>
+                            <td>₹5,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Start Date</td>
+                            <td>Nov 28, 2023</td>
+                        </tr>
+                        <tr>
+                            <td>Assumption Rate (r)</td>
+                            <td>7.0% p.a.</td>
+                        </tr>
+                        <tr>
+                            <td>Years Elapsed (t)</td>
+                            <td>2 years</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Current Value (FV)</strong></td>
+                            <td>₹5,00,000 × (1.07)² = <strong>₹5,72,450</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>SIP / Recurring Investment</h3>
+            <p>Combines lump sum growth with future value of annuity:</p>
+            <div class="formula-box">
+                <div class="formula">FV = PV × (1 + r)<sup>t</sup> + PMT × [((1 + r<sub>p</sub>)<sup>n</sup> - 1) / r<sub>p</sub>] × (1 + r<sub>p</sub>)</div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>PV</code> = Initial Principal Amount<br>
+                    &bull; <code>PMT</code> = Recurring Payment (monthly/quarterly/yearly)<br>
+                    &bull; <code>r</code> = Annual Growth Rate<br>
+                    &bull; <code>r<sub>p</sub></code> = Periodic Rate (annual / payments per year)<br>
+                    &bull; <code>n</code> = Total Number of Payments Made<br>
+                    &bull; <code>t</code> = Years Elapsed
+                </div>
+            </div>
+
+            <div class="example-box">
+                <h5>SIP Investment Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Asset Type</td>
+                            <td>Mutual Fund</td>
+                        </tr>
+                        <tr>
+                            <td>Initial Principal (PV)</td>
+                            <td>₹1,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Monthly SIP (PMT)</td>
+                            <td>₹10,000</td>
+                        </tr>
+                        <tr>
+                            <td>Frequency</td>
+                            <td>Monthly (12 payments/year)</td>
+                        </tr>
+                        <tr>
+                            <td>Assumption Rate</td>
+                            <td>12% p.a.</td>
+                        </tr>
+                        <tr>
+                            <td>Duration</td>
+                            <td>3 years (36 payments)</td>
+                        </tr>
+                        <tr>
+                            <td>Periodic Rate (r<sub>p</sub>)</td>
+                            <td>12% / 12 = 1% per month</td>
+                        </tr>
+                        <tr>
+                            <td>Principal FV</td>
+                            <td>₹1,00,000 × (1.12)³ = ₹1,40,493</td>
+                        </tr>
+                        <tr>
+                            <td>SIP FV</td>
+                            <td>₹10,000 × [((1.01)³⁶ - 1) / 0.01] × 1.01 = ₹4,35,077</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Total Current Value</strong></td>
+                            <td>₹1,40,493 + ₹4,35,077 = <strong>₹5,75,570</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Frequency Adjustments</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Frequency</th>
+                        <th>Payments per Year</th>
+                        <th>Periodic Rate Formula</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Monthly</td>
+                        <td>12</td>
+                        <td>Annual Rate / 12</td>
+                    </tr>
+                    <tr>
+                        <td>Quarterly</td>
+                        <td>4</td>
+                        <td>Annual Rate / 4</td>
+                    </tr>
+                    <tr>
+                        <td>Yearly</td>
+                        <td>1</td>
+                        <td>Annual Rate / 1</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/investmentPlan.service.ts:598-643 (calculateCurrentValue method)
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 2: Assumption Rate Logic -->
+        <section class="section" id="assumption-rate">
+            <h2>2. Assumption Rate (Growth Rate) Logic</h2>
+
+            <h3>Rate Selection Priority</h3>
+            <p>The system uses a hierarchical approach to determine which growth rate to use:</p>
+
+            <div class="formula-box">
+                <div class="formula">Effective Rate = custom_assumption_rate ?? default_assumption_rate ?? 0</div>
+                <div class="description">
+                    <strong>Priority Order:</strong><br>
+                    1. <code>custom_assumption_rate</code> - User-defined rate for specific investment<br>
+                    2. <code>default_assumption_rate</code> - Master rate from asset type configuration<br>
+                    3. <code>0</code> - Fallback if no rate defined
+                </div>
+            </div>
+
+            <h3>Default Assumption Rates by Asset Type</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Asset Type</th>
+                        <th>Code</th>
+                        <th>Default Rate</th>
+                        <th>Risk Profile</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Fixed Deposit</td>
+                        <td>FD</td>
+                        <td>6.5% - 7.5%</td>
+                        <td><span class="badge success">Low Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>PPF (Public Provident Fund)</td>
+                        <td>PPF</td>
+                        <td>7.1%</td>
+                        <td><span class="badge success">Low Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>NSC (National Savings Certificate)</td>
+                        <td>NSC</td>
+                        <td>7.0%</td>
+                        <td><span class="badge success">Low Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>Bonds / Debt</td>
+                        <td>BOND</td>
+                        <td>7% - 8%</td>
+                        <td><span class="badge success">Low Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>Gold</td>
+                        <td>GOLD</td>
+                        <td>4% - 6%</td>
+                        <td><span class="badge primary">Low-Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Real Estate</td>
+                        <td>RE</td>
+                        <td>5% - 7%</td>
+                        <td><span class="badge primary">Low-Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Large Cap Mutual Fund</td>
+                        <td>MF_LC</td>
+                        <td>10% - 12%</td>
+                        <td><span class="badge warning">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Mid Cap Mutual Fund</td>
+                        <td>MF_MC</td>
+                        <td>12% - 14%</td>
+                        <td><span class="badge warning">Medium-High</span></td>
+                    </tr>
+                    <tr>
+                        <td>Small Cap Mutual Fund</td>
+                        <td>MF_SC</td>
+                        <td>14% - 18%</td>
+                        <td><span class="badge danger">High Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>NPS (National Pension System)</td>
+                        <td>NPS</td>
+                        <td>10% - 12%</td>
+                        <td><span class="badge warning">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Direct Equity</td>
+                        <td>EQUITY</td>
+                        <td>12% - 15%</td>
+                        <td><span class="badge danger">High Risk</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout warning">
+                <strong>Custom Rate Override:</strong><br>
+                Users can set a custom assumption rate for individual investment plans that overrides the default. This is useful for:<br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>FDs with negotiated higher interest rates</li>
+                    <li>High-performing mutual fund schemes</li>
+                    <li>Location-specific real estate appreciation</li>
+                    <li>Conservative projections for volatile assets</li>
+                </ul>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/investmentPlan.service.ts:603, backend/src/types/assetType.types.ts
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 3: Goal Allocation -->
+        <section class="section" id="goal-allocation">
+            <h2>3. Goal Investment Allocation</h2>
+
+            <h3>Overview</h3>
+            <p>Investment plans can be allocated to financial goals. Each allocation specifies what percentage of the investment is dedicated to a particular goal.</p>
+
+            <div class="formula-box">
+                <div class="formula">Allocated Value = Investment Current Value × (allocated_percentage / 100)</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Multi-Goal Allocation Example</h5>
+                <p style="margin-bottom: 15px;">A Mutual Fund investment of ₹10,00,000 current value allocated to multiple goals:</p>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Goal</th>
+                            <th>Allocation %</th>
+                            <th>Allocated Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Retirement Fund</td>
+                            <td>50%</td>
+                            <td>₹5,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Child's Education</td>
+                            <td>30%</td>
+                            <td>₹3,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>House Down Payment</td>
+                            <td>20%</td>
+                            <td>₹2,00,000</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Total</strong></td>
+                            <td><strong>100%</strong></td>
+                            <td><strong>₹10,00,000</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Allocation Constraints</h3>
+            <ul class="step-list">
+                <li>Total allocation for an investment plan cannot exceed 100%</li>
+                <li>Multiple investment plans can be allocated to the same goal</li>
+                <li>Allocation percentage can be updated anytime</li>
+                <li>Unallocated portion remains as general savings</li>
+            </ul>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/goalInvestmentAllocation.service.ts
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 4: Risk Level Calculation -->
+        <section class="section" id="risk-level">
+            <h2>4. Portfolio Risk Level Calculation</h2>
+
+            <h3>Equity Exposure Based Risk</h3>
+            <p>Risk level is determined by the percentage of portfolio allocated to equity-like assets:</p>
+
+            <div class="formula-box">
+                <div class="formula">Equity % = (Equity Assets Value / Total Portfolio Value) × 100</div>
+                <div class="description">
+                    <strong>Equity Assets Include:</strong> Mutual Funds, Direct Equity, NPS
+                </div>
+            </div>
+
+            <h3>Risk Classification</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Equity Exposure</th>
+                        <th>Risk Level</th>
+                        <th>Color Code</th>
+                        <th>Suitable For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>≥ 70%</td>
+                        <td><strong>High</strong></td>
+                        <td><span class="badge danger">Red</span></td>
+                        <td>Aggressive investors, long-term goals</td>
+                    </tr>
+                    <tr>
+                        <td>40% - 69%</td>
+                        <td><strong>Medium</strong></td>
+                        <td><span class="badge warning">Yellow</span></td>
+                        <td>Balanced investors, medium-term goals</td>
+                    </tr>
+                    <tr>
+                        <td>&lt; 40%</td>
+                        <td><strong>Low</strong></td>
+                        <td><span class="badge success">Green</span></td>
+                        <td>Conservative investors, short-term goals</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="example-box">
+                <h5>Risk Calculation Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Asset Type</th>
+                            <th>Value</th>
+                            <th>Is Equity?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mutual Funds</td>
+                            <td>₹8,00,000</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Deposits</td>
+                            <td>₹3,00,000</td>
+                            <td>No</td>
+                        </tr>
+                        <tr>
+                            <td>Gold</td>
+                            <td>₹2,00,000</td>
+                            <td>No</td>
+                        </tr>
+                        <tr>
+                            <td>NPS</td>
+                            <td>₹2,00,000</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr style="background: var(--bg-tertiary);">
+                            <td><strong>Total</strong></td>
+                            <td><strong>₹15,00,000</strong></td>
+                            <td></td>
+                        </tr>
+                        <tr class="highlight">
+                            <td>Equity Value</td>
+                            <td>₹10,00,000</td>
+                            <td><strong>66.67%</strong></td>
+                        </tr>
+                        <tr class="highlight">
+                            <td colspan="3" style="text-align: center;">
+                                <strong>Risk Level: <span class="badge warning">Medium</span></strong>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/goalCalculationPhase2.service.ts:447-471 (calculateRiskLevel method)
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 5: Weighted Return Rate -->
+        <section class="section" id="weighted-return">
+            <h2>5. Weighted Average Return Rate</h2>
+
+            <h3>Formula</h3>
+            <p>Calculates the effective return rate across all allocated investments:</p>
+
+            <div class="formula-box">
+                <div class="formula">Weighted Rate = Σ(Allocated Value<sub>i</sub> × Rate<sub>i</sub>) / Σ(Allocated Value<sub>i</sub>)</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Weighted Return Calculation</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Investment</th>
+                            <th>Allocated Value</th>
+                            <th>Assumption Rate</th>
+                            <th>Value × Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>FD Plan</td>
+                            <td>₹3,00,000</td>
+                            <td>7%</td>
+                            <td>21,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>MF SIP</td>
+                            <td>₹5,00,000</td>
+                            <td>12%</td>
+                            <td>60,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Gold</td>
+                            <td>₹2,00,000</td>
+                            <td>5%</td>
+                            <td>10,00,000</td>
+                        </tr>
+                        <tr style="background: var(--bg-tertiary);">
+                            <td><strong>Total</strong></td>
+                            <td><strong>₹10,00,000</strong></td>
+                            <td></td>
+                            <td><strong>91,00,000</strong></td>
+                        </tr>
+                        <tr class="highlight">
+                            <td colspan="3"><strong>Weighted Average Rate</strong></td>
+                            <td><strong>91,00,000 / 10,00,000 = 9.1%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="info-callout">
+                <strong>Usage:</strong> The weighted return rate is used for:<br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>Goal projection calculations</li>
+                    <li>Required SIP calculations</li>
+                    <li>Time-to-target estimates</li>
+                    <li>Success probability simulations</li>
+                </ul>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/goalCalculationPhase2.service.ts:540-567 (calculateWeightedReturnRate method)
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 6: Required SIP Calculation -->
+        <section class="section" id="required-sip">
+            <h2>6. Required SIP Calculation</h2>
+
+            <h3>Formula</h3>
+            <p>Calculates the monthly SIP needed to reach a target amount:</p>
+
+            <div class="formula-box">
+                <div class="formula">PMT = [Target - PV × (1 + r)<sup>n</sup>] × r / [(1 + r)<sup>n</sup> - 1]</div>
+                <div class="description">
+                    <strong>Where:</strong><br>
+                    &bull; <code>PMT</code> = Required Monthly Payment<br>
+                    &bull; <code>Target</code> = Goal Target Amount<br>
+                    &bull; <code>PV</code> = Current Portfolio Value<br>
+                    &bull; <code>r</code> = Monthly Rate (annual / 12 / 100)<br>
+                    &bull; <code>n</code> = Months Remaining to Target Date
+                </div>
+            </div>
+
+            <div class="example-box">
+                <h5>Required SIP Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Target Amount</td>
+                            <td>₹50,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Current Value</td>
+                            <td>₹10,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Time Remaining</td>
+                            <td>5 years (60 months)</td>
+                        </tr>
+                        <tr>
+                            <td>Expected Return</td>
+                            <td>10% p.a. (0.833% monthly)</td>
+                        </tr>
+                        <tr>
+                            <td>FV of Current Value</td>
+                            <td>₹10,00,000 × (1.00833)⁶⁰ = ₹16,45,309</td>
+                        </tr>
+                        <tr>
+                            <td>Amount Needed from SIP</td>
+                            <td>₹50,00,000 - ₹16,45,309 = ₹33,54,691</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Required Monthly SIP</strong></td>
+                            <td><strong>₹43,452</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/goal.calculator.service.ts:36-57 (calculateRequiredSIP method)
+            </div>
+        </section>
+
+        <!-- Asset Allocation Section 7: Monte Carlo Simulation -->
+        <section class="section" id="monte-carlo">
+            <h2>7. Monte Carlo Success Probability</h2>
+
+            <h3>Overview</h3>
+            <p>Monte Carlo simulation runs 1000 scenarios with randomized returns to estimate the probability of reaching a goal target.</p>
+
+            <div class="formula-box">
+                <div class="formula">Success Probability = (Successful Simulations / Total Simulations) × 100</div>
+                <div class="description">
+                    <strong>Simulation Parameters:</strong><br>
+                    &bull; <code>simulations</code> = 1000 (default)<br>
+                    &bull; <code>volatility</code> = 15% standard deviation (default)<br>
+                    &bull; Each month applies a random return from normal distribution
+                </div>
+            </div>
+
+            <h3>Simulation Process</h3>
+            <ol class="step-list">
+                <li>Initialize corpus with current portfolio value</li>
+                <li>For each month until target date, apply random monthly return</li>
+                <li>Random return uses normal distribution: mean = expected return/12, stdDev = volatility/√12</li>
+                <li>Add monthly SIP contribution after applying return</li>
+                <li>Check if final corpus ≥ target amount</li>
+                <li>Repeat 1000 times and count successes</li>
+            </ol>
+
+            <h3>Confidence Level Classification</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Probability</th>
+                        <th>Confidence Level</th>
+                        <th>Interpretation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>≥ 90%</td>
+                        <td><span class="badge success">Very High</span></td>
+                        <td>Goal is highly likely to be achieved</td>
+                    </tr>
+                    <tr>
+                        <td>75% - 89%</td>
+                        <td><span class="badge success">High</span></td>
+                        <td>Goal is on track</td>
+                    </tr>
+                    <tr>
+                        <td>60% - 74%</td>
+                        <td><span class="badge warning">Medium</span></td>
+                        <td>Consider increasing SIP</td>
+                    </tr>
+                    <tr>
+                        <td>40% - 59%</td>
+                        <td><span class="badge warning">Low</span></td>
+                        <td>Action required - increase SIP or extend timeline</td>
+                    </tr>
+                    <tr>
+                        <td>&lt; 40%</td>
+                        <td><span class="badge danger">Very Low</span></td>
+                        <td>Goal unlikely without significant changes</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout warning">
+                <strong>Important Note:</strong><br>
+                Monte Carlo uses the Box-Muller transform for generating normally distributed random numbers, simulating real-world market volatility where returns aren't constant.
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/goal.calculator.service.ts:92-121 (monteCarloSimulation method)
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer style="text-align: center; padding: 40px; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 50px;">
             <p><strong>Kewal Invest</strong> - Calculation Logic Documentation</p>
@@ -2693,7 +3361,7 @@
                 <span class="badge success">Index Analysis - Complete</span>
                 <span class="badge success">NAV Tracking - Complete</span>
                 <span class="badge success">Customer Dashboard - Complete</span>
-                <span class="badge warning">Asset Allocation - Pending</span>
+                <span class="badge success">Asset Allocation - Complete</span>
                 <span class="badge warning">Goals - Pending</span>
             </div>
         </footer>
