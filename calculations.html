@@ -11,12 +11,16 @@
             --success: #16a34a;
             --danger: #dc2626;
             --warning: #d97706;
+            --purple: #7c3aed;
+            --teal: #0d9488;
+            --pink: #db2777;
             --bg-primary: #ffffff;
             --bg-secondary: #f8fafc;
             --bg-tertiary: #f1f5f9;
             --text-primary: #1e293b;
             --text-secondary: #64748b;
             --border: #e2e8f0;
+            --sidebar-width: 280px;
         }
 
         * {
@@ -32,69 +36,246 @@
             line-height: 1.6;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
+        /* ========== MAIN NAVIGATION SIDEBAR ========== */
+        .main-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            padding: 20px 0;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.15);
         }
 
-        header {
-            text-align: center;
-            margin-bottom: 50px;
-            padding: 40px;
+        .main-nav .logo {
+            padding: 10px 20px 30px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+
+        .main-nav .logo h2 {
+            color: white;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .main-nav .logo span {
+            color: var(--primary);
+        }
+
+        .main-nav .logo p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-menu > li {
+            margin-bottom: 5px;
+        }
+
+        .nav-menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-menu-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: white;
+        }
+
+        .nav-menu-item.active {
+            background: rgba(37, 99, 235, 0.15);
+            color: white;
+            border-left-color: var(--primary);
+        }
+
+        .nav-menu-item .icon {
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        .nav-menu-item .status {
+            margin-left: auto;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .nav-menu-item .status.done {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .nav-menu-item .status.pending {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+
+        /* Submenu */
+        .nav-submenu {
+            list-style: none;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .nav-submenu.open {
+            max-height: 500px;
+        }
+
+        .nav-submenu li a {
+            display: block;
+            padding: 10px 20px 10px 50px;
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .nav-submenu li a:hover {
+            color: white;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .nav-submenu li a.active {
+            color: var(--primary);
+        }
+
+        .nav-menu-item .arrow {
+            margin-left: auto;
+            transition: transform 0.3s;
+        }
+
+        .nav-menu-item.expanded .arrow {
+            transform: rotate(90deg);
+        }
+
+        /* ========== MAIN CONTENT AREA ========== */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 30px;
+        }
+
+        /* Module Header */
+        .module-header {
             background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
             color: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(37, 99, 235, 0.3);
+            padding: 40px;
+            margin: -40px -30px 40px -30px;
         }
 
-        header h1 {
-            font-size: 2.5rem;
+        .module-header .breadcrumb {
+            font-size: 0.9rem;
+            opacity: 0.8;
             margin-bottom: 10px;
         }
 
-        header p {
-            font-size: 1.1rem;
+        .module-header .breadcrumb a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .module-header .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .module-header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .module-header p {
+            font-size: 1rem;
             opacity: 0.9;
         }
 
-        .nav-section {
+        /* Section Table of Contents */
+        .section-toc {
             background: var(--bg-primary);
-            padding: 20px;
+            padding: 25px;
             border-radius: 12px;
             margin-bottom: 30px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
         }
 
-        .nav-section h3 {
+        .section-toc h3 {
             margin-bottom: 15px;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .nav-links {
-            display: flex;
-            flex-wrap: wrap;
+        .section-toc ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 10px;
         }
 
-        .nav-links a {
-            padding: 10px 20px;
+        .section-toc ul li a {
+            display: block;
+            padding: 12px 15px;
             background: var(--bg-tertiary);
             color: var(--text-primary);
             text-decoration: none;
             border-radius: 8px;
-            font-weight: 500;
+            font-size: 0.9rem;
             transition: all 0.2s;
+            border-left: 3px solid transparent;
         }
 
-        .nav-links a:hover {
+        .section-toc ul li a:hover {
             background: var(--primary);
             color: white;
+            border-left-color: #1d4ed8;
         }
 
+        .section-toc ul li a .num {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .section-toc ul li a:hover .num {
+            background: white;
+            color: var(--primary);
+        }
+
+        /* ========== ORIGINAL STYLES ========== */
         .section {
             background: var(--bg-primary);
             border-radius: 16px;
@@ -357,43 +538,12 @@
             .grid-2 {
                 grid-template-columns: 1fr;
             }
-        }
-
-        .toc {
-            background: var(--bg-primary);
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-
-        .toc h3 {
-            margin-bottom: 15px;
-            color: var(--text-primary);
-        }
-
-        .toc ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .toc ul li {
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .toc ul li:last-child {
-            border-bottom: none;
-        }
-
-        .toc ul li a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .toc ul li a:hover {
-            color: var(--primary);
+            .main-nav {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
         }
 
         .source-ref {
@@ -402,28 +552,138 @@
             font-style: italic;
             margin-top: 10px;
         }
+
+        /* Mobile toggle */
+        .mobile-nav-toggle {
+            display: none;
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1001;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-nav-toggle {
+                display: block;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Kewal Invest - Calculation Logic Documentation</h1>
-            <p>Index Analysis &rarr; Market Analysis Dashboard</p>
-        </header>
+    <!-- Mobile Navigation Toggle -->
+    <button class="mobile-nav-toggle" onclick="toggleNav()">☰ Menu</button>
 
-        <!-- Table of Contents -->
-        <div class="toc">
-            <h3>Table of Contents</h3>
-            <ul>
-                <li><a href="#best-worst-performer">1. Best and Worst Performer</a></li>
-                <li><a href="#most-volatile">2. Most Volatile</a></li>
-                <li><a href="#heatmap">3. Index Performance Heatmap</a></li>
-                <li><a href="#index-returns">4. Index Returns (1M, 3M, 6M, 1Y, YTD, All)</a></li>
-                <li><a href="#volatility">5. Volatility (7D, 14D, 30D, 60D, 90D)</a></li>
-                <li><a href="#key-metrics">6. Key Metrics (CAGR, Sharpe, Max DD, Risk)</a></li>
-                <li><a href="#detailed-statistics">7. Detailed Statistics - All Values</a></li>
-            </ul>
+    <!-- Main Navigation Sidebar -->
+    <nav class="main-nav" id="mainNav">
+        <div class="logo">
+            <h2>Kewal<span>Invest</span></h2>
+            <p>Calculation Logic Docs</p>
         </div>
+
+        <ul class="nav-menu">
+            <!-- Index Analysis -->
+            <li>
+                <div class="nav-menu-item active expanded" onclick="toggleSubmenu(this)">
+                    <span class="icon">📊</span>
+                    Index Analysis
+                    <span class="status done">Done</span>
+                    <span class="arrow">▶</span>
+                </div>
+                <ul class="nav-submenu open">
+                    <li><a href="#index-analysis" class="active">Market Analysis Dashboard</a></li>
+                </ul>
+            </li>
+
+            <!-- NAV Tracking -->
+            <li>
+                <div class="nav-menu-item" onclick="toggleSubmenu(this)">
+                    <span class="icon">📈</span>
+                    NAV Tracking
+                    <span class="status pending">Pending</span>
+                    <span class="arrow">▶</span>
+                </div>
+                <ul class="nav-submenu">
+                    <li><a href="#nav-tracking">NAV Analysis Dashboard</a></li>
+                </ul>
+            </li>
+
+            <!-- Customer Dashboard -->
+            <li>
+                <div class="nav-menu-item" onclick="toggleSubmenu(this)">
+                    <span class="icon">👤</span>
+                    Customer Dashboard
+                    <span class="status pending">Pending</span>
+                    <span class="arrow">▶</span>
+                </div>
+                <ul class="nav-submenu">
+                    <li><a href="#networth-projection">Networth Projection</a></li>
+                    <li><a href="#portfolio-performance">Portfolio Performance</a></li>
+                    <li><a href="#index-calculations">Index Calculations</a></li>
+                </ul>
+            </li>
+
+            <!-- Asset Allocation -->
+            <li>
+                <div class="nav-menu-item" onclick="toggleSubmenu(this)">
+                    <span class="icon">💰</span>
+                    Asset Allocation
+                    <span class="status pending">Pending</span>
+                    <span class="arrow">▶</span>
+                </div>
+                <ul class="nav-submenu">
+                    <li><a href="#asset-allocation">Principle Calculations</a></li>
+                </ul>
+            </li>
+
+            <!-- Goals -->
+            <li>
+                <div class="nav-menu-item" onclick="toggleSubmenu(this)">
+                    <span class="icon">🎯</span>
+                    Goals
+                    <span class="status pending">Pending</span>
+                    <span class="arrow">▶</span>
+                </div>
+                <ul class="nav-submenu">
+                    <li><a href="#goals-recommendations">Recommendations</a></li>
+                    <li><a href="#goals-health">Goal Health</a></li>
+                    <li><a href="#goals-snapshots">Goal Snapshots</a></li>
+                    <li><a href="#goals-metrics">Goal Metrics</a></li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <div class="container">
+            <!-- Module Header -->
+            <div class="module-header" id="index-analysis">
+                <div class="breadcrumb">
+                    <a href="#">Home</a> / <a href="#">Index Analysis</a> / Market Analysis Dashboard
+                </div>
+                <h1>📊 Market Analysis Dashboard</h1>
+                <p>Complete calculation logic for index performance metrics, volatility analysis, and key financial indicators</p>
+            </div>
+
+            <!-- Section Table of Contents -->
+            <div class="section-toc">
+                <h3>📋 In This Section</h3>
+                <ul>
+                    <li><a href="#best-worst-performer"><span class="num">1</span>Best and Worst Performer</a></li>
+                    <li><a href="#most-volatile"><span class="num">2</span>Most Volatile</a></li>
+                    <li><a href="#heatmap"><span class="num">3</span>Index Performance Heatmap</a></li>
+                    <li><a href="#index-returns"><span class="num">4</span>Index Returns (1M, 3M, 6M, 1Y, YTD, All)</a></li>
+                    <li><a href="#volatility"><span class="num">5</span>Volatility (7D, 14D, 30D, 60D, 90D)</a></li>
+                    <li><a href="#key-metrics"><span class="num">6</span>Key Metrics (CAGR, Sharpe, Max DD, Risk)</a></li>
+                    <li><a href="#detailed-statistics"><span class="num">7</span>Detailed Statistics - All Values</a></li>
+                </ul>
+            </div>
 
         <!-- Section 1: Best and Worst Performer -->
         <section class="section" id="best-worst-performer">
@@ -1333,13 +1593,61 @@
 
         <!-- Footer -->
         <footer style="text-align: center; padding: 40px; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 50px;">
-            <p><strong>Kewal Invest</strong> - Market Analysis Dashboard Documentation</p>
+            <p><strong>Kewal Invest</strong> - Calculation Logic Documentation</p>
             <p style="font-size: 0.9rem; margin-top: 10px;">
                 Generated on: <span id="generated-date"></span><br>
-                Document Version: 1.0 - Index Analysis Module
+                Document Version: 1.0
             </p>
+            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                <span class="badge success">Index Analysis - Complete</span>
+                <span class="badge warning">NAV Tracking - Pending</span>
+                <span class="badge warning">Customer Dashboard - Pending</span>
+                <span class="badge warning">Asset Allocation - Pending</span>
+                <span class="badge warning">Goals - Pending</span>
+            </div>
         </footer>
+        </div>
     </div>
+
+    <!-- Navigation JavaScript -->
+    <script>
+        function toggleSubmenu(element) {
+            const submenu = element.nextElementSibling;
+            const isExpanded = element.classList.contains('expanded');
+
+            // Close all submenus first
+            document.querySelectorAll('.nav-submenu').forEach(sub => {
+                sub.classList.remove('open');
+            });
+            document.querySelectorAll('.nav-menu-item').forEach(item => {
+                item.classList.remove('expanded');
+            });
+
+            // Toggle current
+            if (!isExpanded) {
+                submenu.classList.add('open');
+                element.classList.add('expanded');
+            }
+        }
+
+        function toggleNav() {
+            const nav = document.getElementById('mainNav');
+            nav.style.display = nav.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Highlight active section on scroll
+        window.addEventListener('scroll', function() {
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+        });
+    </script>
 
     <!-- Chart.js Scripts -->
     <script>
