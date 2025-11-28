@@ -2490,6 +2490,161 @@
             <div class="source-ref">
                 <strong>Source:</strong> frontend/src/utils/dataTransformers.ts:410-491 (calculatePortfolioMoM)
             </div>
+
+            <h3>Cumulative Returns Calculation</h3>
+            <p>Unlike MoM which measures point-to-point monthly changes, <strong>Cumulative Returns</strong> track total growth from a starting point to current date.</p>
+
+            <div class="formula-box">
+                <div class="formula">Cumulative Return % = ((Current Value - Initial Investment) / Initial Investment) × 100</div>
+                <div class="description">
+                    <strong>Alternatively with multiple investments:</strong><br>
+                    Cumulative Return % = ((Current Value - Total Invested) / Total Invested) × 100
+                </div>
+            </div>
+
+            <h4>MoM vs Cumulative - Key Difference</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>MoM (Month-over-Month)</th>
+                        <th>Cumulative</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Measures</td>
+                        <td>Change between consecutive months</td>
+                        <td>Total growth from inception</td>
+                    </tr>
+                    <tr>
+                        <td>Reference Point</td>
+                        <td>Previous month's value</td>
+                        <td>Initial investment (Day 0)</td>
+                    </tr>
+                    <tr>
+                        <td>Resets?</td>
+                        <td>Yes - each month starts fresh</td>
+                        <td>No - continuously accumulates</td>
+                    </tr>
+                    <tr>
+                        <td>Use Case</td>
+                        <td>Short-term volatility tracking</td>
+                        <td>Long-term wealth growth</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="example-box">
+                <h5>Cumulative Returns Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Portfolio Value</th>
+                            <th>MoM Change</th>
+                            <th>Cumulative Return</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Jan (Start)</td>
+                            <td>₹10,00,000</td>
+                            <td>-</td>
+                            <td>0.00%</td>
+                        </tr>
+                        <tr>
+                            <td>Feb</td>
+                            <td>₹10,50,000</td>
+                            <td>+5.00%</td>
+                            <td>+5.00%</td>
+                        </tr>
+                        <tr>
+                            <td>Mar</td>
+                            <td>₹10,29,000</td>
+                            <td>-2.00%</td>
+                            <td>+2.90%</td>
+                        </tr>
+                        <tr>
+                            <td>Apr</td>
+                            <td>₹10,80,450</td>
+                            <td>+5.00%</td>
+                            <td>+8.05%</td>
+                        </tr>
+                        <tr>
+                            <td>May</td>
+                            <td>₹11,12,863</td>
+                            <td>+3.00%</td>
+                            <td>+11.29%</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td>Jun</td>
+                            <td>₹11,46,249</td>
+                            <td>+3.00%</td>
+                            <td><strong>+14.62%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 15px; padding: 15px; background: var(--bg-tertiary); border-radius: 8px;">
+                    <strong>Note:</strong> Cumulative return is calculated from initial ₹10,00,000:<br>
+                    Cumulative = ((₹11,46,249 - ₹10,00,000) / ₹10,00,000) × 100 = <strong class="positive">+14.62%</strong><br>
+                    <small>This is NOT the sum of MoM returns (5 - 2 + 5 + 3 + 3 = 14%), due to compounding.</small>
+                </div>
+            </div>
+
+            <h4>Cumulative Return by Time Period</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Starting Value</th>
+                        <th>Current Value</th>
+                        <th>Cumulative Return</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1M Cumulative</td>
+                        <td>₹11,12,863 (May)</td>
+                        <td>₹11,46,249 (Jun)</td>
+                        <td>+3.00%</td>
+                    </tr>
+                    <tr>
+                        <td>3M Cumulative</td>
+                        <td>₹10,29,000 (Mar)</td>
+                        <td>₹11,46,249 (Jun)</td>
+                        <td>+11.39%</td>
+                    </tr>
+                    <tr>
+                        <td>6M Cumulative (YTD)</td>
+                        <td>₹10,00,000 (Jan)</td>
+                        <td>₹11,46,249 (Jun)</td>
+                        <td>+14.62%</td>
+                    </tr>
+                    <tr>
+                        <td>1Y Cumulative</td>
+                        <td>₹8,50,000 (Last Jun)</td>
+                        <td>₹11,46,249 (Jun)</td>
+                        <td>+34.85%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout">
+                <strong>Calculation for Different Periods:</strong>
+                <ul style="margin: 10px 0 0 20px;">
+                    <li><strong>1M:</strong> Uses previous month's value as starting point</li>
+                    <li><strong>3M:</strong> Uses value from 3 months ago</li>
+                    <li><strong>6M:</strong> Uses value from 6 months ago</li>
+                    <li><strong>1Y:</strong> Uses value from 12 months ago</li>
+                    <li><strong>Since Inception:</strong> Uses first recorded value</li>
+                </ul>
+            </div>
+
+            <h3>Cumulative Returns Visualization</h3>
+            <div class="chart-container">
+                <canvas id="cumulativeReturnsChart"></canvas>
+            </div>
         </section>
 
         <!-- Customer Dashboard Section 3: Index Calculations -->
@@ -4532,6 +4687,85 @@
                         y: {
                             ticks: {
                                 callback: function(value) { return value + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Cumulative Returns Chart
+        const cumulativeReturnsCtx = document.getElementById('cumulativeReturnsChart');
+        if (cumulativeReturnsCtx) {
+            new Chart(cumulativeReturnsCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Portfolio Value (₹L)',
+                        data: [10.0, 10.5, 10.29, 10.80, 11.13, 11.46],
+                        borderColor: 'rgb(37, 99, 235)',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Cumulative Return %',
+                        data: [0, 5.0, 2.9, 8.0, 11.3, 14.6],
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        pointRadius: 6,
+                        pointBackgroundColor: 'rgb(16, 185, 129)',
+                        yAxisID: 'y1'
+                    }, {
+                        label: 'MoM Change %',
+                        data: [0, 5.0, -2.0, 5.0, 3.0, 3.0],
+                        type: 'bar',
+                        backgroundColor: function(context) {
+                            const value = context.raw;
+                            return value >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+                        },
+                        borderColor: function(context) {
+                            const value = context.raw;
+                            return value >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
+                        },
+                        borderWidth: 2,
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'MoM vs Cumulative Returns Comparison',
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Portfolio Value (₹ Lakhs)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Return %'
+                            },
+                            grid: {
+                                drawOnChartArea: false
                             }
                         }
                     }
