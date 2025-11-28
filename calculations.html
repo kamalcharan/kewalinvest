@@ -605,7 +605,7 @@
                 <div class="nav-menu-item" onclick="toggleSubmenu(this)">
                     <span class="icon">📈</span>
                     NAV Tracking
-                    <span class="status pending">Pending</span>
+                    <span class="status done">Done</span>
                     <span class="arrow">▶</span>
                 </div>
                 <ul class="nav-submenu">
@@ -1591,6 +1591,552 @@
             </div>
         </section>
 
+        <!-- ================================================================== -->
+        <!-- NAV TRACKING SECTION -->
+        <!-- ================================================================== -->
+
+        <!-- NAV Tracking Module Header -->
+        <div class="module-header" id="nav-tracking" style="margin-top: 60px;">
+            <div class="breadcrumb">
+                <a href="#">Home</a> / <a href="#">NAV Tracking</a> / NAV Analysis Dashboard
+            </div>
+            <h1>📈 NAV Tracking - Mutual Fund Analysis</h1>
+            <p>Calculation logic for mutual fund NAV performance metrics - Uses the same calculation engine as Index Analysis</p>
+        </div>
+
+        <!-- NAV Section Table of Contents -->
+        <div class="section-toc">
+            <h3>📋 In This Section</h3>
+            <ul>
+                <li><a href="#nav-overview"><span class="num">1</span>Overview & Key Differences</a></li>
+                <li><a href="#nav-best-worst"><span class="num">2</span>Best and Worst Performer</a></li>
+                <li><a href="#nav-volatile"><span class="num">3</span>Most Volatile Funds</a></li>
+                <li><a href="#nav-heatmap"><span class="num">4</span>Fund Performance Heatmap</a></li>
+                <li><a href="#nav-returns"><span class="num">5</span>NAV Returns (1M, 3M, 6M, 1Y, YTD, All)</a></li>
+                <li><a href="#nav-volatility"><span class="num">6</span>NAV Volatility (7D, 14D, 30D, 60D, 90D)</a></li>
+                <li><a href="#nav-key-metrics"><span class="num">7</span>Key Metrics (CAGR, Sharpe, Max DD, Risk)</a></li>
+            </ul>
+        </div>
+
+        <!-- NAV Section 1: Overview -->
+        <section class="section" id="nav-overview">
+            <h2>1. Overview & Key Differences</h2>
+
+            <h3>What is NAV Tracking?</h3>
+            <p>NAV (Net Asset Value) Tracking analyzes mutual fund performance using the same calculation engine as Index Analysis. The key difference is the data source - mutual funds have a single NAV value per day instead of OHLC (Open, High, Low, Close) data.</p>
+
+            <div class="info-callout success">
+                <strong>Important:</strong> NAV Tracking uses the <strong>same calculation formulas</strong> as Index Analysis. The underlying <code>marketMetricsCalculator.service.ts</code> powers both modules.
+            </div>
+
+            <h3>Index Analysis vs NAV Tracking</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Index Analysis</th>
+                        <th>NAV Tracking</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Data Source</strong></td>
+                        <td>Market Indices (NIFTY 50, NIFTY IT, Bank NIFTY)</td>
+                        <td>Mutual Fund Schemes (HDFC Equity, ICICI Bluechip)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Price Data</strong></td>
+                        <td>OHLC (Open, High, Low, Close) + Volume</td>
+                        <td>Single NAV value per day</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Database Table</strong></td>
+                        <td><code>t_market_data</code></td>
+                        <td><code>t_nav_data</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Calculation Service</strong></td>
+                        <td><code>marketMetricsCalculator.service.ts</code></td>
+                        <td><code>schemeMetricsCalculator.service.ts</code> → calls marketMetricsCalculator</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Metrics Calculated</strong></td>
+                        <td colspan="2" style="text-align: center; background: #f0fdf4;">
+                            <strong>Same metrics for both:</strong> Returns, Volatility, CAGR, Sharpe Ratio, Max Drawdown, Total Risk
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>How NAV Data is Converted for Calculation</h3>
+            <div class="code-snippet">
+<span class="comment">// NAV data conversion in schemeMetricsCalculator.service.ts</span>
+<span class="keyword">const</span> pricePoints: PricePoint[] = navData.map(nd => ({
+  date: <span class="keyword">new</span> Date(nd.nav_date),
+  close: nd.nav_value,
+  open: nd.nav_value,   <span class="comment">// NAV used as open</span>
+  high: nd.nav_value,   <span class="comment">// NAV used as high</span>
+  low: nd.nav_value,    <span class="comment">// NAV used as low</span>
+  volume: <span class="number">0</span>            <span class="comment">// Not applicable for mutual funds</span>
+}));
+
+<span class="comment">// Then same calculator is used:</span>
+<span class="keyword">const</span> metrics = <span class="keyword">await</span> marketMetricsCalculator.calculateMetricsForDate(
+  todayNav,
+  pricePoints
+);
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/schemeMetricsCalculator.service.ts:119-147
+            </div>
+        </section>
+
+        <!-- NAV Section 2: Best and Worst Performer -->
+        <section class="section" id="nav-best-worst">
+            <h2>2. Best and Worst Performer</h2>
+
+            <h3>Identical Calculation to Index Analysis</h3>
+            <p>Best and Worst performers are determined the same way as Index Analysis - by comparing return values across all tracked mutual fund schemes.</p>
+
+            <div class="formula-box">
+                <div class="formula">Best Fund = MAX(return_value) across all bookmarked schemes</div>
+                <div class="formula">Worst Fund = MIN(return_value) across all bookmarked schemes</div>
+            </div>
+
+            <h3>Sample Mutual Fund Data</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fund Name</th>
+                        <th>AMC</th>
+                        <th>1M Return</th>
+                        <th>3M Return</th>
+                        <th>1Y Return</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="highlight">
+                        <td><strong>Quant Small Cap Fund</strong></td>
+                        <td>Quant MF</td>
+                        <td class="positive">+6.82%</td>
+                        <td class="positive">+18.45%</td>
+                        <td class="positive">+42.67%</td>
+                    </tr>
+                    <tr>
+                        <td>HDFC Mid-Cap Opportunities</td>
+                        <td>HDFC MF</td>
+                        <td class="positive">+3.45%</td>
+                        <td class="positive">+12.34%</td>
+                        <td class="positive">+28.90%</td>
+                    </tr>
+                    <tr>
+                        <td>ICICI Pru Bluechip Fund</td>
+                        <td>ICICI Pru MF</td>
+                        <td class="positive">+2.12%</td>
+                        <td class="positive">+7.89%</td>
+                        <td class="positive">+15.45%</td>
+                    </tr>
+                    <tr>
+                        <td>SBI Equity Hybrid Fund</td>
+                        <td>SBI MF</td>
+                        <td class="positive">+1.56%</td>
+                        <td class="positive">+5.23%</td>
+                        <td class="positive">+11.78%</td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>Aditya Birla SL PSU Equity</strong></td>
+                        <td>ABSL MF</td>
+                        <td class="negative">-2.34%</td>
+                        <td class="negative">-4.56%</td>
+                        <td class="positive">+5.23%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="example-box">
+                <h5>Example (1Y Period Selected):</h5>
+                <div style="display: flex; gap: 30px; margin-top: 15px;">
+                    <div class="metric-card success">
+                        <div class="label">Best Performer</div>
+                        <div class="value">Quant Small Cap</div>
+                        <div style="font-size: 0.9rem; color: var(--success);">+42.67%</div>
+                    </div>
+                    <div class="metric-card danger">
+                        <div class="label">Worst Performer</div>
+                        <div class="value">ABSL PSU Equity</div>
+                        <div style="font-size: 0.9rem; color: var(--success);">+5.23%</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- NAV Section 3: Most Volatile -->
+        <section class="section" id="nav-volatile">
+            <h2>3. Most Volatile Funds</h2>
+
+            <h3>Same Volatility Calculation</h3>
+            <p>Volatility for mutual funds is calculated using the same Standard Deviation formula as Index Analysis - measuring how much the daily NAV returns deviate from the mean.</p>
+
+            <div class="formula-box">
+                <div class="formula">Volatility (SD) = √(Σ(daily_return - mean)² / n)</div>
+                <div class="description">
+                    Where daily returns are calculated as: ((NAV<sub>today</sub> - NAV<sub>yesterday</sub>) / NAV<sub>yesterday</sub>) × 100
+                </div>
+            </div>
+
+            <h3>Fund Volatility Comparison</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fund Name</th>
+                        <th>Category</th>
+                        <th>7D SD</th>
+                        <th>30D SD</th>
+                        <th>3M SD</th>
+                        <th>Risk Level</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>HDFC Liquid Fund</td>
+                        <td>Debt - Liquid</td>
+                        <td>0.02%</td>
+                        <td>0.03%</td>
+                        <td>0.04%</td>
+                        <td><span class="badge success">Very Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>ICICI Pru Equity & Debt</td>
+                        <td>Hybrid</td>
+                        <td>0.65%</td>
+                        <td>0.78%</td>
+                        <td>0.92%</td>
+                        <td><span class="badge primary">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>SBI Bluechip Fund</td>
+                        <td>Large Cap</td>
+                        <td>0.92%</td>
+                        <td>1.12%</td>
+                        <td>1.25%</td>
+                        <td><span class="badge warning">Moderate</span></td>
+                    </tr>
+                    <tr>
+                        <td>HDFC Mid-Cap Opportunities</td>
+                        <td>Mid Cap</td>
+                        <td>1.45%</td>
+                        <td>1.78%</td>
+                        <td>1.95%</td>
+                        <td><span class="badge warning">Moderate-High</span></td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>Quant Small Cap Fund</strong></td>
+                        <td>Small Cap</td>
+                        <td>2.34%</td>
+                        <td>2.89%</td>
+                        <td><strong>3.12%</strong></td>
+                        <td><span class="badge danger">Most Volatile</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout">
+                <strong>Fund Category & Volatility:</strong><br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li><strong>Liquid/Debt Funds:</strong> Very low volatility (0.01% - 0.1%)</li>
+                    <li><strong>Hybrid Funds:</strong> Low-moderate volatility (0.5% - 1.2%)</li>
+                    <li><strong>Large Cap Equity:</strong> Moderate volatility (0.8% - 1.5%)</li>
+                    <li><strong>Mid Cap Equity:</strong> Moderate-high volatility (1.2% - 2.5%)</li>
+                    <li><strong>Small Cap Equity:</strong> High volatility (2% - 4%+)</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- NAV Section 4: Heatmap -->
+        <section class="section" id="nav-heatmap">
+            <h2>4. Fund Performance Heatmap</h2>
+
+            <h3>Visual Representation</h3>
+            <p>The heatmap displays all bookmarked mutual funds with color-coded returns - identical logic to Index Analysis.</p>
+
+            <div class="heatmap-demo">
+                <div class="heatmap-cell" style="background: #15803d;">
+                    <div class="name">Quant Small Cap</div>
+                    <div class="value">+18.45%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #22c55e;">
+                    <div class="name">HDFC Mid-Cap</div>
+                    <div class="value">+12.34%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #4ade80;">
+                    <div class="name">Axis Bluechip</div>
+                    <div class="value">+8.92%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #86efac;">
+                    <div class="name">ICICI Pru Value</div>
+                    <div class="value">+6.45%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #bbf7d0;">
+                    <div class="name">SBI Equity Hybrid</div>
+                    <div class="value">+5.23%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #fca5a5; color: #7f1d1d;">
+                    <div class="name">UTI Flexi Cap</div>
+                    <div class="value">-1.23%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #f87171;">
+                    <div class="name">ABSL PSU Equity</div>
+                    <div class="value">-4.56%</div>
+                </div>
+                <div class="heatmap-cell" style="background: #dc2626;">
+                    <div class="name">Tata Digital India</div>
+                    <div class="value">-7.89%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- NAV Section 5: Returns -->
+        <section class="section" id="nav-returns">
+            <h2>5. NAV Returns (1M, 3M, 6M, 1Y, YTD, All)</h2>
+
+            <h3>Same Return Formula</h3>
+            <div class="formula-box">
+                <div class="formula">NAV Return % = ((Current NAV - Reference NAV) / Reference NAV) × 100</div>
+            </div>
+
+            <h3>Sample Calculation - Quant Small Cap Fund</h3>
+            <div class="example-box">
+                <h5>Current Date: November 28, 2025 | Current NAV: ₹245.67</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Reference Date</th>
+                            <th>NAV on That Date</th>
+                            <th>Return</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1M</td>
+                            <td>Oct 31, 2025</td>
+                            <td>₹230.12</td>
+                            <td class="positive">+6.76%</td>
+                        </tr>
+                        <tr>
+                            <td>3M</td>
+                            <td>Aug 31, 2025</td>
+                            <td>₹207.45</td>
+                            <td class="positive">+18.42%</td>
+                        </tr>
+                        <tr>
+                            <td>6M</td>
+                            <td>May 31, 2025</td>
+                            <td>₹189.23</td>
+                            <td class="positive">+29.82%</td>
+                        </tr>
+                        <tr>
+                            <td>1Y</td>
+                            <td>Nov 28, 2024</td>
+                            <td>₹172.18</td>
+                            <td class="positive">+42.67%</td>
+                        </tr>
+                        <tr>
+                            <td>YTD</td>
+                            <td>Jan 1, 2025</td>
+                            <td>₹178.90</td>
+                            <td class="positive">+37.32%</td>
+                        </tr>
+                        <tr>
+                            <td>All Time</td>
+                            <td>Jan 1, 2013 (Inception)</td>
+                            <td>₹10.00</td>
+                            <td class="positive">+2,356.70%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>NAV Returns Comparison Chart</h3>
+            <div class="chart-container">
+                <canvas id="navReturnsChart"></canvas>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/marketMetricsCalculator.service.ts:52-59 (calculateReturn - same as Index)
+            </div>
+        </section>
+
+        <!-- NAV Section 6: Volatility -->
+        <section class="section" id="nav-volatility">
+            <h2>6. NAV Volatility (7D, 14D, 30D, 60D, 90D)</h2>
+
+            <h3>Volatility Windows - Same as Index</h3>
+            <p>NAV volatility is measured using the same time windows as Index Analysis:</p>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Field Name</th>
+                        <th>Use Case</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>7-Day</strong></td>
+                        <td>sd_7d</td>
+                        <td>Very short-term volatility for active monitoring</td>
+                    </tr>
+                    <tr>
+                        <td><strong>14-Day</strong></td>
+                        <td>sd_14d</td>
+                        <td>Short-term trend volatility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>21-Day (30D)</strong></td>
+                        <td>sd_21d</td>
+                        <td>Monthly volatility assessment</td>
+                    </tr>
+                    <tr>
+                        <td><strong>42-Day (60D)</strong></td>
+                        <td>sd_42d</td>
+                        <td>Bi-monthly volatility for comparison</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3-Month (90D)</strong></td>
+                        <td>sd_3m</td>
+                        <td>Used for "Most Volatile" determination</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6-Month</strong></td>
+                        <td>sd_6m</td>
+                        <td>Longer-term volatility pattern</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Volatility by Fund Category</h3>
+            <div class="chart-container">
+                <canvas id="navVolatilityChart"></canvas>
+            </div>
+        </section>
+
+        <!-- NAV Section 7: Key Metrics -->
+        <section class="section" id="nav-key-metrics">
+            <h2>7. Key Metrics (CAGR, Sharpe, Max DD, Risk)</h2>
+
+            <h3>Same Formulas as Index Analysis</h3>
+            <p>All key metrics use identical calculation formulas:</p>
+
+            <div class="grid-2">
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">CAGR</h4>
+                    <div class="formula" style="font-size: 1rem;">CAGR = (End NAV / Start NAV)^(1/Years) - 1</div>
+                </div>
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">Sharpe Ratio</h4>
+                    <div class="formula" style="font-size: 1rem;">(Return - Risk-Free Rate) / SD</div>
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-top: 15px;">
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">Max Drawdown</h4>
+                    <div class="formula" style="font-size: 1rem;">((Trough NAV - Peak NAV) / Peak NAV) × 100</div>
+                </div>
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">Total Risk</h4>
+                    <div class="formula" style="font-size: 1rem;">30-Day Standard Deviation</div>
+                </div>
+            </div>
+
+            <h3>Sample Fund Metrics Comparison</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fund Name</th>
+                        <th>CAGR (5Y)</th>
+                        <th>Sharpe</th>
+                        <th>Max DD</th>
+                        <th>Risk (SD)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Quant Small Cap Fund</td>
+                        <td class="positive">+28.45%</td>
+                        <td class="positive">1.92</td>
+                        <td class="negative">-32.5%</td>
+                        <td>3.12%</td>
+                    </tr>
+                    <tr>
+                        <td>HDFC Mid-Cap Opportunities</td>
+                        <td class="positive">+18.67%</td>
+                        <td class="positive">1.45</td>
+                        <td class="negative">-25.8%</td>
+                        <td>1.95%</td>
+                    </tr>
+                    <tr>
+                        <td>ICICI Pru Bluechip Fund</td>
+                        <td class="positive">+14.23%</td>
+                        <td class="positive">1.28</td>
+                        <td class="negative">-18.4%</td>
+                        <td>1.25%</td>
+                    </tr>
+                    <tr>
+                        <td>SBI Equity Hybrid Fund</td>
+                        <td class="positive">+11.89%</td>
+                        <td class="positive">1.56</td>
+                        <td class="negative">-12.3%</td>
+                        <td>0.92%</td>
+                    </tr>
+                    <tr>
+                        <td>HDFC Liquid Fund</td>
+                        <td class="positive">+6.12%</td>
+                        <td class="negative">0.45</td>
+                        <td class="negative">-0.2%</td>
+                        <td>0.04%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-callout warning">
+                <strong>Risk-Return Trade-off:</strong><br>
+                Notice how higher CAGR funds (Small Cap) have higher Max Drawdown and Risk (SD), while conservative funds (Liquid) have lower returns but minimal drawdown. The Sharpe Ratio helps compare risk-adjusted performance.
+            </div>
+
+            <h3>Metrics Display in UI</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px;">
+                <div class="metric-card primary">
+                    <div class="label">CAGR</div>
+                    <div class="value">28.45%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">5-Year Annualized</div>
+                </div>
+                <div class="metric-card success">
+                    <div class="label">Sharpe Ratio</div>
+                    <div class="value">1.92</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Excellent</div>
+                </div>
+                <div class="metric-card danger">
+                    <div class="label">Max Drawdown</div>
+                    <div class="value">-32.5%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Worst decline</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Risk</div>
+                    <div class="value">3.12%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">High volatility</div>
+                </div>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/schemeMetricsCalculator.service.ts (wrapper) → backend/src/services/marketMetricsCalculator.service.ts (calculation engine)<br>
+                <strong>Frontend:</strong> frontend/src/pages/nav/SchemeDetailPage.tsx
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer style="text-align: center; padding: 40px; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 50px;">
             <p><strong>Kewal Invest</strong> - Calculation Logic Documentation</p>
@@ -1600,7 +2146,7 @@
             </p>
             <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 <span class="badge success">Index Analysis - Complete</span>
-                <span class="badge warning">NAV Tracking - Pending</span>
+                <span class="badge success">NAV Tracking - Complete</span>
                 <span class="badge warning">Customer Dashboard - Pending</span>
                 <span class="badge warning">Asset Allocation - Pending</span>
                 <span class="badge warning">Goals - Pending</span>
@@ -1759,6 +2305,102 @@
                 }
             }
         });
+
+        // NAV Returns Chart
+        const navReturnsCtx = document.getElementById('navReturnsChart');
+        if (navReturnsCtx) {
+            new Chart(navReturnsCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Quant Small Cap', 'HDFC Mid-Cap', 'ICICI Bluechip', 'SBI Hybrid', 'HDFC Liquid'],
+                    datasets: [{
+                        label: '3M Return',
+                        data: [18.45, 12.34, 7.89, 5.23, 1.52],
+                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                        borderColor: 'rgb(34, 197, 94)',
+                        borderWidth: 2,
+                        borderRadius: 4
+                    }, {
+                        label: '1Y Return',
+                        data: [42.67, 28.90, 15.45, 11.78, 6.12],
+                        backgroundColor: 'rgba(37, 99, 235, 0.7)',
+                        borderColor: 'rgb(37, 99, 235)',
+                        borderWidth: 2,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Mutual Fund Returns Comparison',
+                            font: { size: 16, weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) { return value + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // NAV Volatility Chart
+        const navVolatilityCtx = document.getElementById('navVolatilityChart');
+        if (navVolatilityCtx) {
+            new Chart(navVolatilityCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Liquid', 'Hybrid', 'Large Cap', 'Mid Cap', 'Small Cap'],
+                    datasets: [{
+                        label: '30D Volatility',
+                        data: [0.03, 0.78, 1.12, 1.78, 2.89],
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.7)',
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(234, 179, 8, 0.7)',
+                            'rgba(249, 115, 22, 0.7)',
+                            'rgba(220, 38, 38, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgb(34, 197, 94)',
+                            'rgb(59, 130, 246)',
+                            'rgb(234, 179, 8)',
+                            'rgb(249, 115, 22)',
+                            'rgb(220, 38, 38)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: 'Volatility by Fund Category (30-Day SD)',
+                            font: { size: 16, weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) { return value + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // Drawdown Illustration Chart
         const drawdownCtx = document.getElementById('drawdownChart').getContext('2d');
