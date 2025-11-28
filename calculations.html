@@ -618,7 +618,7 @@
                 <div class="nav-menu-item" onclick="toggleSubmenu(this)">
                     <span class="icon">👤</span>
                     Customer Dashboard
-                    <span class="status pending">Pending</span>
+                    <span class="status done">Done</span>
                     <span class="arrow">▶</span>
                 </div>
                 <ul class="nav-submenu">
@@ -2137,6 +2137,551 @@
             </div>
         </section>
 
+        <!-- ========================================== -->
+        <!-- CUSTOMER DASHBOARD SECTION              -->
+        <!-- ========================================== -->
+
+        <div class="module-header" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);">
+            <div class="breadcrumb">Home / Customer Dashboard</div>
+            <h1>👤 Customer Dashboard Calculations</h1>
+            <p style="margin-top: 10px; opacity: 0.9;">Networth Projection, Portfolio Performance (MoM), and Index Calculations</p>
+        </div>
+
+        <!-- Customer Dashboard Section 1: Networth Projection -->
+        <section class="section" id="networth-projection">
+            <h2>1. Networth Projection</h2>
+
+            <h3>Overview</h3>
+            <p>The Networth Projection chart displays historical portfolio values and projects future growth based on an assumed annual growth rate. This is the primary visualization on the Customer Dashboard.</p>
+
+            <div class="info-callout">
+                <strong>Key Features:</strong><br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>Historical data displayed as solid line (green for growth, red for decline)</li>
+                    <li>Projected data displayed as dashed line</li>
+                    <li>Supports timeframes: 1M, 3M, 6M, 1Y, 24M</li>
+                    <li>Adjustable growth rate assumption (4% - 30%)</li>
+                    <li>Filter by asset type (MF, FD, Gold, etc.)</li>
+                    <li>Handles planned withdrawals in projection</li>
+                </ul>
+            </div>
+
+            <h3>Monthly Growth Rate Calculation</h3>
+            <p>Annual growth rate is converted to monthly compounding rate:</p>
+            <div class="formula-box">
+                <div class="formula">Monthly Growth Rate = (1 + Annual Rate / 100)<sup>1/12</sup> - 1</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Example: 8% Annual Growth Rate</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Calculation</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Annual Rate</td>
+                            <td>Given</td>
+                            <td>8%</td>
+                        </tr>
+                        <tr>
+                            <td>Monthly Rate</td>
+                            <td>(1 + 0.08)^(1/12) - 1</td>
+                            <td><strong>0.6434%</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Verification</td>
+                            <td>(1.006434)^12</td>
+                            <td>≈ 1.08 (8%)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Projection Calculation Formula</h3>
+            <p>Each month's projected value is calculated as:</p>
+            <div class="formula-box">
+                <div class="formula">Next Month Value = Current Value × (1 + Monthly Growth Rate) + Monthly Contribution</div>
+            </div>
+
+            <div class="example-box">
+                <h5>12-Month Projection Example</h5>
+                <p style="margin-bottom: 10px;">Starting Value: ₹10,00,000 | Annual Rate: 8% | Monthly Contribution: ₹25,000</p>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Opening Value</th>
+                            <th>Growth (0.6434%)</th>
+                            <th>+ Contribution</th>
+                            <th>Closing Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Month 1</td>
+                            <td>₹10,00,000</td>
+                            <td>₹6,434</td>
+                            <td>₹25,000</td>
+                            <td>₹10,31,434</td>
+                        </tr>
+                        <tr>
+                            <td>Month 2</td>
+                            <td>₹10,31,434</td>
+                            <td>₹6,636</td>
+                            <td>₹25,000</td>
+                            <td>₹10,63,070</td>
+                        </tr>
+                        <tr>
+                            <td>Month 3</td>
+                            <td>₹10,63,070</td>
+                            <td>₹6,840</td>
+                            <td>₹25,000</td>
+                            <td>₹10,94,910</td>
+                        </tr>
+                        <tr>
+                            <td>...</td>
+                            <td colspan="4">Continues for projection period</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Month 12</strong></td>
+                            <td>₹13,52,890</td>
+                            <td>₹8,705</td>
+                            <td>₹25,000</td>
+                            <td><strong>₹13,86,595</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Withdrawal Impact on Projection</h3>
+            <p>When scheduled withdrawals exist, they are subtracted from the projected value:</p>
+            <div class="formula-box">
+                <div class="formula">Post-Withdrawal Value = Projected Value - Withdrawal Amount</div>
+            </div>
+
+            <div class="info-callout warning">
+                <strong>Withdrawal Handling:</strong><br>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>Withdrawals are matched by month (YYYY-MM format)</li>
+                    <li>Multiple withdrawals in same month are summed</li>
+                    <li>Value cannot go below zero: <code>Math.max(0, currentValue)</code></li>
+                    <li>Withdrawal points shown with red inverted triangle marker</li>
+                </ul>
+            </div>
+
+            <h3>Projected Growth Percentage</h3>
+            <div class="formula-box">
+                <div class="formula">Projected Growth % = ((Projected Value - Current Value) / Current Value) × 100</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Example Calculation</h5>
+                <ul style="padding-left: 20px;">
+                    <li>Current Networth: ₹25,00,000</li>
+                    <li>Projected (12M @ 8%): ₹27,07,847</li>
+                    <li>Growth: ((27,07,847 - 25,00,000) / 25,00,000) × 100 = <strong class="positive">+8.31%</strong></li>
+                </ul>
+            </div>
+
+            <h3>Networth Projection Chart</h3>
+            <div class="chart-container">
+                <canvas id="networthProjectionChart"></canvas>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> frontend/src/components/portfolio/NetworthProjectionChart.tsx:315-357<br>
+                <strong>Backend:</strong> backend/src/services/networth.service.ts
+            </div>
+        </section>
+
+        <!-- Customer Dashboard Section 2: Portfolio Performance -->
+        <section class="section" id="portfolio-performance">
+            <h2>2. Portfolio Performance (Month-over-Month)</h2>
+
+            <h3>Overview</h3>
+            <p>Portfolio Performance calculates Month-over-Month (MoM) changes to show how a portfolio grew or declined. The system calculates <strong>two types of MoM</strong> to provide accurate performance insights.</p>
+
+            <div class="info-callout">
+                <strong>Why Two MoM Types?</strong><br>
+                When a customer adds new investments mid-month, the simple value-based MoM can be misleading. Example:
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>Previous month: ₹10,00,000</li>
+                    <li>New investment: ₹5,00,000</li>
+                    <li>Current month: ₹15,50,000</li>
+                    <li>Simple MoM shows +55% (misleading!)</li>
+                    <li>Returns-based MoM shows +3.33% (actual market growth)</li>
+                </ul>
+            </div>
+
+            <h3>Type 1: Value-Based MoM (Traditional)</h3>
+            <p>Measures total portfolio value change including new investments:</p>
+            <div class="formula-box">
+                <div class="formula">MoM Change % = ((Current Value - Previous Value) / Previous Value) × 100</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Value-Based MoM Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Portfolio Value</th>
+                            <th>MoM Change</th>
+                            <th>MoM %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>October 2024</td>
+                            <td>₹10,00,000</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>November 2024</td>
+                            <td>₹10,35,000</td>
+                            <td>₹35,000</td>
+                            <td class="positive">+3.50%</td>
+                        </tr>
+                        <tr>
+                            <td>December 2024</td>
+                            <td>₹10,15,000</td>
+                            <td>-₹20,000</td>
+                            <td class="negative">-1.93%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Type 2: Returns-Based MoM (True Performance)</h3>
+            <p>Measures actual market returns, excluding the impact of new investments:</p>
+            <div class="formula-box">
+                <div class="formula">Returns MoM % = ((Current Returns - Previous Returns) / Previous Value) × 100</div>
+            </div>
+
+            <p style="margin-top: 15px;">Where:</p>
+            <ul style="padding-left: 20px; margin-bottom: 20px;">
+                <li><strong>Returns</strong> = Current Value - Total Invested</li>
+                <li><strong>Returns Change</strong> = Current Returns - Previous Returns</li>
+            </ul>
+
+            <div class="example-box">
+                <h5>Returns-Based MoM Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Value</th>
+                            <th>Invested</th>
+                            <th>Returns</th>
+                            <th>Returns MoM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>October</td>
+                            <td>₹10,00,000</td>
+                            <td>₹8,00,000</td>
+                            <td>₹2,00,000</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>November</td>
+                            <td>₹15,50,000</td>
+                            <td>₹13,00,000</td>
+                            <td>₹2,50,000</td>
+                            <td class="positive">+5.00%</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 15px; padding: 15px; background: var(--bg-tertiary); border-radius: 8px;">
+                    <strong>Calculation:</strong><br>
+                    Returns Change = ₹2,50,000 - ₹2,00,000 = ₹50,000<br>
+                    Returns MoM = (₹50,000 / ₹10,00,000) × 100 = <strong class="positive">+5.00%</strong><br>
+                    <small style="color: var(--text-secondary);">(Note: ₹5,00,000 new investment had no impact on this calculation)</small>
+                </div>
+            </div>
+
+            <h3>Significant Investment Detection</h3>
+            <p>The system flags months where new investments exceed 10% of previous portfolio value:</p>
+            <div class="formula-box">
+                <div class="formula">Is Significant = |Investment Change| > (Previous Value × 0.10)</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Significance Detection</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Previous Value</th>
+                            <th>New Investment</th>
+                            <th>Threshold (10%)</th>
+                            <th>Is Significant?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>₹10,00,000</td>
+                            <td>₹50,000</td>
+                            <td>₹1,00,000</td>
+                            <td><span class="badge success">No</span></td>
+                        </tr>
+                        <tr>
+                            <td>₹10,00,000</td>
+                            <td>₹2,00,000</td>
+                            <td>₹1,00,000</td>
+                            <td><span class="badge warning">Yes ⚠️</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>MoM Calculation Output</h3>
+            <p>The <code>calculatePortfolioMoM()</code> function returns:</p>
+            <table class="data-table" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>mom_change_percentage</code></td>
+                        <td>number</td>
+                        <td>Value-based MoM %</td>
+                    </tr>
+                    <tr>
+                        <td><code>mom_change_absolute</code></td>
+                        <td>number</td>
+                        <td>Absolute value change (₹)</td>
+                    </tr>
+                    <tr>
+                        <td><code>returns_mom_percentage</code></td>
+                        <td>number</td>
+                        <td>Returns-based MoM %</td>
+                    </tr>
+                    <tr>
+                        <td><code>investment_change</code></td>
+                        <td>number</td>
+                        <td>New investment amount</td>
+                    </tr>
+                    <tr>
+                        <td><code>is_significant_investment</code></td>
+                        <td>boolean</td>
+                        <td>True if investment > 10% of portfolio</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Portfolio MoM Visualization</h3>
+            <div class="chart-container">
+                <canvas id="portfolioMomChart"></canvas>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> frontend/src/utils/dataTransformers.ts:410-491 (calculatePortfolioMoM)
+            </div>
+        </section>
+
+        <!-- Customer Dashboard Section 3: Index Calculations -->
+        <section class="section" id="index-calculations">
+            <h2>3. Index Calculations (Networth Backend)</h2>
+
+            <h3>Overview</h3>
+            <p>The backend networth service aggregates portfolio data from multiple sources and calculates key metrics for the Customer Dashboard.</p>
+
+            <h3>Return Percentage Calculation</h3>
+            <p>Overall portfolio returns as a percentage of invested amount:</p>
+            <div class="formula-box">
+                <div class="formula">Return % = (Total Returns / Total Invested) × 100</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Example</h5>
+                <ul style="padding-left: 20px;">
+                    <li>Total Invested: ₹15,00,000</li>
+                    <li>Current Value: ₹18,75,000</li>
+                    <li>Total Returns: ₹3,75,000</li>
+                    <li>Return %: (3,75,000 / 15,00,000) × 100 = <strong class="positive">+25.00%</strong></li>
+                </ul>
+            </div>
+
+            <h3>Allocation Percentage</h3>
+            <p>Each asset type's share of total networth:</p>
+            <div class="formula-box">
+                <div class="formula">Allocation % = (Asset Current Value / Total Networth) × 100</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Asset Allocation Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Asset Type</th>
+                            <th>Current Value</th>
+                            <th>Allocation %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mutual Funds (MF)</td>
+                            <td>₹12,00,000</td>
+                            <td>48.00%</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Deposits (FD)</td>
+                            <td>₹5,00,000</td>
+                            <td>20.00%</td>
+                        </tr>
+                        <tr>
+                            <td>Gold</td>
+                            <td>₹4,00,000</td>
+                            <td>16.00%</td>
+                        </tr>
+                        <tr>
+                            <td>Real Estate</td>
+                            <td>₹4,00,000</td>
+                            <td>16.00%</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>Total Networth</strong></td>
+                            <td><strong>₹25,00,000</strong></td>
+                            <td><strong>100.00%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Growth Metrics (Historical)</h3>
+            <p>Calculated from networth history:</p>
+
+            <div class="grid-2">
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">Absolute Growth</h4>
+                    <div class="formula" style="font-size: 1rem;">Ending Networth - Starting Networth</div>
+                </div>
+                <div class="formula-box">
+                    <h4 style="margin-bottom: 10px;">Percentage Growth</h4>
+                    <div class="formula" style="font-size: 1rem;">(Absolute Growth / Starting Networth) × 100</div>
+                </div>
+            </div>
+
+            <div class="example-box" style="margin-top: 20px;">
+                <h5>12-Month Growth Example</h5>
+                <ul style="padding-left: 20px;">
+                    <li>Starting Networth (Jan 2024): ₹18,00,000</li>
+                    <li>Ending Networth (Dec 2024): ₹25,00,000</li>
+                    <li>Absolute Growth: ₹7,00,000</li>
+                    <li>Percentage Growth: (7,00,000 / 18,00,000) × 100 = <strong class="positive">+38.89%</strong></li>
+                </ul>
+            </div>
+
+            <h3>Goal Achievability Calculation</h3>
+            <p>Projects whether allocated funds will reach the target amount:</p>
+            <div class="formula-box">
+                <div class="formula">Projected Value = Current Allocated × (1 + Assumption Rate)<sup>Years to Target</sup></div>
+            </div>
+            <div class="formula-box" style="margin-top: 15px;">
+                <div class="formula">Achievability % = (Projected Value / Target Amount) × 100</div>
+            </div>
+
+            <div class="example-box">
+                <h5>Goal Achievability Example</h5>
+                <table class="data-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Goal</td>
+                            <td>Child's Education</td>
+                        </tr>
+                        <tr>
+                            <td>Target Amount</td>
+                            <td>₹50,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Target Date</td>
+                            <td>Dec 2028 (4 years)</td>
+                        </tr>
+                        <tr>
+                            <td>Current Allocated</td>
+                            <td>₹35,00,000</td>
+                        </tr>
+                        <tr>
+                            <td>Assumption Rate</td>
+                            <td>10%</td>
+                        </tr>
+                        <tr>
+                            <td>Projected Value</td>
+                            <td>₹35,00,000 × (1.10)^4 = <strong>₹51,24,350</strong></td>
+                        </tr>
+                        <tr class="highlight">
+                            <td>Achievability</td>
+                            <td>(51,24,350 / 50,00,000) × 100 = <strong class="positive">102.49%</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Status</td>
+                            <td><span class="badge success">Ahead</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Goal Status Classification</h3>
+            <table class="data-table" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th>Achievability %</th>
+                        <th>Status</th>
+                        <th>Color</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>≥ 100%</td>
+                        <td>Ahead</td>
+                        <td><span class="badge success">Green</span></td>
+                    </tr>
+                    <tr>
+                        <td>90% - 99%</td>
+                        <td>On Track</td>
+                        <td><span class="badge success">Green</span></td>
+                    </tr>
+                    <tr>
+                        <td>70% - 89%</td>
+                        <td>At Risk</td>
+                        <td><span class="badge warning">Yellow</span></td>
+                    </tr>
+                    <tr>
+                        <td>&lt; 70%</td>
+                        <td>Behind</td>
+                        <td><span class="badge danger">Red</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Asset Allocation Pie Chart</h3>
+            <div class="chart-container">
+                <canvas id="assetAllocationChart"></canvas>
+            </div>
+
+            <div class="source-ref">
+                <strong>Source:</strong> backend/src/services/networth.service.ts<br>
+                <strong>Functions:</strong> getNetworthSummary(), getNetworthHistory(), getNetworthGoals()
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer style="text-align: center; padding: 40px; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 50px;">
             <p><strong>Kewal Invest</strong> - Calculation Logic Documentation</p>
@@ -2147,7 +2692,7 @@
             <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 <span class="badge success">Index Analysis - Complete</span>
                 <span class="badge success">NAV Tracking - Complete</span>
-                <span class="badge warning">Customer Dashboard - Pending</span>
+                <span class="badge success">Customer Dashboard - Complete</span>
                 <span class="badge warning">Asset Allocation - Pending</span>
                 <span class="badge warning">Goals - Pending</span>
             </div>
@@ -2454,6 +2999,179 @@
                 }
             }
         });
+
+        // ========================================
+        // CUSTOMER DASHBOARD CHARTS
+        // ========================================
+
+        // Networth Projection Chart
+        const networthProjectionCtx = document.getElementById('networthProjectionChart');
+        if (networthProjectionCtx) {
+            new Chart(networthProjectionCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan (P)', 'Feb (P)', 'Mar (P)', 'Apr (P)', 'May (P)', 'Jun (P)'],
+                    datasets: [{
+                        label: 'Historical',
+                        data: [1000000, 1020000, 1065000, 1040000, 1085000, 1120000, 1150000, 1195000, 1230000, 1280000, 1320000, 1386595, null, null, null, null, null, null],
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: 'rgb(16, 185, 129)',
+                        pointBorderColor: 'white',
+                        pointBorderWidth: 2,
+                        pointRadius: 5
+                    }, {
+                        label: 'Projected (8% p.a.)',
+                        data: [null, null, null, null, null, null, null, null, null, null, null, 1386595, 1420520, 1455390, 1491230, 1528060, 1565900, 1604770],
+                        borderColor: 'rgb(16, 185, 129)',
+                        borderDash: [8, 4],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        pointBackgroundColor: 'white',
+                        pointBorderColor: 'rgb(16, 185, 129)',
+                        pointBorderWidth: 2,
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Networth Projection - 12M Historical + 6M Forecast @ 8% p.a.',
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) { return '₹' + (value / 100000).toFixed(1) + 'L'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Portfolio MoM Chart
+        const portfolioMomCtx = document.getElementById('portfolioMomChart');
+        if (portfolioMomCtx) {
+            new Chart(portfolioMomCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Value MoM %',
+                        data: [2.0, 4.4, -2.3, 4.3, 3.2, 2.7, 3.9, 2.9, 4.1, 3.1, 5.0, 3.5],
+                        backgroundColor: function(context) {
+                            const value = context.raw;
+                            return value >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)';
+                        },
+                        borderColor: function(context) {
+                            const value = context.raw;
+                            return value >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
+                        },
+                        borderWidth: 2,
+                        borderRadius: 4
+                    }, {
+                        label: 'Returns MoM %',
+                        data: [1.8, 2.1, -2.5, 2.8, 2.5, 2.2, 2.9, 2.4, 3.1, 2.6, 3.2, 2.8],
+                        backgroundColor: 'rgba(99, 102, 241, 0.5)',
+                        borderColor: 'rgb(99, 102, 241)',
+                        borderWidth: 2,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Portfolio Month-over-Month Performance',
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) { return value + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Asset Allocation Pie Chart
+        const assetAllocationCtx = document.getElementById('assetAllocationChart');
+        if (assetAllocationCtx) {
+            new Chart(assetAllocationCtx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Mutual Funds', 'Fixed Deposits', 'Gold', 'Real Estate'],
+                    datasets: [{
+                        data: [48, 20, 16, 16],
+                        backgroundColor: [
+                            'rgb(37, 99, 235)',
+                            'rgb(16, 185, 129)',
+                            'rgb(245, 158, 11)',
+                            'rgb(139, 92, 246)'
+                        ],
+                        borderColor: 'white',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Asset Allocation Distribution',
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => ({
+                                        text: label + ' (' + data.datasets[0].data[i] + '%)',
+                                        fillStyle: data.datasets[0].backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    }));
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + context.raw + '% of portfolio';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>
