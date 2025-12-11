@@ -2,8 +2,22 @@
 -- This script deploys BOTH functions needed for customer import
 
 -- Step 1: Deploy the duplicate check function
-DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, INTEGER, BOOLEAN);
+-- Drop ALL versions of the function (different signatures may exist)
+DO $$
+DECLARE
+    func_record RECORD;
+BEGIN
+    FOR func_record IN
+        SELECT p.oid::regprocedure as func_sig
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public'
+        AND p.proname = 'check_customer_duplicate'
+    LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS ' || func_record.func_sig || ' CASCADE';
+        RAISE NOTICE 'Dropped function: %', func_record.func_sig;
+    END LOOP;
+END $$;
 
 CREATE OR REPLACE FUNCTION check_customer_duplicate(
     p_iwell_code VARCHAR,
