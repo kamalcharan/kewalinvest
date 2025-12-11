@@ -15,20 +15,12 @@ AS $$
 DECLARE
     v_exists BOOLEAN;
 BEGIN
-    -- Check by PAN if provided (PLAIN TEXT comparison)
-    IF p_pan IS NOT NULL AND p_pan != '' THEN
-        SELECT EXISTS(
-            SELECT 1 FROM t_customers
-            WHERE pan = UPPER(TRIM(p_pan))
-            AND is_active = true
-        ) INTO v_exists;
+    -- NOTE: PAN check is intentionally SKIPPED because:
+    -- Minors don't have their own PAN, so parent/guardian PAN is used.
+    -- Multiple children (minors) can share the same parent's PAN.
+    -- These are NOT duplicates - they are different customers.
 
-        IF v_exists THEN
-            RETURN true;
-        END IF;
-    END IF;
-
-    -- Check by email
+    -- Check by email only
     IF p_email IS NOT NULL AND p_email != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_contact_channels
@@ -42,7 +34,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- Check by mobile
+    -- Check by mobile only
     IF p_mobile IS NOT NULL AND p_mobile != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_contact_channels
@@ -60,7 +52,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using PAN (plain text), email, or mobile';
+COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using email or mobile only (PAN skipped to allow minors with guardian PAN)';
 
 -- Step 2: Deploy the main customer import function
 DROP FUNCTION IF EXISTS process_single_customer_record(INTEGER);
