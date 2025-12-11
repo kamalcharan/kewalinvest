@@ -3,11 +3,12 @@
 
 -- Step 1: Deploy the duplicate check function
 DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS check_customer_duplicate(VARCHAR, INTEGER, BOOLEAN);
 
 CREATE OR REPLACE FUNCTION check_customer_duplicate(
-    p_pan VARCHAR,
-    p_email VARCHAR,
-    p_mobile VARCHAR
+    p_iwell_code VARCHAR,
+    p_tenant_id INTEGER,
+    p_is_live BOOLEAN
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -15,44 +16,31 @@ AS $$
 DECLARE
     v_exists BOOLEAN;
 BEGIN
-    -- NOTE: PAN check is intentionally SKIPPED because:
-    -- Minors don't have their own PAN, so parent/guardian PAN is used.
-    -- Multiple children (minors) can share the same parent's PAN.
-    -- These are NOT duplicates - they are different customers.
+    -- Duplicate check is ONLY based on iwell_code
+    -- PAN, email, mobile are NOT used because:
+    -- - Minors share parent's PAN
+    -- - Minors share parent's email
+    -- - Minors share parent's mobile
+    -- iwell_code is the unique identifier from source system
 
-    -- Check by email only
-    IF p_email IS NOT NULL AND p_email != '' THEN
+    IF p_iwell_code IS NOT NULL AND TRIM(p_iwell_code) != '' THEN
         SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels
-            WHERE channel_type = 'email'
-            AND channel_value = LOWER(TRIM(p_email))
+            SELECT 1 FROM t_customers
+            WHERE iwell_code = UPPER(TRIM(p_iwell_code))
+            AND tenant_id = p_tenant_id
+            AND is_live = p_is_live
             AND is_active = true
         ) INTO v_exists;
 
-        IF v_exists THEN
-            RETURN true;
-        END IF;
+        RETURN v_exists;
     END IF;
 
-    -- Check by mobile only
-    IF p_mobile IS NOT NULL AND p_mobile != '' THEN
-        SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels
-            WHERE channel_type = 'mobile'
-            AND channel_value = REGEXP_REPLACE(p_mobile, '[^0-9]', '', 'g')
-            AND is_active = true
-        ) INTO v_exists;
-
-        IF v_exists THEN
-            RETURN true;
-        END IF;
-    END IF;
-
+    -- If no iwell_code provided, not a duplicate
     RETURN false;
 END;
 $$;
 
-COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using email or mobile only (PAN skipped to allow minors with guardian PAN)';
+COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using iwell_code only (unique identifier from source system)';
 
 -- Step 2: Deploy the main customer import function
 DROP FUNCTION IF EXISTS process_single_customer_record(INTEGER);
@@ -96,11 +84,11 @@ BEGIN
         (SELECT array_agg(key) FROM jsonb_object_keys(v_mapped_data) AS key);
 
     BEGIN
-        -- Check for duplicates
+        -- Check for duplicates (only by iwell_code)
         v_is_duplicate := check_customer_duplicate(
-            v_mapped_data->>'pan',
-            v_mapped_data->>'email',
-            v_mapped_data->>'mobile'
+            v_mapped_data->>'iwell_code',
+            v_staging.tenant_id,
+            v_staging.is_live
         );
 
         IF v_is_duplicate THEN
