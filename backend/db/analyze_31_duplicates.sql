@@ -132,59 +132,37 @@ AND (
 ORDER BY s.mapped_data->>'email', s.mapped_data->>'mobile', s.row_number;
 
 -- ============================================
--- STEP 6: Summary - Root Cause
+-- STEP 6: Summary - Root Cause (Email duplicates)
 -- ============================================
 SELECT
-    '=== ROOT CAUSE SUMMARY ===' as section,
-    'Duplicate Emails in CSV' as cause_type,
-    (
-        SELECT COUNT(DISTINCT LOWER(TRIM(mapped_data->>'email')))
-        FROM t_import_staging_data s
-        JOIN t_import_sessions sess ON s.session_id = sess.id
-        WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
-        AND mapped_data->>'email' IS NOT NULL AND TRIM(mapped_data->>'email') != ''
-        GROUP BY LOWER(TRIM(mapped_data->>'email'))
-        HAVING COUNT(*) > 1
-    ) as unique_duplicate_emails,
-    (
-        SELECT SUM(cnt) - COUNT(*)
-        FROM (
-            SELECT COUNT(*) as cnt
-            FROM t_import_staging_data s
-            JOIN t_import_sessions sess ON s.session_id = sess.id
-            WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
-            AND mapped_data->>'email' IS NOT NULL AND TRIM(mapped_data->>'email') != ''
-            GROUP BY LOWER(TRIM(mapped_data->>'email'))
-            HAVING COUNT(*) > 1
-        ) sub
-    ) as records_affected_by_email
+    '=== EMAIL DUPLICATES SUMMARY ===' as section,
+    COUNT(*) as unique_emails_with_duplicates,
+    SUM(cnt) as total_records_with_dup_email,
+    SUM(cnt) - COUNT(*) as extra_records_due_to_email
+FROM (
+    SELECT LOWER(TRIM(mapped_data->>'email')) as email, COUNT(*) as cnt
+    FROM t_import_staging_data s
+    JOIN t_import_sessions sess ON s.session_id = sess.id
+    WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
+    AND mapped_data->>'email' IS NOT NULL AND TRIM(mapped_data->>'email') != ''
+    GROUP BY LOWER(TRIM(mapped_data->>'email'))
+    HAVING COUNT(*) > 1
+) sub;
 
-UNION ALL
-
+-- ============================================
+-- STEP 7: Summary - Root Cause (Mobile duplicates)
+-- ============================================
 SELECT
-    '=== ROOT CAUSE SUMMARY ===' as section,
-    'Duplicate Mobiles in CSV' as cause_type,
-    (
-        SELECT COUNT(*)
-        FROM (
-            SELECT 1
-            FROM t_import_staging_data s
-            JOIN t_import_sessions sess ON s.session_id = sess.id
-            WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
-            AND mapped_data->>'mobile' IS NOT NULL AND TRIM(mapped_data->>'mobile') != ''
-            GROUP BY REGEXP_REPLACE(mapped_data->>'mobile', '[^0-9]', '', 'g')
-            HAVING COUNT(*) > 1
-        ) sub
-    ) as unique_duplicate_mobiles,
-    (
-        SELECT SUM(cnt) - COUNT(*)
-        FROM (
-            SELECT COUNT(*) as cnt
-            FROM t_import_staging_data s
-            JOIN t_import_sessions sess ON s.session_id = sess.id
-            WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
-            AND mapped_data->>'mobile' IS NOT NULL AND TRIM(mapped_data->>'mobile') != ''
-            GROUP BY REGEXP_REPLACE(mapped_data->>'mobile', '[^0-9]', '', 'g')
-            HAVING COUNT(*) > 1
-        ) sub
-    ) as records_affected_by_mobile;
+    '=== MOBILE DUPLICATES SUMMARY ===' as section,
+    COUNT(*) as unique_mobiles_with_duplicates,
+    SUM(cnt) as total_records_with_dup_mobile,
+    SUM(cnt) - COUNT(*) as extra_records_due_to_mobile
+FROM (
+    SELECT REGEXP_REPLACE(mapped_data->>'mobile', '[^0-9]', '', 'g') as mobile, COUNT(*) as cnt
+    FROM t_import_staging_data s
+    JOIN t_import_sessions sess ON s.session_id = sess.id
+    WHERE sess.id = (SELECT id FROM t_import_sessions WHERE import_type = 'CustomerData' ORDER BY created_at DESC LIMIT 1)
+    AND mapped_data->>'mobile' IS NOT NULL AND TRIM(mapped_data->>'mobile') != ''
+    GROUP BY REGEXP_REPLACE(mapped_data->>'mobile', '[^0-9]', '', 'g')
+    HAVING COUNT(*) > 1
+) sub;
