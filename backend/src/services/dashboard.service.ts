@@ -130,9 +130,9 @@ export class DashboardService {
         familyCount: parseInt(customerStats.family_count || 0)
       };
     } catch (error: any) {
-      // If tables don't exist, return empty data
-      if (error.code === '42P01') {
-        console.log('Summary tables do not exist yet, returning empty data');
+      // If tables/columns don't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('Summary tables/columns do not exist yet, returning empty data');
         return {
           totalAUM: 0,
           aumChange: 0,
@@ -171,10 +171,10 @@ export class DashboardService {
       // Market Downloads - from market indices config
       const marketQuery = `
         SELECT
-          COUNT(*) FILTER (WHERE last_download_status = 'success' AND last_download_date >= $2) as success,
-          COUNT(*) FILTER (WHERE last_download_status = 'failed' AND last_download_date >= $2) as failed,
-          COUNT(*) FILTER (WHERE is_active = true AND (last_download_date IS NULL OR last_download_date < $2)) as pending,
-          MAX(last_download_date) as last_run
+          COUNT(*) FILTER (WHERE last_download_status = 'success' AND last_download_at >= $2) as success,
+          COUNT(*) FILTER (WHERE last_download_status = 'failed' AND last_download_at >= $2) as failed,
+          COUNT(*) FILTER (WHERE is_active = true AND (last_download_at IS NULL OR last_download_at < $2)) as pending,
+          MAX(last_download_at) as last_run
         FROM t_market_indices
         WHERE is_active = true
       `;
@@ -196,9 +196,9 @@ export class DashboardService {
         }
       };
     } catch (error: any) {
-      // If tables don't exist, return empty data
-      if (error.code === '42P01') {
-        console.log('Download status tables do not exist yet, returning empty data');
+      // If tables don't exist or column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('Download status tables/columns do not exist yet, returning empty data');
         return {
           navDownloads: { success: 0, failed: 0, pending: 0, lastRun: null },
           marketDownloads: { success: 0, failed: 0, pending: 0, lastRun: null }
@@ -239,9 +239,9 @@ export class DashboardService {
         currentValue: parseFloat(stats?.current_value || 0)
       };
     } catch (error: any) {
-      // If table doesn't exist, return empty data
-      if (error.code === '42P01') {
-        console.log('Goals table does not exist yet, returning empty data');
+      // If table/column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('Goals table/columns do not exist yet, returning empty data');
         return {
           totalGoals: 0,
           onTrack: 0,
@@ -318,9 +318,9 @@ export class DashboardService {
         criticalCount: parseInt(result.rows[0]?.critical_count || 0)
       };
     } catch (error: any) {
-      // If table doesn't exist, return empty data
-      if (error.code === '42P01') {
-        console.log('JTBD table does not exist yet, returning empty data');
+      // If table/column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('JTBD table/columns do not exist yet, returning empty data');
         return {
           actions: [],
           totalCount: 0,
@@ -374,9 +374,9 @@ export class DashboardService {
         date: new Date(row.date).toISOString().split('T')[0]
       }));
     } catch (error: any) {
-      // If table doesn't exist, return empty data
-      if (error.code === '42P01') {
-        console.log('Transaction table does not exist yet, returning empty data');
+      // If table/column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('Transaction table/columns do not exist yet, returning empty data');
         return [];
       }
       console.error('Error getting recent transactions:', error);
