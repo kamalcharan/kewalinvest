@@ -1,7 +1,7 @@
 // frontend/src/constants/navigation.ts
-import { 
-  Home, 
-  Users, 
+import {
+  Home,
+  Users,
   Crown,
   TrendingUp,
   PieChart,
@@ -14,7 +14,8 @@ import {
   FileSpreadsheet,
   Bug,
   Target,
-  Bell
+  Bell,
+  Link2
 } from 'lucide-react';
 
 // ============================================================================
@@ -69,6 +70,12 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'Customers',
         path: '/customers',
         icon: Crown
+      },
+      {
+        id: 'aliases',
+        name: 'Aliases',
+        path: '/aliases',
+        icon: Link2
       },
       {
         id: 'transactions',

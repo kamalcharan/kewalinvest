@@ -44,6 +44,10 @@ import CustomersPage from './pages/customers/CustomersPage';
 import CustomerFormPage from './pages/customers/CustomerFormPage';
 import CustomerViewPage from './pages/customers/CustomerViewPage';
 
+// Alias pages
+import AliasListPage from './pages/AliasListPage';
+import AliasDetailPage from './pages/AliasDetailPage';
+
 // Goal pages
 import GoalWizardPage from './pages/goals/GoalWizardPage';
 import GoalSetupPage from './pages/goals/GoalSetupPage';
@@ -91,6 +95,10 @@ function App() {
                 <Route path="customers/new" element={<CustomerFormPage />} />
                 <Route path="customers/:id/edit" element={<CustomerFormPage />} />
                 <Route path="customers/:customerId" element={<CustomerViewPage />} />
+
+                {/* Alias Routes */}
+                <Route path="aliases" element={<AliasListPage />} />
+                <Route path="aliases/:aliasId" element={<AliasDetailPage />} />
 
                 {/* Goal Routes */}
                 <Route path="customers/:customerId/goals/new" element={<GoalWizardPage />} />
