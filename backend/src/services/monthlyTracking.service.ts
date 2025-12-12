@@ -257,6 +257,19 @@ export class MonthlyTrackingService {
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
+      // First, get the latest available NAV for this scheme (fallback for incomplete months)
+      const latestNavQuery = `
+        SELECT nav_value, nav_date
+        FROM t_nav_data
+        WHERE scheme_code = $1
+        ORDER BY nav_date DESC
+        LIMIT 1
+      `;
+      const latestNavResult = await this.db.query(latestNavQuery, [scheme_code]);
+      const latestAvailableNav = latestNavResult.rows[0]
+        ? parseFloat(latestNavResult.rows[0].nav_value)
+        : 0;
+
       const navQuery = `
         SELECT
           TO_CHAR(nav_date, 'YYYY-MM') as month,
@@ -277,24 +290,27 @@ export class MonthlyTrackingService {
 
       // Build monthly NAV data
       const monthlyData: MonthlyNAVData[] = [];
+      let lastKnownNav = 0; // Track last known NAV for fallback
 
       for (const month of monthList) {
         const monthNavs = navResult.rows.filter(r => r.month === month);
 
         if (monthNavs.length === 0) {
-          // No NAV data for this month
+          // No NAV data for this month - use latest available NAV with is_estimated flag
+          const estimatedNav = lastKnownNav > 0 ? lastKnownNav : latestAvailableNav;
           monthlyData.push({
             month,
             month_display: this.formatMonthDisplay(month),
             scheme_code,
             scheme_name: schemeDetails.scheme_name,
-            opening_nav: 0,
-            closing_nav: 0,
-            lowest_nav: 0,
-            highest_nav: 0,
+            opening_nav: Math.round(estimatedNav * 10000) / 10000,
+            closing_nav: Math.round(estimatedNav * 10000) / 10000,
+            lowest_nav: Math.round(estimatedNav * 10000) / 10000,
+            highest_nav: Math.round(estimatedNav * 10000) / 10000,
             nav_change: 0,
             nav_change_percentage: 0,
-            days_tracked: 0
+            days_tracked: 0,
+            is_estimated: estimatedNav > 0 // Mark as estimated if we have a value
           });
           continue;
         }
@@ -318,8 +334,12 @@ export class MonthlyTrackingService {
           highest_nav: Math.round(highestNav * 10000) / 10000,
           nav_change: Math.round(navChange * 10000) / 10000,
           nav_change_percentage: Math.round(navChangePercentage * 100) / 100,
-          days_tracked: monthNavs.length
+          days_tracked: monthNavs.length,
+          is_estimated: false
         });
+
+        // Update lastKnownNav for future months that might be missing data
+        lastKnownNav = closingNav;
       }
 
       // Calculate summary
@@ -616,7 +636,8 @@ export class MonthlyTrackingService {
               closing_nav: navMonth.closing_nav,
               nav_change: navMonth.nav_change,
               nav_change_percentage: navMonth.nav_change_percentage,
-              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined,
+              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined && navMonth.closing_nav > 0,
+              is_estimated: navMonth.is_estimated || false, // True if NAV is estimated (show ** in UI)
               // Market Value data
               market_value: marketValueMonth.market_value,
               month_change: marketValueMonth.month_change,

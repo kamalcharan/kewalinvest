@@ -43,6 +43,7 @@ export interface MonthlyNAVData {
   nav_change: number; // closing_nav - opening_nav
   nav_change_percentage: number; // (nav_change / opening_nav) * 100
   days_tracked: number;
+  is_estimated?: boolean; // True if using latest available NAV (shown as ** in UI)
 }
 
 export interface MonthlyNAVResponse {
