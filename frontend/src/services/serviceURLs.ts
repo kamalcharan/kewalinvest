@@ -244,6 +244,23 @@ export const API_ENDPOINTS = {
     MEETINGS: (familyHeadIwellCode: string) => `${API_BASE}/family/${familyHeadIwellCode}/meetings`,
   },
 
+  // Alias endpoints (Customer Alias feature)
+  ALIAS: {
+    LIST: `${API_BASE}/aliases`,
+    GET: (aliasId: number) => `${API_BASE}/aliases/${aliasId}`,
+    CREATE: `${API_BASE}/aliases`,
+    UPDATE: (aliasId: number) => `${API_BASE}/aliases/${aliasId}`,
+    DELETE: (aliasId: number) => `${API_BASE}/aliases/${aliasId}`,
+    MEMBERS: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/members`,
+    ADD_MEMBERS: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/members`,
+    REMOVE_MEMBERS: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/members`,
+    PORTFOLIO: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/portfolio`,
+    ASSET_ALLOCATION: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/asset-allocation`,
+    GOALS: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/goals`,
+    MEETINGS: (aliasId: number) => `${API_BASE}/aliases/${aliasId}/meetings`,
+    CUSTOMER_ALIAS: (customerId: number) => `${API_BASE}/aliases/customer/${customerId}`,
+  },
+
   // Generic Jobs Scheduler endpoints
   JOBS: {
     TYPES: `${API_BASE}/jobs/types`,

@@ -58,10 +58,6 @@ const MarketHistoryPage: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Connection test state
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'ok' | 'failed'>('unknown');
-
   // Calculate metrics state
   const [calculatingIndexId, setCalculatingIndexId] = useState<number | null>(null);
   const [calculationProgress, setCalculationProgress] = useState<string>('');
@@ -493,54 +489,6 @@ const MarketHistoryPage: React.FC = () => {
     }
   }, [refetchAll, startCalculationPolling]);
 
-  // Handle connection test
-  const handleTestConnection = useCallback(async () => {
-    setIsTestingConnection(true);
-    setConnectionStatus('unknown');
-
-    FrontendErrorLogger.info(
-      'Testing Yahoo Finance connection',
-      'MarketHistoryPage',
-      {}
-    );
-
-    try {
-      const isConnected = await MarketService.testConnection();
-      
-      setConnectionStatus(isConnected ? 'ok' : 'failed');
-      
-      if (isConnected) {
-        toastService.success('✅ Yahoo Finance connection successful');
-        FrontendErrorLogger.info(
-          'Connection test successful',
-          'MarketHistoryPage',
-          {}
-        );
-      } else {
-        toastService.error('❌ Cannot connect to Yahoo Finance');
-        FrontendErrorLogger.error(
-          'Connection test failed',
-          'MarketHistoryPage',
-          {},
-          undefined
-        );
-      }
-
-    } catch (err: any) {
-      setConnectionStatus('failed');
-      toastService.error('❌ Connection test failed');
-      
-      FrontendErrorLogger.error(
-        'Connection test error',
-        'MarketHistoryPage',
-        { error: err.message },
-        err.stack
-      );
-    } finally {
-      setIsTestingConnection(false);
-    }
-  }, []);
-
   // Calculate derived values
   const isAllSelected = indices.length > 0 && selectedIndices.size === indices.length;
   const selectedCount = selectedIndices.size;
@@ -626,40 +574,6 @@ const MarketHistoryPage: React.FC = () => {
             Download and manage NSE market indices historical data
           </p>
         </div>
-
-        {/* Connection Test Button */}
-        <button
-          onClick={handleTestConnection}
-          disabled={isTestingConnection}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: connectionStatus === 'ok'
-              ? colors.semantic.success
-              : connectionStatus === 'failed'
-              ? colors.semantic.error
-              : colors.brand.primary,
-            color: '#FFF',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: isTestingConnection ? 'not-allowed' : 'pointer',
-            fontSize: '14px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            opacity: isTestingConnection ? 0.7 : 1
-          }}
-        >
-          {isTestingConnection ? (
-            <>Testing...</>
-          ) : connectionStatus === 'ok' ? (
-            <>Connected</>
-          ) : connectionStatus === 'failed' ? (
-            <>Failed - Retry</>
-          ) : (
-            <>Test Connection</>
-          )}
-        </button>
       </div>
 
       {/* Statistics Bar */}

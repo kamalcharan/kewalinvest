@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomers, useCustomerStats, useActivateCustomer, useDeleteCustomer } from '../../hooks/useCustomers';
 import { usePortfolioMetrics } from '../../hooks/usePortfolioData';
@@ -9,6 +10,7 @@ import { CustomerSearchParams } from '../../types/customer.types';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import CustomerCard from '../../components/customers/CustomerCard';
 import CustomerFilters from '../../components/customers/CustomerFilters';
+import { CreateAliasModal } from '../../components/alias/CreateAliasModal';
 
 const CustomersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,10 +22,12 @@ const CustomersPage: React.FC = () => {
     page: 1,
     page_size: 20,
     sort_by: 'c.name',
-    sort_order: 'asc'
+    sort_order: 'asc',
+    is_active: true  // Default to Active only
   });
   const [selectedCustomers, setSelectedCustomers] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('cards');
+  const [showCreateAliasModal, setShowCreateAliasModal] = useState(false);
 
   // Hooks
   const { data: customerData, isLoading, error, refetch } = useCustomers(searchParams);
@@ -522,16 +526,39 @@ const CustomersPage: React.FC = () => {
               Customer List
             </h3>
             {selectedCustomers.size > 0 && (
-              <span style={{
-                padding: '4px 12px',
-                backgroundColor: colors.brand.primary + '20',
-                color: colors.brand.primary,
-                borderRadius: '12px',
-                fontSize: '12px',
-                fontWeight: '500'
-              }}>
-                {selectedCustomers.size} selected
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{
+                  padding: '4px 12px',
+                  backgroundColor: colors.brand.primary + '20',
+                  color: colors.brand.primary,
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}>
+                  {selectedCustomers.size} selected
+                </span>
+                {selectedCustomers.size >= 2 && (
+                  <button
+                    onClick={() => setShowCreateAliasModal(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 14px',
+                      backgroundColor: colors.brand.primary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    <Link2 size={14} />
+                    Create Alias
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -693,6 +720,24 @@ const CustomersPage: React.FC = () => {
           50% { opacity: 0.6; }
         }
       `}</style>
+
+      {/* Create Alias Modal */}
+      <CreateAliasModal
+        isOpen={showCreateAliasModal}
+        onClose={() => setShowCreateAliasModal(false)}
+        selectedCustomers={customers
+          .filter(c => selectedCustomers.has(c.id))
+          .map(c => ({
+            id: c.id,
+            name: c.name,
+            iwell_code: c.iwell_code,
+            email: c.primary_email
+          }))}
+        onSuccess={() => {
+          setSelectedCustomers(new Set());
+          navigate('/aliases');
+        }}
+      />
     </div>
   );
 };
