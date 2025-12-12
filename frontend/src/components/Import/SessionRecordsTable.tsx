@@ -1,10 +1,12 @@
 // frontend/src/components/Import/SessionRecordsTable.tsx
-// Updated with Edit+Reprocess functionality
+// Updated with Edit+Reprocess functionality and Reprocess All
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api.service';
 import { toastService } from '../../services/toast.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { ImportSession, FileImportType } from '../../types/import.types';
 import RecordModal from './RecordModal';
 import RecordEditModal from '../ETL/RecordEditModal';
@@ -61,6 +63,7 @@ interface RecordsResponse {
 
 const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRecordUpdated }) => {
   const { theme, isDarkMode } = useTheme();
+  const { tenantId, environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [records, setRecords] = useState<StagingRecord[]>([]);
@@ -71,6 +74,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
   const [showEditModal, setShowEditModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [isReprocessingAll, setIsReprocessingAll] = useState(false);
   const pageSize = 50;
 
   useEffect(() => {
@@ -149,6 +153,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
     );
   };
 
+  // Get remaining columns (excluding iwell_code which is now fixed)
   const getDisplayColumns = (): string[] => {
     if (!session) return [];
 
@@ -161,9 +166,10 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
     } else if (importType === 'scheme_import' || importType === 'SchemeData') {
       return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
     } else if (importType === 'transaction_import' || importType === 'TransactionData') {
-      return ['iwell_code', 'txn_date', 'scheme_name', 'total_amount', 'units'];
+      // Remove iwell_code since it's now a fixed column
+      return ['txn_date', 'scheme_name', 'total_amount', 'units'];
     } else {
-      return ['id', 'name', 'value', 'status', 'date'];
+      return ['name', 'value', 'date'];
     }
   };
 
@@ -206,8 +212,69 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
     toastService.error(error);
   };
 
+  // Reprocess all non-success records
+  const handleReprocessAll = async () => {
+    if (!session) return;
+
+    const nonSuccessCount = records.filter(r => r.processing_status !== 'success').length;
+    if (nonSuccessCount === 0) {
+      toastService.info('No records to reprocess');
+      return;
+    }
+
+    const loadingToastId = toastService.loading(`Reprocessing ${nonSuccessCount} records...`);
+    setIsReprocessingAll(true);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        toastService.dismiss(loadingToastId);
+        toastService.error('Authentication token not found');
+        return;
+      }
+
+      const response = await fetch(
+        API_ENDPOINTS.IMPORT.BULK_REPROCESS_RECORDS(session.id),
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...(tenantId && { 'X-Tenant-ID': String(tenantId) }),
+            ...(environment && { 'X-Environment': environment })
+          },
+          body: JSON.stringify({
+            statuses: ['failed', 'duplicate', 'orphan', 'pending']
+          })
+        }
+      );
+
+      const result = await response.json();
+      toastService.dismiss(loadingToastId);
+
+      if (result.success) {
+        const { processed, succeeded, failed } = result.data || {};
+        toastService.success(
+          `Reprocessed ${processed || 0} records: ${succeeded || 0} passed, ${failed || 0} failed`
+        );
+        fetchRecords();
+        if (onRecordUpdated) {
+          onRecordUpdated();
+        }
+      } else {
+        toastService.error(result.error || 'Failed to reprocess records');
+      }
+    } catch (error: any) {
+      toastService.dismiss(loadingToastId);
+      toastService.error(error.message || 'Failed to reprocess records');
+    } finally {
+      setIsReprocessingAll(false);
+    }
+  };
+
   const displayColumns = getDisplayColumns();
   const totalPages = Math.ceil(totalRecords / pageSize);
+  const hasNonSuccessRecords = records.some(r => r.processing_status !== 'success');
 
   if (!session) {
     return (
@@ -297,6 +364,29 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
           }}>
             Showing {records.length} of {totalRecords} records
           </span>
+
+          {/* Reprocess All Button */}
+          {hasNonSuccessRecords && (
+            <button
+              onClick={handleReprocessAll}
+              disabled={isReprocessingAll}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: colors.semantic.warning,
+                border: 'none',
+                borderRadius: '6px',
+                color: 'white',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: isReprocessingAll ? 'not-allowed' : 'pointer',
+                opacity: isReprocessingAll ? 0.7 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              {isReprocessingAll ? 'Reprocessing...' : 'Reprocess All'}
+            </button>
+          )}
+
           <button
             onClick={fetchRecords}
             style={{
@@ -331,6 +421,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
               <tr style={{
                 backgroundColor: colors.utility.secondaryBackground
               }}>
+                {/* Row # */}
                 <th style={{
                   padding: '14px',
                   textAlign: 'left',
@@ -339,28 +430,54 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                   color: colors.utility.secondaryText,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
-                  minWidth: '70px',
+                  minWidth: '60px',
                   position: 'sticky',
                   left: 0,
                   backgroundColor: colors.utility.secondaryBackground,
                   zIndex: 1
                 }}>
-                  Row #
+                  Row
                 </th>
-                {displayColumns.map(col => (
-                  <th key={col} style={{
-                    padding: '14px',
-                    textAlign: 'left',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: colors.utility.secondaryText,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    minWidth: '140px'
-                  }}>
-                    {getColumnLabel(col)}
-                  </th>
-                ))}
+                {/* Iwell Code - Fixed column */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'left',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '120px'
+                }}>
+                  Iwell Code
+                </th>
+                {/* Status */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'center',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '90px'
+                }}>
+                  Status
+                </th>
+                {/* Error/Warning */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'left',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '200px'
+                }}>
+                  Error/Warning
+                </th>
+                {/* Action */}
                 <th style={{
                   padding: '14px',
                   textAlign: 'center',
@@ -371,38 +488,29 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                   letterSpacing: '0.5px',
                   minWidth: '100px'
                 }}>
-                  Status
-                </th>
-                <th style={{
-                  padding: '14px',
-                  textAlign: 'left',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  minWidth: '250px'
-                }}>
-                  Error/Warning
-                </th>
-                <th style={{
-                  padding: '14px',
-                  textAlign: 'center',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  minWidth: '120px'
-                }}>
                   Action
                 </th>
+                {/* Remaining data columns */}
+                {displayColumns.map(col => (
+                  <th key={col} style={{
+                    padding: '14px',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: colors.utility.secondaryText,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    minWidth: '120px'
+                  }}>
+                    {getColumnLabel(col)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={displayColumns.length + 4} style={{
+                  <td colSpan={displayColumns.length + 5} style={{
                     padding: '48px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText
@@ -427,7 +535,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={displayColumns.length + 4} style={{
+                  <td colSpan={displayColumns.length + 5} style={{
                     padding: '48px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText
@@ -460,6 +568,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                         : colors.brand.alternate + '20';
                     }}
                   >
+                    {/* Row # */}
                     <td style={{
                       padding: '14px',
                       fontSize: '13px',
@@ -475,43 +584,43 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                     }}>
                       {record.row_number}
                     </td>
-                    {displayColumns.map(col => (
-                      <td key={col} style={{
-                        padding: '14px',
-                        fontSize: '13px',
-                        color: colors.utility.primaryText,
-                        maxWidth: '200px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {getFieldValue(record, col)}
-                      </td>
-                    ))}
+                    {/* Iwell Code */}
+                    <td style={{
+                      padding: '14px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: colors.brand.primary,
+                      fontFamily: 'monospace'
+                    }}>
+                      {getFieldValue(record, 'iwell_code')}
+                    </td>
+                    {/* Status */}
                     <td style={{
                       padding: '14px',
                       textAlign: 'center'
                     }}>
                       {getStatusBadge(record.processing_status)}
                     </td>
+                    {/* Error/Warning */}
                     <td style={{
                       padding: '14px',
                       fontSize: '12px',
                       color: record.error_messages?.length
                         ? colors.semantic.error
                         : colors.semantic.warning,
-                      maxWidth: '300px',
+                      maxWidth: '250px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
                     }}>
                       {record.error_messages?.join(', ') || record.warnings?.join(', ') || '-'}
                     </td>
+                    {/* Action */}
                     <td style={{
                       padding: '14px',
                       textAlign: 'center'
                     }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -519,7 +628,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                             setShowModal(true);
                           }}
                           style={{
-                            padding: '4px 10px',
+                            padding: '4px 8px',
                             backgroundColor: 'transparent',
                             color: colors.brand.primary,
                             border: `1px solid ${colors.brand.primary}`,
@@ -544,7 +653,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                           <button
                             onClick={(e) => handleEditClick(e, record)}
                             style={{
-                              padding: '4px 10px',
+                              padding: '4px 8px',
                               backgroundColor: 'transparent',
                               color: colors.semantic.success,
                               border: `1px solid ${colors.semantic.success}`,
@@ -568,6 +677,20 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
                         )}
                       </div>
                     </td>
+                    {/* Remaining data columns */}
+                    {displayColumns.map(col => (
+                      <td key={col} style={{
+                        padding: '14px',
+                        fontSize: '13px',
+                        color: colors.utility.primaryText,
+                        maxWidth: '180px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {getFieldValue(record, col)}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
