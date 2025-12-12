@@ -53,6 +53,18 @@ export const PortfolioAllocationSummary: React.FC<PortfolioAllocationSummaryProp
         }}>
           Portfolio Goal Allocation
         </h3>
+        <span style={{
+          backgroundColor: colors.semantic.warning + '20',
+          color: colors.semantic.warning,
+          fontSize: '10px',
+          fontWeight: '600',
+          padding: '3px 8px',
+          borderRadius: '4px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          Coming Soon
+        </span>
       </div>
 
       {/* Allocation Stats */}
