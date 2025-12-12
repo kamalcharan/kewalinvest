@@ -68,12 +68,13 @@ const StatCard: React.FC<StatCardProps> = ({ title, count, color, icon }) => {
     <div
       style={{
         padding: '16px',
-        backgroundColor: colors.utility.primaryBackground,
-        border: `2px solid ${selectedColor}20`,
+        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+        border: `1px solid ${selectedColor}30`,
         borderRadius: '10px',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
       }}
     >
       <div
@@ -169,6 +170,12 @@ const StatusBadge: React.FC<{
         textColor = colors.utility.secondaryText;
         label = 'Pending';
         icon = <Clock size={12} />;
+        break;
+      case 'not_configured':
+        bgColor = `${colors.utility.secondaryText}15`;
+        textColor = colors.utility.secondaryText;
+        label = 'Not Configured';
+        icon = <AlertTriangle size={12} />;
         break;
     }
   } else if (type === 'gaps') {
@@ -532,10 +539,15 @@ export const MarketTab: React.FC = () => {
                     textAlign: 'center',
                     borderBottom: `1px solid ${dividerColor}`
                   }}>
-                    <StatusBadge status={index.metrics_status} type="metrics" />
-                    <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                      {index.metrics_calculated_count}/{index.total_records}
-                    </div>
+                    <StatusBadge
+                      status={!index.provider_enabled ? 'not_configured' : index.metrics_status}
+                      type="metrics"
+                    />
+                    {index.provider_enabled && (
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                        {index.metrics_calculated_count}/{index.total_records}
+                      </div>
+                    )}
                   </td>
                   <td style={{
                     padding: '12px 16px',
