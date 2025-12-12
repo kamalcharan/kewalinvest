@@ -976,13 +976,14 @@ const CustomerViewPage: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      {/* Expanded Alerts List */}
+                      {/* Expanded Alerts List - exclude goal_tracking since goals are shown separately */}
                       {showAllAlerts && customerId && (
                         <JTBDList
                           customerId={customerId}
                           onSetupNew={() => setShowJTBDSetupModal(true)}
                           showFilters={true}
                           compact={false}
+                          excludeTypes={['goal_tracking']}
                         />
                       )}
                     </div>
