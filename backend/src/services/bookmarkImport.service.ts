@@ -18,6 +18,7 @@ export interface BookmarkImportResult {
   bookmarksUpdated: number;
   aliasesCreated: number;
   errors: Array<{ row: number; scheme_code: string; error: string }>;
+  duplicateRows?: number[];  // Row numbers that were duplicates (updated existing)
   duration: number;
 }
 
