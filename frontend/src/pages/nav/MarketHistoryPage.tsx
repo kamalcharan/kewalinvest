@@ -27,6 +27,20 @@ const MarketHistoryPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   const { isSuperAdmin } = useAuth();
 
+  // Reusable Card component (matches Dashboard pattern)
+  const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+    <div style={{
+      backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+      borderRadius: '12px',
+      border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+      boxShadow: isDarkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.08)',
+      padding: '20px',
+      ...style
+    }}>
+      {children}
+    </div>
+  );
+
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
     category: 'all',
@@ -535,457 +549,359 @@ const MarketHistoryPage: React.FC = () => {
   if (error) {
     return (
       <div style={{
-        minHeight: '100vh',
         padding: '24px',
-        backgroundColor: colors.utility.secondaryBackground,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        maxWidth: '1600px',
+        margin: '0 auto',
+        minHeight: 'calc(100vh - 64px)',
+        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC'
       }}>
-        <div style={{
-          maxWidth: '500px',
-          width: '100%',
-          padding: '32px',
-          backgroundColor: colors.utility.primaryBackground,
-          borderRadius: '12px',
-          border: `1px solid ${colors.semantic.error}40`,
-          textAlign: 'center'
-        }}>
-          <div style={{
-            fontSize: '48px',
-            marginBottom: '16px'
-          }}>
-            ⚠️
-          </div>
-          <h2 style={{
-            fontSize: '20px',
-            fontWeight: '700',
-            color: colors.semantic.error,
-            marginBottom: '12px'
-          }}>
-            Failed to Load Market Data
-          </h2>
-          <p style={{
-            fontSize: '14px',
-            color: colors.utility.secondaryText,
-            marginBottom: '24px',
-            lineHeight: '1.6'
-          }}>
-            {error}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: colors.brand.primary,
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
+        <Card>
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>⚠️</div>
+            <h2 style={{
+              fontSize: '18px',
               fontWeight: '600',
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            🔄 Retry
-          </button>
-        </div>
+              color: colors.utility.primaryText,
+              marginBottom: '8px'
+            }}>
+              Failed to load market data
+            </h2>
+            <p style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              marginBottom: '16px'
+            }}>
+              {error}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: colors.brand.primary,
+                color: '#FFF',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Try Again
+            </button>
+          </div>
+        </Card>
       </div>
     );
   }
 
   return (
     <div style={{
-      minHeight: '100vh',
       padding: '24px',
-      backgroundColor: colors.utility.secondaryBackground
+      maxWidth: '1600px',
+      margin: '0 auto',
+      minHeight: 'calc(100vh - 64px)',
+      backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC'
     }}>
+      {/* Header */}
       <div style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '24px'
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px'
       }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px',
-          flexWrap: 'wrap'
-        }}>
-          <div>
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: colors.utility.primaryText,
-              margin: '0 0 4px 0'
-            }}>
-              📈 Market Data History
-            </h1>
-            <p style={{
-              fontSize: '14px',
-              color: colors.utility.secondaryText,
-              margin: 0
-            }}>
-              Download and manage NSE market indices historical data
-            </p>
-          </div>
-
-          {/* Connection Test Button */}
-          <button
-            onClick={handleTestConnection}
-            disabled={isTestingConnection}
-            style={{
-              padding: '10px 16px',
-              backgroundColor: connectionStatus === 'ok'
-                ? colors.semantic.success
-                : connectionStatus === 'failed'
-                ? colors.semantic.error
-                : colors.brand.secondary,
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: isTestingConnection ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'transform 0.2s ease',
-              opacity: isTestingConnection ? 0.7 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (!isTestingConnection) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            {isTestingConnection ? (
-              <>⏳ Testing...</>
-            ) : connectionStatus === 'ok' ? (
-              <>✅ Connected</>
-            ) : connectionStatus === 'failed' ? (
-              <>❌ Failed</>
-            ) : (
-              <>🔍 Test Connection</>
-            )}
-          </button>
+        <div>
+          <h1 style={{
+            fontSize: '28px',
+            fontWeight: '700',
+            color: colors.utility.primaryText,
+            margin: '0 0 4px 0'
+          }}>
+            Market Data History
+          </h1>
+          <p style={{
+            fontSize: '14px',
+            color: colors.utility.secondaryText,
+            margin: 0
+          }}>
+            Download and manage NSE market indices historical data
+          </p>
         </div>
 
-        {/* Statistics Bar */}
-        <StatisticsBar 
-          statistics={statistics} 
-          isLoading={isLoading} 
-        />
+        {/* Connection Test Button */}
+        <button
+          onClick={handleTestConnection}
+          disabled={isTestingConnection}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: connectionStatus === 'ok'
+              ? colors.semantic.success
+              : connectionStatus === 'failed'
+              ? colors.semantic.error
+              : colors.brand.primary,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: isTestingConnection ? 'not-allowed' : 'pointer',
+            fontSize: '14px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            opacity: isTestingConnection ? 0.7 : 1
+          }}
+        >
+          {isTestingConnection ? (
+            <>Testing...</>
+          ) : connectionStatus === 'ok' ? (
+            <>Connected</>
+          ) : connectionStatus === 'failed' ? (
+            <>Failed - Retry</>
+          ) : (
+            <>Test Connection</>
+          )}
+        </button>
+      </div>
 
-        {/* Filter Bar */}
+      {/* Statistics Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <StatisticsBar
+          statistics={statistics}
+          isLoading={isLoading}
+        />
+      </div>
+
+      {/* Filter Bar */}
+      <div style={{ marginBottom: '20px' }}>
         <FilterBar
           filters={filters}
           onFilterChange={handleFilterChange}
           totalResults={indices.length}
           isLoading={isLoading}
         />
+      </div>
 
-        {/* ==================== BULK ACTIONS BAR ==================== */}
-        {indices.length > 0 && (
-          <div style={{
-            backgroundColor: `${colors.brand.primary}08`,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `2px solid ${colors.brand.primary}30`
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '16px',
-              flexWrap: 'wrap'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <button
-                  onClick={handleSelectAll}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 12px',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText,
-                    transition: 'background-color 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {isAllSelected ? (
-                    <CheckSquare style={{ width: '20px', height: '20px', color: colors.brand.primary }} />
-                  ) : (
-                    <Square style={{ width: '20px', height: '20px', color: colors.utility.secondaryText }} />
-                  )}
-                  Select All
-                </button>
-                
-                {selectedCount > 0 && (
-                  <span style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.brand.primary,
-                    color: 'white',
-                    borderRadius: '999px',
-                    fontSize: '13px',
-                    fontWeight: '600'
-                  }}>
-                    {selectedCount} {selectedCount === 1 ? 'index' : 'indices'} selected
-                  </span>
-                )}
-              </div>
-
-              {selectedCount > 0 && (
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={handleBulkDownload}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 16px',
-                      backgroundColor: colors.brand.primary,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      transition: 'transform 0.2s ease',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <Download style={{ width: '16px', height: '16px' }} />
-                    Bulk Download ({selectedCount})
-                  </button>
-                  <button
-                    onClick={handleBulkCalculate}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 16px',
-                      backgroundColor: colors.semantic.success,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      transition: 'transform 0.2s ease',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <Calculator style={{ width: '16px', height: '16px' }} />
-                    Bulk Calculate ({selectedCount})
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Indices Grid */}
-        <div style={{
-          backgroundColor: colors.utility.secondaryBackground,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `1px solid ${colors.utility.primaryText}10`
-        }}>
+      {/* Bulk Actions Bar */}
+      {indices.length > 0 && (
+        <Card style={{ marginBottom: '20px' }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '16px'
+            gap: '16px',
+            flexWrap: 'wrap'
           }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              margin: 0
-            }}>
-              Market Indices ({indices.length})
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <button
+                onClick={handleSelectAll}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText
+                }}
+              >
+                {isAllSelected ? (
+                  <CheckSquare size={20} style={{ color: colors.brand.primary }} />
+                ) : (
+                  <Square size={20} style={{ color: colors.utility.secondaryText }} />
+                )}
+                Select All
+              </button>
 
-            {isLoading && (
-              <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <div style={{
-                  width: '12px',
-                  height: '12px',
-                  border: `2px solid ${colors.utility.secondaryText}40`,
-                  borderTop: `2px solid ${colors.brand.primary}`,
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                Refreshing...
+              {selectedCount > 0 && (
+                <span style={{
+                  padding: '4px 12px',
+                  backgroundColor: colors.brand.primary + '15',
+                  color: colors.brand.primary,
+                  borderRadius: '20px',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}>
+                  {selectedCount} selected
+                </span>
+              )}
+            </div>
+
+            {selectedCount > 0 && (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={handleBulkDownload}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    backgroundColor: colors.brand.primary,
+                    color: '#FFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}
+                >
+                  <Download size={16} />
+                  Download
+                </button>
+                <button
+                  onClick={handleBulkCalculate}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    backgroundColor: '#10B981',
+                    color: '#FFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}
+                >
+                  <Calculator size={16} />
+                  Calculate
+                </button>
               </div>
             )}
           </div>
+        </Card>
+      )}
 
-          {indices.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
+      {/* Indices Grid */}
+      <Card>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px'
+        }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: '16px',
+            fontWeight: '600',
+            color: colors.utility.primaryText
+          }}>
+            Market Indices ({indices.length})
+          </h3>
+
+          {isLoading && (
+            <span style={{
+              fontSize: '12px',
               color: colors.utility.secondaryText
             }}>
-              <div style={{ fontSize: '64px', marginBottom: '16px' }}>
-                {filters.search ? '🔍' : filters.status !== 'all' || filters.category !== 'all' ? '🔎' : '📊'}
-              </div>
-              <h4 style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '8px'
-              }}>
-                {filters.search 
-                  ? 'No indices found' 
-                  : filters.status !== 'all' || filters.category !== 'all'
-                  ? 'No indices match your filters'
-                  : 'No market indices available'}
-              </h4>
-              <p style={{ margin: '0 0 16px 0' }}>
-                {filters.search 
-                  ? `No results for "${filters.search}"` 
-                  : 'Try adjusting your filters or search criteria'}
-              </p>
-              {(filters.search || filters.status !== 'all' || filters.category !== 'all') && (
-                <button
-                  onClick={() => setFilters({ category: 'all', status: 'all', search: '' })}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: colors.brand.primary,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    transition: 'transform 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {indices.map((index) => (
-                <div key={index.id} style={{ position: 'relative' }}>
-                  {/* Selection Checkbox Overlay */}
-                  <div
-                    onClick={() => handleSelectIndex(index.id)}
-                    style={{
-                      position: 'absolute',
-                      top: '12px',
-                      left: '12px',
-                      zIndex: 10,
-                      cursor: 'pointer',
-                      padding: '4px',
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderRadius: '6px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }}
-                  >
-                    {selectedIndices.has(index.id) ? (
-                      <CheckSquare style={{ width: '20px', height: '20px', color: colors.brand.primary }} />
-                    ) : (
-                      <Square style={{ width: '20px', height: '20px', color: colors.utility.secondaryText }} />
-                    )}
-                  </div>
-
-                  {/* Index Card */}
-                  <IndexCard
-                    index={index}
-                    onViewDashboard={handleViewDashboard}
-                    onCalculateMetrics={handleCalculateMetrics}
-                    onDownloadHistorical={handleDownloadHistorical}
-                    onDownloadEOD={handleDownloadEOD}
-                    onDelete={handleDelete}
-                    showDeleteButton={isSuperAdmin}
-                    isDownloading={downloadingIndexId === index.id}
-                    isCalculating={calculatingIndexId === index.id}
-                  />
-                </div>
-              ))}
-            </div>
+              Refreshing...
+            </span>
           )}
         </div>
 
-        {/* Footer Info */}
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          backgroundColor: colors.semantic.info + '10',
-          border: `1px solid ${colors.semantic.info}30`,
-          borderRadius: '8px',
-          fontSize: '13px',
-          color: colors.utility.secondaryText,
-          lineHeight: '1.6'
-        }}>
-          <strong style={{ color: colors.semantic.info }}>ℹ️ About Market Data:</strong>
-          <br />
-          • Data is sourced from Yahoo Finance (free, no API key required)
-          <br />
-          • Historical downloads fetch up to 20 years of OHLCV data
-          <br />
-          • EOD (End of Day) downloads fetch the latest trading day data
-          <br />
-          • Auto-scheduled EOD downloads run daily at 8:00 PM IST
-          <br />
-          • All downloads are asynchronous and may take a few moments to complete
-          <br />
-          <strong style={{ color: colors.brand.primary }}>✨ New: Use bulk operations to download and calculate metrics for multiple indices at once!</strong>
+        {indices.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 20px',
+            color: colors.utility.secondaryText
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}>
+              {filters.search ? '🔍' : '📊'}
+            </div>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '8px'
+            }}>
+              {filters.search
+                ? 'No indices found'
+                : 'No market indices available'}
+            </div>
+            <div style={{ fontSize: '12px', marginBottom: '16px' }}>
+              {filters.search
+                ? `No results for "${filters.search}"`
+                : 'Try adjusting your filters'}
+            </div>
+            {(filters.search || filters.status !== 'all' || filters.category !== 'all') && (
+              <button
+                onClick={() => setFilters({ category: 'all', status: 'all', search: '' })}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: colors.brand.primary,
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {indices.map((index) => (
+              <div key={index.id} style={{ position: 'relative' }}>
+                {/* Selection Checkbox */}
+                <div
+                  onClick={() => handleSelectIndex(index.id)}
+                  style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    zIndex: 10,
+                    cursor: 'pointer',
+                    padding: '4px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFF',
+                    borderRadius: '6px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {selectedIndices.has(index.id) ? (
+                    <CheckSquare size={18} style={{ color: colors.brand.primary }} />
+                  ) : (
+                    <Square size={18} style={{ color: colors.utility.secondaryText }} />
+                  )}
+                </div>
+
+                {/* Index Card */}
+                <IndexCard
+                  index={index}
+                  onViewDashboard={handleViewDashboard}
+                  onCalculateMetrics={handleCalculateMetrics}
+                  onDownloadHistorical={handleDownloadHistorical}
+                  onDownloadEOD={handleDownloadEOD}
+                  onDelete={handleDelete}
+                  showDeleteButton={isSuperAdmin}
+                  isDownloading={downloadingIndexId === index.id}
+                  isCalculating={calculatingIndexId === index.id}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Footer Info */}
+      <div style={{
+        marginTop: '20px',
+        padding: '16px 20px',
+        backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F0F9FF',
+        borderRadius: '12px',
+        border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#BAE6FD'}`,
+        fontSize: '12px',
+        color: colors.utility.secondaryText,
+        lineHeight: '1.8'
+      }}>
+        <strong style={{ color: colors.utility.primaryText }}>About Market Data</strong>
+        <div style={{ marginTop: '8px' }}>
+          Data sourced from Yahoo Finance • Historical downloads fetch up to 20 years • EOD downloads run daily at 8:00 PM IST
         </div>
       </div>
 
@@ -1034,74 +950,50 @@ const MarketHistoryPage: React.FC = () => {
 
       {/* Download Progress Overlay */}
       {downloadingIndexId && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px'
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '16px',
-              padding: '32px',
-              maxWidth: '500px',
-              width: '100%',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-              textAlign: 'center'
-            }}
-          >
-            {/* Spinner */}
-            <div
-              style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto 24px',
-                border: `4px solid ${colors.utility.primaryText}20`,
-                borderTop: `4px solid ${colors.brand.primary}`,
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}
-            />
-
-            {/* Progress Text */}
-            <h3
-              style={{
-                fontSize: '20px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '12px'
-              }}
-            >
-              Download in Progress
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 2000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFF',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              margin: '0 auto 20px',
+              border: `3px solid ${colors.utility.primaryText}20`,
+              borderTop: `3px solid ${colors.brand.primary}`,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '8px'
+            }}>
+              Downloading...
             </h3>
-            <p
-              style={{
-                fontSize: '14px',
-                color: colors.utility.secondaryText,
-                marginBottom: '8px',
-                lineHeight: '1.6'
-              }}
-            >
+            <p style={{
+              fontSize: '13px',
+              color: colors.utility.secondaryText,
+              margin: 0
+            }}>
               {downloadProgress}
-            </p>
-            <p
-              style={{
-                fontSize: '13px',
-                color: colors.utility.secondaryText,
-                fontStyle: 'italic'
-              }}
-            >
-              Please wait... This may take a few moments for large datasets.
             </p>
           </div>
         </div>
@@ -1109,74 +1001,50 @@ const MarketHistoryPage: React.FC = () => {
 
       {/* Calculation Progress Overlay */}
       {calculatingIndexId && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px'
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderRadius: '16px',
-              padding: '32px',
-              maxWidth: '500px',
-              width: '100%',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-              textAlign: 'center'
-            }}
-          >
-            {/* Spinner */}
-            <div
-              style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto 24px',
-                border: `4px solid ${colors.utility.primaryText}20`,
-                borderTop: `4px solid ${colors.semantic.success}`,
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}
-            />
-
-            {/* Progress Text */}
-            <h3
-              style={{
-                fontSize: '20px',
-                fontWeight: '600',
-                color: colors.utility.primaryText,
-                marginBottom: '12px'
-              }}
-            >
-              Calculating Metrics
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 2000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFF',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              margin: '0 auto 20px',
+              border: `3px solid ${colors.utility.primaryText}20`,
+              borderTop: `3px solid #10B981`,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '8px'
+            }}>
+              Calculating Metrics...
             </h3>
-            <p
-              style={{
-                fontSize: '14px',
-                color: colors.utility.secondaryText,
-                marginBottom: '8px',
-                lineHeight: '1.6'
-              }}
-            >
+            <p style={{
+              fontSize: '13px',
+              color: colors.utility.secondaryText,
+              margin: 0
+            }}>
               {calculationProgress}
-            </p>
-            <p
-              style={{
-                fontSize: '13px',
-                color: colors.utility.secondaryText,
-                fontStyle: 'italic'
-              }}
-            >
-              Please wait... Calculating performance metrics for all historical records.
             </p>
           </div>
         </div>
