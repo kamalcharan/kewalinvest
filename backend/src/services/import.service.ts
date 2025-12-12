@@ -1936,19 +1936,23 @@ async processSchemeImport(
       SET
         successful_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE session_id = $1 AND status = 'success'
+          WHERE session_id = $1 AND processing_status = 'success'
         ),
         failed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE session_id = $1 AND status = 'failed'
+          WHERE session_id = $1 AND processing_status = 'failed'
         ),
         duplicate_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE session_id = $1 AND status = 'duplicate'
+          WHERE session_id = $1 AND processing_status = 'duplicate'
+        ),
+        orphan_records = (
+          SELECT COUNT(*) FROM t_import_staging_data
+          WHERE session_id = $1 AND processing_status = 'orphan'
         ),
         processed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE session_id = $1 AND status IN ('success', 'failed', 'duplicate', 'orphan')
+          WHERE session_id = $1 AND processing_status IN ('success', 'failed', 'duplicate', 'orphan')
         ),
         updated_at = NOW()
       WHERE id = $1
