@@ -92,13 +92,33 @@ interface DashboardData {
       type: 'video' | 'in_person' | 'phone';
     }>;
   };
-  reportStatus: Array<{
-    id: number;
-    reportName: string;
-    status: 'pending' | 'generating' | 'completed' | 'failed';
-    scheduledFor: string;
-    customersIncluded: number;
-  }>;
+  reportGeneration: {
+    totalCustomers: number;
+    totalFamilies: number;
+    overdue: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      familyName?: string;
+      lastGeneratedAt: string;
+      frequency: '3_months' | '6_months';
+      daysOverdue: number;
+    }>;
+    dueIn15Days: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      familyName?: string;
+      dueDate: string;
+      frequency: '3_months' | '6_months';
+    }>;
+    recentlyGenerated: Array<{
+      id: number;
+      customerName: string;
+      familyName?: string;
+      generatedAt: string;
+    }>;
+  };
   recentTransactions: Array<{
     id: number;
     customerName: string;
@@ -160,11 +180,26 @@ const getDummyData = (): DashboardData => ({
       { id: 6, customerId: 115, customerName: 'Pooja Reddy', title: 'Tax Planning', date: '2024-12-16', time: '10:00 AM', type: 'video' }
     ]
   },
-  reportStatus: [
-    { id: 1, reportName: 'Monthly Portfolio Summary', status: 'pending', scheduledFor: '2024-12-15', customersIncluded: 127 },
-    { id: 2, reportName: 'Tax Harvesting Report', status: 'generating', scheduledFor: '2024-12-12', customersIncluded: 45 },
-    { id: 3, reportName: 'Goal Progress Report', status: 'completed', scheduledFor: '2024-12-10', customersIncluded: 89 }
-  ],
+  reportGeneration: {
+    totalCustomers: 127,
+    totalFamilies: 45,
+    overdue: [
+      { id: 1, customerId: 120, customerName: 'Sunil Sharma', familyName: 'Sharma Family', lastGeneratedAt: '2024-06-15', frequency: '3_months', daysOverdue: 89 },
+      { id: 2, customerId: 121, customerName: 'Meena Patel', lastGeneratedAt: '2024-07-01', frequency: '3_months', daysOverdue: 73 },
+      { id: 3, customerId: 122, customerName: 'Rakesh Verma', familyName: 'Verma Family', lastGeneratedAt: '2024-05-20', frequency: '6_months', daysOverdue: 24 }
+    ],
+    dueIn15Days: [
+      { id: 4, customerId: 123, customerName: 'Anita Desai', familyName: 'Desai Family', dueDate: '2024-12-20', frequency: '3_months' },
+      { id: 5, customerId: 124, customerName: 'Vijay Kumar', dueDate: '2024-12-22', frequency: '6_months' },
+      { id: 6, customerId: 125, customerName: 'Priya Reddy', familyName: 'Reddy Family', dueDate: '2024-12-25', frequency: '3_months' },
+      { id: 7, customerId: 126, customerName: 'Rahul Mehta', dueDate: '2024-12-27', frequency: '3_months' }
+    ],
+    recentlyGenerated: [
+      { id: 8, customerName: 'Anil Kapoor', familyName: 'Kapoor Family', generatedAt: '2024-12-10' },
+      { id: 9, customerName: 'Deepa Sharma', generatedAt: '2024-12-09' },
+      { id: 10, customerName: 'Kiran Rao', generatedAt: '2024-12-08' }
+    ]
+  },
   recentTransactions: [
     { id: 1, customerName: 'Rahul Mehta', type: 'Purchase', schemeName: 'Axis Bluechip Fund', amount: 100000, date: '2024-12-12' },
     { id: 2, customerName: 'Neha Gupta', type: 'SIP', schemeName: 'HDFC Flexi Cap', amount: 15000, date: '2024-12-12' },
@@ -837,58 +872,153 @@ export const Dashboard: React.FC = () => {
         {/* Report Generation Status */}
         <Card>
           <SectionHeader
-            title="Report Generation"
+            title="Portfolio Reports"
             icon={<FileText size={18} />}
           />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {data.reportStatus.map((report) => {
-              const statusConfig: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
-                pending: { color: '#F59E0B', bg: '#F59E0B15', icon: <Clock size={14} /> },
-                generating: { color: colors.brand.primary, bg: colors.brand.primary + '15', icon: <RefreshCw size={14} className="animate-spin" /> },
-                completed: { color: '#10B981', bg: '#10B98115', icon: <CheckCircle size={14} /> },
-                failed: { color: colors.semantic.error, bg: colors.semantic.error + '15', icon: <XCircle size={14} /> }
-              };
-              const config = statusConfig[report.status];
+          {/* Summary Stats */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '10px',
+            marginBottom: '16px'
+          }}>
+            <div style={{
+              padding: '12px',
+              backgroundColor: colors.semantic.error + '10',
+              borderRadius: '8px',
+              borderLeft: `3px solid ${colors.semantic.error}`
+            }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: colors.semantic.error }}>
+                {data.reportGeneration.overdue.length}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Overdue (Ageing)</div>
+            </div>
+            <div style={{
+              padding: '12px',
+              backgroundColor: '#F59E0B10',
+              borderRadius: '8px',
+              borderLeft: '3px solid #F59E0B'
+            }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#F59E0B' }}>
+                {data.reportGeneration.dueIn15Days.length}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Due in 15 Days</div>
+            </div>
+          </div>
 
-              return (
-                <div
-                  key={report.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                    borderRadius: '8px'
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '500', fontSize: '13px', color: colors.utility.primaryText }}>
-                      {report.reportName}
+          {/* Overdue Reports */}
+          {data.reportGeneration.overdue.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: colors.semantic.error,
+                marginBottom: '8px',
+                textTransform: 'uppercase'
+              }}>
+                Overdue Reports
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {data.reportGeneration.overdue.slice(0, 3).map((report) => (
+                  <div
+                    key={report.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      backgroundColor: colors.semantic.error + '08',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => navigate(`/customers/${report.customerId}`)}
+                  >
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.primaryText }}>
+                        {report.customerName}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                        {report.familyName || 'Individual'} • {report.frequency === '3_months' ? 'Quarterly' : 'Half-yearly'}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: colors.semantic.error,
+                      padding: '2px 6px',
+                      backgroundColor: colors.semantic.error + '15',
+                      borderRadius: '4px'
+                    }}>
+                      {report.daysOverdue}d overdue
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Due in 15 Days */}
+          {data.reportGeneration.dueIn15Days.length > 0 && (
+            <div>
+              <div style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#F59E0B',
+                marginBottom: '8px',
+                textTransform: 'uppercase'
+              }}>
+                Due Soon
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {data.reportGeneration.dueIn15Days.slice(0, 3).map((report) => (
+                  <div
+                    key={report.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => navigate(`/customers/${report.customerId}`)}
+                  >
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.primaryText }}>
+                        {report.customerName}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                        {report.familyName || 'Individual'} • {report.frequency === '3_months' ? 'Quarterly' : 'Half-yearly'}
+                      </div>
                     </div>
                     <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                      {report.customersIncluded} customers • {formatDate(report.scheduledFor)}
+                      {formatDate(report.dueDate)}
                     </div>
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    backgroundColor: config.bg,
-                    color: config.color,
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
-                    {config.icon}
-                    {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recently Generated Summary */}
+          {data.reportGeneration.recentlyGenerated.length > 0 && (
+            <div style={{
+              marginTop: '12px',
+              padding: '8px 10px',
+              backgroundColor: '#10B98110',
+              borderRadius: '6px',
+              fontSize: '11px',
+              color: colors.utility.secondaryText,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <CheckCircle size={12} style={{ color: '#10B981' }} />
+              {data.reportGeneration.recentlyGenerated.length} reports generated this week
+            </div>
+          )}
         </Card>
       </div>
 
