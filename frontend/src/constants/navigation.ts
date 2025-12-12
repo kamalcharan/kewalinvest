@@ -1,10 +1,9 @@
 // frontend/src/constants/navigation.ts
-import { 
-  Home, 
-  Users, 
+import {
+  Home,
+  Users,
   Crown,
   TrendingUp,
-  PieChart,
   BarChart3,
   FileText,
   Settings,
@@ -14,7 +13,8 @@ import {
   FileSpreadsheet,
   Bug,
   Target,
-  Bell
+  Bell,
+  Link2
 } from 'lucide-react';
 
 // ============================================================================
@@ -69,6 +69,12 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'Customers',
         path: '/customers',
         icon: Crown
+      },
+      {
+        id: 'aliases',
+        name: 'Aliases',
+        path: '/aliases',
+        icon: Link2
       },
       {
         id: 'transactions',
@@ -131,12 +137,6 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'Index Analysis',
         path: '/market/dashboard',
         icon: TrendingUp
-      },
-      {
-        id: 'portfolio_analysis',
-        name: 'Portfolio Analysis',
-        path: '/portfolios/analysis',
-        icon: PieChart
       },
       {
         id: 'market_data',

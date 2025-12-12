@@ -1,10 +1,12 @@
 // frontend/src/components/customers/CustomerCard.tsx
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CustomerWithContact } from '../../types/customer.types';
 import { CustomerPortfolioResponse } from '../../types/portfolio.types';
 import { useCustomerJTBDSummary } from '../../hooks/useJTBD';
 import { useBookmarkCustomer, useUnbookmarkCustomer, useBookmarkReasons } from '../../hooks/useCustomers';
+import { useCustomerAlias } from '../../hooks/useAlias';
 import { useTheme } from '../../contexts/ThemeContext';
 import JTBDStatusBadge from '../jtbd/JTBDStatusBadge';
 import PerformanceSparkline from '../visualizations/PerformanceSparkline';
@@ -39,6 +41,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const navigate = useNavigate();
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
@@ -50,7 +53,10 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
 
   // Fetch JTBD summary for this customer
   const { data: jtbdSummary } = useCustomerJTBDSummary(customer.id);
-  
+
+  // Fetch alias info for this customer
+  const { data: customerAlias } = useCustomerAlias(customer.id);
+
   // Bookmark hooks (NEW)
   const { data: bookmarkReasons } = useBookmarkReasons();
   const { mutate: bookmarkCustomer, isPending: isBookmarking } = useBookmarkCustomer();
@@ -397,6 +403,38 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                         }
                       </span>
                     </FamilyMembersPopover>
+                  </>
+                )}
+                {/* Alias Badge - Show if customer is in an alias */}
+                {customerAlias && (
+                  <>
+                    <span>•</span>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        backgroundColor: colors.brand.primary + '15',
+                        color: colors.brand.primary,
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/aliases/${customerAlias.id}`);
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.brand.primary + '25';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.brand.primary + '15';
+                      }}
+                      title={`View alias: ${customerAlias.alias_name}`}
+                    >
+                      {customerAlias.members?.find(m => m.customer_id === customer.id)?.is_primary ? 'Alias (Primary)' : 'In Alias'}: {customerAlias.alias_name}
+                    </span>
                   </>
                 )}
                 {age && (
