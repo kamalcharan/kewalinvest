@@ -72,8 +72,10 @@ const FilterBar: React.FC<FilterBarProps> = ({
     padding: '6px 14px',
     fontSize: '13px',
     fontWeight: isActive ? '600' : '500',
-    backgroundColor: isActive ? (color || colors.brand.primary) : 'transparent',
-    color: isActive ? '#FFF' : colors.utility.secondaryText,
+    backgroundColor: isActive
+      ? (color || colors.brand.primary)
+      : (isDarkMode ? colors.utility.secondaryBackground : '#F1F5F9'),
+    color: isActive ? '#FFF' : colors.utility.primaryText,
     border: 'none',
     borderRadius: '20px',
     cursor: isLoading ? 'not-allowed' : 'pointer',

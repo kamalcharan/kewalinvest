@@ -775,13 +775,13 @@ const MarketHistoryPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Indices Grid */}
-      <Card>
+      {/* Indices Section */}
+      <div>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '16px'
+          marginBottom: '12px'
         }}>
           <h3 style={{
             margin: 0,
@@ -864,7 +864,7 @@ const MarketHistoryPage: React.FC = () => {
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Footer Info */}
       <div style={{
