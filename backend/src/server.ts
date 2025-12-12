@@ -37,6 +37,7 @@ import customerAssetRoutes from './routes/customerAsset.routes';
 import investmentPlanRoutes from './routes/investmentPlan.routes';
 import goalInvestmentAllocationRoutes from './routes/goalInvestmentAllocation.routes'; // Release 1.1 - Phase 2
 import networthRoutes from './routes/networth.routes'; // Release 1.1 - Cycle 2: NetworthViewer
+import dashboardRoutes from './routes/dashboard.routes'; // Main Dashboard API
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -243,6 +244,7 @@ app.use('/api/asset-types', assetTypeRoutes); // Release 1.1 - Phase 1: Asset Ty
 app.use('/api', investmentPlanRoutes); // Release 1.1 - Phase 1: Investment Plans (full CRUD)
 app.use('/api', goalInvestmentAllocationRoutes); // Release 1.1 - Phase 2: Goal-Investment Allocations
 app.use('/api/networth', networthRoutes); // Release 1.1 - Cycle 2: NetworthViewer APIs
+app.use('/api/dashboard', dashboardRoutes); // Main Dashboard API
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
