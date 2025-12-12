@@ -1,14 +1,20 @@
 // frontend/src/components/Import/SessionRecordsTable.tsx
-// FIXED VERSION - Added BookmarkData case to getDisplayColumns
+// Updated with Edit+Reprocess functionality and Reprocess All
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api.service';
+import { toastService } from '../../services/toast.service';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { ImportSession, FileImportType } from '../../types/import.types';
 import RecordModal from './RecordModal';
+import RecordEditModal from '../ETL/RecordEditModal';
 
-interface StagingRecord {
+// API response record type
+interface ApiStagingRecord {
   id: number;
+  session_id?: number;
   row_number: number;
   processing_status: string;
   error_messages?: string[];
@@ -16,38 +22,64 @@ interface StagingRecord {
   raw_data: any;
   mapped_data: any;
   processed_at?: string;
+  match_type?: string;
+  match_confidence?: string;
+  ambiguous_matches?: any[];
+  edit_history?: any[];
+}
+
+// Internal record type (compatible with RecordEditModal)
+interface StagingRecord {
+  id: number;
+  import_session_id: number;
+  row_number: number;
+  processing_status: string;
+  status: string;
+  error_messages: string[];
+  warnings: string[];
+  raw_data: any;
+  mapped_data: any;
+  processed_at?: string;
+  match_type?: string;
+  match_confidence?: string;
+  ambiguous_matches?: any[];
+  edit_history?: any[];
 }
 
 interface SessionRecordsTableProps {
   session: ImportSession | null;
+  onRecordUpdated?: () => void;
 }
 
 // API Response type
 interface RecordsResponse {
   success: boolean;
   data: {
-    records: StagingRecord[];
+    records: ApiStagingRecord[];
     total: number;
   };
   message?: string;
 }
 
-const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) => {
+const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRecordUpdated }) => {
   const { theme, isDarkMode } = useTheme();
+  const { tenantId, environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-  
+
   const [records, setRecords] = useState<StagingRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [selectedRecord, setSelectedRecord] = useState<StagingRecord | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
-  const pageSize = 50; // Default 50 records as per requirement
+  const [isReprocessingAll, setIsReprocessingAll] = useState(false);
+  const pageSize = 50;
 
   useEffect(() => {
     if (session) {
-      setPage(1); // Reset to first page when session changes
+      setPage(1);
       fetchRecords();
     }
   }, [session?.id, filter]);
@@ -60,7 +92,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
 
   const fetchRecords = async () => {
     if (!session) return;
-    
+
     try {
       setLoading(true);
       const params = new URLSearchParams({
@@ -68,13 +100,21 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
         offset: ((page - 1) * pageSize).toString(),
         limit: pageSize.toString()
       });
-      
+
       const response = await apiService.get<RecordsResponse>(
         `/import/staging/${session.id}/records?${params}`
       );
-      
+
       if (response && response.data) {
-        setRecords(response.data.records || []);
+        // Transform API records to internal StagingRecord type
+        const recordsWithStatus: StagingRecord[] = (response.data.records || []).map(r => ({
+          ...r,
+          status: r.processing_status,
+          import_session_id: r.session_id || session.id,
+          error_messages: r.error_messages || [],
+          warnings: r.warnings || []
+        }));
+        setRecords(recordsWithStatus);
         setTotalRecords(response.data.total || 0);
       }
     } catch (error) {
@@ -91,7 +131,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
       'success': { bg: colors.semantic.success + '20', text: colors.semantic.success },
       'failed': { bg: colors.semantic.error + '20', text: colors.semantic.error },
       'duplicate': { bg: colors.semantic.warning + '20', text: colors.semantic.warning },
-       'orphan': { bg: '#8B7355' + '20', text: '#8B7355' },
+      'orphan': { bg: '#8B7355' + '20', text: '#8B7355' },
       'pending': { bg: colors.utility.secondaryText + '20', text: colors.utility.secondaryText },
       'processing': { bg: colors.semantic.info + '20', text: colors.semantic.info }
     };
@@ -113,24 +153,23 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
     );
   };
 
-  // ✅ FIXED: Added BookmarkData case
+  // Get remaining columns (excluding iwell_code which is now fixed)
   const getDisplayColumns = (): string[] => {
     if (!session) return [];
-    
-    const importType = session.import_type as string; // Cast to string for comparison
-    
+
+    const importType = session.import_type as string;
+
     if (importType === 'customer_import' || importType === 'CustomerData') {
       return ['name', 'email', 'mobile', 'pan', 'city'];
     } else if (importType === 'bookmark_import' || importType === 'BookmarkData') {
-      // ✅ FIXED: Added bookmark columns
       return ['scheme_code', 'isin', 'scheme_name'];
     } else if (importType === 'scheme_import' || importType === 'SchemeData') {
       return ['scheme_code', 'scheme_name', 'amc_name', 'scheme_type', 'scheme_category'];
     } else if (importType === 'transaction_import' || importType === 'TransactionData') {
-      return ['iwell_code', 'txn_date', 'scheme_name', 'total_amount', 'units'];
+      // Remove iwell_code since it's now a fixed column
+      return ['txn_date', 'scheme_name', 'total_amount', 'units'];
     } else {
-      // Fallback for any other import types
-      return ['id', 'name', 'value', 'status', 'date'];
+      return ['name', 'value', 'date'];
     }
   };
 
@@ -152,8 +191,90 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
     return String(value);
   };
 
+  const canEdit = (status: string): boolean => {
+    return status !== 'success' && status !== 'processing';
+  };
+
+  const handleEditClick = (e: React.MouseEvent, record: StagingRecord) => {
+    e.stopPropagation();
+    setSelectedRecord(record);
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    fetchRecords();
+    if (onRecordUpdated) {
+      onRecordUpdated();
+    }
+  };
+
+  const handleEditError = (error: string) => {
+    toastService.error(error);
+  };
+
+  // Reprocess all non-success records
+  const handleReprocessAll = async () => {
+    if (!session) return;
+
+    // Get IDs of non-success records
+    const nonSuccessRecords = records.filter(r => r.processing_status !== 'success');
+    if (nonSuccessRecords.length === 0) {
+      toastService.info('No records to reprocess');
+      return;
+    }
+
+    const recordIds = nonSuccessRecords.map(r => r.id);
+    const loadingToastId = toastService.loading(`Reprocessing ${recordIds.length} records...`);
+    setIsReprocessingAll(true);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        toastService.dismiss(loadingToastId);
+        toastService.error('Authentication token not found');
+        return;
+      }
+
+      const response = await fetch(
+        API_ENDPOINTS.IMPORT.BULK_REPROCESS_RECORDS(session.id),
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...(tenantId && { 'X-Tenant-ID': String(tenantId) }),
+            ...(environment && { 'X-Environment': environment })
+          },
+          body: JSON.stringify({ recordIds })
+        }
+      );
+
+      const result = await response.json();
+      toastService.dismiss(loadingToastId);
+
+      if (result.success) {
+        const { processed, successful, failed } = result.data || {};
+        toastService.success(
+          `Reprocessed ${processed || 0} records: ${successful || 0} passed, ${failed || 0} failed`
+        );
+        fetchRecords();
+        if (onRecordUpdated) {
+          onRecordUpdated();
+        }
+      } else {
+        toastService.error(result.error || 'Failed to reprocess records');
+      }
+    } catch (error: any) {
+      toastService.dismiss(loadingToastId);
+      toastService.error(error.message || 'Failed to reprocess records');
+    } finally {
+      setIsReprocessingAll(false);
+    }
+  };
+
   const displayColumns = getDisplayColumns();
   const totalPages = Math.ceil(totalRecords / pageSize);
+  const hasNonSuccessRecords = records.some(r => r.processing_status !== 'success');
 
   if (!session) {
     return (
@@ -199,7 +320,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
           gap: '8px',
           flex: 1
         }}>
-          {['all', 'success', 'failed','orphan', 'duplicate', 'pending'].map(filterType => (
+          {['all', 'success', 'failed', 'orphan', 'duplicate', 'pending'].map(filterType => (
             <button
               key={filterType}
               onClick={() => {
@@ -208,15 +329,15 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
               }}
               style={{
                 padding: '6px 12px',
-                backgroundColor: filter === filterType 
-                  ? colors.brand.primary 
+                backgroundColor: filter === filterType
+                  ? colors.brand.primary
                   : colors.utility.primaryBackground,
-                color: filter === filterType 
-                  ? 'white' 
+                color: filter === filterType
+                  ? 'white'
                   : colors.utility.primaryText,
                 border: `1px solid ${
-                  filter === filterType 
-                    ? colors.brand.primary 
+                  filter === filterType
+                    ? colors.brand.primary
                     : colors.utility.primaryText + '20'
                 }`,
                 borderRadius: '6px',
@@ -243,6 +364,29 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
           }}>
             Showing {records.length} of {totalRecords} records
           </span>
+
+          {/* Reprocess All Button */}
+          {hasNonSuccessRecords && (
+            <button
+              onClick={handleReprocessAll}
+              disabled={isReprocessingAll}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: colors.semantic.warning,
+                border: 'none',
+                borderRadius: '6px',
+                color: 'white',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: isReprocessingAll ? 'not-allowed' : 'pointer',
+                opacity: isReprocessingAll ? 0.7 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              {isReprocessingAll ? 'Reprocessing...' : 'Reprocess All'}
+            </button>
+          )}
+
           <button
             onClick={fetchRecords}
             style={{
@@ -277,78 +421,96 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
               <tr style={{
                 backgroundColor: colors.utility.secondaryBackground
               }}>
-                <th style={{ 
-                  padding: '14px', 
-                  textAlign: 'left', 
-                  fontSize: '11px', 
-                  fontWeight: '600', 
+                {/* Row # */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'left',
+                  fontSize: '11px',
+                  fontWeight: '600',
                   color: colors.utility.secondaryText,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
-                  minWidth: '70px',
+                  minWidth: '60px',
                   position: 'sticky',
                   left: 0,
                   backgroundColor: colors.utility.secondaryBackground,
                   zIndex: 1
                 }}>
-                  Row #
+                  Row
                 </th>
-                {displayColumns.map(col => (
-                  <th key={col} style={{ 
-                    padding: '14px', 
-                    textAlign: 'left', 
-                    fontSize: '11px', 
-                    fontWeight: '600', 
-                    color: colors.utility.secondaryText,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    minWidth: '140px'
-                  }}>
-                    {getColumnLabel(col)}
-                  </th>
-                ))}
-                <th style={{ 
-                  padding: '14px', 
-                  textAlign: 'center', 
-                  fontSize: '11px', 
-                  fontWeight: '600', 
+                {/* Iwell Code - Fixed column */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'left',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '120px'
+                }}>
+                  Iwell Code
+                </th>
+                {/* Status */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'center',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '90px'
+                }}>
+                  Status
+                </th>
+                {/* Error/Warning */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'left',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  minWidth: '200px'
+                }}>
+                  Error/Warning
+                </th>
+                {/* Action */}
+                <th style={{
+                  padding: '14px',
+                  textAlign: 'center',
+                  fontSize: '11px',
+                  fontWeight: '600',
                   color: colors.utility.secondaryText,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   minWidth: '100px'
                 }}>
-                  Status
-                </th>
-                <th style={{ 
-                  padding: '14px', 
-                  textAlign: 'left', 
-                  fontSize: '11px', 
-                  fontWeight: '600', 
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  minWidth: '250px'
-                }}>
-                  Error/Warning
-                </th>
-                <th style={{ 
-                  padding: '14px', 
-                  textAlign: 'center', 
-                  fontSize: '11px', 
-                  fontWeight: '600', 
-                  color: colors.utility.secondaryText,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  minWidth: '80px'
-                }}>
                   Action
                 </th>
+                {/* Remaining data columns */}
+                {displayColumns.map(col => (
+                  <th key={col} style={{
+                    padding: '14px',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: colors.utility.secondaryText,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    minWidth: '120px'
+                  }}>
+                    {getColumnLabel(col)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={displayColumns.length + 4} style={{
+                  <td colSpan={displayColumns.length + 5} style={{
                     padding: '48px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText
@@ -373,7 +535,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={displayColumns.length + 4} style={{
+                  <td colSpan={displayColumns.length + 5} style={{
                     padding: '48px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText
@@ -383,10 +545,10 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                 </tr>
               ) : (
                 records.map((record, index) => (
-                  <tr 
+                  <tr
                     key={record.id}
                     style={{
-                      backgroundColor: index % 2 === 0 
+                      backgroundColor: index % 2 === 0
                         ? 'transparent'
                         : colors.brand.alternate + '20',
                       borderTop: `1px solid ${colors.utility.primaryText}05`,
@@ -401,19 +563,20 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                       e.currentTarget.style.backgroundColor = colors.brand.tertiary + '15';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = index % 2 === 0 
+                      e.currentTarget.style.backgroundColor = index % 2 === 0
                         ? 'transparent'
                         : colors.brand.alternate + '20';
                     }}
                   >
-                    <td style={{ 
-                      padding: '14px', 
-                      fontSize: '13px', 
-                      fontWeight: '600', 
+                    {/* Row # */}
+                    <td style={{
+                      padding: '14px',
+                      fontSize: '13px',
+                      fontWeight: '600',
                       color: colors.utility.primaryText,
                       position: 'sticky',
                       left: 0,
-                      backgroundColor: index % 2 === 0 
+                      backgroundColor: index % 2 === 0
                         ? colors.utility.primaryBackground
                         : colors.brand.alternate + '20',
                       zIndex: 1,
@@ -421,12 +584,106 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                     }}>
                       {record.row_number}
                     </td>
+                    {/* Iwell Code */}
+                    <td style={{
+                      padding: '14px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: colors.brand.primary,
+                      fontFamily: 'monospace'
+                    }}>
+                      {getFieldValue(record, 'iwell_code')}
+                    </td>
+                    {/* Status */}
+                    <td style={{
+                      padding: '14px',
+                      textAlign: 'center'
+                    }}>
+                      {getStatusBadge(record.processing_status)}
+                    </td>
+                    {/* Error/Warning */}
+                    <td style={{
+                      padding: '14px',
+                      fontSize: '12px',
+                      color: record.error_messages?.length
+                        ? colors.semantic.error
+                        : colors.semantic.warning,
+                      maxWidth: '250px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {record.error_messages?.join(', ') || record.warnings?.join(', ') || '-'}
+                    </td>
+                    {/* Action */}
+                    <td style={{
+                      padding: '14px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRecord(record);
+                            setShowModal(true);
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: 'transparent',
+                            color: colors.brand.primary,
+                            border: `1px solid ${colors.brand.primary}`,
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = colors.brand.primary;
+                            e.currentTarget.style.color = 'white';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = colors.brand.primary;
+                          }}
+                        >
+                          View
+                        </button>
+                        {canEdit(record.processing_status) && (
+                          <button
+                            onClick={(e) => handleEditClick(e, record)}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: 'transparent',
+                              color: colors.semantic.success,
+                              border: `1px solid ${colors.semantic.success}`,
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = colors.semantic.success;
+                              e.currentTarget.style.color = 'white';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = colors.semantic.success;
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    {/* Remaining data columns */}
                     {displayColumns.map(col => (
-                      <td key={col} style={{ 
-                        padding: '14px', 
-                        fontSize: '13px', 
+                      <td key={col} style={{
+                        padding: '14px',
+                        fontSize: '13px',
                         color: colors.utility.primaryText,
-                        maxWidth: '200px',
+                        maxWidth: '180px',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
@@ -434,58 +691,6 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                         {getFieldValue(record, col)}
                       </td>
                     ))}
-                    <td style={{ 
-                      padding: '14px', 
-                      textAlign: 'center' 
-                    }}>
-                      {getStatusBadge(record.processing_status)}
-                    </td>
-                    <td style={{ 
-                      padding: '14px', 
-                      fontSize: '12px', 
-                      color: record.error_messages?.length 
-                        ? colors.semantic.error 
-                        : colors.semantic.warning,
-                      maxWidth: '300px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {record.error_messages?.join(', ') || record.warnings?.join(', ') || '-'}
-                    </td>
-                    <td style={{ 
-                      padding: '14px', 
-                      textAlign: 'center' 
-                    }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRecord(record);
-                          setShowModal(true);
-                        }}
-                        style={{
-                          padding: '4px 10px',
-                          backgroundColor: 'transparent',
-                          color: colors.brand.primary,
-                          border: `1px solid ${colors.brand.primary}`,
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.brand.primary;
-                          e.currentTarget.style.color = 'white';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.color = colors.brand.primary;
-                        }}
-                      >
-                        View
-                      </button>
-                    </td>
                   </tr>
                 ))
               )}
@@ -493,7 +698,6 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
           </table>
         </div>
 
-        {/* Add CSS for spinner animation */}
         <style>{`
           @keyframes spin {
             to { transform: rotate(360deg); }
@@ -519,7 +723,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
           }}>
             Page {page} of {totalPages} • {totalRecords} total records
           </div>
-          
+
           <div style={{
             display: 'flex',
             gap: '8px',
@@ -543,7 +747,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
             >
               First
             </button>
-            
+
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
@@ -562,8 +766,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
             >
               Previous
             </button>
-            
-            {/* Page Number Input */}
+
             <input
               type="number"
               min={1}
@@ -586,7 +789,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
                 textAlign: 'center'
               }}
             />
-            
+
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
@@ -605,7 +808,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
             >
               Next
             </button>
-            
+
             <button
               onClick={() => setPage(totalPages)}
               disabled={page === totalPages}
@@ -628,7 +831,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
         </div>
       )}
 
-      {/* Record Detail Modal */}
+      {/* Record Detail Modal (View only) */}
       {showModal && selectedRecord && (
         <RecordModal
           record={selectedRecord}
@@ -636,6 +839,20 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session }) =>
             setShowModal(false);
             setSelectedRecord(null);
           }}
+        />
+      )}
+
+      {/* Record Edit Modal (Edit + Reprocess) */}
+      {showEditModal && selectedRecord && (
+        <RecordEditModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedRecord(null);
+          }}
+          record={selectedRecord}
+          onSaveSuccess={handleEditSuccess}
+          onError={handleEditError}
         />
       )}
     </div>

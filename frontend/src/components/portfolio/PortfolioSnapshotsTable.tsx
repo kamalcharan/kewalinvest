@@ -439,25 +439,31 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           <span>NAV</span>
                         </div>
                       </td>
-                      {scheme.monthly_data.map((month: any, idx: number) => (
-                        <td
-                          key={idx}
-                          style={{
-                            padding: '8px 12px',
-                            textAlign: 'right',
-                            fontWeight: '500',
-                            fontSize: '12px',
-                            color: month.has_nav_data ? colors.utility.primaryText : colors.semantic.error,
-                            backgroundColor: idx === 0
-                              ? `${colors.brand.primary}10`
-                              : undefined
-                          }}
-                        >
-                          {month.has_nav_data
-                            ? formatValue(month.closing_nav, 'nav')
-                            : 'No data'}
-                        </td>
-                      ))}
+                      {scheme.monthly_data.map((month: any, idx: number) => {
+                        const hasData = month.has_nav_data || month.is_estimated;
+                        const isEstimated = month.is_estimated;
+                        return (
+                          <td
+                            key={idx}
+                            style={{
+                              padding: '8px 12px',
+                              textAlign: 'right',
+                              fontWeight: '500',
+                              fontSize: '12px',
+                              color: hasData
+                                ? (isEstimated ? colors.semantic.warning : colors.utility.primaryText)
+                                : colors.semantic.error,
+                              backgroundColor: idx === 0
+                                ? `${colors.brand.primary}10`
+                                : undefined
+                            }}
+                          >
+                            {hasData
+                              ? `${formatValue(month.closing_nav, 'nav')}${isEstimated ? '**' : ''}`
+                              : 'No data'}
+                          </td>
+                        );
+                      })}
                     </tr>
                   )}
 
@@ -564,7 +570,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         fontSize: '12px',
         color: colors.utility.secondaryText
       }}>
-        * Current month data • Click ▶ to expand and view detailed metrics (Units, NAV, Market Value, Performance)
+        * Current month • ** NAV estimated (using latest available) • Click ▶ to expand metrics
       </div>
 
       {/* Chart Modal */}

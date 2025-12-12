@@ -65,8 +65,8 @@ const SessionDetails: React.FC<SessionDetailsProps> = ({ session, onRefreshSessi
       {/* Session Metrics */}
       <SessionMetrics session={session} onStagingDeleted={onRefreshSessions} />
 
-      {/* Session Records Table */}
-      <SessionRecordsTable session={session} />
+      {/* Session Records Table with Edit+Reprocess */}
+      <SessionRecordsTable session={session} onRecordUpdated={onRefreshSessions} />
     </div>
   );
 };

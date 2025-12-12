@@ -1084,16 +1084,31 @@ export class ImportController {
       }
 
       const { sessionId } = req.params;
-      const { page = 1, pageSize = 100, status } = req.query;
+      // Support both offset/limit (from frontend) and page/pageSize formats
+      const { page, pageSize, offset, limit, status } = req.query;
       const isLive = req.headers['x-environment'] === 'live';
+
+      // Calculate page/pageSize from offset/limit if provided
+      let calculatedPage = 1;
+      let calculatedPageSize = 50;
+
+      if (offset !== undefined && limit !== undefined) {
+        // Frontend sends offset and limit
+        calculatedPageSize = parseInt(limit as string) || 50;
+        calculatedPage = Math.floor(parseInt(offset as string) / calculatedPageSize) + 1;
+      } else {
+        // Fallback to page/pageSize
+        calculatedPage = parseInt(page as string) || 1;
+        calculatedPageSize = parseInt(pageSize as string) || 50;
+      }
 
       const result = await this.importService.getStagingRecords(
         user.tenant_id,
         isLive,
         parseInt(sessionId),
         {
-          page: parseInt(page as string),
-          pageSize: parseInt(pageSize as string),
+          page: calculatedPage,
+          pageSize: calculatedPageSize,
           status: status as string
         }
       );

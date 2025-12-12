@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
-import RecordEditModal from './RecordEditModal';
 
 interface ImportResultsProps {
   sessionId: number;
@@ -102,9 +101,8 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   const [portfolioFlagToggles, setPortfolioFlagToggles] = useState<Record<number, boolean>>({});
   const [isTogglingFlag, setIsTogglingFlag] = useState<number | null>(null);
 
-  // View and Edit modals
+  // View modal
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ImportRecord | null>(null);
 
   // Fetch results on component mount and when filters change
@@ -290,11 +288,6 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   const handleViewRecord = (record: ImportRecord) => {
     setSelectedRecord(record);
     setIsViewModalOpen(true);
-  };
-
-  const handleEditRecord = (record: ImportRecord) => {
-    setSelectedRecord(record);
-    setIsEditModalOpen(true);
   };
 
   const formatProcessingTime = (milliseconds: number): string => {
@@ -1210,36 +1203,6 @@ const ImportResults: React.FC<ImportResultsProps> = ({
                     >
                       <span style={{ fontSize: '16px' }}>👁️</span>
                     </button>
-
-                    {/* Edit Icon - For failed/orphan/duplicate/pending records (any non-success) */}
-                    {((record.processing_status && record.processing_status !== 'success') || 
-                      (record.status && record.status !== 'success')) && (
-                      <button
-                        onClick={() => handleEditRecord(record)}
-                        style={{
-                          padding: '6px',
-                          backgroundColor: 'transparent',
-                          border: `1px solid ${colors.utility.secondaryText}30`,
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = `${colors.semantic.warning}10`;
-                          e.currentTarget.style.borderColor = colors.semantic.warning;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = `${colors.utility.secondaryText}30`;
-                        }}
-                        title="Edit & Reprocess"
-                      >
-                        <span style={{ fontSize: '16px' }}>✏️</span>
-                      </button>
-                    )}
                   </div>
                 </div>
               );
@@ -1513,24 +1476,6 @@ const ImportResults: React.FC<ImportResultsProps> = ({
             </div>
           </div>
         </div>
-      )}
-
-      {/* Edit Record Modal */}
-      {isEditModalOpen && selectedRecord && (
-        <RecordEditModal
-          isOpen={isEditModalOpen}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setSelectedRecord(null);
-          }}
-          record={selectedRecord}
-          onSaveSuccess={() => {
-            setIsEditModalOpen(false);
-            setSelectedRecord(null);
-            fetchResults();
-          }}
-          onError={onError}
-        />
       )}
     </div>
   );

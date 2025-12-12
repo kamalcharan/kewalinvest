@@ -5,16 +5,17 @@
 -- Execution: Run FIFTH (last) after 04_functions_views_policies.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-01-30 - Added market indices, clarified admin tenant structure
+-- Updated: 2025-12-12 - Added Migration 026 STP aliases, SELL, OPENING BALANCE
 -- ============================================================================
 --
 -- IMPORTANT NOTES:
 -- ================
 -- 1. GLOBAL MASTER DATA: This script seeds GLOBAL master data shared across
 --    all tenants:
---    - Transaction Types (7 types)
---    - Job Types (1 type: PORTFOLIO_SNAPSHOT)
+--    - Transaction Types (11 types including Migration 026 aliases)
+--    - Job Types (5 types)
 --    - Market Indices (50 NSE indices)
+--    - Asset Types (10 types for multi-asset support)
 --
 -- 2. ADMIN TENANTS (IDs 1-3): Pre-configured admin/system tenants for
 --    deployment with full configuration:
@@ -87,8 +88,13 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
+-- ----------------------------------------------------------------------------
+-- Transaction Types (11 total)
+-- Includes Migration 026: SYSTEMATIC TRANSFER IN/OUT aliases for import files
+-- ----------------------------------------------------------------------------
 INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, description)
 VALUES
+    -- ADDITION TYPES (6)
     ('SIP', 'Systematic Investment Plan', 'Addition', TRUE, 
      'Regular systematic investment contributions at fixed intervals'),
     
@@ -101,13 +107,30 @@ VALUES
     ('SWITCH IN', 'Switch In', 'Addition', TRUE, 
      'Funds received from switching from another scheme'),
     
+    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE, 
+     'Funds added to system portfolio to balance transaction records'),
+    
+    -- Migration 026: Verbose alias for STP IN (import file compatibility)
+    ('SYSTEMATIC TRANSFER IN', 'Systematic Transfer In', 'Addition', TRUE, 
+     'Systematic transfer of funds from another scheme (incoming) - alternate code'),
+    
+    -- DEDUCTION TYPES (5)
     ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE, 
      'Systematic transfer of funds to another scheme (outgoing)'),
     
-    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 'Withdrawal or redemption of invested funds'),
+    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 
+     'Withdrawal or redemption of invested funds'),
     
     ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE, 
-     'Funds moved out by switching to another scheme')
+     'Funds moved out by switching to another scheme'),
+    
+    ('SELL', 'Sell', 'Deduction', TRUE, 
+     'Funds moved out / encashed from the scheme'),
+    
+    -- Migration 026: Verbose alias for STP OUT (import file compatibility)
+    ('SYSTEMATIC TRANSFER OUT', 'Systematic Transfer Out', 'Deduction', TRUE, 
+     'Systematic transfer of funds to another scheme (outgoing) - alternate code')
+
 ON CONFLICT (txn_code) DO UPDATE 
     SET txn_name = EXCLUDED.txn_name,
         txn_type = EXCLUDED.txn_type,
@@ -120,6 +143,10 @@ BEGIN
     RAISE NOTICE 'Transaction Types seeded: % total, % active', 
         (SELECT COUNT(*) FROM m_transaction_types),
         (SELECT COUNT(*) FROM m_transaction_types WHERE is_active = true);
+    RAISE NOTICE '  - Addition types: %',
+        (SELECT COUNT(*) FROM m_transaction_types WHERE txn_type = 'Addition');
+    RAISE NOTICE '  - Deduction types: %',
+        (SELECT COUNT(*) FROM m_transaction_types WHERE txn_type = 'Deduction');
 END $$;
 
 -- ============================================================================
@@ -729,6 +756,8 @@ END $$;
 DO $$
 DECLARE
     v_txn_count INTEGER;
+    v_txn_addition INTEGER;
+    v_txn_deduction INTEGER;
     v_job_types_count INTEGER;
     v_tenant_count INTEGER;
     v_admin_tenant_count INTEGER;
@@ -739,7 +768,12 @@ DECLARE
     v_active_indices INTEGER;
     v_asset_types_count INTEGER;
 BEGIN
-    SELECT COUNT(*) INTO v_txn_count FROM m_transaction_types WHERE is_active = true;
+    SELECT COUNT(*), 
+           COUNT(*) FILTER (WHERE txn_type = 'Addition'),
+           COUNT(*) FILTER (WHERE txn_type = 'Deduction')
+    INTO v_txn_count, v_txn_addition, v_txn_deduction
+    FROM m_transaction_types WHERE is_active = true;
+    
     SELECT COUNT(*) INTO v_job_types_count FROM m_job_types WHERE is_active = true;
 
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_admin = true)
@@ -760,7 +794,9 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE '     SEED DATA SUMMARY';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Transaction Types: % active', v_txn_count;
+    RAISE NOTICE 'Transaction Types: % active (% Addition, % Deduction)', 
+        v_txn_count, v_txn_addition, v_txn_deduction;
+    RAISE NOTICE '  - Includes Migration 026: SYSTEMATIC TRANSFER IN/OUT aliases';
     RAISE NOTICE 'Job Types: % active', v_job_types_count;
     RAISE NOTICE 'Admin Tenants: % total (% admin)', v_tenant_count, v_admin_tenant_count;
     RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)',

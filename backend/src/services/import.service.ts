@@ -358,11 +358,17 @@ export class ImportService {
       `;
 
       const result = await this.db.query(query, [sessionId, tenantId, isLive]);
-      
+
       if (result.rows[0]) {
-        return result.rows[0];
+        const session = result.rows[0];
+        // Extract orphan_records from processing_metadata and add as top-level field
+        const orphanRecords = session.processing_metadata?.orphan_records || 0;
+        return {
+          ...session,
+          orphan_records: orphanRecords
+        };
       }
-      
+
       return null;
     } catch (error: any) {
       console.error('Error getting import session:', error);
@@ -851,7 +857,7 @@ if (params.customerLookupMethod) {
     totalPages: number;
   }> {
     try {
-      const { status, page = 1, pageSize = 100 } = params;
+      const { status, page = 1, pageSize = 50 } = params;
       const offset = (page - 1) * pageSize;
 
       const result = await this.stagingService.getStagingRecords(
@@ -1304,25 +1310,75 @@ private async processBookmarkImportDirect(
 
     console.log(`[ImportService] Bookmark import completed:`, result);
 
-    // Update staging records with success status
-    for (const record of stagingRecords) {
-      await this.db.query(`
-        UPDATE t_import_staging_data
-        SET 
-          processing_status = 'success',
-          processed_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-      `, [record.id]);
+    // Build a map of failed row numbers to their error messages
+    const failedRowMap = new Map<number, string>();
+    if (result.errors && result.errors.length > 0) {
+      for (const error of result.errors) {
+        failedRowMap.set(error.row, error.error);
+      }
     }
 
+    // Build a set of duplicate row numbers
+    const duplicateRowSet = new Set<number>(result.duplicateRows || []);
+
+    // Update staging records based on actual results
+    let successCount = 0;
+    let failedCount = 0;
+    let duplicateCount = 0;
+
+    for (let i = 0; i < stagingRecords.length; i++) {
+      const record = stagingRecords[i];
+      const rowNumber = i + 1; // BookmarkImportService uses 1-indexed row numbers
+
+      if (failedRowMap.has(rowNumber)) {
+        // This record failed
+        const errorMessage = failedRowMap.get(rowNumber);
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'failed',
+            error_messages = ARRAY[$2],
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id, errorMessage]);
+        failedCount++;
+      } else if (duplicateRowSet.has(rowNumber)) {
+        // This record was a duplicate (updated existing bookmark)
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'duplicate',
+            warnings = ARRAY['Bookmark already exists - updated'],
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id]);
+        duplicateCount++;
+      } else {
+        // This record succeeded (new bookmark created)
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'success',
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id]);
+        successCount++;
+      }
+    }
+
+    console.log(`[ImportService] Updated staging records: ${successCount} success, ${duplicateCount} duplicate, ${failedCount} failed`);
+
     // Update session with results
+    const hasErrors = failedCount > 0;
     await this.updateImportSession(sessionInfo.tenant_id, sessionInfo.is_live, sessionId, {
-      status: 'completed',
+      status: hasErrors ? 'completed_with_errors' : 'completed',
       current_stage: 'completed',
-      successful_records: result.bookmarksCreated,
-      duplicate_records: 0,
-      failed_records: result.errors?.length || 0,
+      successful_records: successCount,
+      duplicate_records: duplicateCount,
+      failed_records: failedCount,
       processed_records: stagingRecords.length,
       processing_completed_at: new Date()
     });
@@ -1633,7 +1689,7 @@ async processSchemeImport(
       const currentQuery = `
         SELECT
           id,
-          import_session_id,
+          session_id,
           tenant_id,
           is_live,
           mapped_data,
@@ -1732,14 +1788,14 @@ async processSchemeImport(
       const recordQuery = `
         SELECT
           s.id,
-          s.import_session_id,
+          s.session_id,
           s.row_number,
           s.mapped_data,
-          s.status,
+          s.processing_status,
           sess.import_type,
           sess.customer_lookup_method
         FROM t_import_staging_data s
-        INNER JOIN t_import_sessions sess ON sess.id = s.import_session_id
+        INNER JOIN t_import_sessions sess ON sess.id = s.session_id
         WHERE s.id = $1
           AND s.tenant_id = $2
           AND s.is_live = $3
@@ -1753,14 +1809,59 @@ async processSchemeImport(
 
       const record = recordResult.rows[0];
 
-      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.import_session_id}`);
+      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.session_id}, type: ${record.import_type}`);
 
-      // Import StagingProcessorService
+      let result: { status: string; error_messages?: string[]; warnings?: string[]; match_type?: string; match_confidence?: number; ambiguous_matches?: any; created_customer_id?: number };
+
+      // TransactionData uses PostgreSQL function - reset to pending and call it
+      if (record.import_type === 'TransactionData') {
+        // Reset record to pending so PostgreSQL function picks it up
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET processing_status = 'pending',
+              error_messages = NULL,
+              processed_at = NULL
+          WHERE id = $1
+        `, [stagingId]);
+
+        // Call PostgreSQL function to process this record
+        await this.db.query(
+          'SELECT * FROM process_transaction_import_session($1, $2)',
+          [record.session_id, record.customer_lookup_method || 'iwell_code']
+        );
+
+        // Read back the result
+        const statusResult = await this.db.query(`
+          SELECT processing_status, error_messages, created_record_id
+          FROM t_import_staging_data
+          WHERE id = $1
+        `, [stagingId]);
+
+        const updatedRecord = statusResult.rows[0];
+        result = {
+          status: updatedRecord?.processing_status || 'failed',
+          error_messages: updatedRecord?.error_messages || undefined
+        };
+
+        console.log(`[ImportService] TransactionData record ${stagingId} processed via PostgreSQL function, status: ${result.status}`);
+
+        // Return early - PostgreSQL function already updated the record
+        await this.updateSessionCounters(record.session_id);
+        return {
+          success: result.status === 'success',
+          status: result.status,
+          message: result.status === 'success'
+            ? 'Record processed successfully'
+            : result.error_messages?.[0] || 'Processing failed'
+        };
+      }
+
+      // For other import types (CustomerData, SchemeData), use StagingProcessorService
       const { StagingProcessorService } = await import('./stagingProcessor.service');
       const processor = new StagingProcessorService();
 
       // Process the single record
-      const result = await (processor as any).processRecord(
+      result = await (processor as any).processRecord(
         {
           id: record.id,
           row_number: record.row_number,
@@ -1768,7 +1869,7 @@ async processSchemeImport(
           status: record.status
         },
         {
-          sessionId: record.import_session_id,
+          sessionId: record.session_id,
           tenantId,
           isLive,
           importType: record.import_type,
@@ -1803,7 +1904,7 @@ async processSchemeImport(
       ]);
 
       // Update session counters
-      await this.updateSessionCounters(record.import_session_id);
+      await this.updateSessionCounters(record.session_id);
 
       console.log(`[ImportService] Record ${stagingId} reprocessed with status: ${result.status}`);
 
@@ -1891,19 +1992,19 @@ async processSchemeImport(
       SET
         successful_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'success'
+          WHERE session_id = $1 AND processing_status = 'success'
         ),
         failed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'failed'
+          WHERE session_id = $1 AND processing_status = 'failed'
         ),
         duplicate_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'duplicate'
+          WHERE session_id = $1 AND processing_status = 'duplicate'
         ),
         processed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status IN ('success', 'failed', 'duplicate', 'orphan')
+          WHERE session_id = $1 AND processing_status IN ('success', 'failed', 'duplicate', 'orphan')
         ),
         updated_at = NOW()
       WHERE id = $1

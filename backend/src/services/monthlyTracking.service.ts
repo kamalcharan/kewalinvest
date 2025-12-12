@@ -97,6 +97,43 @@ export class MonthlyTrackingService {
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
+      // CRITICAL FIX: First get cumulative units BEFORE the display period
+      // This ensures we account for all historical transactions
+      const priorUnitsQuery = `
+        SELECT
+          txn_type_id,
+          SUM(units) as total_units
+        FROM t_transaction_table
+        WHERE tenant_id = $1
+          AND is_live = $2
+          AND customer_id = $3
+          AND scheme_code = $4
+          AND is_active = true
+          AND portfolio_flag = true
+          AND TO_CHAR(txn_date, 'YYYY-MM') < $5
+        GROUP BY txn_type_id
+      `;
+
+      const priorResult = await this.db.query(priorUnitsQuery, [
+        tenantId,
+        isLive,
+        customer_id,
+        scheme_code,
+        fromMonth
+      ]);
+
+      // Calculate cumulative units from all prior transactions
+      let priorCumulativeUnits = 0;
+      priorResult.rows.forEach(row => {
+        const txnType = txnTypeMap.get(row.txn_type_id);
+        const units = parseFloat(row.total_units) || 0;
+        if (txnType === 'Addition') {
+          priorCumulativeUnits += units;
+        } else if (txnType === 'Deduction') {
+          priorCumulativeUnits -= Math.abs(units);
+        }
+      });
+
       const transactionQuery = `
         SELECT
           TO_CHAR(txn_date, 'YYYY-MM') as month,
@@ -125,9 +162,9 @@ export class MonthlyTrackingService {
         toMonth
       ]);
 
-      // Build monthly data
+      // Build monthly data - start with prior cumulative units
       const monthlyData: MonthlyUnitsData[] = [];
-      let cumulativeUnits = 0;
+      let cumulativeUnits = priorCumulativeUnits;
 
       for (const month of monthList) {
         const monthTxns = txnResult.rows.filter(r => r.month === month);
@@ -215,19 +252,23 @@ export class MonthlyTrackingService {
       const schemeDetails = await this.getSchemeDetails(scheme_code);
       const monthList = this.generateMonthList(months);
 
-      // Get scheme_id
-      const schemeQuery = `
-        SELECT id FROM t_scheme_details WHERE scheme_code = $1 LIMIT 1
-      `;
-      const schemeResult = await this.db.query(schemeQuery, [scheme_code]);
-      if (schemeResult.rows.length === 0) {
-        throw new Error(`Scheme not found: ${scheme_code}`);
-      }
-      const schemeId = schemeResult.rows[0].id;
-
       // Get NAV data for all months
+      // Use scheme_code directly - NAV data is global (not filtered by is_live)
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
+
+      // First, get the latest available NAV for this scheme (fallback for incomplete months)
+      const latestNavQuery = `
+        SELECT nav_value, nav_date
+        FROM t_nav_data
+        WHERE scheme_code = $1
+        ORDER BY nav_date DESC
+        LIMIT 1
+      `;
+      const latestNavResult = await this.db.query(latestNavQuery, [scheme_code]);
+      const latestAvailableNav = latestNavResult.rows[0]
+        ? parseFloat(latestNavResult.rows[0].nav_value)
+        : 0;
 
       const navQuery = `
         SELECT
@@ -235,40 +276,41 @@ export class MonthlyTrackingService {
           nav_date,
           nav_value
         FROM t_nav_data
-        WHERE scheme_id = $1
-          AND is_live = $2
-          AND TO_CHAR(nav_date, 'YYYY-MM') >= $3
-          AND TO_CHAR(nav_date, 'YYYY-MM') <= $4
+        WHERE scheme_code = $1
+          AND TO_CHAR(nav_date, 'YYYY-MM') >= $2
+          AND TO_CHAR(nav_date, 'YYYY-MM') <= $3
         ORDER BY nav_date
       `;
 
       const navResult = await this.db.query(navQuery, [
-        schemeId,
-        isLive,
+        scheme_code,
         fromMonth,
         toMonth
       ]);
 
       // Build monthly NAV data
       const monthlyData: MonthlyNAVData[] = [];
+      let lastKnownNav = 0; // Track last known NAV for fallback
 
       for (const month of monthList) {
         const monthNavs = navResult.rows.filter(r => r.month === month);
 
         if (monthNavs.length === 0) {
-          // No NAV data for this month
+          // No NAV data for this month - use latest available NAV with is_estimated flag
+          const estimatedNav = lastKnownNav > 0 ? lastKnownNav : latestAvailableNav;
           monthlyData.push({
             month,
             month_display: this.formatMonthDisplay(month),
             scheme_code,
             scheme_name: schemeDetails.scheme_name,
-            opening_nav: 0,
-            closing_nav: 0,
-            lowest_nav: 0,
-            highest_nav: 0,
+            opening_nav: Math.round(estimatedNav * 10000) / 10000,
+            closing_nav: Math.round(estimatedNav * 10000) / 10000,
+            lowest_nav: Math.round(estimatedNav * 10000) / 10000,
+            highest_nav: Math.round(estimatedNav * 10000) / 10000,
             nav_change: 0,
             nav_change_percentage: 0,
-            days_tracked: 0
+            days_tracked: 0,
+            is_estimated: estimatedNav > 0 // Mark as estimated if we have a value
           });
           continue;
         }
@@ -292,8 +334,12 @@ export class MonthlyTrackingService {
           highest_nav: Math.round(highestNav * 10000) / 10000,
           nav_change: Math.round(navChange * 10000) / 10000,
           nav_change_percentage: Math.round(navChangePercentage * 100) / 100,
-          days_tracked: monthNavs.length
+          days_tracked: monthNavs.length,
+          is_estimated: false
         });
+
+        // Update lastKnownNav for future months that might be missing data
+        lastKnownNav = closingNav;
       }
 
       // Calculate summary
@@ -375,6 +421,31 @@ export class MonthlyTrackingService {
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
+      // CRITICAL FIX: First get cumulative invested BEFORE the display period
+      const priorInvestedQuery = `
+        SELECT
+          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN total_amount ELSE 0 END) as invested
+        FROM t_transaction_table tt
+        LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
+        WHERE tt.tenant_id = $1
+          AND tt.is_live = $2
+          AND tt.customer_id = $3
+          AND tt.scheme_code = $4
+          AND tt.is_active = true
+          AND tt.portfolio_flag = true
+          AND TO_CHAR(tt.txn_date, 'YYYY-MM') < $5
+      `;
+
+      const priorInvestedResult = await this.db.query(priorInvestedQuery, [
+        tenantId,
+        isLive,
+        customer_id,
+        scheme_code,
+        fromMonth
+      ]);
+
+      const priorInvested = parseFloat(priorInvestedResult.rows[0]?.invested) || 0;
+
       const investedQuery = `
         SELECT
           TO_CHAR(txn_date, 'YYYY-MM') as month,
@@ -403,7 +474,7 @@ export class MonthlyTrackingService {
       ]);
 
       const investedMap = new Map<string, number>();
-      let cumulativeInvested = 0;
+      let cumulativeInvested = priorInvested;  // Start with prior invested amount
       investedResult.rows.forEach(row => {
         cumulativeInvested += parseFloat(row.invested) || 0;
         investedMap.set(row.month, cumulativeInvested);
@@ -412,6 +483,7 @@ export class MonthlyTrackingService {
       // Build monthly market value data
       const monthlyData: MonthlyMarketValueData[] = [];
       let previousMonthNAV = 0;
+      let previousMonthMarketValue = 0;
 
       for (let i = 0; i < monthList.length; i++) {
         const month = monthList[i];
@@ -421,19 +493,29 @@ export class MonthlyTrackingService {
         // Use previous month's closing NAV
         const navToUse = i === 0 ? navData.closing_nav : previousMonthNAV;
         const currentMonthUnits = unitsData.closing_units;
-        const marketValue = navToUse * currentMonthUnits;
+
+        // FIX: When units <= 0 (investor exited), show market value as 0
+        const rawMarketValue = navToUse * currentMonthUnits;
+        const marketValue = currentMonthUnits <= 0 ? 0 : rawMarketValue;
 
         // Get cumulative invested value up to this month
-        let investedValue = 0;
+        // Start with priorInvested as the base (for months before display period)
+        let investedValue = priorInvested;
         for (const [m, inv] of investedMap.entries()) {
           if (m <= month) {
-            investedValue = inv;
+            investedValue = inv;  // investedMap values already include priorInvested
           }
         }
 
         const profitLoss = marketValue - investedValue;
         const profitLossPercentage = investedValue > 0
           ? (profitLoss / investedValue) * 100
+          : 0;
+
+        // Calculate MoM (Month-over-Month) change
+        const monthChange = marketValue - previousMonthMarketValue;
+        const monthChangePercentage = previousMonthMarketValue > 0
+          ? (monthChange / previousMonthMarketValue) * 100
           : 0;
 
         monthlyData.push({
@@ -446,11 +528,14 @@ export class MonthlyTrackingService {
           market_value: Math.round(marketValue * 100) / 100,
           invested_value: Math.round(investedValue * 100) / 100,
           profit_loss: Math.round(profitLoss * 100) / 100,
-          profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100
+          profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
+          month_change: Math.round(monthChange * 100) / 100,
+          month_change_percentage: Math.round(monthChangePercentage * 100) / 100
         });
 
-        // Update previous month NAV for next iteration
+        // Update previous month values for next iteration
         previousMonthNAV = navData.closing_nav;
+        previousMonthMarketValue = marketValue;
       }
 
       // Calculate summary
@@ -564,7 +649,8 @@ export class MonthlyTrackingService {
               closing_nav: navMonth.closing_nav,
               nav_change: navMonth.nav_change,
               nav_change_percentage: navMonth.nav_change_percentage,
-              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined,
+              has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined && navMonth.closing_nav > 0,
+              is_estimated: navMonth.is_estimated || false, // True if NAV is estimated (show ** in UI)
               // Market Value data
               market_value: marketValueMonth.market_value,
               month_change: marketValueMonth.month_change,

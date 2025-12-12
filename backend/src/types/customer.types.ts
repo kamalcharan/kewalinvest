@@ -112,6 +112,9 @@ export interface CreateCustomerRequest {
 }
 
 export interface UpdateCustomerRequest {
+  // Contact fields (stored in t_contacts)
+  name?: string;
+  prefix?: string;
   // Customer fields
   pan?: string;
   iwell_code?: string;

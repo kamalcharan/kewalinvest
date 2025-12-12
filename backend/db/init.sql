@@ -3652,8 +3652,14 @@ VALUES
     ('SWITCH_OUT', 'Switch Out', 'Deduction', TRUE, 
      'Funds moved out by switching to another scheme'),
     
-    ('SELL', 'Sell', 'Deduction', TRUE, 
-     'Funds sold out')
+    ('SELL', 'Sell', 'Deduction', TRUE,
+     'Funds sold out'),
+
+    ('SYSTEMATIC TRANSFER OUT', 'Systematic Transfer Out', 'Deduction', TRUE,
+     'Systematic transfer of funds to another scheme (outgoing) - alternate code'),
+
+    ('SYSTEMATIC TRANSFER IN', 'Systematic Transfer In', 'Addition', TRUE,
+     'Systematic transfer of funds from another scheme (incoming) - alternate code')
 ON CONFLICT (txn_code) DO UPDATE 
     SET txn_name = EXCLUDED.txn_name,
         txn_type = EXCLUDED.txn_type,

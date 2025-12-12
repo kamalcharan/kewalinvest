@@ -204,7 +204,11 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
             value={`${sortBy}-${sortOrder}`}
             onChange={(e) => {
               const [col, ord] = e.target.value.split('-');
-              handleSort(col);
+              setSortBy(col);
+              setSortOrder(ord as 'asc' | 'desc');
+              if (onSortChange) {
+                onSortChange(col, ord as 'asc' | 'desc');
+              }
             }}
             style={{
               padding: '6px 12px',

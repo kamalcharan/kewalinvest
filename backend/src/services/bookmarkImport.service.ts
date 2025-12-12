@@ -18,6 +18,7 @@ export interface BookmarkImportResult {
   bookmarksUpdated: number;
   aliasesCreated: number;
   errors: Array<{ row: number; scheme_code: string; error: string }>;
+  duplicateRows?: number[];  // Row numbers that were duplicates (updated existing)
   duration: number;
 }
 
@@ -48,6 +49,7 @@ export class BookmarkImportService {
   ): Promise<BookmarkImportResult> {
     const startTime = Date.now();
     const errors: Array<{ row: number; scheme_code: string; error: string }> = [];
+    const duplicateRows: number[] = []; // Track which rows were duplicates (updated existing)
     let bookmarksCreated = 0;
     let bookmarksUpdated = 0;
     let aliasesCreated = 0;
@@ -132,6 +134,7 @@ export class BookmarkImportService {
             bookmarksCreated++;
           } else {
             bookmarksUpdated++;
+            duplicateRows.push(rowNumber); // Track this row as a duplicate
           }
 
           // Step 3: Auto-generate aliases for this bookmark
@@ -208,6 +211,7 @@ export class BookmarkImportService {
         bookmarksUpdated,
         aliasesCreated,
         errors,
+        duplicateRows, // Row numbers that were duplicates (updated existing bookmarks)
         duration
       };
 

@@ -17,11 +17,30 @@ echo "⚠️  This will create a FRESH installation"
 echo "⚠️  All existing data will be replaced"
 echo ""
 
-# Confirmation prompt
-read -p "Continue with clean installation? (yes/no): " CONFIRM
-if [ "$CONFIRM" != "yes" ]; then
-    echo "Installation cancelled."
-    exit 0
+# Check if existing installation exists (exact volume name check)
+if docker volume inspect kewalinvest_prod_postgres_data > /dev/null 2>&1; then
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${RED}   ⚠️  EXISTING INSTALLATION DETECTED!${NC}"
+    echo -e "${RED}=========================================${NC}"
+    echo ""
+    echo -e "${YELLOW}Running deploy.sh will ERASE ALL DATA.${NC}"
+    echo ""
+    echo "For updates/patches, use: ./update.sh"
+    echo ""
+    read -p "Are you SURE you want to do a fresh install? (type 'FRESH INSTALL' to confirm): " CONFIRM
+    if [ "$CONFIRM" != "FRESH INSTALL" ]; then
+        echo ""
+        echo "Cancelled. Use ./update.sh for updates."
+        exit 0
+    fi
+    echo ""
+else
+    # Standard confirmation for new installs
+    read -p "Continue with clean installation? (yes/no): " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Installation cancelled."
+        exit 0
+    fi
 fi
 
 echo ""
@@ -78,8 +97,9 @@ docker-compose -f docker-compose.prod.yml down
 
 echo ""
 echo "🗑️  Removing old volumes (if any)..."
-docker volume rm kewalinvest_postgres_data 2>/dev/null || true
-docker volume rm kewalinvest_pgadmin_data 2>/dev/null || true
+docker volume rm kewalinvest_prod_postgres_data 2>/dev/null || true
+docker volume rm kewalinvest_prod_pgadmin_data 2>/dev/null || true
+docker volume rm kewalinvest_prod_redis_data 2>/dev/null || true
 
 echo ""
 echo "🚀 Starting services with fresh volumes..."
@@ -111,11 +131,11 @@ fi
 
 echo ""
 echo "========================================="
-echo "  📊 Database Setup (6 Steps)"
+echo "  📊 Database Setup (5 Steps)"
 echo "========================================="
 
 # Check if all required SQL files exist
-REQUIRED_FILES=("database/01_init.sql" "database/02_tables.sql" "database/03_indexes_triggers.sql" "database/04_functions_views_policies.sql" "database/05_seed_data.sql" "database/06_fix_meetings_table.sql")
+REQUIRED_FILES=("database/01_init.sql" "database/02_tables.sql" "database/03_indexes_triggers.sql" "database/04_functions_views_policies.sql" "database/05_seed_data.sql")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         echo -e "${RED}❌ ERROR: Required file not found: $file${NC}"
@@ -181,25 +201,13 @@ fi
 
 # Step 5: Load Seed Data
 echo ""
-echo -e "${BLUE}Step 5/6: Loading seed data...${NC}"
+echo -e "${BLUE}Step 5/5: Loading seed data...${NC}"
 if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/05_seed_data.sql > /tmp/05_seed_data.log 2>&1; then
     echo -e "${GREEN}   ✅ Seed data loaded successfully!${NC}"
 else
     echo -e "${RED}   ❌ Seed data loading failed!${NC}"
     echo "   Check /tmp/05_seed_data.log for details"
     cat /tmp/05_seed_data.log
-    exit 1
-fi
-
-# Step 6: Fix Meetings Table
-echo ""
-echo -e "${BLUE}Step 6/6: Applying meetings table fixes...${NC}"
-if docker exec -i kewalinvest_db psql -U kewal_admin kewalinvest < database/06_fix_meetings_table.sql > /tmp/06_fix_meetings_table.log 2>&1; then
-    echo -e "${GREEN}   ✅ Meetings table fixes applied successfully!${NC}"
-else
-    echo -e "${RED}   ❌ Meetings table fixes failed!${NC}"
-    echo "   Check /tmp/06_fix_meetings_table.log for details"
-    cat /tmp/06_fix_meetings_table.log
     exit 1
 fi
 
@@ -262,9 +270,8 @@ echo "   4. Load initial data through the application or API as needed"
 echo ""
 echo "💡 SQL Files Executed:"
 echo "   ✓ 01_init.sql"
-echo "   ✓ 02_tables.sql (with pending_processing status fix)"
+echo "   ✓ 02_tables.sql"
 echo "   ✓ 03_indexes_triggers.sql"
 echo "   ✓ 04_functions_views_policies.sql"
 echo "   ✓ 05_seed_data.sql"
-echo "   ✓ 06_fix_meetings_table.sql"
 echo ""

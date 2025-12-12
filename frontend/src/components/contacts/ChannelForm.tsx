@@ -89,29 +89,33 @@ const ChannelForm: React.FC<ChannelFormProps> = ({
   const updateChannel = (index: number, field: keyof ContactChannelFormData, value: any) => {
     const updatedChannels = [...channels];
     updatedChannels[index] = { ...updatedChannels[index], [field]: value };
-    
+
+    // Only ONE primary channel allowed overall (not per type)
     if (field === 'is_primary' && value === true) {
-      const currentType = updatedChannels[index].channel_type;
       updatedChannels.forEach((channel, i) => {
-        if (i !== index && channel.channel_type === currentType) {
+        if (i !== index) {
           channel.is_primary = false;
         }
       });
     }
-    
+
     onChannelsChange(updatedChannels);
   };
 
   const setPrimary = (index: number) => {
     const updatedChannels = [...channels];
-    const currentType = updatedChannels[index].channel_type;
-    
+
+    // Only ONE primary channel allowed overall
     updatedChannels.forEach((channel, i) => {
-      if (channel.channel_type === currentType) {
-        channel.is_primary = i === index;
-      }
+      channel.is_primary = i === index;
     });
-    
+
+    onChannelsChange(updatedChannels);
+  };
+
+  const clearPrimary = (index: number) => {
+    const updatedChannels = [...channels];
+    updatedChannels[index].is_primary = false;
     onChannelsChange(updatedChannels);
   };
 
@@ -424,6 +428,7 @@ const ChannelForm: React.FC<ChannelFormProps> = ({
                         alignItems: 'center',
                         gap: '2px'
                       }}
+                      title="Set as primary communication channel"
                     >
                       <StarIcon filled={false} />
                       Set Primary
@@ -539,11 +544,13 @@ const ChannelForm: React.FC<ChannelFormProps> = ({
                     type="checkbox"
                     name={`channel_${index}_primary`}
                     label=""
-                    checkboxLabel={`Set as primary ${channel.channel_type} channel`}
+                    checkboxLabel="Set as primary communication channel"
                     value={channel.is_primary}
                     onChange={(value: boolean) => {
                       if (value) {
                         setPrimary(index);
+                      } else {
+                        clearPrimary(index);
                       }
                     }}
                     disabled={disabled}

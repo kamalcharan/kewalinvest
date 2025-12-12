@@ -269,8 +269,12 @@ export class TransactionUtil {
     }
 
     if (filters.scheme_code) {
-      conditions.push(`scheme_code = $${paramIndex}`);
-      params.push(this.sanitizeSchemeCode(filters.scheme_code));
+      // Search by scheme_code OR scheme_name (case-insensitive partial match)
+      conditions.push(`(
+        LOWER(scheme_code) LIKE LOWER($${paramIndex}) OR
+        LOWER(scheme_name) LIKE LOWER($${paramIndex})
+      )`);
+      params.push(`%${filters.scheme_code}%`);
       paramIndex++;
     }
 

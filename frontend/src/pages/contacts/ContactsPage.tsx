@@ -4,14 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  useContacts, 
-  useContactStats, 
+import {
+  useContacts,
+  useContactStats,
   useBulkContactAction,
   useDeleteContact,
   useUpdateContact,
   useActivateContact
 } from '../../hooks/useContacts';
+import { useConvertToCustomer } from '../../hooks/useCustomers';
 import ContactSearch from '../../components/contacts/ContactSearch';
 import ContactCard from '../../components/contacts/ContactCard';
 import { ContactSearchParams } from '../../types/contact.types';
@@ -58,11 +59,12 @@ const ContactsPage: React.FC = () => {
   }, [queryParams]);
   
   const { data: contactsData, isLoading, error, refetch } = useContacts(queryParams);
-  const { data: stats } = useContactStats();
+  const { data: stats, refetch: refetchStats } = useContactStats();
   const bulkActionMutation = useBulkContactAction();
   const deleteContactMutation = useDeleteContact();
   const updateContactMutation = useUpdateContact();
   const activateContactMutation = useActivateContact();
+  const convertToCustomerMutation = useConvertToCustomer();
 
   useEffect(() => {
     setPageInputValue((searchParams.page || 1).toString());
@@ -195,14 +197,16 @@ const ContactsPage: React.FC = () => {
 
   const handleConvertToCustomer = async (contactId: number) => {
     try {
-      await updateContactMutation.mutateAsync({
-        id: contactId,
-        data: { is_customer: true }
+      await convertToCustomerMutation.mutateAsync({
+        contactId,
+        data: {}  // Empty data - backend will use contact details
       });
-      toastService.success('Contact converted to customer successfully');
+      // Hook already handles success toast and cache invalidation
+      // Refetch to update local state immediately
       refetch();
+      refetchStats();
     } catch (error) {
-      toastService.error('Failed to convert contact to customer');
+      // Error handled by mutation's onError
     }
   };
 

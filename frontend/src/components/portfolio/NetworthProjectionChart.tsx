@@ -188,7 +188,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         break;
       case '24M':
         displayHistoricalMonths = 24;
-        projectionMonths = 12;
+        projectionMonths = 24;  // Project 24 months for 24M view
         break;
       default:
         displayHistoricalMonths = 12;

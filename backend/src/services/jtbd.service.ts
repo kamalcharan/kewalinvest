@@ -68,12 +68,15 @@ export class JTBDService {
       // Generate title if not provided
       const title = data.title || JTBDUtil.generateTitle(data.jtbd_type, data.config_data);
 
+      // Determine jtbd_category based on type
+      const jtbdCategory = data.jtbd_type === 'goal_tracking' ? 'transactional' : 'alert';
+
       // Insert JTBD configuration
       const insertQuery = `
         INSERT INTO t_jtbd_configurations (
-          tenant_id, is_live, customer_id, jtbd_type, title, description,
+          tenant_id, is_live, customer_id, jtbd_type, jtbd_category, title, description,
           priority, config_data, next_alert_date, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
       `;
 
@@ -82,6 +85,7 @@ export class JTBDService {
         isLive,
         data.customer_id,
         data.jtbd_type,
+        jtbdCategory,
         title,
         data.description || null,
         data.priority || 'medium',
