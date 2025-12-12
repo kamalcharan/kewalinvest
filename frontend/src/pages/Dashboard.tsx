@@ -897,7 +897,7 @@ export const Dashboard: React.FC = () => {
           <SectionHeader
             title="Action Required"
             icon={<Bell size={18} />}
-            action={{ label: 'View All', onClick: () => navigate('/jtbd/dashboard') }}
+            action={{ label: 'View All', onClick: () => navigate('/cruise-control?tab=alerts') }}
           />
 
           {data.upcomingActions.length === 0 ? (
