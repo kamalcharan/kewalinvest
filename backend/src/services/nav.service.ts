@@ -1848,7 +1848,7 @@ export class NavService {
           sd.scheme_code,
           sd.scheme_name,
           sd.amc_name,
-          sd.category,
+          sc.name as category,
           sb.daily_download_enabled,
           sb.last_download_status,
           sb.last_download_at,
@@ -1861,6 +1861,7 @@ export class NavService {
           ss.last_metrics_calculated_at
         FROM t_scheme_bookmarks sb
         JOIN t_scheme_details sd ON sd.id = sb.scheme_id
+        LEFT JOIN t_scheme_masters sc ON sc.id = sd.scheme_category_id AND sc.master_type = 'scheme_category'
         LEFT JOIN scheme_stats ss ON ss.scheme_id = sb.scheme_id
         WHERE sb.tenant_id = $1
           AND sb.is_live = $2
