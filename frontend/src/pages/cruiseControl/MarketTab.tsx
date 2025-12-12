@@ -252,7 +252,10 @@ export const MarketTab: React.FC = () => {
     try {
       setActionLoading(prev => ({ ...prev, [key]: true }));
 
-      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.MARKET_DOWNLOAD(indexId)) as any;
+      const response = await apiService.post(
+        API_ENDPOINTS.CRUISE_CONTROL.MARKET_DOWNLOAD_EOD,
+        { index_id: indexId }
+      ) as any;
 
       if (response.success) {
         toastService.success(`EOD download triggered for ${indexName}`);
