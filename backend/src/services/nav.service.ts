@@ -123,12 +123,11 @@ export class NavService {
     // 'all' or undefined = no filter, show all
 
     // Filter by calculations availability (check if ANY NAV records have calculated metrics)
-    // Note: $1 is always isLive in both regular and admin modes
+    // NOTE: t_nav_data is GLOBAL - not filtered by is_live
     if (has_calculations === 'true') {
       baseQuery += ` AND EXISTS (
         SELECT 1 FROM t_nav_data nd
         WHERE nd.scheme_id = sb.scheme_id
-          AND nd.is_live = $1
           AND nd.metrics_calculated_at IS NOT NULL
         LIMIT 1
       )`;
@@ -139,7 +138,6 @@ export class NavService {
       baseQuery += ` AND sd.total_nav_records > 0 AND NOT EXISTS (
         SELECT 1 FROM t_nav_data nd
         WHERE nd.scheme_id = sb.scheme_id
-          AND nd.is_live = $1
           AND nd.metrics_calculated_at IS NOT NULL
         LIMIT 1
       )`;
@@ -1119,6 +1117,8 @@ export class NavService {
    */
   async getNavStatistics(tenantId: number, isLive: boolean, userId: number): Promise<NavStatistics> {
     try {
+      // NOTE: t_nav_data is GLOBAL (not filtered by is_live) - NAV data is shared across environments
+      // Only t_scheme_bookmarks and t_nav_download_jobs are filtered by is_live
       const statsQuery = `
         SELECT
           COALESCE((SELECT COUNT(*) FROM t_scheme_bookmarks WHERE tenant_id = $1 AND is_live = $2 AND is_active = true), 0) as total_schemes_tracked,
@@ -1132,7 +1132,6 @@ export class NavService {
               AND EXISTS (
                 SELECT 1 FROM t_nav_data nd
                 WHERE nd.scheme_id = sb.scheme_id
-                  AND nd.is_live = $2
                 LIMIT 1
               )
           ), 0) as schemes_with_historical_data,
@@ -1145,19 +1144,17 @@ export class NavService {
               AND EXISTS (
                 SELECT 1 FROM t_nav_data nd
                 WHERE nd.scheme_id = sb.scheme_id
-                  AND nd.is_live = $2
                 LIMIT 1
               )
               AND NOT EXISTS (
                 SELECT 1 FROM t_nav_data nd
                 WHERE nd.scheme_id = sb.scheme_id
-                  AND nd.is_live = $2
                   AND nd.metrics_calculated_at IS NOT NULL
                 LIMIT 1
               )
           ), 0) as schemes_without_calculations,
-          (SELECT MAX(nav_date) FROM t_nav_data WHERE is_live = $2) as latest_nav_date,
-          (SELECT MIN(nav_date) FROM t_nav_data WHERE is_live = $2) as oldest_nav_date,
+          (SELECT MAX(nav_date) FROM t_nav_data) as latest_nav_date,
+          (SELECT MIN(nav_date) FROM t_nav_data) as oldest_nav_date,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE), 0) as download_jobs_today,
           COALESCE((SELECT COUNT(*) FROM t_nav_download_jobs WHERE tenant_id = $1 AND is_live = $2 AND DATE(created_at) = CURRENT_DATE AND status = 'failed'), 0) as failed_downloads_today
       `;
