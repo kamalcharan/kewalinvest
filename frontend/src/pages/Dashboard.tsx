@@ -585,7 +585,7 @@ export const Dashboard: React.FC = () => {
         </Card>
 
         {/* Pending Actions Card */}
-        <Card onClick={() => navigate('/cruise-control')} style={{ cursor: 'pointer' }}>
+        <Card onClick={() => navigate('/cruise-control?tab=alerts')} style={{ cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Pending Actions</div>
