@@ -97,6 +97,43 @@ export class MonthlyTrackingService {
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
+      // CRITICAL FIX: First get cumulative units BEFORE the display period
+      // This ensures we account for all historical transactions
+      const priorUnitsQuery = `
+        SELECT
+          txn_type_id,
+          SUM(units) as total_units
+        FROM t_transaction_table
+        WHERE tenant_id = $1
+          AND is_live = $2
+          AND customer_id = $3
+          AND scheme_code = $4
+          AND is_active = true
+          AND portfolio_flag = true
+          AND TO_CHAR(txn_date, 'YYYY-MM') < $5
+        GROUP BY txn_type_id
+      `;
+
+      const priorResult = await this.db.query(priorUnitsQuery, [
+        tenantId,
+        isLive,
+        customer_id,
+        scheme_code,
+        fromMonth
+      ]);
+
+      // Calculate cumulative units from all prior transactions
+      let priorCumulativeUnits = 0;
+      priorResult.rows.forEach(row => {
+        const txnType = txnTypeMap.get(row.txn_type_id);
+        const units = parseFloat(row.total_units) || 0;
+        if (txnType === 'Addition') {
+          priorCumulativeUnits += units;
+        } else if (txnType === 'Deduction') {
+          priorCumulativeUnits -= Math.abs(units);
+        }
+      });
+
       const transactionQuery = `
         SELECT
           TO_CHAR(txn_date, 'YYYY-MM') as month,
@@ -125,9 +162,9 @@ export class MonthlyTrackingService {
         toMonth
       ]);
 
-      // Build monthly data
+      // Build monthly data - start with prior cumulative units
       const monthlyData: MonthlyUnitsData[] = [];
-      let cumulativeUnits = 0;
+      let cumulativeUnits = priorCumulativeUnits;
 
       for (const month of monthList) {
         const monthTxns = txnResult.rows.filter(r => r.month === month);
@@ -215,17 +252,8 @@ export class MonthlyTrackingService {
       const schemeDetails = await this.getSchemeDetails(scheme_code);
       const monthList = this.generateMonthList(months);
 
-      // Get scheme_id
-      const schemeQuery = `
-        SELECT id FROM t_scheme_details WHERE scheme_code = $1 LIMIT 1
-      `;
-      const schemeResult = await this.db.query(schemeQuery, [scheme_code]);
-      if (schemeResult.rows.length === 0) {
-        throw new Error(`Scheme not found: ${scheme_code}`);
-      }
-      const schemeId = schemeResult.rows[0].id;
-
       // Get NAV data for all months
+      // Use scheme_code directly (more reliable than scheme_id lookup)
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
@@ -235,7 +263,7 @@ export class MonthlyTrackingService {
           nav_date,
           nav_value
         FROM t_nav_data
-        WHERE scheme_id = $1
+        WHERE scheme_code = $1
           AND is_live = $2
           AND TO_CHAR(nav_date, 'YYYY-MM') >= $3
           AND TO_CHAR(nav_date, 'YYYY-MM') <= $4
@@ -243,7 +271,7 @@ export class MonthlyTrackingService {
       `;
 
       const navResult = await this.db.query(navQuery, [
-        schemeId,
+        scheme_code,
         isLive,
         fromMonth,
         toMonth
@@ -375,6 +403,31 @@ export class MonthlyTrackingService {
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
+      // CRITICAL FIX: First get cumulative invested BEFORE the display period
+      const priorInvestedQuery = `
+        SELECT
+          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN total_amount ELSE 0 END) as invested
+        FROM t_transaction_table tt
+        LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
+        WHERE tt.tenant_id = $1
+          AND tt.is_live = $2
+          AND tt.customer_id = $3
+          AND tt.scheme_code = $4
+          AND tt.is_active = true
+          AND tt.portfolio_flag = true
+          AND TO_CHAR(tt.txn_date, 'YYYY-MM') < $5
+      `;
+
+      const priorInvestedResult = await this.db.query(priorInvestedQuery, [
+        tenantId,
+        isLive,
+        customer_id,
+        scheme_code,
+        fromMonth
+      ]);
+
+      const priorInvested = parseFloat(priorInvestedResult.rows[0]?.invested) || 0;
+
       const investedQuery = `
         SELECT
           TO_CHAR(txn_date, 'YYYY-MM') as month,
@@ -403,7 +456,7 @@ export class MonthlyTrackingService {
       ]);
 
       const investedMap = new Map<string, number>();
-      let cumulativeInvested = 0;
+      let cumulativeInvested = priorInvested;  // Start with prior invested amount
       investedResult.rows.forEach(row => {
         cumulativeInvested += parseFloat(row.invested) || 0;
         investedMap.set(row.month, cumulativeInvested);
@@ -424,10 +477,11 @@ export class MonthlyTrackingService {
         const marketValue = navToUse * currentMonthUnits;
 
         // Get cumulative invested value up to this month
-        let investedValue = 0;
+        // Start with priorInvested as the base (for months before display period)
+        let investedValue = priorInvested;
         for (const [m, inv] of investedMap.entries()) {
           if (m <= month) {
-            investedValue = inv;
+            investedValue = inv;  // investedMap values already include priorInvested
           }
         }
 
