@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api.service';
+import { useCustomerStats } from '../hooks/useCustomers';
 import {
   TrendingUp,
   TrendingDown,
@@ -182,6 +183,9 @@ export const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  // Use customer stats hook - same as CustomerDashboardPage
+  const { data: customerStats, refetch: refetchCustomerStats } = useCustomerStats();
+
   // Fetch dashboard data from API
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -257,6 +261,7 @@ export const Dashboard: React.FC = () => {
 
   const refreshData = () => {
     fetchDashboardData();
+    refetchCustomerStats();
   };
 
   // Format currency
@@ -558,10 +563,10 @@ export const Dashboard: React.FC = () => {
             <div>
               <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Active Customers</div>
               <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-                {data.summary.activeCustomers}
+                {customerStats?.active ?? data.summary.activeCustomers}
               </div>
               <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '8px' }}>
-                of {data.summary.totalCustomers} total
+                of {customerStats?.total ?? data.summary.totalCustomers} total
               </div>
             </div>
             <div style={{
