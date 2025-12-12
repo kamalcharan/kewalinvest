@@ -260,7 +260,7 @@ export const Dashboard: React.FC = () => {
             color: colors.utility.primaryText,
             margin: '0 0 4px 0'
           }}>
-            Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}, {user?.first_name || 'Advisor'}
+            Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}, {user?.tenant?.tenant_name || 'Advisor'}
           </h1>
           <p style={{
             fontSize: '14px',
