@@ -25,6 +25,7 @@ import {
   Briefcase,
   Edit2,
   UserMinus,
+  UserPlus,
   ExternalLink,
   RefreshCw,
   CheckCircle,
@@ -32,6 +33,8 @@ import {
   Clock
 } from 'lucide-react';
 import { Card } from '../components/common/Card';
+import { EditAliasModal } from '../components/alias/EditAliasModal';
+import { AddMembersModal } from '../components/alias/AddMembersModal';
 
 const AliasDetailPage: React.FC = () => {
   const { aliasId } = useParams<{ aliasId: string }>();
@@ -40,8 +43,10 @@ const AliasDetailPage: React.FC = () => {
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const [activeTab, setActiveTab] = useState<'portfolio' | 'goals' | 'meetings'>('portfolio');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
 
-  const { data: alias, isLoading: aliasLoading } = useAlias(aliasId ? parseInt(aliasId) : null);
+  const { data: alias, isLoading: aliasLoading, refetch: refetchAlias } = useAlias(aliasId ? parseInt(aliasId) : null);
   const { data: portfolio, isLoading: portfolioLoading } = useAliasPortfolio(aliasId ? parseInt(aliasId) : null);
   const { data: assetAllocation } = useAliasAssetAllocation(aliasId ? parseInt(aliasId) : null);
   const { data: goals } = useAliasGoals(aliasId ? parseInt(aliasId) : null);
@@ -192,6 +197,48 @@ const AliasDetailPage: React.FC = () => {
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setShowEditModal(true)}
+              style={{
+                padding: '10px 16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '10px',
+                backgroundColor: 'transparent',
+                color: colors.utility.primaryText,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Edit2 size={16} />
+              Edit
+            </button>
+            <button
+              onClick={() => setShowAddMembersModal(true)}
+              style={{
+                padding: '10px 16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                border: 'none',
+                borderRadius: '10px',
+                backgroundColor: colors.status.success,
+                color: '#FFF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <UserPlus size={16} />
+              Add Members
+            </button>
           </div>
         </div>
       </div>
@@ -696,6 +743,23 @@ const AliasDetailPage: React.FC = () => {
           )}
         </Card>
       )}
+
+      {/* Edit Alias Modal */}
+      <EditAliasModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        alias={alias}
+        onSuccess={() => refetchAlias()}
+      />
+
+      {/* Add Members Modal */}
+      <AddMembersModal
+        isOpen={showAddMembersModal}
+        onClose={() => setShowAddMembersModal(false)}
+        aliasId={parseInt(aliasId!)}
+        existingMemberIds={alias.members?.map(m => m.customer_id) || []}
+        onSuccess={() => refetchAlias()}
+      />
 
       <style>{`
         @keyframes spin {
