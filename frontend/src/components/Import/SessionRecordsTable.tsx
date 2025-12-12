@@ -216,13 +216,15 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
   const handleReprocessAll = async () => {
     if (!session) return;
 
-    const nonSuccessCount = records.filter(r => r.processing_status !== 'success').length;
-    if (nonSuccessCount === 0) {
+    // Get IDs of non-success records
+    const nonSuccessRecords = records.filter(r => r.processing_status !== 'success');
+    if (nonSuccessRecords.length === 0) {
       toastService.info('No records to reprocess');
       return;
     }
 
-    const loadingToastId = toastService.loading(`Reprocessing ${nonSuccessCount} records...`);
+    const recordIds = nonSuccessRecords.map(r => r.id);
+    const loadingToastId = toastService.loading(`Reprocessing ${recordIds.length} records...`);
     setIsReprocessingAll(true);
 
     try {
@@ -243,9 +245,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
             ...(tenantId && { 'X-Tenant-ID': String(tenantId) }),
             ...(environment && { 'X-Environment': environment })
           },
-          body: JSON.stringify({
-            statuses: ['failed', 'duplicate', 'orphan', 'pending']
-          })
+          body: JSON.stringify({ recordIds })
         }
       );
 
@@ -253,9 +253,9 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
       toastService.dismiss(loadingToastId);
 
       if (result.success) {
-        const { processed, succeeded, failed } = result.data || {};
+        const { processed, successful, failed } = result.data || {};
         toastService.success(
-          `Reprocessed ${processed || 0} records: ${succeeded || 0} passed, ${failed || 0} failed`
+          `Reprocessed ${processed || 0} records: ${successful || 0} passed, ${failed || 0} failed`
         );
         fetchRecords();
         if (onRecordUpdated) {
