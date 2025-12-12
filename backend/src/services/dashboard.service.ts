@@ -339,9 +339,9 @@ export class DashboardService {
   }
 
   /**
-   * Get recent transactions
+   * Get recent transactions (last 10 by default)
    */
-  async getRecentTransactions(tenantId: number, isLive: boolean, limit: number = 5): Promise<Array<{
+  async getRecentTransactions(tenantId: number, isLive: boolean, limit: number = 10): Promise<Array<{
     id: number;
     customerName: string;
     type: string;
@@ -354,30 +354,30 @@ export class DashboardService {
         SELECT
           t.id,
           c.name as customer_name,
-          tt.txn_type as type,
+          COALESCE(mtt.txn_name, mtt.txn_type, 'Transaction') as type,
           t.scheme_name,
-          t.total_amount as amount,
+          COALESCE(t.total_amount, t.amount, 0) as amount,
           t.txn_date as date
         FROM t_transaction_table t
-        JOIN t_customers cust ON cust.id = t.customer_id
-        JOIN t_contacts c ON c.id = cust.contact_id
-        LEFT JOIN m_transaction_types tt ON tt.id = t.txn_type_id
+        LEFT JOIN t_customers cust ON cust.id = t.customer_id
+        LEFT JOIN t_contacts c ON c.id = cust.contact_id
+        LEFT JOIN m_transaction_types mtt ON mtt.id = t.txn_type_id
         WHERE t.tenant_id = $1
           AND t.is_live = $2
-          AND t.is_active = true
         ORDER BY t.txn_date DESC, t.created_at DESC
         LIMIT $3
       `;
 
       const result = await this.db.query(query, [tenantId, isLive, limit]);
+      console.log('[DashboardService] Recent transactions count:', result.rows.length);
 
       return result.rows.map(row => ({
         id: row.id,
-        customerName: row.customer_name,
+        customerName: row.customer_name || 'Unknown Customer',
         type: row.type || 'Purchase',
         schemeName: row.scheme_name || 'Unknown Scheme',
         amount: parseFloat(row.amount || 0),
-        date: new Date(row.date).toISOString().split('T')[0]
+        date: row.date ? new Date(row.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       }));
     } catch (error: any) {
       // If table/column doesn't exist, return empty data
