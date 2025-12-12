@@ -11,6 +11,7 @@ import RecordEditModal from '../ETL/RecordEditModal';
 
 interface StagingRecord {
   id: number;
+  import_session_id: number;
   row_number: number;
   processing_status: string;
   status?: string; // Alias for compatibility
@@ -86,7 +87,8 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
         // Add status alias for RecordEditModal compatibility
         const recordsWithStatus = (response.data.records || []).map(r => ({
           ...r,
-          status: r.processing_status
+          status: r.processing_status,
+          import_session_id: r.session_id || session.id // Map session_id to import_session_id
         }));
         setRecords(recordsWithStatus);
         setTotalRecords(response.data.total || 0);
