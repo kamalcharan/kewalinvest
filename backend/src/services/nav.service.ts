@@ -1860,7 +1860,7 @@ export class NavService {
           COALESCE(ss.metrics_pending_count, 0) as metrics_pending_count,
           ss.last_metrics_calculated_at
         FROM t_scheme_bookmarks sb
-        JOIN t_scheme_details sd ON sd.scheme_id = sb.scheme_id
+        JOIN t_scheme_details sd ON sd.id = sb.scheme_id
         LEFT JOIN scheme_stats ss ON ss.scheme_id = sb.scheme_id
         WHERE sb.tenant_id = $1
           AND sb.is_live = $2
