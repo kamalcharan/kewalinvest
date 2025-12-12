@@ -129,7 +129,18 @@ export class DashboardService {
         activeCustomers: parseInt(customerStats.active || 0),
         familyCount: parseInt(customerStats.family_count || 0)
       };
-    } catch (error) {
+    } catch (error: any) {
+      // If tables don't exist, return empty data
+      if (error.code === '42P01') {
+        console.log('Summary tables do not exist yet, returning empty data');
+        return {
+          totalAUM: 0,
+          aumChange: 0,
+          totalCustomers: 0,
+          activeCustomers: 0,
+          familyCount: 0
+        };
+      }
       console.error('Error getting dashboard summary:', error);
       throw error;
     }
@@ -184,7 +195,15 @@ export class DashboardService {
           lastRun: marketStats?.last_run ? new Date(marketStats.last_run).toISOString() : null
         }
       };
-    } catch (error) {
+    } catch (error: any) {
+      // If tables don't exist, return empty data
+      if (error.code === '42P01') {
+        console.log('Download status tables do not exist yet, returning empty data');
+        return {
+          navDownloads: { success: 0, failed: 0, pending: 0, lastRun: null },
+          marketDownloads: { success: 0, failed: 0, pending: 0, lastRun: null }
+        };
+      }
       console.error('Error getting download status:', error);
       throw error;
     }
@@ -219,7 +238,20 @@ export class DashboardService {
         totalTargetValue: parseFloat(stats?.total_target_value || 0),
         currentValue: parseFloat(stats?.current_value || 0)
       };
-    } catch (error) {
+    } catch (error: any) {
+      // If table doesn't exist, return empty data
+      if (error.code === '42P01') {
+        console.log('Goals table does not exist yet, returning empty data');
+        return {
+          totalGoals: 0,
+          onTrack: 0,
+          needsAttention: 0,
+          offTrack: 0,
+          lastCalculatedAt: null,
+          totalTargetValue: 0,
+          currentValue: 0
+        };
+      }
       console.error('Error getting goals summary:', error);
       throw error;
     }
@@ -285,7 +317,16 @@ export class DashboardService {
         totalCount: parseInt(result.rows[0]?.total_count || 0),
         criticalCount: parseInt(result.rows[0]?.critical_count || 0)
       };
-    } catch (error) {
+    } catch (error: any) {
+      // If table doesn't exist, return empty data
+      if (error.code === '42P01') {
+        console.log('JTBD table does not exist yet, returning empty data');
+        return {
+          actions: [],
+          totalCount: 0,
+          criticalCount: 0
+        };
+      }
       console.error('Error getting pending actions:', error);
       throw error;
     }
@@ -332,7 +373,12 @@ export class DashboardService {
         amount: parseFloat(row.amount || 0),
         date: new Date(row.date).toISOString().split('T')[0]
       }));
-    } catch (error) {
+    } catch (error: any) {
+      // If table doesn't exist, return empty data
+      if (error.code === '42P01') {
+        console.log('Transaction table does not exist yet, returning empty data');
+        return [];
+      }
       console.error('Error getting recent transactions:', error);
       throw error;
     }
