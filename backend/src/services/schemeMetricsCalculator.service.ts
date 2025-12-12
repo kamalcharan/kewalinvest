@@ -331,15 +331,16 @@ export class SchemeMetricsCalculator {
   /**
    * Fetch NAV data for a scheme up to a specific date
    * Returns all historical data needed for metrics calculation
+   * NOTE: t_nav_data is GLOBAL - not filtered by is_live
    */
   private async getNavDataForScheme(
     schemeId: number,
     asOfDate?: Date,
-    isLive: boolean = true
+    isLive: boolean = true  // Kept for API compatibility but not used
   ): Promise<NavDataRecord[]> {
     try {
       let query = `
-        SELECT 
+        SELECT
           id,
           scheme_id,
           scheme_code,
@@ -347,13 +348,13 @@ export class SchemeMetricsCalculator {
           nav_value,
           is_live
         FROM t_nav_data
-        WHERE scheme_id = $1 AND is_live = $2
+        WHERE scheme_id = $1
       `;
 
-      const params: any[] = [schemeId, isLive];
+      const params: any[] = [schemeId];
 
       if (asOfDate) {
-        query += ` AND nav_date <= $3`;
+        query += ` AND nav_date <= $2`;
         params.push(asOfDate);
       }
 
@@ -382,15 +383,16 @@ export class SchemeMetricsCalculator {
 
   /**
    * Check if metrics already exist for a scheme on a specific date
+   * NOTE: t_nav_data is GLOBAL - not filtered by is_live
    */
   private async checkMetricsExist(
     schemeId: number,
     date: Date,
-    isLive: boolean
+    isLive: boolean  // Kept for API compatibility but not used
   ): Promise<StoredCalculatedMetrics | null> {
     try {
       const query = `
-        SELECT 
+        SELECT
           nav_date as date,
           daily_return,
           return_1w,
@@ -414,13 +416,12 @@ export class SchemeMetricsCalculator {
           cagr,
           metrics_calculated_at as calculated_at
         FROM t_nav_data
-        WHERE scheme_id = $1 
-          AND nav_date = $2 
-          AND is_live = $3
+        WHERE scheme_id = $1
+          AND nav_date = $2
           AND metrics_calculated_at IS NOT NULL
       `;
 
-      const result = await this.db.query(query, [schemeId, date, isLive]);
+      const result = await this.db.query(query, [schemeId, date]);
 
       if (result.rows.length > 0) {
         return result.rows[0];
@@ -456,9 +457,10 @@ export class SchemeMetricsCalculator {
     isLive: boolean
   ): Promise<void> {
     try {
+      // NOTE: t_nav_data is GLOBAL - not filtered by is_live
       const query = `
         UPDATE t_nav_data
-        SET 
+        SET
           daily_return = $3,
           return_1w = $4,
           return_1m = $5,
@@ -481,9 +483,8 @@ export class SchemeMetricsCalculator {
           cagr = $22,
           metrics_calculated_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
-        WHERE scheme_id = $1 
+        WHERE scheme_id = $1
           AND nav_date = $2
-          AND is_live = $23
       `;
 
       const params = [
@@ -508,8 +509,8 @@ export class SchemeMetricsCalculator {
         metrics.sharpe_ratio,
         metrics.max_drawdown,
         metrics.total_risk,
-        metrics.cagr,
-        isLive
+        metrics.cagr
+        // Note: isLive removed - t_nav_data is global
       ];
 
       const result = await this.db.query(query, params);
@@ -517,6 +518,19 @@ export class SchemeMetricsCalculator {
       if (result.rowCount === 0) {
         throw new Error(`No NAV record found to update for scheme ${schemeId} on ${date.toISOString().split('T')[0]}`);
       }
+
+      // Debug logging to confirm metrics were stored
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        'Metrics stored successfully - metrics_calculated_at should now be set',
+        'storeMetrics',
+        {
+          schemeId,
+          date: date.toISOString().split('T')[0],
+          isLive,
+          rowsUpdated: result.rowCount
+        }
+      );
 
     } catch (error: any) {
       SimpleLogger.error(

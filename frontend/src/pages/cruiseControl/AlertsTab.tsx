@@ -260,9 +260,9 @@ export const AlertsTab: React.FC = () => {
         <div style={{
           display: 'flex',
           gap: '8px',
-          padding: '4px',
+          padding: '6px',
           backgroundColor: colors.utility.secondaryBackground,
-          borderRadius: '8px',
+          borderRadius: '10px',
           width: 'fit-content'
         }}>
           {(['all', 'active', 'acknowledged', 'dismissed'] as const).map(status => (
@@ -270,19 +270,21 @@ export const AlertsTab: React.FC = () => {
               key={status}
               onClick={() => setFilter(status)}
               style={{
-                padding: '8px 16px',
+                padding: '10px 20px',
                 fontSize: '14px',
                 fontWeight: '600',
                 backgroundColor: filter === status ? colors.brand.primary : 'transparent',
                 color: filter === status ? 'white' : colors.utility.primaryText,
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                textTransform: 'capitalize'
+                textTransform: 'capitalize',
+                whiteSpace: 'nowrap'
               }}
             >
-              {status} ({status === filter ? alerts.length : '...'})
+              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {status === filter && ` (${alerts.length})`}
             </button>
           ))}
         </div>
@@ -563,14 +565,15 @@ export const AlertsTab: React.FC = () => {
                             padding: '5px',
                             backgroundColor: 'transparent',
                             color: colors.semantic.success,
-                            border: `1px solid ${colors.semantic.success}40`,
+                            border: `1px solid ${colors.semantic.success}80`,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minWidth: '26px',
-                            minHeight: '26px'
+                            minHeight: '26px',
+                            transition: 'all 0.2s'
                           }}
                         >
                           <CheckIcon />
@@ -584,14 +587,15 @@ export const AlertsTab: React.FC = () => {
                             padding: '5px',
                             backgroundColor: 'transparent',
                             color: colors.utility.secondaryText,
-                            border: `1px solid ${colors.utility.secondaryText}40`,
+                            border: `1px solid ${colors.utility.secondaryText}80`,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minWidth: '26px',
-                            minHeight: '26px'
+                            minHeight: '26px',
+                            transition: 'all 0.2s'
                           }}
                         >
                           <XIcon />

@@ -1388,4 +1388,343 @@ export class MarketService {
       };
     }
   }
+
+  // ==================== CRUISE CONTROL - DETAILED STATUS ====================
+
+  /**
+   * Get detailed status for all indices including download status, metrics status, and gaps
+   * Used by Cruise Control -> Market Downloads UI
+   */
+  async getDetailedIndexStatus(): Promise<{
+    statistics: {
+      total_indices: number;
+      download_success_today: number;
+      download_failed_today: number;
+      download_pending: number;
+      metrics_calculated: number;
+      metrics_pending: number;
+      indices_with_gaps: number;
+    };
+    indices: Array<{
+      id: number;
+      index_name: string;
+      index_code: string;
+      category: string;
+      provider_enabled: boolean;
+      provider_symbol: string | null;
+
+      // Download status
+      download_status: 'success' | 'failed' | 'pending' | 'not_configured';
+      last_download_at: string | null;
+      last_download_error: string | null;
+
+      // Data info
+      earliest_date: string | null;
+      latest_date: string | null;
+      total_records: number;
+
+      // Metrics status
+      metrics_status: 'calculated' | 'pending' | 'partial';
+      metrics_calculated_count: number;
+      metrics_pending_count: number;
+      last_metrics_calculated_at: string | null;
+
+      // Gap detection
+      has_gaps: boolean;
+      gap_count: number;
+      gaps: Array<{ start_date: string; end_date: string; missing_days: number }>;
+    }>;
+  }> {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+
+      // Get all active indices with their data stats
+      const indicesQuery = `
+        WITH index_stats AS (
+          SELECT
+            mdr.index_id,
+            COUNT(*) as total_records,
+            MIN(mdr.date) as earliest_date,
+            MAX(mdr.date) as latest_date,
+            COUNT(mdr.metrics_calculated_at) as metrics_calculated_count,
+            COUNT(*) - COUNT(mdr.metrics_calculated_at) as metrics_pending_count,
+            MAX(mdr.metrics_calculated_at) as last_metrics_calculated_at
+          FROM t_market_data_records mdr
+          GROUP BY mdr.index_id
+        )
+        SELECT
+          mi.id,
+          mi.index_name,
+          mi.index_code,
+          mi.category,
+          mi.provider_enabled,
+          mi.provider_symbol,
+          mi.data_provider,
+          mi.last_download_status,
+          mi.last_download_at,
+          mi.last_download_error,
+          COALESCE(ist.total_records, 0) as total_records,
+          ist.earliest_date,
+          ist.latest_date,
+          COALESCE(ist.metrics_calculated_count, 0) as metrics_calculated_count,
+          COALESCE(ist.metrics_pending_count, 0) as metrics_pending_count,
+          ist.last_metrics_calculated_at
+        FROM t_market_indices mi
+        LEFT JOIN index_stats ist ON ist.index_id = mi.id
+        WHERE mi.is_active = true
+        ORDER BY mi.index_name
+      `;
+
+      const indicesResult = await this.db.query(indicesQuery);
+
+      // Process each index to determine status and detect gaps
+      const indices: any[] = [];
+      let downloadSuccessToday = 0;
+      let downloadFailedToday = 0;
+      let downloadPending = 0;
+      let metricsCalculated = 0;
+      let metricsPending = 0;
+      let indicesWithGaps = 0;
+
+      for (const row of indicesResult.rows) {
+        // Determine download status
+        let downloadStatus: 'success' | 'failed' | 'pending' | 'not_configured' = 'pending';
+
+        if (!row.provider_enabled || row.data_provider === 'not_configured') {
+          downloadStatus = 'not_configured';
+        } else if (row.last_download_status === 'success') {
+          downloadStatus = 'success';
+          // Check if download was today
+          if (row.last_download_at) {
+            const downloadDate = new Date(row.last_download_at);
+            downloadDate.setHours(0, 0, 0, 0);
+            if (downloadDate.getTime() === today.getTime()) {
+              downloadSuccessToday++;
+            }
+          }
+        } else if (row.last_download_status === 'failed') {
+          downloadStatus = 'failed';
+          if (row.last_download_at) {
+            const downloadDate = new Date(row.last_download_at);
+            downloadDate.setHours(0, 0, 0, 0);
+            if (downloadDate.getTime() === today.getTime()) {
+              downloadFailedToday++;
+            }
+          }
+        } else {
+          downloadPending++;
+        }
+
+        // Determine metrics status
+        let metricsStatus: 'calculated' | 'pending' | 'partial' = 'pending';
+        if (row.metrics_pending_count === 0 && row.metrics_calculated_count > 0) {
+          metricsStatus = 'calculated';
+          metricsCalculated++;
+        } else if (row.metrics_calculated_count > 0 && row.metrics_pending_count > 0) {
+          metricsStatus = 'partial';
+          metricsPending++;
+        } else {
+          metricsPending++;
+        }
+
+        // Detect gaps in data
+        const gaps = await this.detectDataGaps(row.id, row.earliest_date, row.latest_date);
+        const hasGaps = gaps.length > 0;
+        if (hasGaps) {
+          indicesWithGaps++;
+        }
+
+        indices.push({
+          id: row.id,
+          index_name: row.index_name,
+          index_code: row.index_code,
+          category: row.category,
+          provider_enabled: row.provider_enabled,
+          provider_symbol: row.provider_symbol,
+          download_status: downloadStatus,
+          last_download_at: row.last_download_at,
+          last_download_error: row.last_download_error,
+          earliest_date: row.earliest_date,
+          latest_date: row.latest_date,
+          total_records: parseInt(row.total_records) || 0,
+          metrics_status: metricsStatus,
+          metrics_calculated_count: parseInt(row.metrics_calculated_count) || 0,
+          metrics_pending_count: parseInt(row.metrics_pending_count) || 0,
+          last_metrics_calculated_at: row.last_metrics_calculated_at,
+          has_gaps: hasGaps,
+          gap_count: gaps.length,
+          gaps: gaps
+        });
+      }
+
+      return {
+        statistics: {
+          total_indices: indices.length,
+          download_success_today: downloadSuccessToday,
+          download_failed_today: downloadFailedToday,
+          download_pending: downloadPending,
+          metrics_calculated: metricsCalculated,
+          metrics_pending: metricsPending,
+          indices_with_gaps: indicesWithGaps
+        },
+        indices
+      };
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to get detailed index status', 'getDetailedIndexStatus', {
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Detect gaps in market data for an index
+   * Only checks for missing trading days (excludes weekends)
+   */
+  private async detectDataGaps(
+    indexId: number,
+    earliestDate: string | null,
+    latestDate: string | null
+  ): Promise<Array<{ start_date: string; end_date: string; missing_days: number }>> {
+    if (!earliestDate || !latestDate) {
+      return [];
+    }
+
+    try {
+      // Get all dates we have data for
+      const datesQuery = `
+        SELECT DISTINCT date
+        FROM t_market_data_records
+        WHERE index_id = $1
+        ORDER BY date
+      `;
+      const datesResult = await this.db.query(datesQuery, [indexId]);
+
+      if (datesResult.rows.length < 2) {
+        return [];
+      }
+
+      const existingDates = new Set(
+        datesResult.rows.map(r => new Date(r.date).toISOString().split('T')[0])
+      );
+
+      const gaps: Array<{ start_date: string; end_date: string; missing_days: number }> = [];
+      let currentGapStart: Date | null = null;
+      let missingDays = 0;
+
+      // Iterate through date range and find gaps (only trading days)
+      const start = new Date(earliestDate);
+      const end = new Date(latestDate);
+      const current = new Date(start);
+
+      while (current <= end) {
+        const currentStr = current.toISOString().split('T')[0];
+        const dayOfWeek = current.getDay();
+
+        // Skip weekends (Saturday = 6, Sunday = 0)
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          if (!existingDates.has(currentStr)) {
+            // Missing day
+            if (!currentGapStart) {
+              currentGapStart = new Date(current);
+              missingDays = 1;
+            } else {
+              missingDays++;
+            }
+          } else {
+            // Have data - close any open gap
+            if (currentGapStart && missingDays > 0) {
+              const previousDay = new Date(current);
+              previousDay.setDate(previousDay.getDate() - 1);
+              // Go back to last missing day (skip weekends)
+              while (previousDay.getDay() === 0 || previousDay.getDay() === 6) {
+                previousDay.setDate(previousDay.getDate() - 1);
+              }
+
+              gaps.push({
+                start_date: currentGapStart.toISOString().split('T')[0],
+                end_date: previousDay.toISOString().split('T')[0],
+                missing_days: missingDays
+              });
+            }
+            currentGapStart = null;
+            missingDays = 0;
+          }
+        }
+
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Close any remaining gap
+      if (currentGapStart && missingDays > 0) {
+        gaps.push({
+          start_date: currentGapStart.toISOString().split('T')[0],
+          end_date: end.toISOString().split('T')[0],
+          missing_days: missingDays
+        });
+      }
+
+      return gaps;
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to detect data gaps', 'detectDataGaps', {
+        indexId,
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Fill gaps for a specific index by downloading missing dates
+   */
+  async fillDataGaps(indexId: number): Promise<{
+    success: boolean;
+    gaps_filled: number;
+    records_inserted: number;
+    errors: string[];
+  }> {
+    try {
+      const index = await this.getIndexById(indexId);
+      if (!index) {
+        throw new Error('Index not found');
+      }
+
+      // Get gaps for this index
+      const detailedStatus = await this.getDetailedIndexStatus();
+      const indexStatus = detailedStatus.indices.find(i => i.id === indexId);
+
+      if (!indexStatus || !indexStatus.has_gaps) {
+        return {
+          success: true,
+          gaps_filled: 0,
+          records_inserted: 0,
+          errors: []
+        };
+      }
+
+      // This would require the download service - return info for now
+      SimpleLogger.info('MarketService', 'Gap fill requested', 'fillDataGaps', {
+        indexId,
+        gapCount: indexStatus.gap_count,
+        gaps: indexStatus.gaps
+      });
+
+      return {
+        success: true,
+        gaps_filled: 0,
+        records_inserted: 0,
+        errors: ['Gap fill functionality will be implemented via download service']
+      };
+
+    } catch (error: any) {
+      SimpleLogger.error('MarketService', 'Failed to fill data gaps', 'fillDataGaps', {
+        indexId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
 }

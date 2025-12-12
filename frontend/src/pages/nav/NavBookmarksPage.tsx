@@ -74,7 +74,7 @@ const NavBookmarksPage: React.FC = () => {
   });
 
   const { startPolling, stopPolling } = useDownloadProgress();
-  const { statistics } = useNavStatistics();
+  const { statistics, refetch: refetchStatistics } = useNavStatistics();
 
   // Hooks - Bulk Download operations
   const bulkDownload = useBulkDownload();
@@ -91,8 +91,8 @@ const NavBookmarksPage: React.FC = () => {
           total: result.total_schemes,
         }
       );
-      
-      // Refresh bookmarks after calculation
+
+      // Refresh bookmarks and statistics after calculation
       setTimeout(() => {
         fetchBookmarks({
           page: currentPage,
@@ -100,6 +100,8 @@ const NavBookmarksPage: React.FC = () => {
           search: searchQuery || undefined,
           amc_name: amcFilter || undefined,
         });
+        // Refresh statistics to update "Without Calculations" count
+        refetchStatistics();
       }, 1000);
     }
   });
@@ -344,14 +346,14 @@ const NavBookmarksPage: React.FC = () => {
   // Handle calculation complete
   const handleCalculationComplete = useCallback((schemeId: number) => {
     setCalculatingSchemeId(null);
-    
+
     FrontendErrorLogger.info(
       'Metrics calculation completed',
       'NavBookmarksPage',
       { schemeId }
     );
 
-    // Refresh bookmarks
+    // Refresh bookmarks and statistics
     setTimeout(() => {
       fetchBookmarks({
         page: currentPage,
@@ -359,8 +361,10 @@ const NavBookmarksPage: React.FC = () => {
         search: searchQuery || undefined,
         amc_name: amcFilter || undefined,
       });
+      // Refresh statistics to update "Without Calculations" count
+      refetchStatistics();
     }, 500);
-  }, [currentPage, searchQuery, amcFilter, fetchBookmarks]);
+  }, [currentPage, searchQuery, amcFilter, fetchBookmarks, refetchStatistics]);
 
   const handleCloseMetricsCalculationModal = useCallback(() => {
     setShowMetricsCalculationModal(false);
