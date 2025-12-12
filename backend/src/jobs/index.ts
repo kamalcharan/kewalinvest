@@ -5,6 +5,7 @@ import { JobSchedulerService } from '../services/jobScheduler.service';
 import { navDownloadExecutor } from './navDownload.executor';
 import { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
 import { dailyAlertsExecutor } from './dailyAlerts.executor';
+import { goalCalculationExecutor } from './goalCalculation.executor';
 
 /**
  * Register all job executors with the JobSchedulerService
@@ -23,9 +24,12 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
   // Processes: profile_trigger, time_based, import_notification
   scheduler.registerJob(dailyAlertsExecutor);
 
+  // Goal Calculation - Friday 8:30 PM (per-tenant)
+  // Recalculates all goals and creates progress snapshots
+  scheduler.registerJob(goalCalculationExecutor);
+
   // TODO: Add more executors as they are created
   // - Market OHLC Download (Daily 9:30 PM)
-  // - Goal Calculation (Friday 8:30 PM)
 
   console.log('[JobRegistry] All job executors registered');
 }
@@ -34,3 +38,4 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
 export { navDownloadExecutor } from './navDownload.executor';
 export { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
 export { dailyAlertsExecutor } from './dailyAlerts.executor';
+export { goalCalculationExecutor } from './goalCalculation.executor';
