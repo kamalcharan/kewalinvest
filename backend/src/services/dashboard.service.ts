@@ -168,17 +168,17 @@ export class DashboardService {
       const navResult = await this.db.query(navQuery, [tenantId, isLive, today]);
       const navStats = navResult.rows[0];
 
-      // Market Downloads - from market indices config
+      // Market Downloads - from market indices config (global table, no tenant_id)
       const marketQuery = `
         SELECT
-          COUNT(*) FILTER (WHERE last_download_status = 'success' AND last_download_at >= $2) as success,
-          COUNT(*) FILTER (WHERE last_download_status = 'failed' AND last_download_at >= $2) as failed,
-          COUNT(*) FILTER (WHERE is_active = true AND (last_download_at IS NULL OR last_download_at < $2)) as pending,
+          COUNT(*) FILTER (WHERE last_download_status = 'success' AND last_download_at >= $1) as success,
+          COUNT(*) FILTER (WHERE last_download_status = 'failed' AND last_download_at >= $1) as failed,
+          COUNT(*) FILTER (WHERE is_active = true AND (last_download_at IS NULL OR last_download_at < $1)) as pending,
           MAX(last_download_at) as last_run
         FROM t_market_indices
         WHERE is_active = true
       `;
-      const marketResult = await this.db.query(marketQuery, [tenantId, today]);
+      const marketResult = await this.db.query(marketQuery, [today]);
       const marketStats = marketResult.rows[0];
 
       return {
