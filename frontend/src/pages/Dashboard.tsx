@@ -615,7 +615,7 @@ export const Dashboard: React.FC = () => {
         <Card onClick={() => navigate('/cruise-control')} style={{ cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Downloads Today</div>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Yesterday Downloads</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <CheckCircle size={16} style={{ color: '#10B981' }} />

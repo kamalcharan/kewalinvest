@@ -151,12 +151,14 @@ export class DashboardService {
   }
 
   /**
-   * Get download status for today
+   * Get download status for yesterday (downloads run after office hours)
    */
   async getDownloadStatus(tenantId: number, isLive: boolean): Promise<DownloadStatus> {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Use yesterday's date since downloads run after office hours (evening/night)
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
 
       // NAV Downloads - from scheme bookmarks
       const navQuery = `
@@ -169,7 +171,7 @@ export class DashboardService {
         JOIN t_scheme_details sd ON sd.id = sb.scheme_id
         WHERE sb.tenant_id = $1 AND sb.is_live = $2 AND sb.is_active = true
       `;
-      const navResult = await this.db.query(navQuery, [tenantId, isLive, today]);
+      const navResult = await this.db.query(navQuery, [tenantId, isLive, yesterday]);
       const navStats = navResult.rows[0];
 
       // Market Downloads - from market indices config (global table, no tenant_id)
@@ -182,7 +184,7 @@ export class DashboardService {
         FROM t_market_indices
         WHERE is_active = true
       `;
-      const marketResult = await this.db.query(marketQuery, [today]);
+      const marketResult = await this.db.query(marketQuery, [yesterday]);
       const marketStats = marketResult.rows[0];
 
       return {
