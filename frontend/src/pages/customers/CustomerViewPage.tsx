@@ -61,6 +61,7 @@ const CustomerViewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions'>(initialTab);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
 
   // Goal modal states
@@ -941,33 +942,49 @@ const CustomerViewPage: React.FC = () => {
                       borderRadius: '12px',
                       padding: '20px'
                     }}>
-                      <h3 style={{ 
-                        fontSize: '16px', 
-                        fontWeight: '600', 
-                        color: colors.utility.primaryText, 
-                        margin: '0 0 16px 0'
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: showAllAlerts ? '16px' : '0'
                       }}>
-                        Upcoming Actions
-                      </h3>
-                      <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
-                        {jtbds.filter(j => j.is_active).length} active alerts configured.
-                        <button
-                          onClick={() => setActiveTab('jobs')}
-                          style={{
-                            marginLeft: '8px',
-                            padding: '4px 12px',
-                            backgroundColor: colors.brand.primary,
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500'
-                          }}
-                        >
-                          View All
-                        </button>
+                        <h3 style={{
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: colors.utility.primaryText,
+                          margin: '0'
+                        }}>
+                          Upcoming Actions
+                        </h3>
+                        <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                          {jtbds.filter(j => j.is_active).length} active alerts configured.
+                          <button
+                            onClick={() => setShowAllAlerts(!showAllAlerts)}
+                            style={{
+                              marginLeft: '8px',
+                              padding: '4px 12px',
+                              backgroundColor: showAllAlerts ? colors.utility.secondaryText : colors.brand.primary,
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            {showAllAlerts ? 'Hide' : 'View All'}
+                          </button>
+                        </div>
                       </div>
+                      {/* Expanded Alerts List */}
+                      {showAllAlerts && customerId && (
+                        <JTBDList
+                          customerId={customerId}
+                          onSetupNew={() => setShowJTBDSetupModal(true)}
+                          showFilters={true}
+                          compact={false}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
