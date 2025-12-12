@@ -1066,149 +1066,32 @@ export const Dashboard: React.FC = () => {
             icon={<FileText size={18} />}
           />
 
-          {/* Summary Stats */}
+          {/* Coming Soon Empty State */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '10px',
-            marginBottom: '16px'
+            padding: '32px 16px',
+            textAlign: 'center',
+            backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+            borderRadius: '8px'
           }}>
+            <FileText size={40} style={{ color: colors.brand.primary, opacity: 0.5, marginBottom: '12px' }} />
             <div style={{
-              padding: '12px',
-              backgroundColor: colors.semantic.error + '10',
-              borderRadius: '8px',
-              borderLeft: `3px solid ${colors.semantic.error}`
+              fontSize: '14px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginBottom: '8px'
             }}>
-              <div style={{ fontSize: '20px', fontWeight: '700', color: colors.semantic.error }}>
-                {data.reportGeneration.overdue.length}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Overdue (Ageing)</div>
+              Coming Soon
             </div>
             <div style={{
-              padding: '12px',
-              backgroundColor: '#F59E0B10',
-              borderRadius: '8px',
-              borderLeft: '3px solid #F59E0B'
+              fontSize: '12px',
+              color: colors.utility.secondaryText,
+              lineHeight: '1.5',
+              maxWidth: '280px',
+              margin: '0 auto'
             }}>
-              <div style={{ fontSize: '20px', fontWeight: '700', color: '#F59E0B' }}>
-                {data.reportGeneration.dueIn15Days.length}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Due in 15 Days</div>
+              Generate quarterly and half-yearly portfolio reports for your customers. Track overdue reports and schedule automated generation.
             </div>
           </div>
-
-          {/* Overdue Reports */}
-          {data.reportGeneration.overdue.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: colors.semantic.error,
-                marginBottom: '8px',
-                textTransform: 'uppercase'
-              }}>
-                Overdue Reports
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {data.reportGeneration.overdue.slice(0, 3).map((report) => (
-                  <div
-                    key={report.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px 10px',
-                      backgroundColor: colors.semantic.error + '08',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => navigate(`/customers/${report.customerId}`)}
-                  >
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.primaryText }}>
-                        {report.customerName}
-                      </div>
-                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                        {report.familyName || 'Individual'} • {report.frequency === '3_months' ? 'Quarterly' : 'Half-yearly'}
-                      </div>
-                    </div>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: colors.semantic.error,
-                      padding: '2px 6px',
-                      backgroundColor: colors.semantic.error + '15',
-                      borderRadius: '4px'
-                    }}>
-                      {report.daysOverdue}d overdue
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Due in 15 Days */}
-          {data.reportGeneration.dueIn15Days.length > 0 && (
-            <div>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: '#F59E0B',
-                marginBottom: '8px',
-                textTransform: 'uppercase'
-              }}>
-                Due Soon
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {data.reportGeneration.dueIn15Days.slice(0, 3).map((report) => (
-                  <div
-                    key={report.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px 10px',
-                      backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => navigate(`/customers/${report.customerId}`)}
-                  >
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: '500', color: colors.utility.primaryText }}>
-                        {report.customerName}
-                      </div>
-                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                        {report.familyName || 'Individual'} • {report.frequency === '3_months' ? 'Quarterly' : 'Half-yearly'}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                      {formatDate(report.dueDate)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Recently Generated Summary */}
-          {data.reportGeneration.recentlyGenerated.length > 0 && (
-            <div style={{
-              marginTop: '12px',
-              padding: '8px 10px',
-              backgroundColor: '#10B98110',
-              borderRadius: '6px',
-              fontSize: '11px',
-              color: colors.utility.secondaryText,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <CheckCircle size={12} style={{ color: '#10B981' }} />
-              {data.reportGeneration.recentlyGenerated.length} reports generated this week
-            </div>
-          )}
         </Card>
       </div>
 
