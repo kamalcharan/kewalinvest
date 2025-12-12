@@ -103,8 +103,15 @@ export const CruiseControlPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div>
+      {/* Tab Content - Wrapped in styled panel for visual separation */}
+      <div style={{
+        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+        borderRadius: '16px',
+        padding: '24px',
+        border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+        boxShadow: isDarkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+        minHeight: '400px'
+      }}>
         {activeTab === 'nav' && <NavTab />}
         {activeTab === 'market' && <MarketTab />}
         {activeTab === 'alerts' && <AlertsTab />}

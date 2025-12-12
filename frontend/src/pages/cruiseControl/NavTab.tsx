@@ -89,7 +89,7 @@ export const NavTab: React.FC = () => {
       setActionLoading(prev => ({ ...prev, [key]: true }));
 
       const response = await apiService.post(
-        API_ENDPOINTS.NAV.DOWNLOAD_SCHEME(schemeCode)
+        API_ENDPOINTS.CRUISE_CONTROL.NAV_DOWNLOAD(schemeCode)
       ) as any;
 
       if (response.success) {
@@ -271,14 +271,15 @@ export const NavTab: React.FC = () => {
 
       {/* Table View */}
       <div style={{
-        backgroundColor: colors.utility.primaryBackground,
+        backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
         borderRadius: '10px',
-        border: `1px solid ${dividerColor}`,
-        overflow: 'hidden'
+        border: `1px solid ${isDarkMode ? dividerColor : '#E2E8F0'}`,
+        overflow: 'hidden',
+        boxShadow: isDarkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: colors.utility.secondaryBackground }}>
+            <tr style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC' }}>
               <th style={{
                 padding: '12px 16px',
                 textAlign: 'left',
@@ -345,7 +346,7 @@ export const NavTab: React.FC = () => {
             {schemes.map((scheme, i) => (
               <React.Fragment key={scheme.id}>
                 <tr style={{
-                  backgroundColor: i % 2 === 0 ? 'transparent' : colors.utility.secondaryBackground + '50'
+                  backgroundColor: i % 2 === 0 ? 'transparent' : (isDarkMode ? colors.utility.secondaryBackground + '50' : '#F8FAFC50')
                 }}>
                   <td style={{
                     padding: '12px 16px',

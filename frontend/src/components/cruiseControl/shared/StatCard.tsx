@@ -29,13 +29,13 @@ export const StatCard: React.FC<StatCardProps> = ({ title, count, color, icon })
     <div
       style={{
         padding: '16px',
-        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-        border: `1px solid ${selectedColor}30`,
+        backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+        border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : selectedColor + '30'}`,
         borderRadius: '10px',
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+        boxShadow: isDarkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'
       }}
     >
       <div
