@@ -354,6 +354,8 @@ export class DashboardService {
     date: string;
   }>> {
     try {
+      console.log('[DashboardService] getRecentTransactions called with tenantId:', tenantId, 'isLive:', isLive, 'limit:', limit);
+
       // Use existing TransactionService
       const result = await transactionService.getTransactions(tenantId, isLive, {
         page: 1,
@@ -362,9 +364,9 @@ export class DashboardService {
         sort_order: 'desc'
       });
 
-      console.log('[DashboardService] Recent transactions count:', result.transactions.length);
+      console.log('[DashboardService] TransactionService returned:', result.transactions.length, 'transactions, total:', result.pagination.total);
 
-      return result.transactions.map((txn: any) => ({
+      const mapped = result.transactions.map((txn: any) => ({
         id: txn.id,
         customerName: txn.customer_name || 'Unknown Customer',
         type: txn.txn_type_name || txn.txn_type || 'Transaction',
@@ -372,7 +374,11 @@ export class DashboardService {
         amount: parseFloat(txn.total_amount || 0),
         date: txn.txn_date ? new Date(txn.txn_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       }));
+
+      console.log('[DashboardService] Returning mapped transactions:', mapped.length);
+      return mapped;
     } catch (error: any) {
+      console.error('[DashboardService] Error in getRecentTransactions:', error.message, error.code);
       // If table/column doesn't exist, return empty data
       if (error.code === '42P01' || error.code === '42703') {
         console.log('Transaction table/columns do not exist yet, returning empty data');
