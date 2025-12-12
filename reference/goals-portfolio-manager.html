@@ -1,0 +1,2286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goals & Portfolio Management - KewalInvest</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #1a1a1a;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 32px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            font-weight: 700;
+        }
+        .header-title h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .header-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-primary { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { 
+            background: white; 
+            border: 1px solid #e5e7eb; 
+            color: #1a1a1a; 
+        }
+        .btn-secondary:hover { background: #f9fafb; }
+        
+        /* Navigation Tabs */
+        .nav-tabs {
+            background: white;
+            padding: 0 32px;
+            display: flex;
+            gap: 32px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .nav-tab {
+            padding: 16px 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .nav-tab:hover {
+            color: #667eea;
+        }
+        .nav-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+        
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .summary-card.highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .summary-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .summary-card.highlight .summary-label { color: rgba(255,255,255,0.9); }
+        .summary-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .summary-desc {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .summary-card.highlight .summary-desc { color: rgba(255,255,255,0.8); }
+        
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+        
+        /* Goals List */
+        .goals-section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .section-filters {
+            display: flex;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 6px 14px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover {
+            background: #f9fafb;
+        }
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Goal Card */
+        .goal-card {
+            background: #fafbfc;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .goal-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        .goal-card.on-track { border-left: 4px solid #10b981; }
+        .goal-card.behind { border-left: 4px solid #ef4444; }
+        .goal-card.needs-rebalance { border-left: 4px solid #f59e0b; }
+        
+        .goal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .goal-left {
+            flex: 1;
+        }
+        .goal-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #1a1a1a;
+        }
+        .goal-type {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #dbeafe;
+            color: #1e40af;
+            margin-bottom: 8px;
+        }
+        .goal-meta {
+            font-size: 13px;
+            color: #6b7280;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .goal-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 16px;
+        }
+        .icon-btn:hover {
+            background: #f9fafb;
+            transform: scale(1.05);
+        }
+        .icon-btn.bookmarked {
+            background: #fef3c7;
+            color: #f59e0b;
+            border-color: #fbbf24;
+        }
+        
+        .goal-progress-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .goal-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .goal-stat {
+            text-align: center;
+        }
+        .goal-stat-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .goal-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            transition: width 0.5s;
+        }
+        .progress-fill.behind {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+        }
+        .progress-fill.warning {
+            background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        
+        .goal-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .goal-status.on-track { background: #d1fae5; color: #065f46; }
+        .goal-status.behind { background: #fee2e2; color: #991b1b; }
+        .goal-status.needs-rebalance { background: #fef3c7; color: #92400e; }
+        
+        .scheme-allocation {
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .scheme-allocation-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .scheme-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+        .scheme-name {
+            flex: 1;
+            color: #1a1a1a;
+        }
+        .scheme-allocation-bar {
+            flex: 1;
+            margin: 0 12px;
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .scheme-allocation-fill {
+            height: 100%;
+            background: #667eea;
+        }
+        .scheme-percentage {
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .sidebar-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .sidebar-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        /* Quick Actions */
+        .quick-action {
+            padding: 12px;
+            background: #fafbfc;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .quick-action:hover {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transform: translateX(4px);
+        }
+        .quick-action-icon {
+            font-size: 24px;
+        }
+        .quick-action-content {
+            flex: 1;
+        }
+        .quick-action-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .quick-action-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        /* Insights */
+        .insight-item {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 3px solid #667eea;
+        }
+        .insight-item.critical {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+        .insight-item.warning {
+            background: #fef3c7;
+            border-left-color: #f59e0b;
+        }
+        .insight-item.success {
+            background: #d1fae5;
+            border-left-color: #10b981;
+        }
+        .insight-item.info {
+            background: #dbeafe;
+            border-left-color: #3b82f6;
+        }
+        .insight-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .insight-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        /* Portfolio Snapshots */
+        .snapshot-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .snapshot-tab {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .snapshot-tab:hover {
+            background: #f9fafb;
+        }
+        .snapshot-tab.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .portfolio-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .portfolio-table th {
+            background: #fafbfc;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .portfolio-table td {
+            padding: 12px;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .portfolio-table tr:hover {
+            background: #fafbfc;
+        }
+        .scheme-name-col {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        .utilization-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .utilization-bar {
+            flex: 1;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .utilization-fill {
+            height: 100%;
+            background: #667eea;
+        }
+        .utilization-fill.full {
+            background: #ef4444;
+        }
+        .utilization-value {
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        /* Month pills for snapshots */
+        .month-pills {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        .month-pill {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .month-pill:hover {
+            background: #f9fafb;
+        }
+        .month-pill.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .month-pill.provisional {
+            background: #fef3c7;
+            border-color: #fbbf24;
+            color: #92400e;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.show {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: #f3f4f6;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close:hover {
+            background: #e5e7eb;
+        }
+        .modal-body {
+            padding: 24px;
+        }
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .form-select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        
+        /* Chart Placeholder */
+        .chart-container {
+            background: linear-gradient(to top, #f0f9ff 0%, white 100%);
+            border: 2px dashed #e5e7eb;
+            border-radius: 8px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            margin-top: 16px;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        .empty-state-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .empty-state-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Hide/Show Content */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="avatar">RK</div>
+                <div class="header-title">
+                    <h1>Rajesh Kumar - Goals & Portfolio</h1>
+                    <div class="header-subtitle">Customer ID: KI-2024-1847 • Joined Jan 2020</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="showModal('scheduleModal')">📞 Schedule Meeting</button>
+                <button class="btn btn-primary" onclick="showModal('createGoalModal')">🎯 Create New Goal</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+        <div class="nav-tab active" onclick="switchTab('goals')">🎯 Goals Management</div>
+        <div class="nav-tab" onclick="switchTab('portfolio')">📊 Portfolio Snapshots</div>
+        <div class="nav-tab" onclick="switchTab('schemes')">💼 Individual Schemes</div>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="container">
+        <!-- GOALS TAB -->
+        <div id="goalsTab" class="tab-content active">
+            <!-- Summary Cards -->
+            <div class="summary-grid">
+                <div class="summary-card highlight">
+                    <div class="summary-label">Active Goals</div>
+                    <div class="summary-value">7</div>
+                    <div class="summary-desc">5 On Track • 2 Need Attention</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Total Target</div>
+                    <div class="summary-value">₹85L</div>
+                    <div class="summary-desc">Across all goals</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Current Value</div>
+                    <div class="summary-value">₹58.3L</div>
+                    <div class="summary-desc">68.6% achieved</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Monthly SIP</div>
+                    <div class="summary-value">₹45K</div>
+                    <div class="summary-desc">Across 8 schemes</div>
+                </div>
+            </div>
+            
+            <div class="content-grid">
+                <!-- Goals List -->
+                <div class="goals-section">
+                    <div class="section-header">
+                        <div class="section-title">🎯 Customer Goals</div>
+                        <div class="section-filters">
+                            <button class="filter-btn active" onclick="filterGoals('all')">All (7)</button>
+                            <button class="filter-btn" onclick="filterGoals('on-track')">On Track (5)</button>
+                            <button class="filter-btn" onclick="filterGoals('behind')">Behind (1)</button>
+                            <button class="filter-btn" onclick="filterGoals('rebalance')">Needs Rebalance (1)</button>
+                            <button class="filter-btn" onclick="filterGoals('bookmarked')">⭐ Bookmarked (3)</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Goal Cards -->
+                    <div id="goalsList">
+                        <!-- Goal 1 - On Track -->
+                        <div class="goal-card on-track" data-status="on-track" onclick="showModal('goalDetailModal', this)">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">🎓 Aarav's Higher Education</div>
+                                    <span class="goal-type">Time + Price Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹25L by Aug 2028</span>
+                                        <span>•</span>
+                                        <span>Started: Jan 2020</span>
+                                        <span>•</span>
+                                        <span>44 of 104 months completed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn bookmarked" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal', this)">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status on-track">✅ On Track - Projected to exceed by ₹1.2L</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹18.2L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹25L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Remaining</div>
+                                        <div class="goal-stat-value" style="color: #6b7280;">₹6.8L</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 72.8%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>72.8% Complete</span>
+                                    <span>5 years remaining</span>
+                                </div>
+                                
+                                <div class="scheme-allocation">
+                                    <div class="scheme-allocation-title">Scheme Allocation</div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">HDFC Mid-Cap Opportunities</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 40%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">40%</span>
+                                    </div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">ICICI Pru Bluechip Fund</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 35%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">35%</span>
+                                    </div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">Parag Parikh Flexi Cap</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 25%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">25%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 2 - Behind Schedule -->
+                        <div class="goal-card behind" data-status="behind">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">🏠 Dream Home Down Payment</div>
+                                    <span class="goal-type">Price Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹30L</span>
+                                        <span>•</span>
+                                        <span>Started: Mar 2021</span>
+                                        <span>•</span>
+                                        <span>44 months elapsed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status behind">⚠️ Behind Schedule - Increase SIP by ₹5K to stay on track</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #ef4444;">₹16.5L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹30L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Shortfall</div>
+                                        <div class="goal-stat-value" style="color: #ef4444;">₹13.5L</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill behind" style="width: 55%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>55% Complete (Expected: 68%)</span>
+                                    <span>Should have ₹20.4L by now</span>
+                                </div>
+                                
+                                <div class="scheme-allocation">
+                                    <div class="scheme-allocation-title">Scheme Allocation</div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">Axis Small Cap Fund</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 50%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">50%</span>
+                                    </div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">Mirae Asset Emerging Bluechip</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 50%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">50%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 3 - Needs Rebalance -->
+                        <div class="goal-card needs-rebalance" data-status="rebalance">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">✈️ Europe Trip 2025</div>
+                                    <span class="goal-type">Time Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹4L by Jun 2025</span>
+                                        <span>•</span>
+                                        <span>Started: Jul 2023</span>
+                                        <span>•</span>
+                                        <span>16 of 24 months completed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn bookmarked" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status needs-rebalance">🔄 Needs Rebalancing - High equity exposure for short timeline</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #f59e0b;">₹3.2L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹4L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Remaining</div>
+                                        <div class="goal-stat-value" style="color: #6b7280;">₹80K</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill warning" style="width: 80%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>80% Complete</span>
+                                    <span>8 months remaining</span>
+                                </div>
+                                
+                                <div class="scheme-allocation">
+                                    <div class="scheme-allocation-title">Scheme Allocation - Consider moving to debt</div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">Parag Parikh Flexi Cap</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 100%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 4 - On Track -->
+                        <div class="goal-card on-track" data-status="on-track">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">🚗 New Car Purchase</div>
+                                    <span class="goal-type">Time + Price Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹8L by Dec 2025</span>
+                                        <span>•</span>
+                                        <span>Started: Dec 2023</span>
+                                        <span>•</span>
+                                        <span>11 of 25 months completed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn bookmarked" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status on-track">✅ On Track - Strong performance</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹3.8L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹8L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Remaining</div>
+                                        <div class="goal-stat-value" style="color: #6b7280;">₹4.2L</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 47.5%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>47.5% Complete</span>
+                                    <span>14 months remaining</span>
+                                </div>
+                                
+                                <div class="scheme-allocation">
+                                    <div class="scheme-allocation-title">Scheme Allocation</div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">Kotak Equity Opportunities</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 60%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">60%</span>
+                                    </div>
+                                    <div class="scheme-item">
+                                        <span class="scheme-name">HDFC Balanced Advantage</span>
+                                        <div class="scheme-allocation-bar">
+                                            <div class="scheme-allocation-fill" style="width: 40%"></div>
+                                        </div>
+                                        <span class="scheme-percentage">40%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 5 - On Track -->
+                        <div class="goal-card on-track" data-status="on-track">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">💍 Wedding Anniversary - 25th</div>
+                                    <span class="goal-type">Time Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹5L by Feb 2027</span>
+                                        <span>•</span>
+                                        <span>Started: Feb 2024</span>
+                                        <span>•</span>
+                                        <span>9 of 37 months completed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status on-track">✅ On Track</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹1.2L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹5L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Remaining</div>
+                                        <div class="goal-stat-value" style="color: #6b7280;">₹3.8L</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 24%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>24% Complete</span>
+                                    <span>28 months remaining</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 6 - On Track -->
+                        <div class="goal-card on-track" data-status="on-track">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">🏖️ Retirement Corpus</div>
+                                    <span class="goal-type">Time + Price Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹2.5Cr by Mar 2040</span>
+                                        <span>•</span>
+                                        <span>Started: Jan 2020</span>
+                                        <span>•</span>
+                                        <span>58 of 243 months completed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status on-track">✅ Excellent Progress</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹15.4L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹2.5Cr</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">On Track For</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹2.8Cr</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 6.2%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>6.2% Complete</span>
+                                    <span>15 years 5 months remaining</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal 7 - On Track -->
+                        <div class="goal-card on-track" data-status="on-track">
+                            <div class="goal-header">
+                                <div class="goal-left">
+                                    <div class="goal-name">🏥 Medical Emergency Fund</div>
+                                    <span class="goal-type">Price Based</span>
+                                    <div class="goal-meta">
+                                        <span>Target: ₹3L</span>
+                                        <span>•</span>
+                                        <span>Started: Jun 2022</span>
+                                        <span>•</span>
+                                        <span>29 months elapsed</span>
+                                    </div>
+                                </div>
+                                <div class="goal-actions">
+                                    <button class="icon-btn" onclick="event.stopPropagation(); toggleBookmark(this)">⭐</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('scheduleModal')">📞</button>
+                                    <button class="icon-btn" onclick="event.stopPropagation(); showModal('goalDetailModal')">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="goal-progress-section">
+                                <div class="goal-status on-track">✅ Nearly Complete</div>
+                                
+                                <div class="goal-stats">
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Current</div>
+                                        <div class="goal-stat-value" style="color: #10b981;">₹2.85L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Target</div>
+                                        <div class="goal-stat-value">₹3L</div>
+                                    </div>
+                                    <div class="goal-stat">
+                                        <div class="goal-stat-label">Remaining</div>
+                                        <div class="goal-stat-value" style="color: #6b7280;">₹15K</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 95%"></div>
+                                </div>
+                                <div class="progress-label">
+                                    <span>95% Complete</span>
+                                    <span>Target achievable in 1-2 months</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <!-- Quick Actions -->
+                    <div class="sidebar-card">
+                        <div class="sidebar-title">⚡ Quick Actions</div>
+                        <div class="quick-action" onclick="showModal('createGoalModal')">
+                            <div class="quick-action-icon">🎯</div>
+                            <div class="quick-action-content">
+                                <div class="quick-action-title">Create New Goal</div>
+                                <div class="quick-action-desc">Add price/time-based goal</div>
+                            </div>
+                        </div>
+                        <div class="quick-action" onclick="showModal('onboardGoalModal')">
+                            <div class="quick-action-icon">📥</div>
+                            <div class="quick-action-content">
+                                <div class="quick-action-title">Onboard Existing Goal</div>
+                                <div class="quick-action-desc">Import in-progress goal</div>
+                            </div>
+                        </div>
+                        <div class="quick-action" onclick="showModal('rebalanceModal')">
+                            <div class="quick-action-icon">⚖️</div>
+                            <div class="quick-action-content">
+                                <div class="quick-action-title">Rebalance Goals</div>
+                                <div class="quick-action-desc">Adjust allocations</div>
+                            </div>
+                        </div>
+                        <div class="quick-action" onclick="alert('Generating comprehensive goal report...')">
+                            <div class="quick-action-icon">📊</div>
+                            <div class="quick-action-content">
+                                <div class="quick-action-title">Generate Report</div>
+                                <div class="quick-action-desc">Export goal summary</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Key Insights -->
+                    <div class="sidebar-card">
+                        <div class="sidebar-title">💡 Key Insights</div>
+                        <div class="insight-item critical">
+                            <div class="insight-title">⚠️ Dream Home Goal Behind</div>
+                            <div class="insight-desc">Increase SIP by ₹5K monthly to stay on track for target.</div>
+                        </div>
+                        <div class="insight-item warning">
+                            <div class="insight-title">🔄 Europe Trip - Rebalance Required</div>
+                            <div class="insight-desc">Move 50% to debt funds. Only 8 months remaining.</div>
+                        </div>
+                        <div class="insight-item success">
+                            <div class="insight-title">✅ Education Goal Exceeding</div>
+                            <div class="insight-desc">Projected to exceed target by ₹1.2L. Strong returns!</div>
+                        </div>
+                        <div class="insight-item info">
+                            <div class="insight-title">🎉 Medical Fund Near Complete</div>
+                            <div class="insight-desc">95% achieved. Consider creating new emergency goal.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Portfolio Utilization -->
+                    <div class="sidebar-card">
+                        <div class="sidebar-title">📊 Portfolio Utilization</div>
+                        <div style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">
+                            <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between;">
+                                <span>HDFC Mid-Cap</span>
+                                <span style="font-weight: 600; color: #667eea;">75%</span>
+                            </div>
+                            <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between;">
+                                <span>ICICI Bluechip</span>
+                                <span style="font-weight: 600; color: #667eea;">70%</span>
+                            </div>
+                            <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between;">
+                                <span>Axis Small Cap</span>
+                                <span style="font-weight: 600; color: #667eea;">50%</span>
+                            </div>
+                            <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between;">
+                                <span>Parag Parikh Flexi</span>
+                                <span style="font-weight: 600; color: #ef4444;">100% 🚫</span>
+                            </div>
+                            <div style="padding: 8px 0; display: flex; justify-content: space-between;">
+                                <span>Mirae Emerging</span>
+                                <span style="font-weight: 600; color: #667eea;">50%</span>
+                            </div>
+                        </div>
+                        <div style="padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 12px; color: #92400e;">
+                            <strong>Note:</strong> Parag Parikh fully allocated. Consider other schemes for new goals.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PORTFOLIO TAB -->
+        <div id="portfolioTab" class="tab-content">
+            <!-- Summary Cards -->
+            <div class="summary-grid">
+                <div class="summary-card highlight">
+                    <div class="summary-label">Total Portfolio</div>
+                    <div class="summary-value">₹58.3L</div>
+                    <div class="summary-desc">Across 12 schemes</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">This Month Change</div>
+                    <div class="summary-value" style="color: #10b981;">+₹2.8L</div>
+                    <div class="summary-desc">+5.04% from last month</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">YTD Returns</div>
+                    <div class="summary-value" style="color: #10b981;">+18.7%</div>
+                    <div class="summary-desc">₹9.2L absolute gain</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Avg. Monthly SIP</div>
+                    <div class="summary-value">₹45K</div>
+                    <div class="summary-desc">Invested consistently</div>
+                </div>
+            </div>
+            
+            <!-- Snapshot Tabs -->
+            <div class="goals-section">
+                <div class="section-header">
+                    <div class="section-title">📈 Portfolio Snapshots</div>
+                    <div class="section-filters">
+                        <button class="filter-btn" onclick="exportData('units')">📊 Export Units</button>
+                        <button class="filter-btn" onclick="exportData('nav')">📊 Export NAV</button>
+                        <button class="filter-btn" onclick="exportData('market')">📊 Export Market Value</button>
+                    </div>
+                </div>
+                
+                <div class="snapshot-tabs">
+                    <div class="snapshot-tab active" onclick="switchSnapshot('units')">📊 Monthly Units</div>
+                    <div class="snapshot-tab" onclick="switchSnapshot('nav')">💰 NAV Values</div>
+                    <div class="snapshot-tab" onclick="switchSnapshot('market')">💼 Market Value</div>
+                </div>
+                
+                <!-- Month Selection -->
+                <div class="month-pills">
+                    <div class="month-pill provisional active">Nov 2024 (Provisional)</div>
+                    <div class="month-pill">Oct 2024</div>
+                    <div class="month-pill">Sep 2024</div>
+                    <div class="month-pill">Aug 2024</div>
+                    <div class="month-pill">Jul 2024</div>
+                    <div class="month-pill">Jun 2024</div>
+                    <div class="month-pill">May 2024</div>
+                    <div class="month-pill">Apr 2024</div>
+                    <div class="month-pill">Mar 2024</div>
+                    <div class="month-pill">Feb 2024</div>
+                    <div class="month-pill">Jan 2024</div>
+                    <div class="month-pill">Dec 2023</div>
+                    <div class="month-pill">Nov 2023</div>
+                </div>
+                
+                <!-- Units Snapshot -->
+                <div id="unitsSnapshot" class="snapshot-content">
+                    <table class="portfolio-table">
+                        <thead>
+                            <tr>
+                                <th>Scheme Name</th>
+                                <th style="text-align: right;">Units (Nov 2024*)</th>
+                                <th style="text-align: right;">Units (Oct 2024)</th>
+                                <th style="text-align: right;">Change</th>
+                                <th style="text-align: right;">% Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Mid-Cap Opportunities</td>
+                                <td style="text-align: right;">4,823.45</td>
+                                <td style="text-align: right;">4,752.80</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+70.65</td>
+                                <td style="text-align: right; color: #10b981;">+1.49%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">ICICI Pru Bluechip Fund</td>
+                                <td style="text-align: right;">8,945.20</td>
+                                <td style="text-align: right;">8,845.20</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+100.00</td>
+                                <td style="text-align: right; color: #10b981;">+1.13%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Axis Small Cap Fund</td>
+                                <td style="text-align: right;">9,234.78</td>
+                                <td style="text-align: right;">9,146.12</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+88.66</td>
+                                <td style="text-align: right; color: #10b981;">+0.97%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Parag Parikh Flexi Cap</td>
+                                <td style="text-align: right;">6,782.90</td>
+                                <td style="text-align: right;">6,715.34</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+67.56</td>
+                                <td style="text-align: right; color: #10b981;">+1.01%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Mirae Asset Emerging Bluechip</td>
+                                <td style="text-align: right;">4,567.23</td>
+                                <td style="text-align: right;">4,523.89</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+43.34</td>
+                                <td style="text-align: right; color: #10b981;">+0.96%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Kotak Equity Opportunities</td>
+                                <td style="text-align: right;">3,456.12</td>
+                                <td style="text-align: right;">3,401.45</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+54.67</td>
+                                <td style="text-align: right; color: #10b981;">+1.61%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Balanced Advantage</td>
+                                <td style="text-align: right;">12,345.67</td>
+                                <td style="text-align: right;">12,234.56</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+111.11</td>
+                                <td style="text-align: right; color: #10b981;">+0.91%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">SBI Small Cap Fund</td>
+                                <td style="text-align: right;">2,345.89</td>
+                                <td style="text-align: right;">2,345.89</td>
+                                <td style="text-align: right; color: #6b7280; font-weight: 600;">0.00</td>
+                                <td style="text-align: right; color: #6b7280;">0.00%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 3px solid #f59e0b; font-size: 13px; color: #92400e;">
+                        <strong>*Provisional Data:</strong> November 2024 values are provisional until month-end. Final values will be updated after 30th Nov.
+                    </div>
+                </div>
+                
+                <!-- NAV Snapshot -->
+                <div id="navSnapshot" class="snapshot-content" style="display: none;">
+                    <table class="portfolio-table">
+                        <thead>
+                            <tr>
+                                <th>Scheme Name</th>
+                                <th style="text-align: right;">NAV (Oct 31, 2024)</th>
+                                <th style="text-align: right;">NAV (Sep 30, 2024)</th>
+                                <th style="text-align: right;">Change</th>
+                                <th style="text-align: right;">% Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Mid-Cap Opportunities</td>
+                                <td style="text-align: right;">₹175.23</td>
+                                <td style="text-align: right;">₹168.45</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹6.78</td>
+                                <td style="text-align: right; color: #10b981;">+4.02%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">ICICI Pru Bluechip Fund</td>
+                                <td style="text-align: right;">₹80.85</td>
+                                <td style="text-align: right;">₹78.12</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹2.73</td>
+                                <td style="text-align: right; color: #10b981;">+3.49%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Axis Small Cap Fund</td>
+                                <td style="text-align: right;">₹74.67</td>
+                                <td style="text-align: right;">₹70.23</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹4.44</td>
+                                <td style="text-align: right; color: #10b981;">+6.32%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Parag Parikh Flexi Cap</td>
+                                <td style="text-align: right;">₹73.45</td>
+                                <td style="text-align: right;">₹71.89</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹1.56</td>
+                                <td style="text-align: right; color: #10b981;">+2.17%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Mirae Asset Emerging Bluechip</td>
+                                <td style="text-align: right;">₹119.56</td>
+                                <td style="text-align: right;">₹115.78</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹3.78</td>
+                                <td style="text-align: right; color: #10b981;">+3.26%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Kotak Equity Opportunities</td>
+                                <td style="text-align: right;">₹109.87</td>
+                                <td style="text-align: right;">₹106.45</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹3.42</td>
+                                <td style="text-align: right; color: #10b981;">+3.21%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Balanced Advantage</td>
+                                <td style="text-align: right;">₹156.23</td>
+                                <td style="text-align: right;">₹153.67</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹2.56</td>
+                                <td style="text-align: right; color: #10b981;">+1.67%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">SBI Small Cap Fund</td>
+                                <td style="text-align: right;">₹98.34</td>
+                                <td style="text-align: right;">₹95.12</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹3.22</td>
+                                <td style="text-align: right; color: #10b981;">+3.38%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #dbeafe; border-radius: 8px; border-left: 3px solid #3b82f6; font-size: 13px; color: #1e40af;">
+                        <strong>NAV Reference:</strong> NAV values are as of last day of previous month. Used for monthly portfolio calculations.
+                    </div>
+                </div>
+                
+                <!-- Market Value Snapshot -->
+                <div id="marketSnapshot" class="snapshot-content" style="display: none;">
+                    <table class="portfolio-table">
+                        <thead>
+                            <tr>
+                                <th>Scheme Name</th>
+                                <th style="text-align: right;">Market Value</th>
+                                <th style="text-align: right;">Invested</th>
+                                <th style="text-align: right;">Gain/Loss</th>
+                                <th style="text-align: right;">Returns %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Mid-Cap Opportunities</td>
+                                <td style="text-align: right; font-weight: 600;">₹8,45,200</td>
+                                <td style="text-align: right;">₹6,80,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹1,65,200</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+24.29%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">ICICI Pru Bluechip Fund</td>
+                                <td style="text-align: right; font-weight: 600;">₹7,23,400</td>
+                                <td style="text-align: right;">₹6,09,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹1,14,400</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+18.79%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Axis Small Cap Fund</td>
+                                <td style="text-align: right; font-weight: 600;">₹6,89,500</td>
+                                <td style="text-align: right;">₹5,25,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹1,64,500</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+31.33%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Parag Parikh Flexi Cap</td>
+                                <td style="text-align: right; font-weight: 600;">₹4,98,200</td>
+                                <td style="text-align: right;">₹4,27,600</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹70,600</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+16.51%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Mirae Asset Emerging Bluechip</td>
+                                <td style="text-align: right; font-weight: 600;">₹5,45,800</td>
+                                <td style="text-align: right;">₹4,47,100</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹98,700</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+22.08%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">Kotak Equity Opportunities</td>
+                                <td style="text-align: right; font-weight: 600;">₹3,79,600</td>
+                                <td style="text-align: right;">₹3,25,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹54,600</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+16.80%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">HDFC Balanced Advantage</td>
+                                <td style="text-align: right; font-weight: 600;">₹19,28,700</td>
+                                <td style="text-align: right;">₹17,50,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹1,78,700</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+10.21%</td>
+                            </tr>
+                            <tr>
+                                <td class="scheme-name-col">SBI Small Cap Fund</td>
+                                <td style="text-align: right; font-weight: 600;">₹2,30,600</td>
+                                <td style="text-align: right;">₹2,00,000</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 600;">+₹30,600</td>
+                                <td style="text-align: right; color: #10b981; font-weight: 700;">+15.30%</td>
+                            </tr>
+                            <tr style="background: #f9fafb; font-weight: 700;">
+                                <td class="scheme-name-col">TOTAL</td>
+                                <td style="text-align: right;">₹58,41,000</td>
+                                <td style="text-align: right;">₹49,63,700</td>
+                                <td style="text-align: right; color: #10b981;">+₹8,77,300</td>
+                                <td style="text-align: right; color: #10b981;">+17.67%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #d1fae5; border-radius: 8px; border-left: 3px solid #10b981; font-size: 13px; color: #065f46;">
+                        <strong>Market Value Calculation:</strong> Units (Previous Month) × NAV (Previous Month) = Market Value as of end of last month.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SCHEMES TAB -->
+        <div id="schemesTab" class="tab-content">
+            <!-- Summary Cards -->
+            <div class="summary-grid">
+                <div class="summary-card highlight">
+                    <div class="summary-label">Total Schemes</div>
+                    <div class="summary-value">12</div>
+                    <div class="summary-desc">8 Active SIPs</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Avg Utilization</div>
+                    <div class="summary-value">62%</div>
+                    <div class="summary-desc">Across all schemes</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Top Performer</div>
+                    <div class="summary-value">+31.3%</div>
+                    <div class="summary-desc">Axis Small Cap Fund</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Available Capacity</div>
+                    <div class="summary-value">38%</div>
+                    <div class="summary-desc">For new goals</div>
+                </div>
+            </div>
+            
+            <!-- Schemes Table -->
+            <div class="goals-section">
+                <div class="section-header">
+                    <div class="section-title">💼 Individual Scheme Performance</div>
+                    <div class="section-filters">
+                        <button class="filter-btn active" onclick="filterSchemes('all')">All Schemes</button>
+                        <button class="filter-btn" onclick="filterSchemes('equity')">Equity</button>
+                        <button class="filter-btn" onclick="filterSchemes('hybrid')">Hybrid</button>
+                        <button class="filter-btn" onclick="filterSchemes('debt')">Debt</button>
+                    </div>
+                </div>
+                
+                <table class="portfolio-table">
+                    <thead>
+                        <tr>
+                            <th>Scheme Name</th>
+                            <th style="text-align: right;">Current Value</th>
+                            <th style="text-align: right;">Goal Utilization</th>
+                            <th style="text-align: right;">Monthly SIP</th>
+                            <th style="text-align: right;">Returns</th>
+                            <th style="text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">HDFC Mid-Cap Opportunities</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Large & Mid Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹8,45,200</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 75%"></div>
+                                    </div>
+                                    <span class="utilization-value">75%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹10,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+24.29%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('HDFC Mid-Cap')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">ICICI Pru Bluechip Fund</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Large Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹7,23,400</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 70%"></div>
+                                    </div>
+                                    <span class="utilization-value">70%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹8,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+18.79%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('ICICI Bluechip')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">Axis Small Cap Fund</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Small Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹6,89,500</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 50%"></div>
+                                    </div>
+                                    <span class="utilization-value">50%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹7,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+31.33%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('Axis Small Cap')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">Parag Parikh Flexi Cap</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Flexi Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹4,98,200</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill full" style="width: 100%"></div>
+                                    </div>
+                                    <span class="utilization-value" style="color: #ef4444;">100%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹5,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+16.51%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('Parag Parikh')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">Mirae Asset Emerging Bluechip</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Large & Mid Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹5,45,800</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 50%"></div>
+                                    </div>
+                                    <span class="utilization-value">50%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹6,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+22.08%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('Mirae Emerging')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">Kotak Equity Opportunities</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Large Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹3,79,600</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 60%"></div>
+                                    </div>
+                                    <span class="utilization-value">60%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹4,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+16.80%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('Kotak Equity')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="hybrid">
+                            <td>
+                                <div class="scheme-name-col">HDFC Balanced Advantage</div>
+                                <div style="font-size: 11px; color: #6b7280;">Hybrid • Balanced</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹19,28,700</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 40%"></div>
+                                    </div>
+                                    <span class="utilization-value">40%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">₹3,000</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+10.21%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('HDFC Balanced')">👁️</button>
+                            </td>
+                        </tr>
+                        <tr data-category="equity">
+                            <td>
+                                <div class="scheme-name-col">SBI Small Cap Fund</div>
+                                <div style="font-size: 11px; color: #6b7280;">Equity • Small Cap</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">₹2,30,600</td>
+                            <td>
+                                <div class="utilization-cell">
+                                    <div class="utilization-bar">
+                                        <div class="utilization-fill" style="width: 0%"></div>
+                                    </div>
+                                    <span class="utilization-value">0%</span>
+                                </div>
+                            </td>
+                            <td style="text-align: right;">-</td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+15.30%</td>
+                            <td style="text-align: center;">
+                                <button class="icon-btn" onclick="viewSchemeDetail('SBI Small Cap')">👁️</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CREATE GOAL MODAL -->
+    <div id="createGoalModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">🎯 Create New Goal</div>
+                <button class="modal-close" onclick="hideModal('createGoalModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Goal Name *</label>
+                    <input type="text" class="form-input" placeholder="e.g., Child's Education, Dream Home">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Goal Type *</label>
+                    <select class="form-select">
+                        <option>Price Based Goal</option>
+                        <option>Time Based Goal</option>
+                        <option>Price + Time Based Goal</option>
+                    </select>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Target Amount (₹) *</label>
+                        <input type="number" class="form-input" placeholder="25,00,000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Target Date</label>
+                        <input type="date" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Select Schemes & Allocation *</label>
+                    <div style="padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="font-size: 13px;">
+                                <input type="checkbox" style="margin-right: 8px;">
+                                HDFC Mid-Cap Opportunities (75% utilized)
+                            </label>
+                            <input type="number" style="width: 80px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 13px;" placeholder="%" min="0" max="100">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="font-size: 13px;">
+                                <input type="checkbox" style="margin-right: 8px;">
+                                Axis Small Cap Fund (50% utilized)
+                            </label>
+                            <input type="number" style="width: 80px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 13px;" placeholder="%" min="0" max="100">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="font-size: 13px;">
+                                <input type="checkbox" style="margin-right: 8px;">
+                                Mirae Emerging Bluechip (50% utilized)
+                            </label>
+                            <input type="number" style="width: 80px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 13px;" placeholder="%" min="0" max="100">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; opacity: 0.5;">
+                            <label style="font-size: 13px;">
+                                <input type="checkbox" style="margin-right: 8px;" disabled>
+                                Parag Parikh Flexi Cap (100% utilized 🚫)
+                            </label>
+                            <span style="font-size: 12px; color: #ef4444; font-weight: 600;">Full</span>
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280;">
+                        Total allocation must equal 100%
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Monthly SIP Amount (₹)</label>
+                        <input type="number" class="form-input" placeholder="10,000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">SIP Date</label>
+                        <select class="form-select">
+                            <option>1st of every month</option>
+                            <option>5th of every month</option>
+                            <option>10th of every month</option>
+                            <option>15th of every month</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModal('createGoalModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="createGoal()">Create Goal</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ONBOARD GOAL MODAL -->
+    <div id="onboardGoalModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📥 Onboard Existing Goal</div>
+                <button class="modal-close" onclick="hideModal('onboardGoalModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="padding: 16px; background: #dbeafe; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #1e40af;">
+                    <strong>Import In-Progress Goal:</strong> Add goals that started earlier and are currently in progress.
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Goal Name *</label>
+                    <input type="text" class="form-input" placeholder="e.g., Europe Trip">
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Start Date *</label>
+                        <input type="date" class="form-input" value="2023-07-01">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Current Value (₹) *</label>
+                        <input type="number" class="form-input" placeholder="3,20,000">
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Target Amount (₹) *</label>
+                        <input type="number" class="form-input" placeholder="4,00,000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Target Date</label>
+                        <input type="date" class="form-input" value="2025-06-30">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Linked Schemes *</label>
+                    <select class="form-select">
+                        <option>Parag Parikh Flexi Cap (100%)</option>
+                        <option>Split across multiple schemes</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModal('onboardGoalModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="onboardGoal()">Onboard Goal</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- GOAL DETAIL MODAL -->
+    <div id="goalDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">🎯 Goal Details & Progress</div>
+                <button class="modal-close" onclick="hideModal('goalDetailModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white; margin-bottom: 24px;">
+                    <h2 style="font-size: 24px; margin-bottom: 8px;">🎓 Aarav's Higher Education</h2>
+                    <p style="font-size: 14px; opacity: 0.9;">Time + Price Based Goal</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+                    <div style="text-align: center; padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">CURRENT VALUE</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #10b981;">₹18.2L</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">TARGET</div>
+                        <div style="font-size: 24px; font-weight: 700;">₹25L</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">REMAINING</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #6b7280;">₹6.8L</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    📈 Progress Over Time Chart<br>
+                    <span style="font-size: 12px;">(Line chart showing monthly accumulation)</span>
+                </div>
+                
+                <div style="margin-top: 24px;">
+                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Transaction History</h3>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <table style="width: 100%; font-size: 13px;">
+                            <tr style="background: #f9fafb;">
+                                <td style="padding: 8px; font-weight: 600;">Date</td>
+                                <td style="padding: 8px; font-weight: 600;">Type</td>
+                                <td style="padding: 8px; font-weight: 600; text-align: right;">Amount</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px;">Nov 01, 2024</td>
+                                <td style="padding: 8px;">SIP</td>
+                                <td style="padding: 8px; text-align: right;">₹15,000</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px;">Oct 01, 2024</td>
+                                <td style="padding: 8px;">SIP</td>
+                                <td style="padding: 8px; text-align: right;">₹15,000</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px;">Sep 01, 2024</td>
+                                <td style="padding: 8px;">SIP</td>
+                                <td style="padding: 8px; text-align: right;">₹15,000</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModal('goalDetailModal')">Close</button>
+                <button class="btn btn-primary" onclick="alert('Exporting goal report...')">📊 Export Report</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- SCHEDULE MEETING MODAL -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📞 Schedule Review Meeting</div>
+                <button class="modal-close" onclick="hideModal('scheduleModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Meeting Type</label>
+                    <select class="form-select">
+                        <option>Goal Review Meeting</option>
+                        <option>Portfolio Review</option>
+                        <option>Rebalancing Discussion</option>
+                        <option>General Consultation</option>
+                    </select>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Time</label>
+                        <input type="time" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Meeting Notes</label>
+                    <textarea class="form-input" rows="4" placeholder="Add agenda, topics to discuss..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModal('scheduleModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="scheduleMeeting()">Schedule Meeting</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- REBALANCE MODAL -->
+    <div id="rebalanceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">⚖️ Rebalance Goals</div>
+                <button class="modal-close" onclick="hideModal('rebalanceModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="padding: 16px; background: #fef3c7; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #92400e;">
+                    <strong>⚠️ Europe Trip Goal:</strong> High equity exposure for short timeline. Consider moving 50% to debt funds.
+                </div>
+                
+                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Current Allocation</h3>
+                <div style="padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                        <span>Parag Parikh Flexi Cap (Equity)</span>
+                        <span style="font-weight: 600;">100%</span>
+                    </div>
+                </div>
+                
+                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Recommended Allocation</h3>
+                <div style="padding: 12px; background: #d1fae5; border-radius: 8px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #a7f3d0;">
+                        <span>Parag Parikh Flexi Cap (Equity)</span>
+                        <span style="font-weight: 600;">50%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                        <span>HDFC Short Term Debt (Debt)</span>
+                        <span style="font-weight: 600;">50%</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Rebalancing Notes</label>
+                    <textarea class="form-input" rows="3" placeholder="Add notes about rebalancing decision..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModal('rebalanceModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="applyRebalance()">Apply Rebalancing</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Tab Switching
+        function switchTab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            
+            // Show selected tab
+            if (tab === 'goals') {
+                document.getElementById('goalsTab').classList.add('active');
+                document.querySelectorAll('.nav-tab')[0].classList.add('active');
+            } else if (tab === 'portfolio') {
+                document.getElementById('portfolioTab').classList.add('active');
+                document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            } else if (tab === 'schemes') {
+                document.getElementById('schemesTab').classList.add('active');
+                document.querySelectorAll('.nav-tab')[2].classList.add('active');
+            }
+        }
+        
+        // Filter Goals
+        function filterGoals(filter) {
+            const goals = document.querySelectorAll('.goal-card');
+            const filterBtns = document.querySelectorAll('#goalsTab .filter-btn');
+            
+            // Update active filter button
+            filterBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            goals.forEach(goal => {
+                if (filter === 'all') {
+                    goal.style.display = 'block';
+                } else if (filter === 'bookmarked') {
+                    const isBookmarked = goal.querySelector('.icon-btn.bookmarked');
+                    goal.style.display = isBookmarked ? 'block' : 'none';
+                } else {
+                    const status = goal.dataset.status;
+                    goal.style.display = status === filter ? 'block' : 'none';
+                }
+            });
+        }
+        
+        // Toggle Bookmark
+        function toggleBookmark(btn) {
+            btn.classList.toggle('bookmarked');
+        }
+        
+        // Switch Snapshot
+        function switchSnapshot(type) {
+            // Hide all snapshots
+            document.getElementById('unitsSnapshot').style.display = 'none';
+            document.getElementById('navSnapshot').style.display = 'none';
+            document.getElementById('marketSnapshot').style.display = 'none';
+            
+            // Update tab buttons
+            document.querySelectorAll('.snapshot-tab').forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected snapshot
+            if (type === 'units') {
+                document.getElementById('unitsSnapshot').style.display = 'block';
+                document.querySelectorAll('.snapshot-tab')[0].classList.add('active');
+            } else if (type === 'nav') {
+                document.getElementById('navSnapshot').style.display = 'block';
+                document.querySelectorAll('.snapshot-tab')[1].classList.add('active');
+            } else if (type === 'market') {
+                document.getElementById('marketSnapshot').style.display = 'block';
+                document.querySelectorAll('.snapshot-tab')[2].classList.add('active');
+            }
+        }
+        
+        // Filter Schemes
+        function filterSchemes(category) {
+            const rows = document.querySelectorAll('#schemesTab tbody tr');
+            const filterBtns = document.querySelectorAll('#schemesTab .filter-btn');
+            
+            // Update active filter button
+            filterBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            rows.forEach(row => {
+                if (category === 'all') {
+                    row.style.display = '';
+                } else {
+                    const rowCategory = row.dataset.category;
+                    row.style.display = rowCategory === category ? '' : 'none';
+                }
+            });
+        }
+        
+        // Modal Functions
+        function showModal(modalId, element) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        // Close modal on background click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    hideModal(modal.id);
+                }
+            });
+        });
+        
+        // Action Functions
+        function createGoal() {
+            alert('Creating new goal... In production, this would:\n\n1. Validate inputs\n2. Check scheme availability\n3. Create goal record\n4. Set up SIP tracking\n5. Send confirmation to customer');
+            hideModal('createGoalModal');
+        }
+        
+        function onboardGoal() {
+            alert('Onboarding existing goal... In production, this would:\n\n1. Import historical data\n2. Link to existing schemes\n3. Calculate current progress\n4. Set up tracking');
+            hideModal('onboardGoalModal');
+        }
+        
+        function scheduleMeeting() {
+            alert('Meeting scheduled! In production, this would:\n\n1. Add to calendar\n2. Send confirmation email\n3. Set up reminders\n4. Prepare meeting agenda');
+            hideModal('scheduleModal');
+        }
+        
+        function applyRebalance() {
+            alert('Applying rebalancing... In production, this would:\n\n1. Create switch transactions\n2. Update goal allocations\n3. Notify customer\n4. Track rebalancing history');
+            hideModal('rebalanceModal');
+        }
+        
+        function viewSchemeDetail(schemeName) {
+            alert(`Viewing details for ${schemeName}\n\nIn production, this would show:\n\n1. Complete transaction history\n2. Performance charts\n3. Goal allocations\n4. Comparison with benchmark\n5. Risk metrics`);
+        }
+        
+        function exportData(type) {
+            alert(`Exporting ${type} data... In production, this would generate a downloadable Excel/CSV file.`);
+        }
+        
+        // Month pill interaction
+        document.querySelectorAll('.month-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                document.querySelectorAll('.month-pill').forEach(p => p.classList.remove('active'));
+                this.classList.add('active');
+                // In production, this would load data for the selected month
+            });
+        });
+    </script>
+</body>
+</html>

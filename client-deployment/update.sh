@@ -187,7 +187,6 @@ if [ "$APPLY_MIGRATIONS_LOWER" = "yes" ] || [ "$APPLY_MIGRATIONS_LOWER" = "y" ];
     MIGRATION_FILES=(
         "database/03_indexes_triggers.sql"
         "database/04_functions_views_policies.sql"
-        "database/06_fix_meetings_table.sql"
     )
 
     for file in "${MIGRATION_FILES[@]}"; do

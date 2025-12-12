@@ -14,7 +14,6 @@ services:
       POSTGRES_SHARED_BUFFERS: ${DB_SHARED_BUFFERS:-256MB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Database initialization handled by deploy.sh - no auto-init
     ports:
       - "${DB_PORT:-5432}:5432"
     networks:
@@ -35,12 +34,8 @@ services:
   # Backend API (Node.js/Express)
   # ============================================================================
   backend:
-    # Use pre-built image from Docker Hub or build locally
     image: ${DOCKER_REGISTRY:-vikuna}/kewalinvest-backend:${IMAGE_TAG:-latest}
     container_name: kewalinvest_backend
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
     environment:
       NODE_ENV: production
       PORT: ${BACKEND_PORT:-8080}
@@ -93,7 +88,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # Resource limits (adjust based on customer hardware)
     deploy:
       resources:
         limits:
@@ -104,19 +98,13 @@ services:
           cpus: ${BACKEND_CPU_RESERVATION:-0.5}
 
   # ============================================================================
-  # Frontend (React Production Build with Serve)
+  # Frontend (React Production Build with Nginx)
   # ============================================================================
   frontend:
-    # Use pre-built image from Docker Hub or build locally
     image: ${DOCKER_REGISTRY:-vikuna}/kewalinvest-frontend:${IMAGE_TAG:-latest}
     container_name: kewalinvest_frontend
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    environment:
-      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3000}:80"
     networks:
       - kewalinvest_network
     depends_on:
@@ -124,25 +112,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 30s
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Resource limits
     deploy:
       resources:
         limits:
-          memory: ${FRONTEND_MEMORY_LIMIT:-512M}
-          cpus: ${FRONTEND_CPU_LIMIT:-1}
+          memory: ${FRONTEND_MEMORY_LIMIT:-128M}
+          cpus: ${FRONTEND_CPU_LIMIT:-0.5}
         reservations:
-          memory: ${FRONTEND_MEMORY_RESERVATION:-128M}
-          cpus: ${FRONTEND_CPU_RESERVATION:-0.25}
+          memory: ${FRONTEND_MEMORY_RESERVATION:-32M}
+          cpus: ${FRONTEND_CPU_RESERVATION:-0.1}
 
   # ============================================================================
   # pgAdmin (Database Management UI)
@@ -186,12 +173,12 @@ networks:
     driver: bridge
 
 # ============================================================================
-# Volumes (Persistent Data)
+# Volumes (Persistent Data) - Explicit names to avoid conflicts
 # ============================================================================
-# Using Docker-managed named volumes for automatic handling
-# Data is stored in Docker's volume directory
-# To backup: docker run --rm -v kewalinvest_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz /data
 volumes:
   postgres_data:
+    name: kewalinvest_prod_postgres_data
   userfiles_data:
+    name: kewalinvest_prod_userfiles_data
   pgadmin_data:
+    name: kewalinvest_prod_pgadmin_data

@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fund Manager Dashboard - KewalInvest</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #1a1a1a;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 32px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .fm-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            font-weight: 700;
+        }
+        .header-title h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .header-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .search-box {
+            position: relative;
+        }
+        .search-input {
+            width: 320px;
+            padding: 10px 16px 10px 42px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: #9ca3af;
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-primary { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { 
+            background: white; 
+            border: 1px solid #e5e7eb; 
+            color: #1a1a1a; 
+        }
+        .btn-secondary:hover { background: #f9fafb; }
+        
+        /* Container */
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+        
+        /* Hero Stats */
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .stat-card.highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .stat-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .stat-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .stat-card.highlight .stat-label { color: rgba(255,255,255,0.9); }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .stat-desc {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .stat-card.highlight .stat-desc { color: rgba(255,255,255,0.8); }
+        .stat-trend {
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+        .trend-up { color: #10b981; }
+        .trend-down { color: #ef4444; }
+        
+        /* Priority Actions Grid */
+        .priority-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        
+        /* Section Styles */
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-badge {
+            background: #ef4444;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .section-badge.warning { background: #f59e0b; }
+        .section-badge.success { background: #10b981; }
+        .section-badge.info { background: #3b82f6; }
+        
+        /* Action Items */
+        .action-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .action-item {
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            border-left: 4px solid transparent;
+        }
+        .action-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transform: translateX(4px);
+        }
+        .action-item.critical {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+        .action-item.warning {
+            background: #fef3c7;
+            border-left-color: #f59e0b;
+        }
+        .action-item.info {
+            background: #dbeafe;
+            border-left-color: #3b82f6;
+        }
+        .action-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .action-content {
+            flex: 1;
+        }
+        .action-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .action-desc {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .action-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .mini-btn {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .mini-btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .mini-btn-primary:hover { opacity: 0.9; }
+        .mini-btn-secondary {
+            background: white;
+            border: 1px solid #e5e7eb;
+            color: #1a1a1a;
+        }
+        .mini-btn-secondary:hover { background: #f9fafb; }
+        
+        /* Today's Schedule */
+        .schedule-item {
+            padding: 14px;
+            background: #fafbfc;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #667eea;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .schedule-item:hover {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .schedule-time {
+            font-size: 12px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+        .schedule-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .schedule-client {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        /* SIP Tracker */
+        .sip-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .sip-stat {
+            background: #fafbfc;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .sip-stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .sip-stat-value.success { color: #10b981; }
+        .sip-stat-value.danger { color: #ef4444; }
+        .sip-stat-value.pending { color: #f59e0b; }
+        .sip-stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        
+        .sip-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .sip-item {
+            padding: 12px;
+            background: #fafbfc;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .sip-item.failed {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+        }
+        .sip-item.completed {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+        }
+        .sip-client {
+            font-weight: 600;
+        }
+        .sip-amount {
+            font-weight: 700;
+            color: #667eea;
+        }
+        .sip-status {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .sip-status.failed { background: #ef4444; color: white; }
+        .sip-status.completed { background: #10b981; color: white; }
+        .sip-status.pending { background: #f59e0b; color: white; }
+        
+        /* Client Table */
+        .client-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .client-table th {
+            background: #fafbfc;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+        }
+        .client-table td {
+            padding: 14px 12px;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .client-table tr:hover {
+            background: #fafbfc;
+            cursor: pointer;
+        }
+        .client-name {
+            font-weight: 700;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .client-avatar-mini {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: 700;
+        }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .status-badge.on-track { background: #d1fae5; color: #065f46; }
+        .status-badge.needs-attention { background: #fee2e2; color: #991b1b; }
+        .status-badge.review-due { background: #fef3c7; color: #92400e; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .tab {
+            padding: 10px 20px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            background: #f9fafb;
+        }
+        .tab.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Performance Chart */
+        .chart-container {
+            background: linear-gradient(to top, #f0f9ff 0%, white 100%);
+            border: 2px dashed #e5e7eb;
+            border-radius: 8px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            flex-direction: column;
+            margin-top: 16px;
+        }
+        
+        /* Quick Filters */
+        .quick-filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .filter-chip {
+            padding: 6px 14px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-chip:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        .filter-chip.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .hero-stats {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .priority-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .sip-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="fm-avatar">FM</div>
+                <div class="header-title">
+                    <h1>Fund Manager Dashboard</h1>
+                    <div class="header-subtitle">Welcome back, Amit Sharma • Friday, Nov 07, 2025</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" placeholder="Search clients, goals, schemes..." onkeyup="searchClients(this.value)">
+                </div>
+                <button class="btn btn-secondary" onclick="alert('Opening reports...')">📊 Reports</button>
+                <button class="btn btn-primary" onclick="alert('Adding new client...')">➕ Add Client</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Container -->
+    <div class="container">
+        <!-- Hero Stats -->
+        <div class="hero-stats">
+            <div class="stat-card highlight">
+                <div class="stat-icon">💼</div>
+                <div class="stat-label">Total AUM</div>
+                <div class="stat-value">₹245Cr</div>
+                <div class="stat-desc">Across all portfolios</div>
+                <div class="stat-trend trend-up">↗ +12.3% YTD</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-label">Active Clients</div>
+                <div class="stat-value">287</div>
+                <div class="stat-desc">142 families</div>
+                <div class="stat-trend trend-up">↗ +8 this month</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-label">Active Goals</div>
+                <div class="stat-value">1,247</div>
+                <div class="stat-desc">892 on track</div>
+                <div class="stat-trend" style="color: #f59e0b;">⚠️ 45 need attention</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-label">Monthly SIP</div>
+                <div class="stat-value">₹2.8Cr</div>
+                <div class="stat-desc">This month's collection</div>
+                <div class="stat-trend trend-up">↗ +15% vs last month</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-label">Avg. Returns</div>
+                <div class="stat-value">+16.8%</div>
+                <div class="stat-desc">YTD performance</div>
+                <div class="stat-trend trend-up">↗ vs Nifty +12.3%</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">📞</div>
+                <div class="stat-label">Today's Tasks</div>
+                <div class="stat-value">23</div>
+                <div class="stat-desc">8 meetings • 15 actions</div>
+                <div class="stat-trend" style="color: #ef4444;">🔴 5 urgent</div>
+            </div>
+        </div>
+        
+        <!-- Priority Actions Grid -->
+        <div class="priority-grid">
+            <!-- Urgent Actions -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        🚨 Urgent Actions
+                        <span class="section-badge">12 Items</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="alert('Viewing all urgent actions...')">View All</button>
+                </div>
+                
+                <div class="action-list">
+                    <div class="action-item critical" onclick="alert('Opening Rajesh Kumar profile...')">
+                        <div class="action-icon">💸</div>
+                        <div class="action-content">
+                            <div class="action-title">5 SIP Payments Failed Today</div>
+                            <div class="action-desc">HDFC Mid-Cap, ICICI Bluechip, Axis Small Cap bounced for multiple clients</div>
+                            <div class="action-meta">
+                                <span>Total: ₹2.45L</span>
+                                <span>•</span>
+                                <span>5 customers affected</span>
+                                <span>•</span>
+                                <span>Action required before 5 PM</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Viewing failed SIPs...')">View Details</button>
+                                <button class="mini-btn mini-btn-secondary" onclick="event.stopPropagation(); alert('Calling customers...')">Call Customers</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item critical" onclick="alert('Opening portfolio review...')">
+                        <div class="action-icon">📋</div>
+                        <div class="action-content">
+                            <div class="action-title">3 Quarterly Reviews Overdue</div>
+                            <div class="action-desc">Priya Sharma (45 days), Amit Patel (38 days), Sanjay Kumar (52 days)</div>
+                            <div class="action-meta">
+                                <span>Combined AUM: ₹8.4Cr</span>
+                                <span>•</span>
+                                <span>Schedule urgently</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Scheduling reviews...')">Schedule Now</button>
+                                <button class="mini-btn mini-btn-secondary" onclick="event.stopPropagation(); alert('Preparing reports...')">Prepare Reports</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item warning" onclick="alert('Opening rebalancing dashboard...')">
+                        <div class="action-icon">⚖️</div>
+                        <div class="action-content">
+                            <div class="action-title">18 Goals Need Rebalancing</div>
+                            <div class="action-desc">High equity exposure approaching target dates, recommended shift to debt</div>
+                            <div class="action-meta">
+                                <span>Total value: ₹12.8Cr</span>
+                                <span>•</span>
+                                <span>6-12 months to target</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Starting rebalancing...')">Start Rebalancing</button>
+                                <button class="mini-btn mini-btn-secondary" onclick="event.stopPropagation(); alert('Viewing goals...')">View Goals</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item warning" onclick="alert('Opening birthday reminders...')">
+                        <div class="action-icon">🎂</div>
+                        <div class="action-content">
+                            <div class="action-title">4 Client Birthdays This Week</div>
+                            <div class="action-desc">Rajesh Kumar (Nov 15), Anita Singh (Nov 16), Vikram Mehta (Nov 18), Neha Gupta (Nov 20)</div>
+                            <div class="action-meta">
+                                <span>Send personalized wishes</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Sending wishes...')">Send Wishes</button>
+                                <button class="mini-btn mini-btn-secondary" onclick="event.stopPropagation(); alert('Viewing calendar...')">View Calendar</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item info" onclick="alert('Opening milestone dashboard...')">
+                        <div class="action-icon">🎯</div>
+                        <div class="action-content">
+                            <div class="action-title">7 Goals Reached Milestones</div>
+                            <div class="action-desc">75%+ completion - schedule review meetings to discuss progress</div>
+                            <div class="action-meta">
+                                <span>Total value: ₹5.2Cr</span>
+                                <span>•</span>
+                                <span>Positive news to share</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Scheduling celebrations...')">Schedule Reviews</button>
+                                <button class="mini-btn mini-btn-secondary" onclick="event.stopPropagation(); alert('Viewing progress...')">View Progress</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Today's Schedule -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        📅 Today's Schedule
+                        <span class="section-badge info">8 Items</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="alert('Opening calendar...')">Full Calendar</button>
+                </div>
+                
+                <div class="schedule-item" onclick="alert('Joining meeting...')">
+                    <div class="schedule-time">09:00 AM - 10:00 AM</div>
+                    <div class="schedule-title">Portfolio Review - Priya Sharma</div>
+                    <div class="schedule-client">AUM: ₹3.2Cr • Q3 Performance Discussion</div>
+                </div>
+                
+                <div class="schedule-item" onclick="alert('Joining meeting...')">
+                    <div class="schedule-time">11:00 AM - 11:30 AM</div>
+                    <div class="schedule-title">Goal Planning - Amit & Neha Verma</div>
+                    <div class="schedule-client">AUM: ₹1.8Cr • New Education Goal Setup</div>
+                </div>
+                
+                <div class="schedule-item" onclick="alert('Joining meeting...')">
+                    <div class="schedule-time">02:00 PM - 02:30 PM</div>
+                    <div class="schedule-title">Rebalancing Discussion - Rajesh Kumar</div>
+                    <div class="schedule-client">AUM: ₹4.5Cr • Europe Trip Goal Adjustment</div>
+                </div>
+                
+                <div class="schedule-item" onclick="alert('Joining meeting...')">
+                    <div class="schedule-time">03:30 PM - 04:30 PM</div>
+                    <div class="schedule-title">New Client Onboarding - Vikram Family</div>
+                    <div class="schedule-client">Prospective AUM: ₹2.5Cr • Initial Consultation</div>
+                </div>
+                
+                <div class="schedule-item" onclick="alert('Joining meeting...')">
+                    <div class="schedule-time">05:00 PM - 05:30 PM</div>
+                    <div class="schedule-title">Tax Planning - Sanjay Industries</div>
+                    <div class="schedule-client">Corporate Client • Year-end optimization</div>
+                </div>
+                
+                <div style="text-align: center; padding: 16px; background: #f9fafb; border-radius: 8px; margin-top: 12px; font-size: 13px; color: #6b7280;">
+                    <strong>3 more meetings scheduled</strong> • <a href="#" style="color: #667eea; text-decoration: none;">View all →</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SIP Tracker & Performance -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+            <!-- SIP Tracker -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        💰 SIP Tracker
+                        <span class="section-badge warning">5 Failed</span>
+                    </div>
+                    <div class="tabs">
+                        <div class="tab active">Today</div>
+                        <div class="tab">This Week</div>
+                        <div class="tab">This Month</div>
+                    </div>
+                </div>
+                
+                <div class="sip-grid">
+                    <div class="sip-stat">
+                        <div class="sip-stat-value success">47</div>
+                        <div class="sip-stat-label">Completed</div>
+                    </div>
+                    <div class="sip-stat">
+                        <div class="sip-stat-value pending">12</div>
+                        <div class="sip-stat-label">Pending</div>
+                    </div>
+                    <div class="sip-stat">
+                        <div class="sip-stat-value danger">5</div>
+                        <div class="sip-stat-label">Failed</div>
+                    </div>
+                </div>
+                
+                <div class="sip-list">
+                    <div class="sip-item failed">
+                        <div>
+                            <div class="sip-client">Rajesh Kumar</div>
+                            <div style="font-size: 12px; color: #6b7280;">HDFC Mid-Cap Opportunities</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="sip-amount">₹10,000</div>
+                            <span class="sip-status failed">FAILED</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sip-item failed">
+                        <div>
+                            <div class="sip-client">Priya Sharma</div>
+                            <div style="font-size: 12px; color: #6b7280;">ICICI Bluechip Fund</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="sip-amount">₹25,000</div>
+                            <span class="sip-status failed">FAILED</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sip-item completed">
+                        <div>
+                            <div class="sip-client">Amit Verma</div>
+                            <div style="font-size: 12px; color: #6b7280;">Axis Small Cap Fund</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="sip-amount">₹15,000</div>
+                            <span class="sip-status completed">✓ DONE</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sip-item completed">
+                        <div>
+                            <div class="sip-client">Neha Gupta</div>
+                            <div style="font-size: 12px; color: #6b7280;">Parag Parikh Flexi Cap</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="sip-amount">₹20,000</div>
+                            <span class="sip-status completed">✓ DONE</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sip-item">
+                        <div>
+                            <div class="sip-client">Vikram Mehta</div>
+                            <div style="font-size: 12px; color: #6b7280;">Mirae Emerging Bluechip</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="sip-amount">₹30,000</div>
+                            <span class="sip-status pending">PENDING</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Overall Performance -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">📊 Overall Performance</div>
+                    <div class="tabs">
+                        <div class="tab">1M</div>
+                        <div class="tab">3M</div>
+                        <div class="tab active">6M</div>
+                        <div class="tab">1Y</div>
+                        <div class="tab">3Y</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    📈 Portfolio Performance vs Nifty 50<br>
+                    <span style="font-size: 12px;">Your Portfolios: +16.8% | Nifty 50: +12.3% | Outperformance: +4.5%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Client List -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">👥 Client Portfolio</div>
+                <div style="display: flex; gap: 12px;">
+                    <select class="btn btn-secondary" style="padding: 8px 16px; cursor: pointer;">
+                        <option>Sort by: AUM (High to Low)</option>
+                        <option>Sort by: Name (A-Z)</option>
+                        <option>Sort by: Last Contact</option>
+                        <option>Sort by: Goals Count</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="alert('Exporting client list...')">📊 Export</button>
+                </div>
+            </div>
+            
+            <div class="quick-filters">
+                <div class="filter-chip active">All Clients (287)</div>
+                <div class="filter-chip">On Track (242)</div>
+                <div class="filter-chip">Needs Attention (28)</div>
+                <div class="filter-chip">Review Due (17)</div>
+                <div class="filter-chip">High AUM (₹1Cr+)</div>
+                <div class="filter-chip">New This Month (8)</div>
+            </div>
+            
+            <div style="max-height: 600px; overflow-y: auto;">
+                <table class="client-table">
+                    <thead>
+                        <tr>
+                            <th>Client Name</th>
+                            <th style="text-align: right;">AUM</th>
+                            <th style="text-align: center;">Goals</th>
+                            <th style="text-align: center;">Status</th>
+                            <th style="text-align: right;">YTD Returns</th>
+                            <th>Last Contact</th>
+                            <th style="text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientTableBody">
+                        <tr onclick="window.location.href='client-portfolio-dashboard.html'">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">RK</div>
+                                    <div>
+                                        Rajesh Kumar
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2024-1847 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹4.57Cr</td>
+                            <td style="text-align: center;">7 <span style="color: #10b981;">✓</span></td>
+                            <td style="text-align: center;"><span class="status-badge needs-attention">Needs Attention</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+17.7%</td>
+                            <td>2 days ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Priya Sharma profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">PS</div>
+                                    <div>
+                                        Priya Sharma
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2024-1523 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹3.24Cr</td>
+                            <td style="text-align: center;">5 <span style="color: #10b981;">✓</span></td>
+                            <td style="text-align: center;"><span class="status-badge on-track">On Track</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+15.2%</td>
+                            <td>Today</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Verma Family profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">VF</div>
+                                    <div>
+                                        Verma Family
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2024-1089 • Family (3 members)</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹2.85Cr</td>
+                            <td style="text-align: center;">9 <span style="color: #10b981;">✓</span></td>
+                            <td style="text-align: center;"><span class="status-badge on-track">On Track</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+18.4%</td>
+                            <td>1 week ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Amit Patel profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">AP</div>
+                                    <div>
+                                        Amit Patel
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2023-0892 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹2.12Cr</td>
+                            <td style="text-align: center;">4 <span style="color: #f59e0b;">⚠️</span></td>
+                            <td style="text-align: center;"><span class="status-badge review-due">Review Due</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+14.8%</td>
+                            <td>38 days ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Neha Gupta profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">NG</div>
+                                    <div>
+                                        Neha Gupta
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2024-2156 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹1.89Cr</td>
+                            <td style="text-align: center;">6 <span style="color: #10b981;">✓</span></td>
+                            <td style="text-align: center;"><span class="status-badge on-track">On Track</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+19.2%</td>
+                            <td>3 days ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Vikram Mehta profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">VM</div>
+                                    <div>
+                                        Vikram Mehta
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2024-1765 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹1.67Cr</td>
+                            <td style="text-align: center;">3 <span style="color: #10b981;">✓</span></td>
+                            <td style="text-align: center;"><span class="status-badge on-track">On Track</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+16.5%</td>
+                            <td>5 days ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                        
+                        <tr onclick="alert('Opening Sanjay Kumar profile...')">
+                            <td>
+                                <div class="client-name">
+                                    <div class="client-avatar-mini">SK</div>
+                                    <div>
+                                        Sanjay Kumar
+                                        <div style="font-size: 11px; color: #6b7280; font-weight: normal;">KI-2023-0234 • Individual</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 700;">₹1.43Cr</td>
+                            <td style="text-align: center;">8 <span style="color: #ef4444;">⚠️</span></td>
+                            <td style="text-align: center;"><span class="status-badge needs-attention">Needs Attention</span></td>
+                            <td style="text-align: right; color: #10b981; font-weight: 700;">+13.2%</td>
+                            <td>52 days ago</td>
+                            <td style="text-align: center;">
+                                <button class="mini-btn mini-btn-primary" onclick="event.stopPropagation(); alert('Calling...')">📞</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="text-align: center; padding: 20px; border-top: 1px solid #e5e7eb; margin-top: 16px;">
+                    <button class="btn btn-secondary">Load More Clients (280 remaining)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Search functionality
+        function searchClients(query) {
+            const rows = document.querySelectorAll('#clientTableBody tr');
+            const lowerQuery = query.toLowerCase();
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(lowerQuery) ? '' : 'none';
+            });
+        }
+        
+        // Filter chips
+        document.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                
+                // In production, this would filter the table
+                console.log('Filter:', this.textContent);
+            });
+        });
+        
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const parent = this.closest('.tabs');
+                parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // In production, this would load different data
+                console.log('Tab:', this.textContent);
+            });
+        });
+    </script>
+</body>
+</html>
