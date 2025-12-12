@@ -1735,7 +1735,7 @@ async processSchemeImport(
           s.session_id,
           s.row_number,
           s.mapped_data,
-          s.status,
+          s.processing_status,
           sess.import_type,
           sess.customer_lookup_method
         FROM t_import_staging_data s
