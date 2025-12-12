@@ -1,73 +1,206 @@
 // frontend/src/pages/cruiseControl/MarketTab.tsx
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
-import IndexCard from '../../components/market/IndexCard';
-import type { MarketIndex } from '../../types/market.types';
 
+interface IndexStatus {
+  id: number;
+  index_name: string;
+  index_code: string;
+  category: string;
+  provider_enabled: boolean;
+  provider_symbol: string | null;
+  download_status: 'success' | 'failed' | 'pending' | 'not_configured';
+  last_download_at: string | null;
+  last_download_error: string | null;
+  earliest_date: string | null;
+  latest_date: string | null;
+  total_records: number;
+  metrics_status: 'calculated' | 'pending' | 'partial';
+  metrics_calculated_count: number;
+  metrics_pending_count: number;
+  last_metrics_calculated_at: string | null;
+  has_gaps: boolean;
+  gap_count: number;
+  gaps: Array<{ start_date: string; end_date: string; missing_days: number }>;
+}
+
+interface Statistics {
+  total_indices: number;
+  download_success_today: number;
+  download_failed_today: number;
+  download_pending: number;
+  metrics_calculated: number;
+  metrics_pending: number;
+  indices_with_gaps: number;
+}
+
+interface DetailedStatusResponse {
+  statistics: Statistics;
+  indices: IndexStatus[];
+}
 
 interface StatCardProps {
   title: string;
   count: number;
-  color?: 'blue' | 'yellow' | 'red' | 'green';
-  onClick?: () => void;
+  color: 'blue' | 'green' | 'red' | 'yellow' | 'purple';
+  icon: React.ReactNode;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, count, color = 'blue', onClick }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, count, color, icon }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
   const colorMap = {
     blue: colors.brand.primary,
-    yellow: colors.semantic.warning,
+    green: colors.semantic.success,
     red: colors.semantic.error,
-    green: colors.semantic.success
+    yellow: colors.semantic.warning,
+    purple: '#9333EA'
   };
 
   const selectedColor = colorMap[color];
 
   return (
     <div
-      onClick={onClick}
       style={{
-        padding: '20px',
+        padding: '16px',
         backgroundColor: colors.utility.primaryBackground,
         border: `2px solid ${selectedColor}20`,
         borderRadius: '10px',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.2s'
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) {
-          e.currentTarget.style.borderColor = `${selectedColor}60`;
-          e.currentTarget.style.boxShadow = `0 4px 12px ${selectedColor}20`;
-          e.currentTarget.style.transform = 'translateY(-2px)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = `${selectedColor}20`;
-        e.currentTarget.style.boxShadow = 'none';
-        e.currentTarget.style.transform = 'translateY(0)';
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
       }}
     >
-      <div style={{
-        fontSize: '32px',
-        fontWeight: '700',
-        color: selectedColor,
-        marginBottom: '8px'
-      }}>
-        {count}
+      <div
+        style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: '8px',
+          backgroundColor: `${selectedColor}15`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: selectedColor
+        }}
+      >
+        {icon}
       </div>
-      <div style={{
-        fontSize: '14px',
-        color: colors.utility.secondaryText,
-        fontWeight: '500'
-      }}>
-        {title}
+      <div>
+        <div style={{
+          fontSize: '24px',
+          fontWeight: '700',
+          color: selectedColor
+        }}>
+          {count}
+        </div>
+        <div style={{
+          fontSize: '12px',
+          color: colors.utility.secondaryText,
+          fontWeight: '500'
+        }}>
+          {title}
+        </div>
       </div>
+    </div>
+  );
+};
+
+const StatusBadge: React.FC<{
+  status: string;
+  type: 'download' | 'metrics' | 'gaps';
+  gapCount?: number;
+}> = ({ status, type, gapCount }) => {
+  const { theme, isDarkMode } = useTheme();
+  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  let bgColor = '';
+  let textColor = '';
+  let label = '';
+  let icon: React.ReactNode = null;
+
+  if (type === 'download') {
+    switch (status) {
+      case 'success':
+        bgColor = `${colors.semantic.success}15`;
+        textColor = colors.semantic.success;
+        label = 'Success';
+        icon = <CheckCircle size={12} />;
+        break;
+      case 'failed':
+        bgColor = `${colors.semantic.error}15`;
+        textColor = colors.semantic.error;
+        label = 'Failed';
+        icon = <XCircle size={12} />;
+        break;
+      case 'pending':
+        bgColor = `${colors.semantic.warning}15`;
+        textColor = colors.semantic.warning;
+        label = 'Pending';
+        icon = <Clock size={12} />;
+        break;
+      case 'not_configured':
+        bgColor = `${colors.utility.secondaryText}15`;
+        textColor = colors.utility.secondaryText;
+        label = 'Not Configured';
+        icon = <AlertTriangle size={12} />;
+        break;
+    }
+  } else if (type === 'metrics') {
+    switch (status) {
+      case 'calculated':
+        bgColor = `${colors.semantic.success}15`;
+        textColor = colors.semantic.success;
+        label = 'Calculated';
+        icon = <CheckCircle size={12} />;
+        break;
+      case 'partial':
+        bgColor = `${colors.semantic.warning}15`;
+        textColor = colors.semantic.warning;
+        label = 'Partial';
+        icon = <Clock size={12} />;
+        break;
+      case 'pending':
+        bgColor = `${colors.utility.secondaryText}15`;
+        textColor = colors.utility.secondaryText;
+        label = 'Pending';
+        icon = <Clock size={12} />;
+        break;
+    }
+  } else if (type === 'gaps') {
+    if (gapCount && gapCount > 0) {
+      bgColor = `${colors.semantic.error}15`;
+      textColor = colors.semantic.error;
+      label = `${gapCount} Gap${gapCount > 1 ? 's' : ''}`;
+      icon = <AlertTriangle size={12} />;
+    } else {
+      bgColor = `${colors.semantic.success}15`;
+      textColor = colors.semantic.success;
+      label = 'No Gaps';
+      icon = <CheckCircle size={12} />;
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        backgroundColor: bgColor,
+        color: textColor,
+        fontSize: '11px',
+        fontWeight: '600'
+      }}
+    >
+      {icon}
+      {label}
     </div>
   );
 };
@@ -76,101 +209,89 @@ export const MarketTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'no-data' | null>(null);
-  const [stats, setStats] = useState({
-    totalIndices: 0,
-    downloadCompleted: 0,
-    pendingBeyondOneDay: 0,
-    failedDownloads: 0,
-    metricsPending: 0
-  });
-  const [indices, setIndices] = useState<MarketIndex[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<DetailedStatusResponse | null>(null);
+  const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
+  const [expandedGaps, setExpandedGaps] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
-    fetchMarketStats();
-    fetchIndices();
+    fetchDetailedStatus();
   }, []);
 
-  const fetchMarketStats = async () => {
+  const fetchDetailedStatus = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.MARKET_STATISTICS) as any;
+      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.MARKET_DETAILED_STATUS) as any;
 
       if (response.success && response.data) {
-        setStats({
-          totalIndices: response.data.total_active_indices || 0,
-          downloadCompleted: response.data.download_completed_today || 0,
-          pendingBeyondOneDay: response.data.pending_over_one_day || 0,
-          failedDownloads: response.data.failed_downloads || 0,
-          metricsPending: response.data.pending_over_one_day || 0
-        });
+        setData(response.data);
       } else {
-        setError(response.error || 'Failed to load market statistics');
+        setError(response.error || 'Failed to load market status');
       }
     } catch (err: any) {
-      console.error('Error fetching market stats:', err);
-      setError('Failed to load market statistics');
+      console.error('Error fetching market status:', err);
+      setError('Failed to load market status');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchIndices = async () => {
+  const handleDownloadEOD = async (indexId: number, indexName: string) => {
+    const key = `download_${indexId}`;
     try {
-      const response = await apiService.get(API_ENDPOINTS.MARKET.INDICES) as any;
+      setActionLoading(prev => ({ ...prev, [key]: true }));
 
-      if (response.success && response.data) {
-        setIndices(response.data.indices || []);
-      }
-    } catch (err: any) {
-      console.error('Error fetching market indices:', err);
-    }
-  };
-
-  const handleDownloadNow = async (indexId: number) => {
-    try {
       const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.MARKET_DOWNLOAD(indexId)) as any;
 
       if (response.success) {
-        toastService.success(response.message || 'Market download triggered successfully');
-        // Refresh stats after download
-        fetchMarketStats();
+        toastService.success(`EOD download triggered for ${indexName}`);
+        // Refresh data after action
+        await fetchDetailedStatus();
       } else {
-        toastService.error(response.error || 'Failed to trigger market download');
+        toastService.error(response.error || 'Failed to trigger download');
       }
     } catch (err: any) {
-      console.error('Error triggering market download:', err);
-      toastService.error('Failed to trigger market download');
+      console.error('Error triggering download:', err);
+      toastService.error('Failed to trigger download');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
-  // Filter indices based on selected filter
-  const getFilteredIndices = (): MarketIndex[] => {
-    if (!filter) return [];
+  const handleCalculateMetrics = async (indexId: number, indexName: string) => {
+    const key = `metrics_${indexId}`;
+    try {
+      setActionLoading(prev => ({ ...prev, [key]: true }));
 
-    switch (filter) {
-      case 'all':
-        return indices;
-      case 'pending':
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        return indices.filter(idx =>
-          idx.latest_date && new Date(idx.latest_date) < yesterday
-        );
-      case 'failed':
-        return indices.filter(idx => idx.last_download_status === 'failed');
-      case 'no-data':
-        return indices.filter(idx => !idx.historical_data_available);
-      default:
-        return [];
+      const response = await apiService.post(
+        API_ENDPOINTS.MARKET_ANALYSIS.CALCULATE_METRICS(indexId),
+        { recalculate: false }
+      ) as any;
+
+      if (response.success) {
+        toastService.success(`Metrics calculation triggered for ${indexName}`);
+        // Refresh data after action
+        await fetchDetailedStatus();
+      } else {
+        toastService.error(response.error || 'Failed to calculate metrics');
+      }
+    } catch (err: any) {
+      console.error('Error calculating metrics:', err);
+      toastService.error('Failed to calculate metrics');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
-  const filteredIndices = getFilteredIndices();
+  const toggleGaps = (indexId: number) => {
+    setExpandedGaps(prev => ({
+      ...prev,
+      [indexId]: !prev[indexId]
+    }));
+  };
 
   if (loading) {
     return (
@@ -182,7 +303,7 @@ export const MarketTab: React.FC = () => {
         color: colors.utility.secondaryText
       }}>
         <Loader2 size={24} className="animate-spin" style={{ marginRight: '8px' }} />
-        Loading market statistics...
+        Loading market status...
       </div>
     );
   }
@@ -198,7 +319,7 @@ export const MarketTab: React.FC = () => {
       }}>
         <strong>Error:</strong> {error}
         <button
-          onClick={fetchMarketStats}
+          onClick={fetchDetailedStatus}
           style={{
             marginLeft: '12px',
             padding: '6px 12px',
@@ -215,159 +336,345 @@ export const MarketTab: React.FC = () => {
     );
   }
 
+  if (!data) {
+    return null;
+  }
+
+  const { statistics, indices } = data;
+
   return (
     <div>
+      {/* Header with Refresh Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px'
+      }}>
+        <h3 style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          color: colors.utility.primaryText,
+          margin: 0
+        }}>
+          Market Index Status
+        </h3>
+        <button
+          onClick={fetchDetailedStatus}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            backgroundColor: colors.brand.primary,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          <RefreshCw size={14} />
+          Refresh
+        </button>
+      </div>
+
       {/* Statistics Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '32px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '12px',
+        marginBottom: '24px'
       }}>
         <StatCard
           title="Total Indices"
-          count={stats.totalIndices}
+          count={statistics.total_indices}
           color="blue"
-          onClick={() => setFilter(filter === 'all' ? null : 'all')}
+          icon={<Download size={18} />}
         />
         <StatCard
-          title="Download Completed"
-          count={stats.downloadCompleted}
+          title="Download Success"
+          count={statistics.download_success_today}
           color="green"
+          icon={<CheckCircle size={18} />}
         />
         <StatCard
-          title="Pending >1 Day"
-          count={stats.pendingBeyondOneDay}
-          color="yellow"
-          onClick={() => setFilter(filter === 'pending' ? null : 'pending')}
-        />
-        <StatCard
-          title="Failed Downloads"
-          count={stats.failedDownloads}
+          title="Download Failed"
+          count={statistics.download_failed_today}
           color="red"
-          onClick={() => setFilter(filter === 'failed' ? null : 'failed')}
+          icon={<XCircle size={18} />}
+        />
+        <StatCard
+          title="Metrics Calculated"
+          count={statistics.metrics_calculated}
+          color="purple"
+          icon={<Calculator size={18} />}
         />
         <StatCard
           title="Metrics Pending"
-          count={stats.metricsPending}
+          count={statistics.metrics_pending}
           color="yellow"
+          icon={<Clock size={18} />}
+        />
+        <StatCard
+          title="Indices with Gaps"
+          count={statistics.indices_with_gaps}
+          color="red"
+          icon={<AlertTriangle size={18} />}
         />
       </div>
 
-      {/* Instructions */}
-      {!filter && (
-        <div style={{
-          padding: '32px',
-          backgroundColor: `${colors.brand.primary}10`,
-          borderRadius: '12px',
-          textAlign: 'center',
-          border: `1px dashed ${colors.brand.primary}40`
-        }}>
+      {/* Table View */}
+      <div style={{
+        backgroundColor: colors.utility.primaryBackground,
+        borderRadius: '10px',
+        border: `1px solid ${colors.utility.divider}`,
+        overflow: 'hidden'
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: colors.utility.secondaryBackground }}>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Index
+              </th>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Download Status
+              </th>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Metrics Status
+              </th>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Data Gaps
+              </th>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Data Range
+              </th>
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                borderBottom: `1px solid ${colors.utility.divider}`
+              }}>
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {indices.map((index, i) => (
+              <React.Fragment key={index.id}>
+                <tr style={{
+                  backgroundColor: i % 2 === 0 ? 'transparent' : colors.utility.secondaryBackground + '50'
+                }}>
+                  <td style={{
+                    padding: '12px 16px',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    <div style={{ fontWeight: '500', color: colors.utility.primaryText }}>
+                      {index.index_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {index.index_code} • {index.category}
+                    </div>
+                  </td>
+                  <td style={{
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    <StatusBadge status={index.download_status} type="download" />
+                    {index.last_download_at && (
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                        {new Date(index.last_download_at).toLocaleDateString()}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    <StatusBadge status={index.metrics_status} type="metrics" />
+                    <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                      {index.metrics_calculated_count}/{index.total_records}
+                    </div>
+                  </td>
+                  <td style={{
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    <div
+                      onClick={() => index.has_gaps && toggleGaps(index.id)}
+                      style={{ cursor: index.has_gaps ? 'pointer' : 'default' }}
+                    >
+                      <StatusBadge status="" type="gaps" gapCount={index.gap_count} />
+                    </div>
+                  </td>
+                  <td style={{
+                    padding: '12px 16px',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    {index.earliest_date && index.latest_date ? (
+                      <div style={{ fontSize: '12px', color: colors.utility.primaryText }}>
+                        {new Date(index.earliest_date).toLocaleDateString()} - {new Date(index.latest_date).toLocaleDateString()}
+                        <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                          {index.total_records} records
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: colors.utility.secondaryText }}>No data</span>
+                    )}
+                  </td>
+                  <td style={{
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    borderBottom: `1px solid ${colors.utility.divider}`
+                  }}>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => handleDownloadEOD(index.id, index.index_name)}
+                        disabled={actionLoading[`download_${index.id}`] || !index.provider_enabled}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: index.provider_enabled ? colors.brand.primary : colors.utility.secondaryBackground,
+                          color: index.provider_enabled ? '#FFF' : colors.utility.secondaryText,
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          cursor: index.provider_enabled ? 'pointer' : 'not-allowed',
+                          opacity: actionLoading[`download_${index.id}`] ? 0.7 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title={index.provider_enabled ? 'Download EOD' : 'Provider not configured'}
+                      >
+                        {actionLoading[`download_${index.id}`] ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Download size={12} />
+                        )}
+                        EOD
+                      </button>
+                      <button
+                        onClick={() => handleCalculateMetrics(index.id, index.index_name)}
+                        disabled={actionLoading[`metrics_${index.id}`] || index.total_records === 0}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: index.total_records > 0 ? '#9333EA' : colors.utility.secondaryBackground,
+                          color: index.total_records > 0 ? '#FFF' : colors.utility.secondaryText,
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          cursor: index.total_records > 0 ? 'pointer' : 'not-allowed',
+                          opacity: actionLoading[`metrics_${index.id}`] ? 0.7 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title={index.total_records > 0 ? 'Calculate Metrics' : 'No data available'}
+                      >
+                        {actionLoading[`metrics_${index.id}`] ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Calculator size={12} />
+                        )}
+                        Calc
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {/* Gap Details Row */}
+                {expandedGaps[index.id] && index.gaps.length > 0 && (
+                  <tr>
+                    <td colSpan={6} style={{
+                      padding: '12px 16px',
+                      backgroundColor: `${colors.semantic.error}08`,
+                      borderBottom: `1px solid ${colors.utility.divider}`
+                    }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: colors.semantic.error, marginBottom: '8px' }}>
+                        Data Gaps Detected:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {index.gaps.map((gap, gapIdx) => (
+                          <div
+                            key={gapIdx}
+                            style={{
+                              padding: '6px 10px',
+                              backgroundColor: colors.utility.primaryBackground,
+                              borderRadius: '4px',
+                              border: `1px solid ${colors.semantic.error}30`,
+                              fontSize: '11px',
+                              color: colors.utility.primaryText
+                            }}
+                          >
+                            <span style={{ fontWeight: '500' }}>
+                              {new Date(gap.start_date).toLocaleDateString()} - {new Date(gap.end_date).toLocaleDateString()}
+                            </span>
+                            <span style={{ color: colors.utility.secondaryText, marginLeft: '6px' }}>
+                              ({gap.missing_days} day{gap.missing_days > 1 ? 's' : ''})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+
+        {indices.length === 0 && (
           <div style={{
-            fontSize: '48px',
-            marginBottom: '16px'
-          }}>
-            👆
-          </div>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: '600',
-            color: colors.utility.primaryText,
-            marginBottom: '8px'
-          }}>
-            Click on any stat card to view details
-          </div>
-          <div style={{
-            fontSize: '14px',
+            padding: '48px',
+            textAlign: 'center',
             color: colors.utility.secondaryText
           }}>
-            See list of market indices and take actions like download or delete data
+            No market indices found
           </div>
-        </div>
-      )}
-
-      {/* List View */}
-      {filter && (
-        <div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              margin: 0
-            }}>
-              {filter === 'all' && 'All Market Indices'}
-              {filter === 'pending' && 'Pending >1 Day'}
-              {filter === 'failed' && 'Failed Downloads'}
-              {filter === 'no-data' && 'Indices with No Data'}
-              {' '}({filteredIndices.length})
-            </h3>
-            <button
-              onClick={() => setFilter(null)}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: colors.utility.secondaryBackground,
-                border: 'none',
-                borderRadius: '6px',
-                color: colors.utility.primaryText,
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer'
-              }}
-            >
-              ✕ Close
-            </button>
-          </div>
-
-          {filteredIndices.length === 0 ? (
-            <div style={{
-              padding: '48px',
-              textAlign: 'center',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '12px'
-            }}>
-              <div style={{
-                fontSize: '48px',
-                marginBottom: '16px'
-              }}>
-                🎉
-              </div>
-              <div style={{
-                fontSize: '16px',
-                color: colors.utility.secondaryText
-              }}>
-                No indices found in this category
-              </div>
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              {filteredIndices.map(index => (
-                <IndexCard
-                  key={index.id}
-                  index={index}
-                  onDownloadHistorical={(idx) => handleDownloadNow(idx.id)}
-                  onDownloadEOD={(idx) => handleDownloadNow(idx.id)}
-                  onDelete={(idx) => {
-                    // eslint-disable-next-line no-restricted-globals
-                    if (window.confirm(`Delete all data for ${idx.index_name}?`)) {
-                      toastService.info('Delete functionality coming soon');
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
