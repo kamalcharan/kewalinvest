@@ -1262,6 +1262,40 @@ export class NavController {
     }
   };
 
+  /**
+   * GET /api/nav/detailed-status
+   * Get detailed status for all bookmarked schemes including download, metrics, and gaps
+   * Used by Cruise Control -> NAV Downloads UI
+   */
+  getDetailedStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const result = await this.navService.getDetailedSchemeStatus(
+        user!.tenant_id,
+        isLive,
+        user!.user_id
+      );
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to get detailed status', 'getDetailedStatus', {
+        tenantId: req.user?.tenant_id,
+        userId: req.user?.user_id,
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get detailed status'
+      });
+    }
+  };
+
   getActiveDownloads = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const activeDownloads = await this.downloadService.getActiveDownloads();

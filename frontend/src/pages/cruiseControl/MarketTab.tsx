@@ -1,10 +1,14 @@
 // frontend/src/pages/cruiseControl/MarketTab.tsx
+// Market Downloads Tab with table view - uses shared components
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
+import { StatCard } from '../../components/cruiseControl/shared/StatCard';
+import { StatusBadge } from '../../components/cruiseControl/shared/StatusBadge';
 
 interface IndexStatus {
   id: number;
@@ -42,175 +46,6 @@ interface DetailedStatusResponse {
   statistics: Statistics;
   indices: IndexStatus[];
 }
-
-interface StatCardProps {
-  title: string;
-  count: number;
-  color: 'blue' | 'green' | 'red' | 'yellow' | 'purple';
-  icon: React.ReactNode;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ title, count, color, icon }) => {
-  const { theme, isDarkMode } = useTheme();
-  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-
-  const colorMap = {
-    blue: colors.brand.primary,
-    green: colors.semantic.success,
-    red: colors.semantic.error,
-    yellow: colors.semantic.warning,
-    purple: '#9333EA'
-  };
-
-  const selectedColor = colorMap[color];
-
-  return (
-    <div
-      style={{
-        padding: '16px',
-        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-        border: `1px solid ${selectedColor}30`,
-        borderRadius: '10px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
-      }}
-    >
-      <div
-        style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '8px',
-          backgroundColor: `${selectedColor}15`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: selectedColor
-        }}
-      >
-        {icon}
-      </div>
-      <div>
-        <div style={{
-          fontSize: '24px',
-          fontWeight: '700',
-          color: selectedColor
-        }}>
-          {count}
-        </div>
-        <div style={{
-          fontSize: '12px',
-          color: colors.utility.secondaryText,
-          fontWeight: '500'
-        }}>
-          {title}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const StatusBadge: React.FC<{
-  status: string;
-  type: 'download' | 'metrics' | 'gaps';
-  gapCount?: number;
-}> = ({ status, type, gapCount }) => {
-  const { theme, isDarkMode } = useTheme();
-  const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
-
-  let bgColor = '';
-  let textColor = '';
-  let label = '';
-  let icon: React.ReactNode = null;
-
-  if (type === 'download') {
-    switch (status) {
-      case 'success':
-        bgColor = `${colors.semantic.success}15`;
-        textColor = colors.semantic.success;
-        label = 'Success';
-        icon = <CheckCircle size={12} />;
-        break;
-      case 'failed':
-        bgColor = `${colors.semantic.error}15`;
-        textColor = colors.semantic.error;
-        label = 'Failed';
-        icon = <XCircle size={12} />;
-        break;
-      case 'pending':
-        bgColor = `${colors.semantic.warning}15`;
-        textColor = colors.semantic.warning;
-        label = 'Pending';
-        icon = <Clock size={12} />;
-        break;
-      case 'not_configured':
-        bgColor = `${colors.utility.secondaryText}15`;
-        textColor = colors.utility.secondaryText;
-        label = 'Not Configured';
-        icon = <AlertTriangle size={12} />;
-        break;
-    }
-  } else if (type === 'metrics') {
-    switch (status) {
-      case 'calculated':
-        bgColor = `${colors.semantic.success}15`;
-        textColor = colors.semantic.success;
-        label = 'Calculated';
-        icon = <CheckCircle size={12} />;
-        break;
-      case 'partial':
-        bgColor = `${colors.semantic.warning}15`;
-        textColor = colors.semantic.warning;
-        label = 'Partial';
-        icon = <Clock size={12} />;
-        break;
-      case 'pending':
-        bgColor = `${colors.utility.secondaryText}15`;
-        textColor = colors.utility.secondaryText;
-        label = 'Pending';
-        icon = <Clock size={12} />;
-        break;
-      case 'not_configured':
-        bgColor = `${colors.utility.secondaryText}15`;
-        textColor = colors.utility.secondaryText;
-        label = 'Not Configured';
-        icon = <AlertTriangle size={12} />;
-        break;
-    }
-  } else if (type === 'gaps') {
-    if (gapCount && gapCount > 0) {
-      bgColor = `${colors.semantic.error}15`;
-      textColor = colors.semantic.error;
-      label = `${gapCount} Gap${gapCount > 1 ? 's' : ''}`;
-      icon = <AlertTriangle size={12} />;
-    } else {
-      bgColor = `${colors.semantic.success}15`;
-      textColor = colors.semantic.success;
-      label = 'No Gaps';
-      icon = <CheckCircle size={12} />;
-    }
-  }
-
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        backgroundColor: bgColor,
-        color: textColor,
-        fontSize: '11px',
-        fontWeight: '600'
-      }}
-    >
-      {icon}
-      {label}
-    </div>
-  );
-};
 
 export const MarketTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();

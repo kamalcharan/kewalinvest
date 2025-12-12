@@ -258,6 +258,7 @@ export const API_ENDPOINTS = {
   CRUISE_CONTROL: {
     // Dashboard & Statistics (using existing endpoints)
     NAV_STATISTICS: `${API_BASE}/nav/statistics`,
+    NAV_DETAILED_STATUS: `${API_BASE}/nav/detailed-status`,
     MARKET_STATISTICS: `${API_BASE}/market/statistics`,
     MARKET_DETAILED_STATUS: `${API_BASE}/market/detailed-status`,
 

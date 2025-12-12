@@ -1776,4 +1776,296 @@ export class NavService {
       client.release();
     }
   }
+
+  // ==================== CRUISE CONTROL - DETAILED STATUS ====================
+
+  /**
+   * Get detailed status for all bookmarked schemes including download status, metrics status, and gaps
+   * Used by Cruise Control -> NAV Downloads UI
+   */
+  async getDetailedSchemeStatus(tenantId: number, isLive: boolean, userId: number): Promise<{
+    statistics: {
+      total_schemes: number;
+      download_success_today: number;
+      download_failed_today: number;
+      download_pending: number;
+      metrics_calculated: number;
+      metrics_pending: number;
+      schemes_with_gaps: number;
+    };
+    schemes: Array<{
+      id: number;
+      scheme_id: number;
+      scheme_code: string;
+      scheme_name: string;
+      amc_name: string | null;
+      category: string | null;
+      daily_download_enabled: boolean;
+
+      // Download status
+      download_status: 'success' | 'failed' | 'pending' | 'not_configured';
+      last_download_at: string | null;
+      last_download_error: string | null;
+
+      // Data info
+      earliest_date: string | null;
+      latest_date: string | null;
+      total_records: number;
+
+      // Metrics status
+      metrics_status: 'calculated' | 'pending' | 'partial';
+      metrics_calculated_count: number;
+      metrics_pending_count: number;
+      last_metrics_calculated_at: string | null;
+
+      // Gap detection
+      has_gaps: boolean;
+      gap_count: number;
+      gaps: Array<{ start_date: string; end_date: string; missing_days: number }>;
+    }>;
+  }> {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get all bookmarked schemes with their NAV data stats
+      const schemesQuery = `
+        WITH scheme_stats AS (
+          SELECT
+            nd.scheme_id,
+            COUNT(*) as total_records,
+            MIN(nd.nav_date) as earliest_date,
+            MAX(nd.nav_date) as latest_date,
+            COUNT(nd.metrics_calculated_at) as metrics_calculated_count,
+            COUNT(*) - COUNT(nd.metrics_calculated_at) as metrics_pending_count,
+            MAX(nd.metrics_calculated_at) as last_metrics_calculated_at
+          FROM t_nav_data nd
+          GROUP BY nd.scheme_id
+        )
+        SELECT
+          sb.id,
+          sb.scheme_id,
+          sd.scheme_code,
+          sd.scheme_name,
+          sd.amc_name,
+          sd.category,
+          sb.daily_download_enabled,
+          sb.last_download_status,
+          sb.last_download_at,
+          sb.last_download_error,
+          COALESCE(ss.total_records, 0) as total_records,
+          ss.earliest_date,
+          ss.latest_date,
+          COALESCE(ss.metrics_calculated_count, 0) as metrics_calculated_count,
+          COALESCE(ss.metrics_pending_count, 0) as metrics_pending_count,
+          ss.last_metrics_calculated_at
+        FROM t_scheme_bookmarks sb
+        JOIN t_scheme_details sd ON sd.scheme_id = sb.scheme_id
+        LEFT JOIN scheme_stats ss ON ss.scheme_id = sb.scheme_id
+        WHERE sb.tenant_id = $1
+          AND sb.is_live = $2
+          AND sb.is_active = true
+        ORDER BY sd.scheme_name
+      `;
+
+      const schemesResult = await this.db.query(schemesQuery, [tenantId, isLive]);
+
+      // Process each scheme to determine status and detect gaps
+      const schemes: any[] = [];
+      let downloadSuccessToday = 0;
+      let downloadFailedToday = 0;
+      let downloadPending = 0;
+      let metricsCalculated = 0;
+      let metricsPending = 0;
+      let schemesWithGaps = 0;
+
+      for (const row of schemesResult.rows) {
+        // Determine download status
+        let downloadStatus: 'success' | 'failed' | 'pending' | 'not_configured' = 'pending';
+
+        if (!row.daily_download_enabled) {
+          downloadStatus = 'not_configured';
+        } else if (row.last_download_status === 'success') {
+          downloadStatus = 'success';
+          if (row.last_download_at) {
+            const downloadDate = new Date(row.last_download_at);
+            downloadDate.setHours(0, 0, 0, 0);
+            if (downloadDate.getTime() === today.getTime()) {
+              downloadSuccessToday++;
+            }
+          }
+        } else if (row.last_download_status === 'failed') {
+          downloadStatus = 'failed';
+          if (row.last_download_at) {
+            const downloadDate = new Date(row.last_download_at);
+            downloadDate.setHours(0, 0, 0, 0);
+            if (downloadDate.getTime() === today.getTime()) {
+              downloadFailedToday++;
+            }
+          }
+        } else {
+          downloadPending++;
+        }
+
+        // Determine metrics status
+        let metricsStatus: 'calculated' | 'pending' | 'partial' = 'pending';
+        if (row.metrics_pending_count === 0 && row.metrics_calculated_count > 0) {
+          metricsStatus = 'calculated';
+          metricsCalculated++;
+        } else if (row.metrics_calculated_count > 0 && row.metrics_pending_count > 0) {
+          metricsStatus = 'partial';
+          metricsPending++;
+        } else {
+          metricsPending++;
+        }
+
+        // Detect gaps in data
+        const gaps = await this.detectNavDataGaps(row.scheme_id, row.earliest_date, row.latest_date);
+        const hasGaps = gaps.length > 0;
+        if (hasGaps) {
+          schemesWithGaps++;
+        }
+
+        schemes.push({
+          id: row.id,
+          scheme_id: row.scheme_id,
+          scheme_code: row.scheme_code,
+          scheme_name: row.scheme_name,
+          amc_name: row.amc_name,
+          category: row.category,
+          daily_download_enabled: row.daily_download_enabled,
+          download_status: downloadStatus,
+          last_download_at: row.last_download_at,
+          last_download_error: row.last_download_error,
+          earliest_date: row.earliest_date,
+          latest_date: row.latest_date,
+          total_records: parseInt(row.total_records) || 0,
+          metrics_status: metricsStatus,
+          metrics_calculated_count: parseInt(row.metrics_calculated_count) || 0,
+          metrics_pending_count: parseInt(row.metrics_pending_count) || 0,
+          last_metrics_calculated_at: row.last_metrics_calculated_at,
+          has_gaps: hasGaps,
+          gap_count: gaps.length,
+          gaps: gaps
+        });
+      }
+
+      return {
+        statistics: {
+          total_schemes: schemes.length,
+          download_success_today: downloadSuccessToday,
+          download_failed_today: downloadFailedToday,
+          download_pending: downloadPending,
+          metrics_calculated: metricsCalculated,
+          metrics_pending: metricsPending,
+          schemes_with_gaps: schemesWithGaps
+        },
+        schemes
+      };
+
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to get detailed scheme status', 'getDetailedSchemeStatus', {
+        tenantId,
+        error: error.message
+      }, userId, tenantId, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Detect gaps in NAV data for a scheme
+   * Only checks for missing trading days (excludes weekends)
+   */
+  private async detectNavDataGaps(
+    schemeId: number,
+    earliestDate: string | null,
+    latestDate: string | null
+  ): Promise<Array<{ start_date: string; end_date: string; missing_days: number }>> {
+    if (!earliestDate || !latestDate) {
+      return [];
+    }
+
+    try {
+      // Get all dates we have data for
+      const datesQuery = `
+        SELECT DISTINCT nav_date as date
+        FROM t_nav_data
+        WHERE scheme_id = $1
+        ORDER BY nav_date
+      `;
+      const datesResult = await this.db.query(datesQuery, [schemeId]);
+
+      if (datesResult.rows.length < 2) {
+        return [];
+      }
+
+      const existingDates = new Set(
+        datesResult.rows.map(r => new Date(r.date).toISOString().split('T')[0])
+      );
+
+      const gaps: Array<{ start_date: string; end_date: string; missing_days: number }> = [];
+      let currentGapStart: Date | null = null;
+      let missingDays = 0;
+
+      // Iterate through date range and find gaps (only trading days)
+      const start = new Date(earliestDate);
+      const end = new Date(latestDate);
+      const current = new Date(start);
+
+      while (current <= end) {
+        const currentStr = current.toISOString().split('T')[0];
+        const dayOfWeek = current.getDay();
+
+        // Skip weekends (Saturday = 6, Sunday = 0)
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          if (!existingDates.has(currentStr)) {
+            // Missing day
+            if (!currentGapStart) {
+              currentGapStart = new Date(current);
+              missingDays = 1;
+            } else {
+              missingDays++;
+            }
+          } else {
+            // Have data - close any open gap
+            if (currentGapStart && missingDays > 0) {
+              const previousDay = new Date(current);
+              previousDay.setDate(previousDay.getDate() - 1);
+              // Go back to last missing day (skip weekends)
+              while (previousDay.getDay() === 0 || previousDay.getDay() === 6) {
+                previousDay.setDate(previousDay.getDate() - 1);
+              }
+
+              gaps.push({
+                start_date: currentGapStart.toISOString().split('T')[0],
+                end_date: previousDay.toISOString().split('T')[0],
+                missing_days: missingDays
+              });
+            }
+            currentGapStart = null;
+            missingDays = 0;
+          }
+        }
+
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Close any remaining gap
+      if (currentGapStart && missingDays > 0) {
+        gaps.push({
+          start_date: currentGapStart.toISOString().split('T')[0],
+          end_date: end.toISOString().split('T')[0],
+          missing_days: missingDays
+        });
+      }
+
+      return gaps;
+    } catch (error: any) {
+      SimpleLogger.error('NavService', 'Failed to detect NAV data gaps', 'detectNavDataGaps', {
+        schemeId,
+        error: error.message
+      });
+      return [];
+    }
+  }
 }

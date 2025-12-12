@@ -416,6 +416,15 @@ router.get('/download/active', navController.getActiveDownloads);
 router.get('/statistics', navController.getNavStatistics);
 
 /**
+ * Get detailed status for all bookmarked schemes
+ * GET /api/nav/detailed-status
+ *
+ * Used by Cruise Control -> NAV Downloads UI
+ * Returns download status, metrics status, and gap detection per scheme
+ */
+router.get('/detailed-status', navController.getDetailedStatus);
+
+/**
  * Check if today's NAV data is available
  * GET /api/nav/check-today
  * 
