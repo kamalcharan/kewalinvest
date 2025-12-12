@@ -5,7 +5,7 @@
 -- Execution: Run FOURTH after 03_indexes_triggers.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-11-08 (Integrated Migration 006, JTBD Consolidation, Migration 007)
+-- Updated: 2025-12-12 (Integrated Migration 006, JTBD Consolidation, Migration 007, Migration 025)
 -- ============================================================================
 
 -- ============================================================================
@@ -276,14 +276,17 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: check_customer_duplicate
+-- FUNCTION: check_customer_duplicate (Migration 025: iwell_code only)
+-- ----------------------------------------------------------------------------
+-- REASON: Minors don't have their own PAN, so they use parent/guardian's PAN.
+-- Multiple children (minors) can share the same parent's PAN, email, and mobile.
+-- These are NOT duplicates - they are different customers.
+-- iwell_code is the unique identifier from source system.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION check_customer_duplicate(
+    p_iwell_code VARCHAR,
     p_tenant_id INTEGER,
-    p_is_live BOOLEAN,
-    p_pan VARCHAR,
-    p_email VARCHAR,
-    p_mobile VARCHAR
+    p_is_live BOOLEAN
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -291,60 +294,34 @@ AS $$
 DECLARE
     v_exists BOOLEAN;
 BEGIN
-    IF p_pan IS NOT NULL AND p_pan != '' THEN
+    -- Duplicate check is ONLY based on iwell_code
+    -- PAN, email, mobile are NOT used because:
+    -- - Minors share parent's PAN
+    -- - Minors share parent's email
+    -- - Minors share parent's mobile
+    -- iwell_code is the unique identifier from source system
+    
+    IF p_iwell_code IS NOT NULL AND TRIM(p_iwell_code) != '' THEN
         SELECT EXISTS(
             SELECT 1 FROM t_customers 
-            WHERE pan = UPPER(TRIM(p_pan))
+            WHERE iwell_code = UPPER(TRIM(p_iwell_code))
             AND tenant_id = p_tenant_id
             AND is_live = p_is_live
             AND is_active = true
         ) INTO v_exists;
         
-        IF v_exists THEN
-            RETURN true;
-        END IF;
+        RETURN v_exists;
     END IF;
     
-    IF p_email IS NOT NULL AND p_email != '' THEN
-        SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels cc
-            JOIN t_contacts c ON cc.contact_id = c.id
-            WHERE cc.channel_type = 'email'
-            AND cc.channel_value = LOWER(TRIM(p_email))
-            AND c.tenant_id = p_tenant_id
-            AND c.is_live = p_is_live
-            AND cc.is_active = true
-        ) INTO v_exists;
-        
-        IF v_exists THEN
-            RETURN true;
-        END IF;
-    END IF;
-    
-    IF p_mobile IS NOT NULL AND p_mobile != '' THEN
-        SELECT EXISTS(
-            SELECT 1 FROM t_contact_channels cc
-            JOIN t_contacts c ON cc.contact_id = c.id
-            WHERE cc.channel_type = 'mobile'
-            AND cc.channel_value = REGEXP_REPLACE(p_mobile, '[^0-9]', '', 'g')
-            AND c.tenant_id = p_tenant_id
-            AND c.is_live = p_is_live
-            AND cc.is_active = true
-        ) INTO v_exists;
-        
-        IF v_exists THEN
-            RETURN true;
-        END IF;
-    END IF;
-    
+    -- If no iwell_code provided, not a duplicate
     RETURN false;
 END;
 $$;
 
-COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using PAN (plain text), email, or mobile';
+COMMENT ON FUNCTION check_customer_duplicate IS 'Check for duplicate customers using iwell_code only (Migration 025) - PAN/email/mobile not used as minors share parent credentials';
 
 -- ----------------------------------------------------------------------------
--- FUNCTION: process_single_customer_record
+-- FUNCTION: process_single_customer_record (Migration 025: Updated duplicate check)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION process_single_customer_record(p_staging_id INTEGER)
 RETURNS VOID
@@ -377,19 +354,24 @@ BEGIN
     v_mapped_data := v_staging.mapped_data;
     v_error_messages := ARRAY[]::TEXT[];
     
+    -- DEBUG: Log the entire mapped_data JSON
+    RAISE NOTICE '[DEBUG] Processing staging_id: %, mapped_data keys: %', 
+        p_staging_id, 
+        (SELECT array_agg(key) FROM jsonb_object_keys(v_mapped_data) AS key);
+    
     BEGIN
+        -- Migration 025: Check for duplicates using iwell_code ONLY
+        -- PAN/email/mobile not used - minors share parent credentials
         v_is_duplicate := check_customer_duplicate(
+            v_mapped_data->>'iwell_code',
             v_staging.tenant_id,
-            v_staging.is_live,
-            v_mapped_data->>'pan',
-            v_mapped_data->>'email',
-            v_mapped_data->>'mobile'
+            v_staging.is_live
         );
         
         IF v_is_duplicate THEN
             UPDATE t_import_staging_data
             SET processing_status = 'duplicate',
-                warnings = array_append(warnings, 'Customer already exists'),
+                warnings = array_append(warnings, 'Customer already exists with this iwell_code'),
                 processed_at = CURRENT_TIMESTAMP
             WHERE id = p_staging_id;
             RETURN;
@@ -495,6 +477,12 @@ BEGIN
         
         v_iwell_code := NULLIF(TRIM(v_mapped_data->>'iwell_code'), '');
 
+        -- DEBUG: Log family field values before INSERT
+        RAISE NOTICE '[DEBUG] About to INSERT customer - name: %, family_head_name: %, family_head_iwell_code: %',
+            v_mapped_data->>'name',
+            v_mapped_data->>'family_head_name',
+            v_mapped_data->>'family_head_iwell_code';
+
         INSERT INTO t_customers (
             contact_id,
             tenant_id,
@@ -520,6 +508,9 @@ BEGIN
             v_mapped_data->>'referred_by_name',
             CURRENT_TIMESTAMP
         ) RETURNING id INTO v_customer_id;
+
+        -- DEBUG: Verify what was actually inserted
+        RAISE NOTICE '[DEBUG] Customer % created', v_customer_id;
 
         IF (v_mapped_data->>'address_line1' IS NOT NULL AND TRIM(v_mapped_data->>'address_line1') != '') OR 
            (v_mapped_data->>'city' IS NOT NULL AND TRIM(v_mapped_data->>'city') != '') THEN
@@ -573,7 +564,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - normalized_name auto-generated';
+COMMENT ON FUNCTION process_single_customer_record IS 'Process single customer record from staging - uses iwell_code for duplicate detection (Migration 025), plain text PAN, with debug logging';
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: process_customer_import_with_timing
@@ -2351,6 +2342,10 @@ BEGIN
     RAISE NOTICE '    - Updated get_staging_storage_stats()';
     RAISE NOTICE '  ✓ Migration 007: Allocation tracking';
     RAISE NOTICE '    - t_customer_portfolio_totals includes allocation';
+    RAISE NOTICE '  ✓ Migration 025: iwell_code duplicate check';
+    RAISE NOTICE '    - check_customer_duplicate() uses iwell_code ONLY';
+    RAISE NOTICE '    - PAN/email/mobile NOT used (minors share parent)';
+    RAISE NOTICE '    - process_single_customer_record() updated';
     RAISE NOTICE '  ✓ JTBD Consolidation:';
     RAISE NOTICE '    - No additional functions/views required';
     RAISE NOTICE '    - All logic handled via triggers in 03 script';
@@ -2361,6 +2356,7 @@ BEGIN
     RAISE NOTICE '  - Staging edit history tracking ready';
     RAISE NOTICE '  - Manual review workflow enabled';
     RAISE NOTICE '  - Goal allocation visible in portfolio views';
+    RAISE NOTICE '  - Customer import uses iwell_code for dedup';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 05_seed_data.sql';
     RAISE NOTICE '========================================';

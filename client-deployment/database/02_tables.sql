@@ -5,7 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-11-08 (Integrated all migrations: 006, JTBD Consolidation, 007)
+-- Updated: 2025-12-12 (Integrated migrations: 006, JTBD Consolidation, 007, 025, 026)
 -- ============================================================================
 
 -- ============================================================================
@@ -160,6 +160,8 @@ COMMENT ON COLUMN t_contact_channels.channel_type IS 'Type: email, mobile, whats
 COMMENT ON COLUMN t_contact_channels.is_primary IS 'Primary channel for this type';
 
 -- TABLE: t_customers
+-- NOTE: Migration 025 removed unique PAN constraint to allow minors to share guardian's PAN
+-- Duplicate detection now uses iwell_code only (see check_customer_duplicate function)
 CREATE TABLE t_customers (
     id SERIAL PRIMARY KEY,
     contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
@@ -185,7 +187,7 @@ CREATE TABLE t_customers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id),
-    CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan, is_live),
+    -- NOTE: No unique constraint on PAN - minors share parent's PAN (Migration 025)
     CONSTRAINT death_date_logic CHECK (
         (survival_status = 'alive' AND date_of_death IS NULL) OR
         (survival_status = 'deceased' AND date_of_death IS NOT NULL)
@@ -193,8 +195,8 @@ CREATE TABLE t_customers (
 );
 
 COMMENT ON TABLE t_customers IS 'Customer records with financial and personal data';
-COMMENT ON COLUMN t_customers.pan IS 'PAN card number - stored as PLAIN TEXT';
-COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - stored as PLAIN TEXT';
+COMMENT ON COLUMN t_customers.pan IS 'PAN card number - stored as PLAIN TEXT. NOT unique - minors share guardian PAN';
+COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - stored as PLAIN TEXT. Used as primary duplicate detection key';
 COMMENT ON COLUMN t_customers.survival_status IS 'Alive or deceased status for tracking';
 COMMENT ON COLUMN t_customers.jtbd_count IS 'Count of active JTBD configurations for this customer';
 COMMENT ON COLUMN t_customers.has_jtbd_setup IS 'Flag indicating if customer has any JTBD configurations';
@@ -723,19 +725,7 @@ CREATE TABLE m_transaction_types (
 );
 
 COMMENT ON TABLE m_transaction_types IS 'Master data for transaction types (SIP, Purchase, Redemption, etc.)';
-
--- Seed transaction types
-INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, description) VALUES
-    ('SIP', 'Systematic Investment Plan', 'Addition', TRUE, 'Regular systematic investment contributions'),
-    ('STP IN', 'Systematic Transfer Plan - In', 'Addition', TRUE, 'Systematic transfer of funds from another scheme'),
-    ('PURCHASE', 'One-Time Purchase', 'Addition', TRUE, 'Lump sum purchase or investment transaction'),
-    ('SWITCH IN', 'Switch In', 'Addition', TRUE, 'Funds received from switching from another scheme'),
-    ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE, 'Systematic transfer of funds to another scheme'),
-    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 'Withdrawal or redemption of invested funds'),
-    ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE, 'Funds moved out by switching to another scheme'),
-    ('SELL', 'Sell', 'Deduction', TRUE, 'Funds moved out / encashed from the scheme'),
-    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE, 'Funds added to system portfolio to balance transaction records')
-ON CONFLICT (txn_code) DO NOTHING;
+-- NOTE: Transaction types are seeded in 05_seed_data.sql (11 types including Migration 026 aliases)
 
 -- TABLE: t_transaction_table
 CREATE TABLE t_transaction_table (
@@ -1560,6 +1550,14 @@ BEGIN
     RAISE NOTICE '    - t_jtbd_executions (NEW TABLE)';
     RAISE NOTICE '  ✓ Migration 007: Scheme allocation';
     RAISE NOTICE '    - t_customer_master_portfolio.allocation';
+    RAISE NOTICE '  ✓ Migration 023: Alert System Enhancements';
+    RAISE NOTICE '    - m_alert_settings (NEW TABLE)';
+    RAISE NOTICE '    - t_jtbd_configurations completion tracking';
+    RAISE NOTICE '  ✓ Migration 025: Drop unique PAN constraint';
+    RAISE NOTICE '    - t_customers: NO unique_customer_pan constraint';
+    RAISE NOTICE '    - Minors can share guardian PAN';
+    RAISE NOTICE '  ✓ Migration 026: STP transaction aliases';
+    RAISE NOTICE '    - m_transaction_types: SYSTEMATIC TRANSFER IN/OUT';
     RAISE NOTICE '  ✓ Default comparison index';
     RAISE NOTICE '    - t_tenants.default_comparison_index_id';
     RAISE NOTICE '========================================';
