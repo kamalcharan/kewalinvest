@@ -208,6 +208,7 @@ const StatusBadge: React.FC<{
 export const MarketTab: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const dividerColor = `${colors.utility.secondaryText}20`; // Use secondaryText with low opacity as divider
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -429,7 +430,7 @@ export const MarketTab: React.FC = () => {
       <div style={{
         backgroundColor: colors.utility.primaryBackground,
         borderRadius: '10px',
-        border: `1px solid ${colors.utility.divider}`,
+        border: `1px solid ${dividerColor}`,
         overflow: 'hidden'
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -441,7 +442,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Index
               </th>
@@ -451,7 +452,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Download Status
               </th>
@@ -461,7 +462,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Metrics Status
               </th>
@@ -471,7 +472,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Data Gaps
               </th>
@@ -481,7 +482,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Data Range
               </th>
@@ -491,7 +492,7 @@ export const MarketTab: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: '600',
                 color: colors.utility.secondaryText,
-                borderBottom: `1px solid ${colors.utility.divider}`
+                borderBottom: `1px solid ${dividerColor}`
               }}>
                 Actions
               </th>
@@ -505,7 +506,7 @@ export const MarketTab: React.FC = () => {
                 }}>
                   <td style={{
                     padding: '12px 16px',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <div style={{ fontWeight: '500', color: colors.utility.primaryText }}>
                       {index.index_name}
@@ -517,7 +518,7 @@ export const MarketTab: React.FC = () => {
                   <td style={{
                     padding: '12px 16px',
                     textAlign: 'center',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <StatusBadge status={index.download_status} type="download" />
                     {index.last_download_at && (
@@ -529,7 +530,7 @@ export const MarketTab: React.FC = () => {
                   <td style={{
                     padding: '12px 16px',
                     textAlign: 'center',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <StatusBadge status={index.metrics_status} type="metrics" />
                     <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
@@ -539,7 +540,7 @@ export const MarketTab: React.FC = () => {
                   <td style={{
                     padding: '12px 16px',
                     textAlign: 'center',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <div
                       onClick={() => index.has_gaps && toggleGaps(index.id)}
@@ -550,7 +551,7 @@ export const MarketTab: React.FC = () => {
                   </td>
                   <td style={{
                     padding: '12px 16px',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     {index.earliest_date && index.latest_date ? (
                       <div style={{ fontSize: '12px', color: colors.utility.primaryText }}>
@@ -566,7 +567,7 @@ export const MarketTab: React.FC = () => {
                   <td style={{
                     padding: '12px 16px',
                     textAlign: 'center',
-                    borderBottom: `1px solid ${colors.utility.divider}`
+                    borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                       <button
@@ -630,7 +631,7 @@ export const MarketTab: React.FC = () => {
                     <td colSpan={6} style={{
                       padding: '12px 16px',
                       backgroundColor: `${colors.semantic.error}08`,
-                      borderBottom: `1px solid ${colors.utility.divider}`
+                      borderBottom: `1px solid ${dividerColor}`
                     }}>
                       <div style={{ fontSize: '12px', fontWeight: '600', color: colors.semantic.error, marginBottom: '8px' }}>
                         Data Gaps Detected:
