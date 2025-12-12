@@ -1946,10 +1946,6 @@ async processSchemeImport(
           SELECT COUNT(*) FROM t_import_staging_data
           WHERE session_id = $1 AND processing_status = 'duplicate'
         ),
-        orphan_records = (
-          SELECT COUNT(*) FROM t_import_staging_data
-          WHERE session_id = $1 AND processing_status = 'orphan'
-        ),
         processed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
           WHERE session_id = $1 AND processing_status IN ('success', 'failed', 'duplicate', 'orphan')
