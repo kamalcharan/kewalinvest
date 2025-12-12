@@ -144,14 +144,18 @@ export class DashboardController {
       const { user, environment } = req;
       const isLive = environment === 'live';
 
+      console.log('[DashboardController] getDashboard called for tenant:', user!.tenant_id, 'isLive:', isLive);
+
       // Fetch all data in parallel
       const [summary, downloadStatus, goalsSummary, pendingActions, recentTransactions] = await Promise.all([
         this.dashboardService.getSummary(user!.tenant_id, isLive),
         this.dashboardService.getDownloadStatus(user!.tenant_id, isLive),
         this.dashboardService.getGoalsSummary(user!.tenant_id, isLive),
         this.dashboardService.getPendingActions(user!.tenant_id, isLive, 10),
-        this.dashboardService.getRecentTransactions(user!.tenant_id, isLive, 5)
+        this.dashboardService.getRecentTransactions(user!.tenant_id, isLive, 10)
       ]);
+
+      console.log('[DashboardController] recentTransactions count:', recentTransactions.length);
 
       res.json({
         success: true,
