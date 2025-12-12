@@ -799,7 +799,6 @@ export const Dashboard: React.FC = () => {
           <SectionHeader
             title="Today's Meetings"
             icon={<Calendar size={18} />}
-            action={{ label: 'Add Meeting', onClick: () => navigate('/customers') }}
           />
 
           {data.meetings.today.length === 0 ? (
@@ -811,7 +810,7 @@ export const Dashboard: React.FC = () => {
               <Calendar size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
               <div style={{ marginBottom: '8px' }}>No meetings scheduled for today</div>
               <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                Go to a customer page to schedule a meeting
+                Schedule meetings from customer pages
               </div>
             </div>
           ) : (
@@ -1000,11 +999,15 @@ export const Dashboard: React.FC = () => {
 
           {data.plannedWithdrawals.length === 0 ? (
             <div style={{
-              padding: '24px',
+              padding: '32px',
               textAlign: 'center',
               color: colors.utility.secondaryText
             }}>
-              No withdrawals planned
+              <Banknote size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <div style={{ marginBottom: '8px' }}>No withdrawals planned</div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                No goals are ending or have intermediate withdrawals in the next 3 months
+              </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
