@@ -80,6 +80,8 @@ export interface MonthlyMarketValueData {
   invested_value: number; // Total investment till date
   profit_loss: number; // market_value - invested_value
   profit_loss_percentage: number; // (profit_loss / invested_value) * 100
+  month_change: number; // Change from previous month's market value
+  month_change_percentage: number; // MoM percentage change
 }
 
 export interface MonthlyMarketValueResponse {

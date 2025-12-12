@@ -483,6 +483,7 @@ export class MonthlyTrackingService {
       // Build monthly market value data
       const monthlyData: MonthlyMarketValueData[] = [];
       let previousMonthNAV = 0;
+      let previousMonthMarketValue = 0;
 
       for (let i = 0; i < monthList.length; i++) {
         const month = monthList[i];
@@ -492,7 +493,10 @@ export class MonthlyTrackingService {
         // Use previous month's closing NAV
         const navToUse = i === 0 ? navData.closing_nav : previousMonthNAV;
         const currentMonthUnits = unitsData.closing_units;
-        const marketValue = navToUse * currentMonthUnits;
+
+        // FIX: When units <= 0 (investor exited), show market value as 0
+        const rawMarketValue = navToUse * currentMonthUnits;
+        const marketValue = currentMonthUnits <= 0 ? 0 : rawMarketValue;
 
         // Get cumulative invested value up to this month
         // Start with priorInvested as the base (for months before display period)
@@ -508,6 +512,12 @@ export class MonthlyTrackingService {
           ? (profitLoss / investedValue) * 100
           : 0;
 
+        // Calculate MoM (Month-over-Month) change
+        const monthChange = marketValue - previousMonthMarketValue;
+        const monthChangePercentage = previousMonthMarketValue > 0
+          ? (monthChange / previousMonthMarketValue) * 100
+          : 0;
+
         monthlyData.push({
           month,
           month_display: this.formatMonthDisplay(month),
@@ -518,11 +528,14 @@ export class MonthlyTrackingService {
           market_value: Math.round(marketValue * 100) / 100,
           invested_value: Math.round(investedValue * 100) / 100,
           profit_loss: Math.round(profitLoss * 100) / 100,
-          profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100
+          profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
+          month_change: Math.round(monthChange * 100) / 100,
+          month_change_percentage: Math.round(monthChangePercentage * 100) / 100
         });
 
-        // Update previous month NAV for next iteration
+        // Update previous month values for next iteration
         previousMonthNAV = navData.closing_nav;
+        previousMonthMarketValue = marketValue;
       }
 
       // Calculate summary
