@@ -1633,7 +1633,7 @@ async processSchemeImport(
       const currentQuery = `
         SELECT
           id,
-          import_session_id,
+          session_id,
           tenant_id,
           is_live,
           mapped_data,
@@ -1891,19 +1891,19 @@ async processSchemeImport(
       SET
         successful_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'success'
+          WHERE session_id = $1 AND status = 'success'
         ),
         failed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'failed'
+          WHERE session_id = $1 AND status = 'failed'
         ),
         duplicate_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status = 'duplicate'
+          WHERE session_id = $1 AND status = 'duplicate'
         ),
         processed_records = (
           SELECT COUNT(*) FROM t_import_staging_data
-          WHERE import_session_id = $1 AND status IN ('success', 'failed', 'duplicate', 'orphan')
+          WHERE session_id = $1 AND status IN ('success', 'failed', 'duplicate', 'orphan')
         ),
         updated_at = NOW()
       WHERE id = $1
