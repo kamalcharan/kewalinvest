@@ -93,6 +93,14 @@ router.post('/download/eod-all', marketController.downloadEODAll);
 router.get('/statistics', marketController.getStatistics);
 
 /**
+ * @route   GET /api/market/detailed-status
+ * @desc    Get detailed status for all indices including download, metrics, and gaps
+ * @desc    Used by Cruise Control -> Market Downloads UI
+ * @access  Private
+ */
+router.get('/detailed-status', marketController.getDetailedStatus);
+
+/**
  * @route   GET /api/market/health
  * @desc    Health check and Yahoo Finance connection test
  * @access  Private

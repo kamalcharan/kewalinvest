@@ -205,6 +205,32 @@ export class JTBDService {
   }
 
   /**
+   * Acknowledge alert (mark as done)
+   */
+  static async acknowledgeAlert(alertId: number): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const url = API_ENDPOINTS.JTBD.ACKNOWLEDGE_ALERT(alertId);
+      return await apiService.patch(url, {});
+    } catch (error: any) {
+      console.error('Error acknowledging alert:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Dismiss alert
+   */
+  static async dismissAlert(alertId: number): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const url = API_ENDPOINTS.JTBD.DISMISS_ALERT(alertId);
+      return await apiService.patch(url, {});
+    } catch (error: any) {
+      console.error('Error dismissing alert:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get dashboard statistics
    */
   static async getDashboardStats(): Promise<JTBDStatsApiResponse> {

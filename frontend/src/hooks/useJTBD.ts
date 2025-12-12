@@ -980,6 +980,98 @@ export function useDeleteJTBD() {
 }
 
 /**
+ * Mutation: Acknowledge alert (mark as done)
+ */
+export function useAcknowledgeAlert() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<void, Error, { alertId: number; customerId: number }>({
+    mutationFn: async ({ alertId }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.acknowledgeAlert(alertId);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to acknowledge alert');
+      }
+    },
+
+    retry: false,
+
+    onSuccess: (_, { customerId }) => {
+      // Invalidate customer's JTBD list
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.list(customerId)
+      });
+
+      // Invalidate customer summary
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.summary(customerId)
+      });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.dashboard()
+      });
+
+      toastService.success('Alert marked as done');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to acknowledge alert');
+    }
+  });
+}
+
+/**
+ * Mutation: Dismiss alert
+ */
+export function useDismissAlert() {
+  const queryClient = useQueryClient();
+  const { user, tenantId } = useAuth();
+
+  return useMutation<void, Error, { alertId: number; customerId: number }>({
+    mutationFn: async ({ alertId }) => {
+      if (!user || !tenantId) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await JTBDService.dismissAlert(alertId);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to dismiss alert');
+      }
+    },
+
+    retry: false,
+
+    onSuccess: (_, { customerId }) => {
+      // Invalidate customer's JTBD list
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.list(customerId)
+      });
+
+      // Invalidate customer summary
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.summary(customerId)
+      });
+
+      // Invalidate dashboard queries
+      queryClient.invalidateQueries({
+        queryKey: JTBD_QUERY_KEYS.dashboard()
+      });
+
+      toastService.success('Alert dismissed');
+    },
+    onError: (error) => {
+      handleAPIError(error, 'Failed to dismiss alert');
+    }
+  });
+}
+
+/**
  * Mutation: Toggle JTBD active/inactive
  */
 export function useToggleJTBD() {

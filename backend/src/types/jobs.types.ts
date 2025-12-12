@@ -209,6 +209,8 @@ export interface MarketOhlcExecutionData {
   indices_processed: number;
   indices_updated: number;
   indices_failed: number;
+  metrics_calculated?: number;
+  metrics_failed?: number;
   errors?: Array<{
     index_id: number;
     index_name?: string;

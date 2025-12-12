@@ -30,6 +30,7 @@ const GoalDetailsPage: React.FC = () => {
   const [showRecalculationModal, setShowRecalculationModal] = useState(false);
   const [recalculationResult, setRecalculationResult] = useState<{ previousCorpus?: number; newCorpus?: number; error?: boolean } | null>(null);
   const [showRebalanceComingSoon, setShowRebalanceComingSoon] = useState(false);
+  const [showEditGoalComingSoon, setShowEditGoalComingSoon] = useState(false);
 
   const goalIdNum = goalId ? parseInt(goalId) : 0;
   const customerIdNum = customerId ? parseInt(customerId) : 0;
@@ -312,7 +313,7 @@ const GoalDetailsPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => navigate(`/customers/${customerId}/goals/${goalId}/edit`)}
+                onClick={() => setShowEditGoalComingSoon(true)}
                 style={{
                   padding: '10px 16px',
                   backgroundColor: colors.brand.primary,
@@ -618,6 +619,18 @@ const GoalDetailsPage: React.FC = () => {
         onConfirm={() => setShowRebalanceComingSoon(false)}
         title="Coming Soon"
         description="The Rebalance feature is currently under development and will be available in a future release. This feature will help you optimize your portfolio allocation to better align with your goal."
+        confirmText="Got it"
+        cancelText=""
+        type="info"
+      />
+
+      {/* Edit Goal Coming Soon Dialog */}
+      <ConfirmationDialog
+        isOpen={showEditGoalComingSoon}
+        onClose={() => setShowEditGoalComingSoon(false)}
+        onConfirm={() => setShowEditGoalComingSoon(false)}
+        title="Coming Soon"
+        description="The Edit Goal feature is currently under development and will be available in a future release. This feature will allow you to modify goal parameters like target amount, timeline, and allocations."
         confirmText="Got it"
         cancelText=""
         type="info"

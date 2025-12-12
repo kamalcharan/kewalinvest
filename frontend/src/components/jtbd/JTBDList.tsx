@@ -12,6 +12,7 @@ interface JTBDListProps {
   onEdit?: (jtbdId: number) => void;
   showFilters?: boolean;
   compact?: boolean;
+  excludeTypes?: string[];  // Types to exclude from the list (e.g., ['goal_tracking'])
 }
 
 const JTBDList: React.FC<JTBDListProps> = ({
@@ -19,7 +20,8 @@ const JTBDList: React.FC<JTBDListProps> = ({
   onSetupNew,
   onEdit,
   showFilters = true,
-  compact = false
+  compact = false,
+  excludeTypes = []
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -36,6 +38,11 @@ const JTBDList: React.FC<JTBDListProps> = ({
     if (!jtbds) return [];
 
     let filtered = [...jtbds];
+
+    // Exclude specified types (e.g., goal_tracking)
+    if (excludeTypes.length > 0) {
+      filtered = filtered.filter(j => !excludeTypes.includes(j.jtbd_type));
+    }
 
     // Filter by type
     if (filterType !== 'all') {
@@ -74,7 +81,7 @@ const JTBDList: React.FC<JTBDListProps> = ({
     });
 
     return filtered;
-  }, [jtbds, filterType, filterPriority, filterStatus]);
+  }, [jtbds, filterType, filterPriority, filterStatus, excludeTypes]);
 
   // Get filter counts
   const filterCounts = useMemo(() => {
