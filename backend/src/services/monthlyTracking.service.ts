@@ -253,7 +253,7 @@ export class MonthlyTrackingService {
       const monthList = this.generateMonthList(months);
 
       // Get NAV data for all months
-      // Use scheme_code directly (more reliable than scheme_id lookup)
+      // Use scheme_code directly - NAV data is global (not filtered by is_live)
       const fromMonth = monthList[0];
       const toMonth = monthList[monthList.length - 1];
 
@@ -264,15 +264,13 @@ export class MonthlyTrackingService {
           nav_value
         FROM t_nav_data
         WHERE scheme_code = $1
-          AND is_live = $2
-          AND TO_CHAR(nav_date, 'YYYY-MM') >= $3
-          AND TO_CHAR(nav_date, 'YYYY-MM') <= $4
+          AND TO_CHAR(nav_date, 'YYYY-MM') >= $2
+          AND TO_CHAR(nav_date, 'YYYY-MM') <= $3
         ORDER BY nav_date
       `;
 
       const navResult = await this.db.query(navQuery, [
         scheme_code,
-        isLive,
         fromMonth,
         toMonth
       ]);
