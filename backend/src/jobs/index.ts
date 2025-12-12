@@ -6,6 +6,7 @@ import { navDownloadExecutor } from './navDownload.executor';
 import { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
 import { dailyAlertsExecutor } from './dailyAlerts.executor';
 import { goalCalculationExecutor } from './goalCalculation.executor';
+import { marketOhlcDownloadExecutor } from './marketOhlcDownload.executor';
 
 /**
  * Register all job executors with the JobSchedulerService
@@ -16,6 +17,10 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
 
   // NAV Download - Daily 9 PM, Failover 10 PM (GLOBAL)
   scheduler.registerJob(navDownloadExecutor);
+
+  // Market OHLC Download - Daily 9:30 PM (GLOBAL)
+  // Downloads daily OHLC data for all registered market indices
+  scheduler.registerJob(marketOhlcDownloadExecutor);
 
   // Portfolio Snapshot - Friday 9 PM (per-tenant)
   scheduler.registerJob(portfolioSnapshotExecutor);
@@ -28,9 +33,6 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
   // Recalculates all goals and creates progress snapshots
   scheduler.registerJob(goalCalculationExecutor);
 
-  // TODO: Add more executors as they are created
-  // - Market OHLC Download (Daily 9:30 PM)
-
   console.log('[JobRegistry] All job executors registered');
 }
 
@@ -39,3 +41,4 @@ export { navDownloadExecutor } from './navDownload.executor';
 export { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
 export { dailyAlertsExecutor } from './dailyAlerts.executor';
 export { goalCalculationExecutor } from './goalCalculation.executor';
+export { marketOhlcDownloadExecutor } from './marketOhlcDownload.executor';
