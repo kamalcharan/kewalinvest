@@ -20,6 +20,7 @@ export interface BookmarkImportResult {
   bookmarksUpdated: number;                                      // Existing bookmarks updated
   aliasesCreated: number;                                        // Total aliases generated
   errors: Array<BookmarkImportError>;                            // List of errors encountered
+  duplicateRows?: number[];                                      // Row numbers that were duplicates
   duration: number;                                              // Processing time in milliseconds
 }
 

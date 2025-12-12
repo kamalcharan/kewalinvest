@@ -1312,9 +1312,13 @@ private async processBookmarkImportDirect(
       }
     }
 
+    // Build a set of duplicate row numbers
+    const duplicateRowSet = new Set<number>(result.duplicateRows || []);
+
     // Update staging records based on actual results
     let successCount = 0;
     let failedCount = 0;
+    let duplicateCount = 0;
 
     for (let i = 0; i < stagingRecords.length; i++) {
       const record = stagingRecords[i];
@@ -1333,8 +1337,20 @@ private async processBookmarkImportDirect(
           WHERE id = $1
         `, [record.id, errorMessage]);
         failedCount++;
+      } else if (duplicateRowSet.has(rowNumber)) {
+        // This record was a duplicate (updated existing bookmark)
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'duplicate',
+            warnings = ARRAY['Bookmark already exists - updated'],
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id]);
+        duplicateCount++;
       } else {
-        // This record succeeded
+        // This record succeeded (new bookmark created)
         await this.db.query(`
           UPDATE t_import_staging_data
           SET
@@ -1347,7 +1363,7 @@ private async processBookmarkImportDirect(
       }
     }
 
-    console.log(`[ImportService] Updated staging records: ${successCount} success, ${failedCount} failed`);
+    console.log(`[ImportService] Updated staging records: ${successCount} success, ${duplicateCount} duplicate, ${failedCount} failed`);
 
     // Update session with results
     const hasErrors = failedCount > 0;
@@ -1355,7 +1371,7 @@ private async processBookmarkImportDirect(
       status: hasErrors ? 'completed_with_errors' : 'completed',
       current_stage: 'completed',
       successful_records: successCount,
-      duplicate_records: result.bookmarksUpdated || 0,
+      duplicate_records: duplicateCount,
       failed_records: failedCount,
       processed_records: stagingRecords.length,
       processing_completed_at: new Date()
