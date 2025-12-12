@@ -22,7 +22,8 @@ const CustomersPage: React.FC = () => {
     page: 1,
     page_size: 20,
     sort_by: 'c.name',
-    sort_order: 'asc'
+    sort_order: 'asc',
+    is_active: true  // Default to Active only
   });
   const [selectedCustomers, setSelectedCustomers] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('cards');

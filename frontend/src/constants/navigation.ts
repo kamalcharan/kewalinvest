@@ -4,7 +4,6 @@ import {
   Users,
   Crown,
   TrendingUp,
-  PieChart,
   BarChart3,
   FileText,
   Settings,
@@ -138,12 +137,6 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'Index Analysis',
         path: '/market/dashboard',
         icon: TrendingUp
-      },
-      {
-        id: 'portfolio_analysis',
-        name: 'Portfolio Analysis',
-        path: '/portfolios/analysis',
-        icon: PieChart
       },
       {
         id: 'market_data',
