@@ -1165,6 +1165,16 @@ export class NavService {
       const result = await this.db.query(statsQuery, [tenantId, isLive]);
       const stats = result.rows.length > 0 ? result.rows[0] : {};
 
+      // Debug logging to trace the issue
+      SimpleLogger.info('NavService', 'Statistics query result', 'getNavStatistics', {
+        tenantId,
+        isLive,
+        userId,
+        total_schemes_tracked: stats.total_schemes_tracked,
+        schemes_with_historical_data: stats.schemes_with_historical_data,
+        schemes_without_calculations: stats.schemes_without_calculations
+      }, userId, tenantId);
+
       return {
         total_schemes_tracked: parseInt(stats.total_schemes_tracked) || 0,
         schemes_with_daily_download: parseInt(stats.schemes_with_daily_download) || 0,

@@ -518,6 +518,19 @@ export class SchemeMetricsCalculator {
         throw new Error(`No NAV record found to update for scheme ${schemeId} on ${date.toISOString().split('T')[0]}`);
       }
 
+      // Debug logging to confirm metrics were stored
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        'Metrics stored successfully - metrics_calculated_at should now be set',
+        'storeMetrics',
+        {
+          schemeId,
+          date: date.toISOString().split('T')[0],
+          isLive,
+          rowsUpdated: result.rowCount
+        }
+      );
+
     } catch (error: any) {
       SimpleLogger.error(
         'SchemeMetricsCalculator',
