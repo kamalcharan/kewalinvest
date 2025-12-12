@@ -1304,25 +1304,59 @@ private async processBookmarkImportDirect(
 
     console.log(`[ImportService] Bookmark import completed:`, result);
 
-    // Update staging records with success status
-    for (const record of stagingRecords) {
-      await this.db.query(`
-        UPDATE t_import_staging_data
-        SET 
-          processing_status = 'success',
-          processed_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-      `, [record.id]);
+    // Build a map of failed row numbers to their error messages
+    const failedRowMap = new Map<number, string>();
+    if (result.errors && result.errors.length > 0) {
+      for (const error of result.errors) {
+        failedRowMap.set(error.row, error.error);
+      }
     }
 
+    // Update staging records based on actual results
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < stagingRecords.length; i++) {
+      const record = stagingRecords[i];
+      const rowNumber = i + 1; // BookmarkImportService uses 1-indexed row numbers
+
+      if (failedRowMap.has(rowNumber)) {
+        // This record failed
+        const errorMessage = failedRowMap.get(rowNumber);
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'failed',
+            error_messages = ARRAY[$2],
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id, errorMessage]);
+        failedCount++;
+      } else {
+        // This record succeeded
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET
+            processing_status = 'success',
+            processed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [record.id]);
+        successCount++;
+      }
+    }
+
+    console.log(`[ImportService] Updated staging records: ${successCount} success, ${failedCount} failed`);
+
     // Update session with results
+    const hasErrors = failedCount > 0;
     await this.updateImportSession(sessionInfo.tenant_id, sessionInfo.is_live, sessionId, {
-      status: 'completed',
+      status: hasErrors ? 'completed_with_errors' : 'completed',
       current_stage: 'completed',
-      successful_records: result.bookmarksCreated,
-      duplicate_records: 0,
-      failed_records: result.errors?.length || 0,
+      successful_records: successCount,
+      duplicate_records: result.bookmarksUpdated || 0,
+      failed_records: failedCount,
       processed_records: stagingRecords.length,
       processing_completed_at: new Date()
     });
