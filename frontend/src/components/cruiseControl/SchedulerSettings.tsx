@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Clock, Globe, User, RefreshCw, Calendar, AlertCircle } from 'lucide-react';
+import { Clock, RefreshCw, Calendar, AlertCircle } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 
@@ -230,21 +230,6 @@ export const SchedulerSettings: React.FC = () => {
                         }}>
                           {job.name}
                         </span>
-                        {/* Global/Tenant Badge */}
-                        <span style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          fontSize: '10px',
-                          fontWeight: '500',
-                          backgroundColor: job.is_global ? `${colors.brand.primary}15` : `${colors.semantic.warning}15`,
-                          color: job.is_global ? colors.brand.primary : colors.semantic.warning
-                        }}>
-                          {job.is_global ? <Globe size={10} /> : <User size={10} />}
-                          {job.is_global ? 'Global' : 'Per-Tenant'}
-                        </span>
                       </div>
 
                       <p style={{
@@ -324,23 +309,6 @@ export const SchedulerSettings: React.FC = () => {
             })}
           </div>
         )}
-      </div>
-
-      {/* Footer Note */}
-      <div style={{
-        padding: '12px 20px',
-        borderTop: `1px solid ${colors.utility.primaryText}10`,
-        fontSize: '11px',
-        color: colors.utility.secondaryText,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
-        <Globe size={12} />
-        <span>
-          <strong>Global</strong> jobs run once and data is available for all tenants.
-          <strong> Per-Tenant</strong> jobs run separately for each tenant.
-        </span>
       </div>
     </div>
   );
