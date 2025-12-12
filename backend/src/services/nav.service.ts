@@ -123,11 +123,12 @@ export class NavService {
     // 'all' or undefined = no filter, show all
 
     // Filter by calculations availability (check if ANY NAV records have calculated metrics)
+    // Note: $1 is always isLive in both regular and admin modes
     if (has_calculations === 'true') {
       baseQuery += ` AND EXISTS (
         SELECT 1 FROM t_nav_data nd
         WHERE nd.scheme_id = sb.scheme_id
-          AND nd.is_live = $2
+          AND nd.is_live = $1
           AND nd.metrics_calculated_at IS NOT NULL
         LIMIT 1
       )`;
@@ -138,7 +139,7 @@ export class NavService {
       baseQuery += ` AND sd.total_nav_records > 0 AND NOT EXISTS (
         SELECT 1 FROM t_nav_data nd
         WHERE nd.scheme_id = sb.scheme_id
-          AND nd.is_live = $2
+          AND nd.is_live = $1
           AND nd.metrics_calculated_at IS NOT NULL
         LIMIT 1
       )`;
