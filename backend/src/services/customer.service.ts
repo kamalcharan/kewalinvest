@@ -578,6 +578,53 @@ export class CustomerService {
     data: UpdateCustomerRequest & { address?: CreateAddressRequest }
   ): Promise<CustomerWithContact> {
     try {
+      // First, update contact if name or prefix are provided
+      if (data.name !== undefined || data.prefix !== undefined) {
+        // Get the contact_id for this customer
+        const customerResult = await this.db.query(
+          'SELECT contact_id FROM t_customers WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+          [customerId, tenantId, isLive]
+        );
+
+        if (customerResult.rows.length === 0) {
+          throw new Error('Customer not found');
+        }
+
+        const contactId = customerResult.rows[0].contact_id;
+
+        // Build contact update query
+        const contactUpdateFields: string[] = [];
+        const contactParams: any[] = [contactId, tenantId, isLive];
+        let contactParamIndex = 4;
+
+        if (data.name !== undefined) {
+          contactUpdateFields.push(`name = $${contactParamIndex}`);
+          contactParams.push(data.name);
+          contactParamIndex++;
+          // Also update normalized_name for search
+          contactUpdateFields.push(`normalized_name = normalize_customer_name($${contactParamIndex})`);
+          contactParams.push(data.name);
+          contactParamIndex++;
+        }
+
+        if (data.prefix !== undefined) {
+          contactUpdateFields.push(`prefix = $${contactParamIndex}`);
+          contactParams.push(data.prefix);
+          contactParamIndex++;
+        }
+
+        contactUpdateFields.push('updated_at = CURRENT_TIMESTAMP');
+
+        const contactUpdateQuery = `
+          UPDATE t_contacts
+          SET ${contactUpdateFields.join(', ')}
+          WHERE id = $1 AND tenant_id = $2 AND is_live = $3
+        `;
+
+        await this.db.query(contactUpdateQuery, contactParams);
+      }
+
+      // Now update customer fields
       const updateFields: string[] = [];
       const queryParams: any[] = [customerId, tenantId, isLive];
       let paramIndex = 4;
