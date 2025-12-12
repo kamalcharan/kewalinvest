@@ -1732,14 +1732,14 @@ async processSchemeImport(
       const recordQuery = `
         SELECT
           s.id,
-          s.import_session_id,
+          s.session_id,
           s.row_number,
           s.mapped_data,
           s.status,
           sess.import_type,
           sess.customer_lookup_method
         FROM t_import_staging_data s
-        INNER JOIN t_import_sessions sess ON sess.id = s.import_session_id
+        INNER JOIN t_import_sessions sess ON sess.id = s.session_id
         WHERE s.id = $1
           AND s.tenant_id = $2
           AND s.is_live = $3
@@ -1753,7 +1753,7 @@ async processSchemeImport(
 
       const record = recordResult.rows[0];
 
-      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.import_session_id}`);
+      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.session_id}`);
 
       // Import StagingProcessorService
       const { StagingProcessorService } = await import('./stagingProcessor.service');
@@ -1768,7 +1768,7 @@ async processSchemeImport(
           status: record.status
         },
         {
-          sessionId: record.import_session_id,
+          sessionId: record.session_id,
           tenantId,
           isLive,
           importType: record.import_type,
@@ -1803,7 +1803,7 @@ async processSchemeImport(
       ]);
 
       // Update session counters
-      await this.updateSessionCounters(record.import_session_id);
+      await this.updateSessionCounters(record.session_id);
 
       console.log(`[ImportService] Record ${stagingId} reprocessed with status: ${result.status}`);
 
