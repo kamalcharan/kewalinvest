@@ -19,8 +19,7 @@ import {
   Info
 } from 'lucide-react';
 import type { AliasWithMembers } from '../types/alias.types';
-import { Card } from '../components/common/Card';
-import ConfirmationDialog from '../components/common/ConfirmationDialog';
+import ConfirmationDialog from '../components/ui/ConfirmationDialog';
 
 const AliasListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -122,7 +121,7 @@ const AliasListPage: React.FC = () => {
       </div>
 
       {/* Info Banner */}
-      <Card style={{ marginBottom: '20px', padding: '16px' }}>
+      <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, marginBottom: '20px', padding: '16px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
           <Info size={20} color={colors.brand.primary} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
@@ -135,10 +134,10 @@ const AliasListPage: React.FC = () => {
             </p>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Search Bar */}
-      <Card style={{ marginBottom: '20px', padding: '16px' }}>
+      <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, marginBottom: '20px', padding: '16px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
             <Search
@@ -172,20 +171,20 @@ const AliasListPage: React.FC = () => {
             {pagination ? `${pagination.total} alias${pagination.total !== 1 ? 'es' : ''}` : ''}
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Alias List */}
       {isLoading ? (
-        <Card style={{ padding: '60px 20px', textAlign: 'center' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '60px 20px', textAlign: 'center' }}>
           <RefreshCw
             size={32}
             color={colors.utility.secondaryText}
             style={{ animation: 'spin 1s linear infinite' }}
           />
           <p style={{ marginTop: '16px', color: colors.utility.secondaryText }}>Loading aliases...</p>
-        </Card>
+        </div>
       ) : aliases.length === 0 ? (
-        <Card style={{ padding: '60px 20px', textAlign: 'center' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '60px 20px', textAlign: 'center' }}>
           <Link2 size={48} color={colors.utility.secondaryText} style={{ opacity: 0.5 }} />
           <p
             style={{
@@ -224,13 +223,16 @@ const AliasListPage: React.FC = () => {
               Go to Customers
             </button>
           )}
-        </Card>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {aliases.map((alias) => (
-            <Card
+            <div
               key={alias.id}
               style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderRadius: '12px',
+                border: `1px solid ${colors.utility.primaryText}10`,
                 padding: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
@@ -332,7 +334,7 @@ const AliasListPage: React.FC = () => {
                       style={{
                         fontSize: '18px',
                         fontWeight: '700',
-                        color: alias.total_aum > 0 ? colors.status.success : colors.utility.secondaryText
+                        color: alias.total_aum > 0 ? colors.semantic.success : colors.utility.secondaryText
                       }}
                     >
                       {alias.total_aum > 0 ? formatCurrency(alias.total_aum) : '-'}
@@ -367,7 +369,7 @@ const AliasListPage: React.FC = () => {
                       }}
                       style={{
                         padding: '8px',
-                        border: `1px solid ${colors.status.error}30`,
+                        border: `1px solid ${colors.semantic.error}30`,
                         borderRadius: '8px',
                         backgroundColor: 'transparent',
                         cursor: 'pointer',
@@ -377,14 +379,14 @@ const AliasListPage: React.FC = () => {
                       }}
                       title="Delete Alias"
                     >
-                      <Trash2 size={16} color={colors.status.error} />
+                      <Trash2 size={16} color={colors.semantic.error} />
                     </button>
                   </div>
 
                   <ChevronRight size={20} color={colors.utility.secondaryText} />
                 </div>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}

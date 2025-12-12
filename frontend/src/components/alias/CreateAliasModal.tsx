@@ -365,7 +365,7 @@ export const CreateAliasModal: React.FC<CreateAliasModalProps> = ({
                       style={{
                         fontSize: '13px',
                         fontWeight: '600',
-                        color: colors.status.success,
+                        color: colors.semantic.success,
                         flexShrink: 0
                       }}
                     >

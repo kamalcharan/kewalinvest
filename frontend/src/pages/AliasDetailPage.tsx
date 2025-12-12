@@ -32,7 +32,6 @@ import {
   AlertTriangle,
   Clock
 } from 'lucide-react';
-import { Card } from '../components/common/Card';
 import { EditAliasModal } from '../components/alias/EditAliasModal';
 import { AddMembersModal } from '../components/alias/AddMembersModal';
 
@@ -228,7 +227,7 @@ const AliasDetailPage: React.FC = () => {
                 fontWeight: '600',
                 border: 'none',
                 borderRadius: '10px',
-                backgroundColor: colors.status.success,
+                backgroundColor: colors.semantic.success,
                 color: '#FFF',
                 cursor: 'pointer',
                 display: 'flex',
@@ -253,7 +252,7 @@ const AliasDetailPage: React.FC = () => {
         }}
       >
         {/* Combined AUM */}
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <Briefcase size={20} color={colors.brand.primary} />
             <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Combined AUM</span>
@@ -266,18 +265,18 @@ const AliasDetailPage: React.FC = () => {
               style={{
                 marginTop: '4px',
                 fontSize: '13px',
-                color: portfolio.total_return_percentage >= 0 ? colors.status.success : colors.status.error
+                color: portfolio.total_return_percentage >= 0 ? colors.semantic.success : colors.semantic.error
               }}
             >
               {formatPercent(portfolio.total_return_percentage)} returns
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Members */}
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Users size={20} color={colors.status.info} />
+            <Users size={20} color={colors.semantic.info} />
             <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Members</span>
           </div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
@@ -286,43 +285,43 @@ const AliasDetailPage: React.FC = () => {
           <div style={{ marginTop: '4px', fontSize: '13px', color: colors.utility.secondaryText }}>
             customer profiles
           </div>
-        </Card>
+        </div>
 
         {/* Goals */}
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Target size={20} color={colors.status.warning} />
+            <Target size={20} color={colors.semantic.warning} />
             <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Goals</span>
           </div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
             {goals?.total_goals || 0}
           </div>
           {goals && goals.total_goals > 0 && (
-            <div style={{ marginTop: '4px', fontSize: '13px', color: colors.status.success }}>
+            <div style={{ marginTop: '4px', fontSize: '13px', color: colors.semantic.success }}>
               {goals.on_track_count} on track
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Meetings */}
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Calendar size={20} color={colors.status.success} />
+            <Calendar size={20} color={colors.semantic.success} />
             <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Meetings</span>
           </div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: colors.utility.primaryText }}>
             {meetings?.total_meetings || 0}
           </div>
           {meetings && meetings.upcoming_count > 0 && (
-            <div style={{ marginTop: '4px', fontSize: '13px', color: colors.status.info }}>
+            <div style={{ marginTop: '4px', fontSize: '13px', color: colors.semantic.info }}>
               {meetings.upcoming_count} upcoming
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
       {/* Members Section */}
-      <Card style={{ marginBottom: '24px', padding: '20px' }}>
+      <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, marginBottom: '24px', padding: '20px' }}>
         <h2
           style={{
             margin: '0 0 16px',
@@ -386,7 +385,7 @@ const AliasDetailPage: React.FC = () => {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {member.current_value !== undefined && member.current_value > 0 && (
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: colors.status.success }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: colors.semantic.success }}>
                     {formatCurrency(member.current_value)}
                   </span>
                 )}
@@ -440,10 +439,10 @@ const AliasDetailPage: React.FC = () => {
                         style={{
                           padding: '6px 12px',
                           fontSize: '12px',
-                          border: `1px solid ${colors.status.error}40`,
+                          border: `1px solid ${colors.semantic.error}40`,
                           borderRadius: '6px',
                           backgroundColor: 'transparent',
-                          color: colors.status.error,
+                          color: colors.semantic.error,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -461,7 +460,7 @@ const AliasDetailPage: React.FC = () => {
             </div>
           ))}
         </div>
-      </Card>
+      </div>
 
       {/* Tabs */}
       <div
@@ -503,7 +502,7 @@ const AliasDetailPage: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'portfolio' && (
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
             Combined Portfolio by Member
           </h3>
@@ -544,7 +543,7 @@ const AliasDetailPage: React.FC = () => {
                     <div
                       style={{
                         fontSize: '12px',
-                        color: member.return_percentage >= 0 ? colors.status.success : colors.status.error
+                        color: member.return_percentage >= 0 ? colors.semantic.success : colors.semantic.error
                       }}
                     >
                       {formatPercent(member.return_percentage)}
@@ -588,11 +587,11 @@ const AliasDetailPage: React.FC = () => {
               </div>
             </>
           )}
-        </Card>
+        </div>
       )}
 
       {activeTab === 'goals' && (
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
             Combined Goals Summary
           </h3>
@@ -602,19 +601,19 @@ const AliasDetailPage: React.FC = () => {
               {/* Goal Status Summary */}
               <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle size={16} color={colors.status.success} />
+                  <CheckCircle size={16} color={colors.semantic.success} />
                   <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
                     {goals.on_track_count} On Track
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AlertTriangle size={16} color={colors.status.warning} />
+                  <AlertTriangle size={16} color={colors.semantic.warning} />
                   <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
                     {goals.behind_count} Behind
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <TrendingUp size={16} color={colors.status.info} />
+                  <TrendingUp size={16} color={colors.semantic.info} />
                   <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
                     {goals.ahead_count} Ahead
                   </span>
@@ -647,7 +646,7 @@ const AliasDetailPage: React.FC = () => {
                       <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText }}>
                         Target: {formatCurrency(member.total_target)}
                       </div>
-                      <div style={{ fontSize: '12px', color: colors.status.success }}>
+                      <div style={{ fontSize: '12px', color: colors.semantic.success }}>
                         Current: {formatCurrency(member.current_value)}
                       </div>
                     </div>
@@ -660,11 +659,11 @@ const AliasDetailPage: React.FC = () => {
               No goals configured for these customers
             </p>
           )}
-        </Card>
+        </div>
       )}
 
       {activeTab === 'meetings' && (
-        <Card style={{ padding: '20px' }}>
+        <div style={{ backgroundColor: colors.utility.secondaryBackground, borderRadius: '12px', border: `1px solid ${colors.utility.primaryText}10`, padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
             Combined Meetings Summary
           </h3>
@@ -677,14 +676,14 @@ const AliasDetailPage: React.FC = () => {
                   style={{
                     padding: '16px',
                     borderRadius: '10px',
-                    backgroundColor: colors.status.info + '10',
-                    border: `1px solid ${colors.status.info}30`,
+                    backgroundColor: colors.semantic.info + '10',
+                    border: `1px solid ${colors.semantic.info}30`,
                     marginBottom: '20px'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Clock size={16} color={colors.status.info} />
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: colors.status.info }}>
+                    <Clock size={16} color={colors.semantic.info} />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: colors.semantic.info }}>
                       Next Meeting
                     </span>
                   </div>
@@ -741,7 +740,7 @@ const AliasDetailPage: React.FC = () => {
               No meetings scheduled for these customers
             </p>
           )}
-        </Card>
+        </div>
       )}
 
       {/* Edit Alias Modal */}

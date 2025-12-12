@@ -433,7 +433,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
                       }}
                       title={`View alias: ${customerAlias.alias_name}`}
                     >
-                      {customerAlias.is_primary ? 'Alias (Primary)' : 'In Alias'}: {customerAlias.alias_name}
+                      {customerAlias.members?.find(m => m.customer_id === customer.id)?.is_primary ? 'Alias (Primary)' : 'In Alias'}: {customerAlias.alias_name}
                     </span>
                   </>
                 )}

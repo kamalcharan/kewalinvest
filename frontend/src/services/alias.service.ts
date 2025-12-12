@@ -172,7 +172,7 @@ export class AliasService {
   static async removeMembers(aliasId: number, customerIds: number[]): Promise<ApiResponse<void>> {
     try {
       const url = API_ENDPOINTS.ALIAS.REMOVE_MEMBERS(aliasId);
-      const response = await apiService.delete<ApiResponse<void>>(url, { customer_ids: customerIds });
+      const response = await apiService.delete<ApiResponse<void>>(url, { data: { customer_ids: customerIds } });
       return response;
     } catch (error: any) {
       console.error('Failed to remove members:', error);

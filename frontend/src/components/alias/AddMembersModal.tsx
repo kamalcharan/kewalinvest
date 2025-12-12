@@ -82,12 +82,6 @@ export const AddMembersModal: React.FC<AddMembersModalProps> = ({
     }
   };
 
-  const formatCurrency = (value: number) => {
-    if (value >= 10000000) return `${(value / 10000000).toFixed(2)} Cr`;
-    if (value >= 100000) return `${(value / 100000).toFixed(2)} L`;
-    return `${value.toLocaleString('en-IN')}`;
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -136,13 +130,13 @@ export const AddMembersModal: React.FC<AddMembersModalProps> = ({
                 width: '40px',
                 height: '40px',
                 borderRadius: '10px',
-                backgroundColor: colors.status.success + '15',
+                backgroundColor: colors.semantic.success + '15',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}
             >
-              <UserPlus size={20} color={colors.status.success} />
+              <UserPlus size={20} color={colors.semantic.success} />
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: colors.utility.primaryText }}>
@@ -259,24 +253,10 @@ export const AddMembersModal: React.FC<AddMembersModalProps> = ({
                       </div>
                       <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '2px' }}>
                         {customer.iwell_code && <span>{customer.iwell_code}</span>}
-                        {customer.email && customer.iwell_code && <span> | </span>}
-                        {customer.email && <span>{customer.email}</span>}
+                        {customer.primary_email && customer.iwell_code && <span> | </span>}
+                        {customer.primary_email && <span>{customer.primary_email}</span>}
                       </div>
                     </div>
-
-                    {/* Value */}
-                    {customer.current_value !== undefined && customer.current_value > 0 && (
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          color: colors.status.success,
-                          flexShrink: 0
-                        }}
-                      >
-                        {formatCurrency(customer.current_value)}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -323,7 +303,7 @@ export const AddMembersModal: React.FC<AddMembersModalProps> = ({
                 fontWeight: '600',
                 border: 'none',
                 borderRadius: '10px',
-                backgroundColor: colors.status.success,
+                backgroundColor: colors.semantic.success,
                 color: '#FFF',
                 cursor: addMembersMutation.isPending || selectedIds.size === 0 ? 'not-allowed' : 'pointer',
                 opacity: addMembersMutation.isPending || selectedIds.size === 0 ? 0.6 : 1,

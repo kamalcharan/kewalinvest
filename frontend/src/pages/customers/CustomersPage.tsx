@@ -731,8 +731,7 @@ const CustomersPage: React.FC = () => {
             id: c.id,
             name: c.name,
             iwell_code: c.iwell_code,
-            email: c.email,
-            current_value: c.current_value
+            email: c.primary_email
           }))}
         onSuccess={() => {
           setSelectedCustomers(new Set());
