@@ -8,6 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api.service';
 import { useCustomerStats } from '../hooks/useCustomers';
+import { usePortfolioMetrics } from '../hooks/usePortfolioData';
 import {
   TrendingUp,
   TrendingDown,
@@ -185,6 +186,9 @@ export const Dashboard: React.FC = () => {
 
   // Use customer stats hook - same as CustomerDashboardPage
   const { data: customerStats, refetch: refetchCustomerStats } = useCustomerStats();
+
+  // Use portfolio metrics hook - same as CustomerDashboardPage for AUM
+  const { metrics: portfolioMetrics, isLoading: metricsLoading } = usePortfolioMetrics();
 
   // Fetch dashboard data from API
   const fetchDashboardData = useCallback(async () => {
@@ -531,7 +535,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Total AUM</div>
               <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-                {formatCurrency(data.summary.totalAUM, true)}
+                {metricsLoading ? '...' : formatCurrency(portfolioMetrics.totalAUM || data.summary.totalAUM, true)}
               </div>
               <div style={{
                 display: 'flex',
