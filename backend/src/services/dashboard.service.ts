@@ -61,6 +61,8 @@ export class DashboardService {
    */
   async getSummary(tenantId: number, isLive: boolean): Promise<DashboardSummary> {
     try {
+      console.log('[DashboardService] getSummary called with tenantId:', tenantId, 'isLive:', isLive);
+
       // Get customer stats
       const customerQuery = `
         SELECT
@@ -74,6 +76,7 @@ export class DashboardService {
       `;
       const customerResult = await this.db.query(customerQuery, [tenantId, isLive]);
       const customerStats = customerResult.rows[0];
+      console.log('[DashboardService] Customer stats result:', customerStats);
 
       // Get AUM from latest portfolio snapshot
       const aumQuery = `
@@ -90,6 +93,7 @@ export class DashboardService {
       `;
       const aumResult = await this.db.query(aumQuery, [tenantId, isLive]);
       const totalAUM = parseFloat(aumResult.rows[0]?.total_aum || 0);
+      console.log('[DashboardService] AUM result:', aumResult.rows[0], 'parsed totalAUM:', totalAUM);
 
       // Get MTD AUM change (compare with first day of month)
       const mtdQuery = `
