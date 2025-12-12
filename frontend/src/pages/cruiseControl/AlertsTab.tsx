@@ -565,14 +565,15 @@ export const AlertsTab: React.FC = () => {
                             padding: '5px',
                             backgroundColor: 'transparent',
                             color: colors.semantic.success,
-                            border: `1px solid ${colors.semantic.success}40`,
+                            border: `1px solid ${colors.semantic.success}80`,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minWidth: '26px',
-                            minHeight: '26px'
+                            minHeight: '26px',
+                            transition: 'all 0.2s'
                           }}
                         >
                           <CheckIcon />
@@ -586,14 +587,15 @@ export const AlertsTab: React.FC = () => {
                             padding: '5px',
                             backgroundColor: 'transparent',
                             color: colors.utility.secondaryText,
-                            border: `1px solid ${colors.utility.secondaryText}40`,
+                            border: `1px solid ${colors.utility.secondaryText}80`,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minWidth: '26px',
-                            minHeight: '26px'
+                            minHeight: '26px',
+                            transition: 'all 0.2s'
                           }}
                         >
                           <XIcon />
