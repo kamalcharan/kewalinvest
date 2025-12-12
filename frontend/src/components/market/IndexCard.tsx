@@ -1,9 +1,9 @@
 // frontend/src/components/market/IndexCard.tsx
-// Individual index card with actions for Market Data
+// Elegant index card for Market Data
 
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Calendar, TrendingUp, Database } from 'lucide-react';
+import { Database, Calendar, Clock, CheckSquare, Square, BarChart2, Download, RefreshCw, Trash2 } from 'lucide-react';
 import type { MarketIndex } from '../../types/market.types';
 
 interface IndexCardProps {
@@ -16,6 +16,8 @@ interface IndexCardProps {
   showDeleteButton?: boolean;
   isDownloading?: boolean;
   isCalculating?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: number) => void;
 }
 
 const IndexCard: React.FC<IndexCardProps> = ({
@@ -27,628 +29,273 @@ const IndexCard: React.FC<IndexCardProps> = ({
   onDelete,
   showDeleteButton = false,
   isDownloading = false,
-  isCalculating = false
+  isCalculating = false,
+  isSelected = false,
+  onSelect
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  // Get status indicator
-  const getStatusIndicator = () => {
-    if (isDownloading) {
-      return {
-        color: colors.brand.primary,
-        message: 'Downloading...',
-        icon: '🔄',
-        bgColor: colors.brand.primary + '10'
-      };
-    }
-
-    if (index.historical_data_available && index.total_records > 0) {
-      return {
-        color: colors.semantic.success,
-        message: 'Downloaded',
-        icon: '✅',
-        bgColor: colors.semantic.success + '10'
-      };
-    }
-
-    if (index.last_download_status === 'failed') {
-      return {
-        color: colors.semantic.error,
-        message: 'Failed',
-        icon: '❌',
-        bgColor: colors.semantic.error + '10'
-      };
-    }
-
-    return {
-      color: colors.utility.secondaryText,
-      message: 'Pending',
-      icon: '⏳',
-      bgColor: colors.utility.secondaryText + '10'
-    };
-  };
-
-  const status = getStatusIndicator();
-
-  // Format date for display
+  // Format date
   const formatDate = (dateString: string | null): string => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return '-';
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-IN', {
+      return new Date(dateString).toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric'
       });
     } catch {
-      return 'N/A';
+      return '-';
     }
   };
 
-  // Get date range display
-  const getDateRangeDisplay = (): string => {
-    if (!index.earliest_date && !index.latest_date) {
-      return 'No data available';
-    }
-
-    const start = formatDate(index.earliest_date);
-    const end = formatDate(index.latest_date);
-
-    if (start === 'N/A' && end === 'N/A') {
-      return 'No data available';
-    }
-
-    return `${start} → ${end}`;
-  };
-
-  // Get data ageing display
-  const getDataAgeingDisplay = (): string => {
-    if (!index.latest_date) {
-      return 'No data';
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const latestDate = new Date(index.latest_date);
-    latestDate.setHours(0, 0, 0, 0);
-
-    const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysDiff === 0) return 'Last Data: Today';
-    if (daysDiff === 1) return 'Last Data: Yesterday';
-    if (daysDiff < 0) return 'Last Data: Future date';
-
-    return `Last Data: ${daysDiff} days ago`;
-  };
-
-  // Get ageing in days (for warnings)
+  // Get aging days
   const getAgingDays = (): number => {
     if (!index.latest_date) return 999;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const latestDate = new Date(index.latest_date);
     latestDate.setHours(0, 0, 0, 0);
-
     return Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Get category badge color
+  const agingDays = getAgingDays();
+  const hasData = index.historical_data_available && index.total_records > 0;
+
+  // Status config
+  const getStatus = () => {
+    if (isDownloading) return { label: 'Downloading', color: colors.brand.primary, bg: colors.brand.primary + '15' };
+    if (hasData) return { label: 'Ready', color: '#10B981', bg: '#10B98115' };
+    if (index.last_download_status === 'failed') return { label: 'Failed', color: '#EF4444', bg: '#EF444415' };
+    return { label: 'No Data', color: colors.utility.secondaryText, bg: colors.utility.secondaryText + '15' };
+  };
+
+  const status = getStatus();
+
+  // Category color
   const getCategoryColor = () => {
     switch (index.category) {
-      case 'broad':
-        return colors.brand.primary;
-      case 'sectoral':
-        return colors.brand.secondary;
-      case 'thematic':
-        return colors.semantic.info;
-      default:
-        return colors.utility.secondaryText;
+      case 'broad': return colors.brand.primary;
+      case 'sectoral': return '#8B5CF6';
+      case 'thematic': return '#06B6D4';
+      default: return colors.utility.secondaryText;
     }
   };
 
   const categoryColor = getCategoryColor();
 
+  // Button style helper
+  const btnStyle = (color: string, disabled: boolean) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: '500' as const,
+    color: disabled ? colors.utility.secondaryText : color,
+    backgroundColor: 'transparent',
+    border: `1px solid ${disabled ? colors.utility.secondaryText + '30' : color + '40'}`,
+    borderRadius: '6px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
+    transition: 'all 0.15s ease'
+  });
+
   return (
-    <div
-      className="index-card"
-      style={{
-        padding: '16px',
-        backgroundColor: colors.utility.primaryBackground,
-        border: `1px solid ${colors.utility.primaryText}10`,
-        borderRadius: '10px',
+    <div style={{
+      backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+      borderRadius: '12px',
+      border: `1px solid ${isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0')}`,
+      boxShadow: isSelected ? `0 0 0 2px ${colors.brand.primary}30` : (isDarkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.06)'),
+      padding: '16px 20px',
+      transition: 'all 0.15s ease',
+      opacity: isDownloading ? 0.85 : 1
+    }}>
+      {/* Top Row: Checkbox + Name + Status */}
+      <div style={{
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'flex-start',
-        gap: '16px',
-        transition: 'all 0.2s ease',
-        opacity: isDownloading ? 0.7 : 1,
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
-      {/* Loading overlay */}
-      {isDownloading && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            backgroundColor: colors.brand.primary,
-            animation: 'progress 2s ease-in-out infinite'
-          }}
-        />
-      )}
-
-      {/* Left Section: Index Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Index Name & Status */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          marginBottom: '8px',
-          gap: '12px'
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{
-              fontSize: '16px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              margin: '0 0 4px 0',
-              lineHeight: '1.3',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {index.index_name}
-            </h3>
-
-            {/* Code & Category */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              flexWrap: 'wrap'
-            }}>
-              <span style={{
-                fontSize: '13px',
-                color: colors.utility.secondaryText,
-                fontWeight: '500',
-                fontFamily: 'monospace'
-              }}>
-                {index.yahoo_symbol}
-              </span>
-              <span style={{
-                padding: '2px 8px',
-                backgroundColor: categoryColor + '10',
-                color: categoryColor,
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontWeight: '600',
-                textTransform: 'capitalize'
-              }}>
-                {index.category}
-              </span>
-            </div>
-          </div>
-
-          {/* Status Badge */}
-          <div
+        gap: '12px',
+        marginBottom: '12px'
+      }}>
+        {/* Checkbox */}
+        {onSelect && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(index.id);
+            }}
             style={{
-              padding: '6px 12px',
-              backgroundColor: status.bgColor,
-              color: status.color,
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: '600',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px',
+              marginTop: '2px',
               display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              whiteSpace: 'nowrap',
               flexShrink: 0
             }}
           >
-            <span>{status.icon}</span>
-            <span>{status.message}</span>
+            {isSelected ? (
+              <CheckSquare size={20} style={{ color: colors.brand.primary }} />
+            ) : (
+              <Square size={20} style={{ color: colors.utility.secondaryText }} />
+            )}
+          </button>
+        )}
+
+        {/* Name & Code */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: '15px',
+            fontWeight: '600',
+            color: colors.utility.primaryText,
+            marginBottom: '4px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {index.index_name}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              fontSize: '12px',
+              color: colors.utility.secondaryText,
+              fontFamily: 'monospace'
+            }}>
+              {index.yahoo_symbol}
+            </span>
+            <span style={{
+              padding: '2px 8px',
+              backgroundColor: categoryColor + '15',
+              color: categoryColor,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: '600',
+              textTransform: 'capitalize'
+            }}>
+              {index.category}
+            </span>
           </div>
         </div>
 
-        {/* Data Metrics - Only show if data is available */}
-        {index.historical_data_available && index.total_records > 0 ? (
-          <div style={{
-            marginTop: '12px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px'
-          }}>
-            {/* Total Records */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '6px'
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.brand.primary + '10',
-                borderRadius: '6px',
-                flexShrink: 0
-              }}>
-                <Database size={16} color={colors.brand.primary} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  color: colors.utility.primaryText,
-                  lineHeight: '1.3'
-                }}>
-                  {index.total_records.toLocaleString()}
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: colors.utility.secondaryText,
-                  marginTop: '2px'
-                }}>
-                  Records
-                </div>
-              </div>
-            </div>
-
-            {/* Date Range */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '6px'
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.brand.secondary + '10',
-                borderRadius: '6px',
-                flexShrink: 0
-              }}>
-                <Calendar size={16} color={colors.brand.secondary} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  lineHeight: '1.3',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {getDateRangeDisplay()}
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: colors.utility.secondaryText,
-                  marginTop: '2px'
-                }}>
-                  Date Range
-                </div>
-              </div>
-            </div>
-
-            {/* Data Ageing */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px',
-              backgroundColor: colors.utility.secondaryBackground,
-              borderRadius: '6px'
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                backgroundColor: getAgingDays() > 7
-                  ? colors.semantic.warning + '10'
-                  : getAgingDays() > 3
-                  ? colors.semantic.info + '10'
-                  : colors.semantic.success + '10',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <TrendingUp size={16} color={
-                  getAgingDays() > 7
-                    ? colors.semantic.warning
-                    : getAgingDays() > 3
-                    ? colors.semantic.info
-                    : colors.semantic.success
-                } />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  lineHeight: '1.3'
-                }}>
-                  {getDataAgeingDisplay()}
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: colors.utility.secondaryText,
-                  marginTop: '2px'
-                }}>
-                  Data Ageing
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            marginTop: '12px',
-            padding: '12px',
-            backgroundColor: colors.utility.secondaryBackground,
-            borderRadius: '6px',
-            border: `1px dashed ${colors.utility.primaryText}20`,
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '12px',
-              color: colors.utility.secondaryText,
-              fontWeight: '500'
-            }}>
-              📭 No historical data available
-            </div>
-            {index.last_download_status === 'failed' && index.last_download_error && (
-              <div style={{
-                fontSize: '11px',
-                color: colors.semantic.error,
-                marginTop: '4px'
-              }}>
-                Error: {index.last_download_error}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Status Badge */}
+        <div style={{
+          padding: '4px 10px',
+          backgroundColor: status.bg,
+          color: status.color,
+          borderRadius: '6px',
+          fontSize: '11px',
+          fontWeight: '600',
+          flexShrink: 0
+        }}>
+          {status.label}
+        </div>
       </div>
 
-      {/* Right Section: Action Buttons */}
+      {/* Data Metrics Row */}
+      {hasData ? (
+        <div style={{
+          display: 'flex',
+          gap: '24px',
+          padding: '12px 16px',
+          backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+          borderRadius: '8px',
+          marginBottom: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Database size={14} style={{ color: colors.brand.primary }} />
+            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
+              <strong style={{ color: colors.utility.primaryText }}>{index.total_records.toLocaleString()}</strong> records
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Calendar size={14} style={{ color: '#8B5CF6' }} />
+            <span style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
+              {formatDate(index.earliest_date)} - {formatDate(index.latest_date)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={14} style={{ color: agingDays > 7 ? '#F59E0B' : '#10B981' }} />
+            <span style={{
+              fontSize: '13px',
+              color: agingDays > 7 ? '#F59E0B' : colors.utility.secondaryText
+            }}>
+              {agingDays === 0 ? 'Today' : agingDays === 1 ? 'Yesterday' : `${agingDays} days old`}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+          borderRadius: '8px',
+          marginBottom: '12px',
+          textAlign: 'center',
+          fontSize: '13px',
+          color: colors.utility.secondaryText
+        }}>
+          No historical data available - download to get started
+        </div>
+      )}
+
+      {/* Actions Row */}
       <div style={{
         display: 'flex',
-        alignItems: 'center',
         gap: '8px',
-        flexShrink: 0
+        flexWrap: 'wrap'
       }}>
-        {/* Dashboard Button */}
         {onViewDashboard && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewDashboard(index);
-            }}
-            disabled={!index.historical_data_available || isDownloading}
-            title={
-              !index.historical_data_available
-                ? 'No data available. Download data first.'
-                : 'View market analysis dashboard'
-            }
-            style={{
-              backgroundColor: 'transparent',
-              color: (!index.historical_data_available || isDownloading)
-                ? colors.utility.secondaryText
-                : colors.brand.primary,
-              border: `1px solid ${(!index.historical_data_available || isDownloading)
-                ? colors.utility.secondaryText + '40'
-                : colors.brand.primary + '40'}`,
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '12px',
-              cursor: (!index.historical_data_available || isDownloading) ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              opacity: (!index.historical_data_available || isDownloading) ? 0.5 : 1,
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap'
-            }}
+            onClick={(e) => { e.stopPropagation(); onViewDashboard(index); }}
+            disabled={!hasData || isDownloading}
+            style={btnStyle(colors.brand.primary, !hasData || isDownloading)}
           >
-            📊 Dashboard
+            <BarChart2 size={14} />
+            Dashboard
           </button>
         )}
 
-        {/* Calculate Metrics Button */}
         {onCalculateMetrics && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onCalculateMetrics(index);
-            }}
-            disabled={!index.historical_data_available || isDownloading || isCalculating}
-            title={
-              !index.historical_data_available
-                ? 'No data available. Download data first.'
-                : isCalculating
-                ? 'Calculating metrics...'
-                : 'Calculate or recalculate performance metrics'
-            }
-            style={{
-              backgroundColor: 'transparent',
-              color: (!index.historical_data_available || isDownloading || isCalculating)
-                ? colors.utility.secondaryText
-                : colors.semantic.success,
-              border: `1px solid ${(!index.historical_data_available || isDownloading || isCalculating)
-                ? colors.utility.secondaryText + '40'
-                : colors.semantic.success + '40'}`,
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '12px',
-              cursor: (!index.historical_data_available || isDownloading || isCalculating)
-                ? 'not-allowed'
-                : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              opacity: (!index.historical_data_available || isDownloading || isCalculating) ? 0.5 : 1,
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap'
-            }}
+            onClick={(e) => { e.stopPropagation(); onCalculateMetrics(index); }}
+            disabled={!hasData || isDownloading || isCalculating}
+            style={btnStyle('#10B981', !hasData || isDownloading || isCalculating)}
           >
-            {isCalculating ? '⏳ Calculating...' : '🧮 Calculate'}
+            {isCalculating ? <RefreshCw size={14} className="animate-spin" /> : <BarChart2 size={14} />}
+            {isCalculating ? 'Calculating...' : 'Metrics'}
           </button>
         )}
 
-        {/* Download More Button */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDownloadHistorical(index);
-          }}
+          onClick={(e) => { e.stopPropagation(); onDownloadHistorical(index); }}
           disabled={isDownloading}
-          title={
-            index.historical_data_available
-              ? `Download additional data. Current: ${index.total_records.toLocaleString()} records`
-              : 'Download 20 years of historical data'
-          }
-          style={{
-            backgroundColor: 'transparent',
-            color: isDownloading
-              ? colors.utility.secondaryText
-              : index.historical_data_available
-              ? colors.semantic.success
-              : colors.brand.primary,
-            border: `1px solid ${isDownloading
-              ? colors.utility.secondaryText + '40'
-              : index.historical_data_available
-              ? colors.semantic.success + '40'
-              : colors.brand.primary + '40'}`,
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: '12px',
-            cursor: isDownloading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            opacity: isDownloading ? 0.5 : 1,
-            transition: 'all 0.2s ease',
-            whiteSpace: 'nowrap'
-          }}
+          style={btnStyle(hasData ? '#8B5CF6' : colors.brand.primary, isDownloading)}
         >
-          {index.historical_data_available ? '📥 Download More' : '📥 Download History'}
+          <Download size={14} />
+          {hasData ? 'More Data' : 'Download'}
         </button>
 
-        {/* Download EOD Button */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDownloadEOD(index);
-          }}
+          onClick={(e) => { e.stopPropagation(); onDownloadEOD(index); }}
           disabled={isDownloading}
-          title={
-            getAgingDays() > 7
-              ? `⚠️ Data is ${getAgingDays()} days old. Use 'Download More' to fill gap first.`
-              : 'Download latest End of Day data'
-          }
-          style={{
-            backgroundColor: 'transparent',
-            color: isDownloading
-              ? colors.utility.secondaryText
-              : getAgingDays() > 7
-              ? colors.semantic.warning
-              : colors.brand.secondary,
-            border: `1px solid ${isDownloading
-              ? colors.utility.secondaryText + '40'
-              : getAgingDays() > 7
-              ? colors.semantic.warning + '40'
-              : colors.brand.secondary + '40'}`,
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: '12px',
-            cursor: isDownloading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            opacity: isDownloading ? 0.5 : 1,
-            transition: 'all 0.2s ease',
-            whiteSpace: 'nowrap'
-          }}
+          style={btnStyle('#06B6D4', isDownloading)}
         >
-          🔄 Download EOD
+          <RefreshCw size={14} />
+          EOD
         </button>
 
-        {/* Delete All Button - Admin Only */}
         {showDeleteButton && onDelete && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(index);
-            }}
-            disabled={isDownloading || !index.historical_data_available}
-            title={
-              !index.historical_data_available
-                ? 'No data to delete'
-                : `Delete all ${index.total_records.toLocaleString()} records`
-            }
-            style={{
-              backgroundColor: 'transparent',
-              color: (!index.historical_data_available || isDownloading)
-                ? colors.utility.secondaryText
-                : colors.semantic.error,
-              border: `1px solid ${(!index.historical_data_available || isDownloading)
-                ? colors.utility.secondaryText + '40'
-                : colors.semantic.error + '40'}`,
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '12px',
-              cursor: (!index.historical_data_available || isDownloading)
-                ? 'not-allowed'
-                : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              opacity: (!index.historical_data_available || isDownloading) ? 0.5 : 1,
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap'
-            }}
+            onClick={(e) => { e.stopPropagation(); onDelete(index); }}
+            disabled={isDownloading || !hasData}
+            style={btnStyle('#EF4444', isDownloading || !hasData)}
           >
-            🗑️ Delete All
+            <Trash2 size={14} />
+            Delete
           </button>
         )}
       </div>
-
-      {/* CSS animations */}
-      <style>{`
-        .index-card:hover {
-          border-color: ${status.color}30 !important;
-          box-shadow: 0 2px 12px ${status.color}10;
-          transform: translateY(-1px);
-        }
-
-        @keyframes progress {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(400%);
-          }
-        }
-      `}</style>
     </div>
   );
 };

@@ -847,42 +847,20 @@ const MarketHistoryPage: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {indices.map((index) => (
-              <div key={index.id} style={{ position: 'relative' }}>
-                {/* Selection Checkbox */}
-                <div
-                  onClick={() => handleSelectIndex(index.id)}
-                  style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '12px',
-                    zIndex: 10,
-                    cursor: 'pointer',
-                    padding: '4px',
-                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFF',
-                    borderRadius: '6px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                  }}
-                >
-                  {selectedIndices.has(index.id) ? (
-                    <CheckSquare size={18} style={{ color: colors.brand.primary }} />
-                  ) : (
-                    <Square size={18} style={{ color: colors.utility.secondaryText }} />
-                  )}
-                </div>
-
-                {/* Index Card */}
-                <IndexCard
-                  index={index}
-                  onViewDashboard={handleViewDashboard}
-                  onCalculateMetrics={handleCalculateMetrics}
-                  onDownloadHistorical={handleDownloadHistorical}
-                  onDownloadEOD={handleDownloadEOD}
-                  onDelete={handleDelete}
-                  showDeleteButton={isSuperAdmin}
-                  isDownloading={downloadingIndexId === index.id}
-                  isCalculating={calculatingIndexId === index.id}
-                />
-              </div>
+              <IndexCard
+                key={index.id}
+                index={index}
+                onViewDashboard={handleViewDashboard}
+                onCalculateMetrics={handleCalculateMetrics}
+                onDownloadHistorical={handleDownloadHistorical}
+                onDownloadEOD={handleDownloadEOD}
+                onDelete={handleDelete}
+                showDeleteButton={isSuperAdmin}
+                isDownloading={downloadingIndexId === index.id}
+                isCalculating={calculatingIndexId === index.id}
+                isSelected={selectedIndices.has(index.id)}
+                onSelect={handleSelectIndex}
+              />
             ))}
           </div>
         )}
