@@ -358,11 +358,17 @@ export class ImportService {
       `;
 
       const result = await this.db.query(query, [sessionId, tenantId, isLive]);
-      
+
       if (result.rows[0]) {
-        return result.rows[0];
+        const session = result.rows[0];
+        // Extract orphan_records from processing_metadata and add as top-level field
+        const orphanRecords = session.processing_metadata?.orphan_records || 0;
+        return {
+          ...session,
+          orphan_records: orphanRecords
+        };
       }
-      
+
       return null;
     } catch (error: any) {
       console.error('Error getting import session:', error);
