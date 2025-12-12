@@ -9,14 +9,32 @@ import { ImportSession, FileImportType } from '../../types/import.types';
 import RecordModal from './RecordModal';
 import RecordEditModal from '../ETL/RecordEditModal';
 
+// API response record type
+interface ApiStagingRecord {
+  id: number;
+  session_id?: number;
+  row_number: number;
+  processing_status: string;
+  error_messages?: string[];
+  warnings?: string[];
+  raw_data: any;
+  mapped_data: any;
+  processed_at?: string;
+  match_type?: string;
+  match_confidence?: string;
+  ambiguous_matches?: any[];
+  edit_history?: any[];
+}
+
+// Internal record type (compatible with RecordEditModal)
 interface StagingRecord {
   id: number;
   import_session_id: number;
   row_number: number;
   processing_status: string;
-  status?: string; // Alias for compatibility
-  error_messages?: string[];
-  warnings?: string[];
+  status: string;
+  error_messages: string[];
+  warnings: string[];
   raw_data: any;
   mapped_data: any;
   processed_at?: string;
@@ -35,7 +53,7 @@ interface SessionRecordsTableProps {
 interface RecordsResponse {
   success: boolean;
   data: {
-    records: StagingRecord[];
+    records: ApiStagingRecord[];
     total: number;
   };
   message?: string;
@@ -84,11 +102,13 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
       );
 
       if (response && response.data) {
-        // Add status alias for RecordEditModal compatibility
-        const recordsWithStatus = (response.data.records || []).map(r => ({
+        // Transform API records to internal StagingRecord type
+        const recordsWithStatus: StagingRecord[] = (response.data.records || []).map(r => ({
           ...r,
           status: r.processing_status,
-          import_session_id: r.session_id || session.id // Map session_id to import_session_id
+          import_session_id: r.session_id || session.id,
+          error_messages: r.error_messages || [],
+          warnings: r.warnings || []
         }));
         setRecords(recordsWithStatus);
         setTotalRecords(response.data.total || 0);
