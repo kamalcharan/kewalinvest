@@ -1037,54 +1037,6 @@ const CustomerViewPage: React.FC = () => {
                       />
                     );
                   })()}
-
-                  {/* Holdings */}
-                  {portfolio.holdings && portfolio.holdings.length > 0 && (
-                    <div style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderRadius: '12px',
-                      padding: '24px'
-                    }}>
-                      <h3 style={{
-                        fontSize: '18px',
-                        fontWeight: '600',
-                        color: colors.utility.primaryText,
-                        margin: 0,
-                        marginBottom: '20px'
-                      }}>
-                        Holdings ({portfolio.holdings.length})
-                      </h3>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                        gap: '12px',
-                        maxHeight: '600px',
-                        overflowY: 'auto',
-                        padding: '4px'
-                      }}>
-                        {portfolio.holdings.map((holding, idx) => (
-                          <SchemeCard
-                            key={idx}
-                            scheme={{
-                              scheme_code: holding.scheme_code,
-                              scheme_name: holding.scheme_name,
-                              fund_name: holding.fund_name,
-                              category: holding.category,
-                              sub_category: holding.sub_category,
-                              current_value: holding.current_value,
-                              allocation: holding.allocation,
-                              return_percentage: holding.return_percentage
-                            }}
-                            showAllocation={true}
-                            showValue={true}
-                            showReturn={true}
-                            showCategory={true}
-                            compact={true}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
               </>
