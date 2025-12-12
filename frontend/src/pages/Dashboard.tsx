@@ -197,14 +197,13 @@ export const Dashboard: React.FC = () => {
 
     try {
       // Fetch all dashboard data from the consolidated endpoint
-      const response = await apiService.get('/dashboard') as { data: { success: boolean; data: any } };
+      const response = await apiService.get('/dashboard') as { success: boolean; data: any };
 
       console.log('[Dashboard] API response:', response);
-      console.log('[Dashboard] response.data:', response.data);
-      console.log('[Dashboard] recentTransactions:', response.data?.data?.recentTransactions);
+      console.log('[Dashboard] recentTransactions:', response.data?.recentTransactions);
 
-      if (response.data.success) {
-        const apiData = response.data.data;
+      if (response.success) {
+        const apiData = response.data;
 
         // Transform API response to match component's data structure
         setData(prev => ({
