@@ -7,10 +7,10 @@
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS t_customer_aliases (
     id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES m_tenants(id),
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     alias_name VARCHAR(255) NOT NULL,
     description TEXT,
-    created_by INTEGER NOT NULL REFERENCES m_users(id),
+    created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT true,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS t_customer_alias_members (
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
     is_primary BOOLEAN DEFAULT false,
     added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    added_by INTEGER NOT NULL REFERENCES m_users(id),
+    added_by INTEGER NOT NULL REFERENCES t_users(id),
 
     -- Each customer can only be in one alias (prevent double-counting)
     CONSTRAINT uq_customer_alias UNIQUE (customer_id),
