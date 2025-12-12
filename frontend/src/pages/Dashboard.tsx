@@ -790,7 +790,7 @@ export const Dashboard: React.FC = () => {
           <SectionHeader
             title="Today's Meetings"
             icon={<Calendar size={18} />}
-            action={{ label: 'Add Meeting', onClick: () => console.log('Add meeting clicked') }}
+            action={{ label: 'Add Meeting', onClick: () => navigate('/customers') }}
           />
 
           {data.meetings.today.length === 0 ? (
@@ -800,7 +800,10 @@ export const Dashboard: React.FC = () => {
               color: colors.utility.secondaryText
             }}>
               <Calendar size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-              <div>No meetings scheduled for today</div>
+              <div style={{ marginBottom: '8px' }}>No meetings scheduled for today</div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                Go to a customer page to schedule a meeting
+              </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
