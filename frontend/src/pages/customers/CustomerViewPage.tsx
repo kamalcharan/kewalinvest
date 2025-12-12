@@ -950,9 +950,9 @@ const CustomerViewPage: React.FC = () => {
                         Upcoming Actions
                       </h3>
                       <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
-                        {jtbds.filter(j => j.is_active).length} active alerts configured. 
+                        {jtbds.filter(j => j.is_active).length} active alerts configured.
                         <button
-                          onClick={() => setActiveTab('goals')}
+                          onClick={() => setActiveTab('jobs')}
                           style={{
                             marginLeft: '8px',
                             padding: '4px 12px',
