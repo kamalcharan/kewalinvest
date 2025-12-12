@@ -857,7 +857,7 @@ if (params.customerLookupMethod) {
     totalPages: number;
   }> {
     try {
-      const { status, page = 1, pageSize = 100 } = params;
+      const { status, page = 1, pageSize = 50 } = params;
       const offset = (page - 1) * pageSize;
 
       const result = await this.stagingService.getStagingRecords(
