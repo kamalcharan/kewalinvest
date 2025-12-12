@@ -1,5 +1,6 @@
 // frontend/src/pages/cruiseControl/CruiseControlPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { NavTab } from './NavTab';
 import { MarketTab } from './MarketTab';
@@ -7,11 +8,31 @@ import { AlertsTab } from './AlertsTab';
 import { PortfolioSnapshotsTab } from './PortfolioSnapshotsTab';
 import { SettingsTab } from './SettingsTab';
 
+type TabId = 'nav' | 'market' | 'alerts' | 'snapshots' | 'settings';
+
 export const CruiseControlPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<'nav' | 'market' | 'alerts' | 'snapshots' | 'settings'>('nav');
+  // Get initial tab from URL query param or default to 'nav'
+  const getInitialTab = (): TabId => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['nav', 'market', 'alerts', 'snapshots', 'settings'].includes(tabParam)) {
+      return tabParam as TabId;
+    }
+    return 'nav';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab());
+
+  // Update tab when URL changes
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['nav', 'market', 'alerts', 'snapshots', 'settings'].includes(tabParam)) {
+      setActiveTab(tabParam as TabId);
+    }
+  }, [searchParams]);
 
   const tabs = [
     { id: 'nav' as const, label: 'NAV Downloads', icon: '📊' },
