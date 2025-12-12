@@ -4,6 +4,7 @@
 import { JobSchedulerService } from '../services/jobScheduler.service';
 import { navDownloadExecutor } from './navDownload.executor';
 import { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
+import { dailyAlertsExecutor } from './dailyAlerts.executor';
 
 /**
  * Register all job executors with the JobSchedulerService
@@ -18,10 +19,13 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
   // Portfolio Snapshot - Friday 9 PM (per-tenant)
   scheduler.registerJob(portfolioSnapshotExecutor);
 
+  // Daily Alerts - Daily 8 PM (per-tenant)
+  // Processes: profile_trigger, time_based, import_notification
+  scheduler.registerJob(dailyAlertsExecutor);
+
   // TODO: Add more executors as they are created
   // - Market OHLC Download (Daily 9:30 PM)
   // - Goal Calculation (Friday 8:30 PM)
-  // - Daily Alerts (Daily 8 PM)
 
   console.log('[JobRegistry] All job executors registered');
 }
@@ -29,3 +33,4 @@ export function registerAllJobExecutors(scheduler: JobSchedulerService): void {
 // Export individual executors for direct access
 export { navDownloadExecutor } from './navDownload.executor';
 export { portfolioSnapshotExecutor } from './portfolioSnapshot.executor';
+export { dailyAlertsExecutor } from './dailyAlerts.executor';
