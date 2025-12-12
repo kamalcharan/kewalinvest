@@ -1753,14 +1753,59 @@ async processSchemeImport(
 
       const record = recordResult.rows[0];
 
-      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.session_id}`);
+      console.log(`[ImportService] Reprocessing single record ${stagingId}, session: ${record.session_id}, type: ${record.import_type}`);
 
-      // Import StagingProcessorService
+      let result: { status: string; error_messages?: string[]; warnings?: string[]; match_type?: string; match_confidence?: number; ambiguous_matches?: any; created_customer_id?: number };
+
+      // TransactionData uses PostgreSQL function - reset to pending and call it
+      if (record.import_type === 'TransactionData') {
+        // Reset record to pending so PostgreSQL function picks it up
+        await this.db.query(`
+          UPDATE t_import_staging_data
+          SET processing_status = 'pending',
+              error_messages = NULL,
+              processed_at = NULL
+          WHERE id = $1
+        `, [stagingId]);
+
+        // Call PostgreSQL function to process this record
+        await this.db.query(
+          'SELECT * FROM process_transaction_import_session($1, $2)',
+          [record.session_id, record.customer_lookup_method || 'iwell_code']
+        );
+
+        // Read back the result
+        const statusResult = await this.db.query(`
+          SELECT processing_status, error_messages, created_record_id
+          FROM t_import_staging_data
+          WHERE id = $1
+        `, [stagingId]);
+
+        const updatedRecord = statusResult.rows[0];
+        result = {
+          status: updatedRecord?.processing_status || 'failed',
+          error_messages: updatedRecord?.error_messages || undefined
+        };
+
+        console.log(`[ImportService] TransactionData record ${stagingId} processed via PostgreSQL function, status: ${result.status}`);
+
+        // Return early - PostgreSQL function already updated the record
+        await this.updateSessionCounters(record.session_id);
+        return {
+          success: result.status === 'success',
+          status: result.status,
+          message: result.status === 'success'
+            ? 'Record processed successfully'
+            : result.error_messages?.[0] || 'Processing failed'
+        };
+      }
+
+      // For other import types (CustomerData, SchemeData), use StagingProcessorService
       const { StagingProcessorService } = await import('./stagingProcessor.service');
       const processor = new StagingProcessorService();
 
       // Process the single record
-      const result = await (processor as any).processRecord(
+      result = await (processor as any).processRecord(
         {
           id: record.id,
           row_number: record.row_number,
