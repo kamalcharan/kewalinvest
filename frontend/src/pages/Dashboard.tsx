@@ -1,7 +1,8 @@
 // frontend/src/pages/Dashboard.tsx
 // Main Dashboard - Executive view for IFA/RIA managing multiple client portfolios
+// Redesigned based on practical data sources
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,112 +13,165 @@ import {
   Target,
   Bell,
   Briefcase,
-  PieChart,
-  Activity,
-  ArrowUpRight,
-  ArrowDownRight,
   Calendar,
-  AlertTriangle,
-  CheckCircle,
   Clock,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Download,
+  FileText,
+  Video,
+  Phone,
+  MapPin,
+  Banknote
 } from 'lucide-react';
 
-// Dummy data - In production, this would come from API
-const getDummyData = () => ({
-  // Executive Summary
+// Types for dashboard data
+interface DashboardData {
+  summary: {
+    totalAUM: number;
+    aumChange: number;
+    totalCustomers: number;
+    activeCustomers: number;
+    pendingActions: number;
+    criticalAlerts: number;
+  };
+  goalsSummary: {
+    totalGoals: number;
+    onTrack: number;
+    needsAttention: number;
+    offTrack: number;
+    lastCalculatedAt: string | null;
+    totalTargetValue: number;
+    currentValue: number;
+  };
+  downloadStatus: {
+    navDownloads: { success: number; failed: number; pending: number; lastRun: string | null };
+    marketDownloads: { success: number; failed: number; pending: number; lastRun: string | null };
+    snapshotStatus: { success: boolean; lastRun: string | null; customersProcessed: number };
+  };
+  upcomingActions: Array<{
+    id: number;
+    customerId: number;
+    customerName: string;
+    type: 'sip_due' | 'redemption' | 'birthday' | 'anniversary' | 'goal_review';
+    title: string;
+    description: string;
+    amount?: number;
+    dueDate: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+  }>;
+  plannedWithdrawals: Array<{
+    id: number;
+    customerId: number;
+    customerName: string;
+    goalName: string;
+    goalType: string;
+    amount: number;
+    withdrawalDate: string;
+    frequency: 'one_time' | 'monthly' | 'quarterly' | 'yearly';
+  }>;
+  meetings: {
+    today: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      title: string;
+      time: string;
+      type: 'video' | 'in_person' | 'phone';
+    }>;
+    upcoming: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      title: string;
+      date: string;
+      time: string;
+      type: 'video' | 'in_person' | 'phone';
+    }>;
+  };
+  reportStatus: Array<{
+    id: number;
+    reportName: string;
+    status: 'pending' | 'generating' | 'completed' | 'failed';
+    scheduledFor: string;
+    customersIncluded: number;
+  }>;
+  recentTransactions: Array<{
+    id: number;
+    customerName: string;
+    type: 'Purchase' | 'SIP' | 'Redemption' | 'Switch';
+    schemeName: string;
+    amount: number;
+    date: string;
+  }>;
+}
+
+// Dummy data generator - In production, this would come from APIs
+const getDummyData = (): DashboardData => ({
   summary: {
     totalAUM: 45672345.67,
     aumChange: 3.2,
     totalCustomers: 127,
     activeCustomers: 112,
-    totalSchemes: 89,
-    avgPortfolioSize: 359625.24,
-    mtdReturns: 2.8,
-    ytdReturns: 14.2
+    pendingActions: 23,
+    criticalAlerts: 3
   },
-
-  // Market Overview
-  marketIndices: [
-    { name: 'NIFTY 50', value: 24750.50, change: 1.2, changeValue: 293.45 },
-    { name: 'SENSEX', value: 81456.78, change: 1.15, changeValue: 925.32 },
-    { name: 'NIFTY BANK', value: 52340.25, change: -0.45, changeValue: -236.78 },
-    { name: 'NIFTY IT', value: 41250.80, change: 2.1, changeValue: 847.65 }
-  ],
-
-  // Alerts & Actions
-  pendingActions: {
-    criticalAlerts: 3,
-    highPriorityAlerts: 8,
-    pendingSIPs: 12,
-    redemptionsDue: 4,
-    birthdaysThisWeek: 5,
-    goalsOffTrack: 7
-  },
-
-  // Recent Alerts
-  recentAlerts: [
-    { id: 1, customer: 'Rajesh Kumar', type: 'SIP Due', amount: 25000, scheme: 'HDFC Mid-Cap Opportunities', dueDate: '2024-12-15', priority: 'high' },
-    { id: 2, customer: 'Priya Sharma', type: 'Goal Review', goal: 'Retirement Fund', progress: 78, priority: 'medium' },
-    { id: 3, customer: 'Amit Patel', type: 'Redemption', amount: 150000, scheme: 'ICICI Prudential Bluechip', dueDate: '2024-12-14', priority: 'critical' },
-    { id: 4, customer: 'Sunita Verma', type: 'Birthday', date: '2024-12-16', priority: 'low' },
-    { id: 5, customer: 'Vikram Singh', type: 'SIP Due', amount: 50000, scheme: 'Axis Small Cap Fund', dueDate: '2024-12-15', priority: 'high' }
-  ],
-
-  // Top Performing Schemes (by returns)
-  topSchemes: [
-    { name: 'Quant Small Cap Fund', category: 'Small Cap', returns1Y: 48.5, aum: 8234567 },
-    { name: 'Nippon India Small Cap', category: 'Small Cap', returns1Y: 42.3, aum: 6543210 },
-    { name: 'HDFC Mid-Cap Opportunities', category: 'Mid Cap', returns1Y: 38.7, aum: 5678234 },
-    { name: 'Parag Parikh Flexi Cap', category: 'Flexi Cap', returns1Y: 32.1, aum: 4567890 },
-    { name: 'ICICI Pru Technology', category: 'Sectoral', returns1Y: 29.8, aum: 3456789 }
-  ],
-
-  // Bottom Performing Schemes
-  bottomSchemes: [
-    { name: 'HDFC Balanced Advantage', category: 'Hybrid', returns1Y: 8.2, aum: 2345678 },
-    { name: 'SBI Magnum Gilt Fund', category: 'Debt', returns1Y: 6.5, aum: 1234567 },
-    { name: 'Kotak Liquid Fund', category: 'Liquid', returns1Y: 5.8, aum: 987654 }
-  ],
-
-  // Sector Allocation
-  sectorAllocation: [
-    { sector: 'Financial Services', percentage: 28.5, value: 13016518 },
-    { sector: 'Information Technology', percentage: 18.2, value: 8312366 },
-    { sector: 'Consumer Goods', percentage: 14.8, value: 6759507 },
-    { sector: 'Healthcare', percentage: 12.3, value: 5617698 },
-    { sector: 'Automobile', percentage: 9.5, value: 4338872 },
-    { sector: 'Others', percentage: 16.7, value: 7627383 }
-  ],
-
-  // Goal Summary
-  goalSummary: {
+  goalsSummary: {
     totalGoals: 156,
     onTrack: 124,
     needsAttention: 25,
     offTrack: 7,
+    lastCalculatedAt: '2024-12-12T06:00:00Z',
     totalTargetValue: 234567890,
     currentValue: 187654321
   },
-
-  // Recent Transactions
-  recentTransactions: [
-    { id: 1, customer: 'Rahul Mehta', type: 'Purchase', scheme: 'Axis Bluechip Fund', amount: 100000, date: '2024-12-12' },
-    { id: 2, customer: 'Neha Gupta', type: 'SIP', scheme: 'HDFC Flexi Cap', amount: 15000, date: '2024-12-12' },
-    { id: 3, customer: 'Arun Kumar', type: 'Redemption', scheme: 'SBI Large Cap', amount: 50000, date: '2024-12-11' },
-    { id: 4, customer: 'Deepa Joshi', type: 'Switch', scheme: 'ICICI Value Discovery', amount: 75000, date: '2024-12-11' },
-    { id: 5, customer: 'Kiran Rao', type: 'Purchase', scheme: 'Mirae Asset Large Cap', amount: 200000, date: '2024-12-10' }
+  downloadStatus: {
+    navDownloads: { success: 45, failed: 2, pending: 3, lastRun: '2024-12-12T22:00:00Z' },
+    marketDownloads: { success: 8, failed: 0, pending: 0, lastRun: '2024-12-12T22:30:00Z' },
+    snapshotStatus: { success: true, lastRun: '2024-12-12T21:00:00Z', customersProcessed: 112 }
+  },
+  upcomingActions: [
+    { id: 1, customerId: 101, customerName: 'Rajesh Kumar', type: 'sip_due', title: 'SIP Due', description: 'HDFC Mid-Cap Opportunities', amount: 25000, dueDate: '2024-12-15', priority: 'high' },
+    { id: 2, customerId: 102, customerName: 'Priya Sharma', type: 'goal_review', title: 'Goal Review', description: 'Retirement Fund at 78%', dueDate: '2024-12-14', priority: 'medium' },
+    { id: 3, customerId: 103, customerName: 'Amit Patel', type: 'redemption', title: 'Redemption Due', description: 'ICICI Prudential Bluechip', amount: 150000, dueDate: '2024-12-14', priority: 'critical' },
+    { id: 4, customerId: 104, customerName: 'Sunita Verma', type: 'birthday', title: 'Birthday', description: 'Client turning 45', dueDate: '2024-12-16', priority: 'low' },
+    { id: 5, customerId: 105, customerName: 'Vikram Singh', type: 'sip_due', title: 'SIP Due', description: 'Axis Small Cap Fund', amount: 50000, dueDate: '2024-12-15', priority: 'high' },
+    { id: 6, customerId: 106, customerName: 'Meera Reddy', type: 'anniversary', title: 'Anniversary', description: 'Wedding Anniversary', dueDate: '2024-12-18', priority: 'low' }
   ],
-
-  // Customer Insights
-  customerInsights: {
-    newCustomersThisMonth: 8,
-    totalInvestmentsThisMonth: 12500000,
-    totalRedemptionsThisMonth: 3200000,
-    netFlowThisMonth: 9300000,
-    avgInvestmentSize: 156250
-  }
+  // Planned withdrawals from Goals - NOT redemptions
+  plannedWithdrawals: [
+    { id: 1, customerId: 107, customerName: 'Suresh Menon', goalName: 'Home Down Payment', goalType: 'major_purchase', amount: 500000, withdrawalDate: '2025-01-15', frequency: 'one_time' },
+    { id: 2, customerId: 108, customerName: 'Kavita Nair', goalName: 'Child Education', goalType: 'education', amount: 200000, withdrawalDate: '2025-02-01', frequency: 'yearly' },
+    { id: 3, customerId: 109, customerName: 'Ravi Gupta', goalName: 'Retirement Income', goalType: 'retirement', amount: 75000, withdrawalDate: '2025-01-01', frequency: 'monthly' },
+    { id: 4, customerId: 110, customerName: 'Anita Desai', goalName: 'Vacation Fund', goalType: 'lifestyle', amount: 150000, withdrawalDate: '2025-03-10', frequency: 'one_time' }
+  ],
+  meetings: {
+    today: [
+      { id: 1, customerId: 110, customerName: 'Anil Kapoor', title: 'Portfolio Review', time: '10:30 AM', type: 'video' },
+      { id: 2, customerId: 111, customerName: 'Deepa Sharma', title: 'Goal Planning', time: '2:00 PM', type: 'in_person' },
+      { id: 3, customerId: 112, customerName: 'Ramesh Iyer', title: 'SIP Discussion', time: '4:30 PM', type: 'phone' }
+    ],
+    upcoming: [
+      { id: 4, customerId: 113, customerName: 'Neha Gupta', title: 'Quarterly Review', date: '2024-12-13', time: '11:00 AM', type: 'video' },
+      { id: 5, customerId: 114, customerName: 'Sanjay Mehta', title: 'New Investment', date: '2024-12-14', time: '3:00 PM', type: 'in_person' },
+      { id: 6, customerId: 115, customerName: 'Pooja Reddy', title: 'Tax Planning', date: '2024-12-16', time: '10:00 AM', type: 'video' }
+    ]
+  },
+  reportStatus: [
+    { id: 1, reportName: 'Monthly Portfolio Summary', status: 'pending', scheduledFor: '2024-12-15', customersIncluded: 127 },
+    { id: 2, reportName: 'Tax Harvesting Report', status: 'generating', scheduledFor: '2024-12-12', customersIncluded: 45 },
+    { id: 3, reportName: 'Goal Progress Report', status: 'completed', scheduledFor: '2024-12-10', customersIncluded: 89 }
+  ],
+  recentTransactions: [
+    { id: 1, customerName: 'Rahul Mehta', type: 'Purchase', schemeName: 'Axis Bluechip Fund', amount: 100000, date: '2024-12-12' },
+    { id: 2, customerName: 'Neha Gupta', type: 'SIP', schemeName: 'HDFC Flexi Cap', amount: 15000, date: '2024-12-12' },
+    { id: 3, customerName: 'Arun Kumar', type: 'Redemption', schemeName: 'SBI Large Cap', amount: 50000, date: '2024-12-11' },
+    { id: 4, customerName: 'Deepa Joshi', type: 'Switch', schemeName: 'ICICI Value Discovery', amount: 75000, date: '2024-12-11' },
+    { id: 5, customerName: 'Kiran Rao', type: 'Purchase', schemeName: 'Mirae Asset Large Cap', amount: 200000, date: '2024-12-10' }
+  ]
 });
 
 export const Dashboard: React.FC = () => {
@@ -126,13 +180,12 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [data, setData] = useState(getDummyData());
+  const [data, setData] = useState<DashboardData>(getDummyData());
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const refreshData = () => {
     setLoading(true);
-    // Simulate API call
     setTimeout(() => {
       setData(getDummyData());
       setLastUpdated(new Date());
@@ -143,15 +196,36 @@ export const Dashboard: React.FC = () => {
   // Format currency
   const formatCurrency = (value: number, compact = false) => {
     if (compact) {
-      if (value >= 10000000) return `${(value / 10000000).toFixed(2)} Cr`;
-      if (value >= 100000) return `${(value / 100000).toFixed(2)} L`;
-      if (value >= 1000) return `${(value / 1000).toFixed(1)} K`;
+      if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+      if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+      if (value >= 1000) return `₹${(value / 1000).toFixed(1)} K`;
     }
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(value);
+  };
+
+  // Format date
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  };
+
+  // Format relative date
+  const formatRelativeDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    return `${diffDays} days ago`;
   };
 
   // Get priority color
@@ -162,6 +236,28 @@ export const Dashboard: React.FC = () => {
       case 'medium': return '#F59E0B';
       case 'low': return '#10B981';
       default: return colors.utility.secondaryText;
+    }
+  };
+
+  // Get action type icon
+  const getActionIcon = (type: string) => {
+    switch (type) {
+      case 'sip_due': return '💰';
+      case 'redemption': return '📤';
+      case 'birthday': return '🎂';
+      case 'anniversary': return '💑';
+      case 'goal_review': return '🎯';
+      default: return '📋';
+    }
+  };
+
+  // Get meeting type icon
+  const getMeetingIcon = (type: string) => {
+    switch (type) {
+      case 'video': return <Video size={14} />;
+      case 'in_person': return <MapPin size={14} />;
+      case 'phone': return <Phone size={14} />;
+      default: return <Calendar size={14} />;
     }
   };
 
@@ -184,59 +280,38 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 
-  // Stat Card
-  const StatCard: React.FC<{
-    title: string;
-    value: string | number;
-    subValue?: string;
-    change?: number;
-    icon: React.ReactNode;
-    color: string;
-    onClick?: () => void;
-  }> = ({ title, value, subValue, change, icon, color, onClick }) => (
-    <Card onClick={onClick} style={onClick ? { cursor: 'pointer' } : {}}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>
-            {title}
-          </div>
-          <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
-            {value}
-          </div>
-          {subValue && (
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-              {subValue}
-            </div>
-          )}
-          {change !== undefined && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              marginTop: '8px',
-              fontSize: '13px',
-              fontWeight: '600',
-              color: change >= 0 ? '#10B981' : colors.semantic.error
-            }}>
-              {change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {change >= 0 ? '+' : ''}{change.toFixed(1)}%
-            </div>
-          )}
-        </div>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '12px',
-          backgroundColor: color + '15',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: color
-        }}>
-          {icon}
-        </div>
+  // Section Header
+  const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode; action?: { label: string; onClick: () => void } }> = ({ title, icon, action }) => (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '16px'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {icon && <span style={{ color: colors.utility.secondaryText }}>{icon}</span>}
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
+          {title}
+        </h3>
       </div>
-    </Card>
+      {action && (
+        <button
+          onClick={action.onClick}
+          style={{
+            fontSize: '12px',
+            color: colors.brand.primary,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          {action.label} <ChevronRight size={14} />
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -244,7 +319,8 @@ export const Dashboard: React.FC = () => {
       padding: '24px',
       maxWidth: '1600px',
       margin: '0 auto',
-      minHeight: 'calc(100vh - 64px)'
+      minHeight: 'calc(100vh - 64px)',
+      backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC'
     }}>
       {/* Header */}
       <div style={{
@@ -267,12 +343,12 @@ export const Dashboard: React.FC = () => {
             color: colors.utility.secondaryText,
             margin: 0
           }}>
-            Here's your portfolio overview for {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-            Last updated: {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            Updated: {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
           </span>
           <button
             onClick={refreshData}
@@ -305,36 +381,123 @@ export const Dashboard: React.FC = () => {
         gap: '16px',
         marginBottom: '24px'
       }}>
-        <StatCard
-          title="Total AUM"
-          value={formatCurrency(data.summary.totalAUM, true)}
-          change={data.summary.aumChange}
-          icon={<Briefcase size={24} />}
-          color={colors.brand.primary}
-        />
-        <StatCard
-          title="Active Customers"
-          value={data.summary.activeCustomers}
-          subValue={`of ${data.summary.totalCustomers} total`}
-          icon={<Users size={24} />}
-          color="#8B5CF6"
-          onClick={() => navigate('/customers')}
-        />
-        <StatCard
-          title="MTD Returns"
-          value={`${data.summary.mtdReturns}%`}
-          subValue={`YTD: ${data.summary.ytdReturns}%`}
-          icon={<TrendingUp size={24} />}
-          color="#10B981"
-        />
-        <StatCard
-          title="Pending Actions"
-          value={data.pendingActions.criticalAlerts + data.pendingActions.highPriorityAlerts}
-          subValue={`${data.pendingActions.criticalAlerts} critical`}
-          icon={<Bell size={24} />}
-          color={colors.semantic.error}
-          onClick={() => navigate('/cruise-control')}
-        />
+        {/* AUM Card */}
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Total AUM</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
+                {formatCurrency(data.summary.totalAUM, true)}
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginTop: '8px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: data.summary.aumChange >= 0 ? '#10B981' : colors.semantic.error
+              }}>
+                {data.summary.aumChange >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                {data.summary.aumChange >= 0 ? '+' : ''}{data.summary.aumChange}% MTD
+              </div>
+            </div>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '12px',
+              backgroundColor: colors.brand.primary + '15',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: colors.brand.primary
+            }}>
+              <Briefcase size={24} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Customers Card */}
+        <Card onClick={() => navigate('/customers')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Active Customers</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
+                {data.summary.activeCustomers}
+              </div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '8px' }}>
+                of {data.summary.totalCustomers} total
+              </div>
+            </div>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '12px',
+              backgroundColor: '#8B5CF615',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#8B5CF6'
+            }}>
+              <Users size={24} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Pending Actions Card */}
+        <Card onClick={() => navigate('/cruise-control')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Pending Actions</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: colors.utility.primaryText }}>
+                {data.summary.pendingActions}
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                marginTop: '8px', fontSize: '12px', color: colors.semantic.error
+              }}>
+                <AlertTriangle size={12} />
+                {data.summary.criticalAlerts} critical
+              </div>
+            </div>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '12px',
+              backgroundColor: colors.semantic.error + '15',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: colors.semantic.error
+            }}>
+              <Bell size={24} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Downloads Status Card */}
+        <Card onClick={() => navigate('/cruise-control')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '8px' }}>Downloads Today</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle size={16} style={{ color: '#10B981' }} />
+                  <span style={{ fontSize: '18px', fontWeight: '700', color: '#10B981' }}>
+                    {data.downloadStatus.navDownloads.success + data.downloadStatus.marketDownloads.success}
+                  </span>
+                </div>
+                {(data.downloadStatus.navDownloads.failed + data.downloadStatus.marketDownloads.failed) > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <XCircle size={16} style={{ color: colors.semantic.error }} />
+                    <span style={{ fontSize: '18px', fontWeight: '700', color: colors.semantic.error }}>
+                      {data.downloadStatus.navDownloads.failed + data.downloadStatus.marketDownloads.failed}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginTop: '8px' }}>
+                Last run: {formatRelativeDate(data.downloadStatus.navDownloads.lastRun)}
+              </div>
+            </div>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '12px',
+              backgroundColor: '#10B98115',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#10B981'
+            }}>
+              <Download size={24} />
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Main Content Grid */}
@@ -344,72 +507,13 @@ export const Dashboard: React.FC = () => {
         gap: '20px',
         marginBottom: '24px'
       }}>
-        {/* Market Overview */}
+        {/* Goals Overview */}
         <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Market Overview
-            </h3>
-            <Activity size={18} style={{ color: colors.utility.secondaryText }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {data.marketIndices.map((index, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px',
-                  backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                  borderRadius: '8px'
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: '600', color: colors.utility.primaryText, fontSize: '14px' }}>
-                    {index.name}
-                  </div>
-                  <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                    {index.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  backgroundColor: index.change >= 0 ? '#10B98115' : colors.semantic.error + '15',
-                  color: index.change >= 0 ? '#10B981' : colors.semantic.error,
-                  fontSize: '13px',
-                  fontWeight: '600'
-                }}>
-                  {index.change >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {index.change >= 0 ? '+' : ''}{index.change}%
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Goal Summary */}
-        <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Goals Overview
-            </h3>
-            <Target size={18} style={{ color: colors.utility.secondaryText }} />
-          </div>
+          <SectionHeader
+            title="Goals Overview"
+            icon={<Target size={18} />}
+            action={{ label: 'View All', onClick: () => navigate('/customers') }}
+          />
 
           {/* Goal Progress Bar */}
           <div style={{ marginBottom: '20px' }}>
@@ -421,7 +525,7 @@ export const Dashboard: React.FC = () => {
             }}>
               <span style={{ color: colors.utility.secondaryText }}>Overall Progress</span>
               <span style={{ fontWeight: '600', color: colors.utility.primaryText }}>
-                {((data.goalSummary.currentValue / data.goalSummary.totalTargetValue) * 100).toFixed(1)}%
+                {((data.goalsSummary.currentValue / data.goalsSummary.totalTargetValue) * 100).toFixed(1)}%
               </span>
             </div>
             <div style={{
@@ -431,7 +535,7 @@ export const Dashboard: React.FC = () => {
               overflow: 'hidden'
             }}>
               <div style={{
-                width: `${(data.goalSummary.currentValue / data.goalSummary.totalTargetValue) * 100}%`,
+                width: `${(data.goalsSummary.currentValue / data.goalsSummary.totalTargetValue) * 100}%`,
                 height: '100%',
                 backgroundColor: colors.brand.primary,
                 borderRadius: '5px'
@@ -444,8 +548,8 @@ export const Dashboard: React.FC = () => {
               fontSize: '11px',
               color: colors.utility.secondaryText
             }}>
-              <span>{formatCurrency(data.goalSummary.currentValue, true)}</span>
-              <span>{formatCurrency(data.goalSummary.totalTargetValue, true)}</span>
+              <span>{formatCurrency(data.goalsSummary.currentValue, true)}</span>
+              <span>{formatCurrency(data.goalsSummary.totalTargetValue, true)}</span>
             </div>
           </div>
 
@@ -453,7 +557,8 @@ export const Dashboard: React.FC = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px'
+            gap: '12px',
+            marginBottom: '12px'
           }}>
             <div style={{
               padding: '12px',
@@ -462,7 +567,7 @@ export const Dashboard: React.FC = () => {
               textAlign: 'center'
             }}>
               <div style={{ fontSize: '24px', fontWeight: '700', color: '#10B981' }}>
-                {data.goalSummary.onTrack}
+                {data.goalsSummary.onTrack}
               </div>
               <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>On Track</div>
             </div>
@@ -473,7 +578,7 @@ export const Dashboard: React.FC = () => {
               textAlign: 'center'
             }}>
               <div style={{ fontSize: '24px', fontWeight: '700', color: '#F59E0B' }}>
-                {data.goalSummary.needsAttention}
+                {data.goalsSummary.needsAttention}
               </div>
               <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Needs Attention</div>
             </div>
@@ -484,116 +589,140 @@ export const Dashboard: React.FC = () => {
               textAlign: 'center'
             }}>
               <div style={{ fontSize: '24px', fontWeight: '700', color: colors.semantic.error }}>
-                {data.goalSummary.offTrack}
+                {data.goalsSummary.offTrack}
               </div>
               <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Off Track</div>
             </div>
           </div>
 
           <div style={{
-            marginTop: '16px',
-            fontSize: '13px',
+            fontSize: '11px',
             color: colors.utility.secondaryText,
-            textAlign: 'center'
+            textAlign: 'center',
+            padding: '8px',
+            backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+            borderRadius: '6px'
           }}>
-            {data.goalSummary.totalGoals} total goals across all customers
+            {data.goalsSummary.totalGoals} goals • Last calculated: {formatRelativeDate(data.goalsSummary.lastCalculatedAt)}
           </div>
         </Card>
 
-        {/* Pending Actions / Alerts */}
-        <Card style={{ gridRow: 'span 2' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Action Required
-            </h3>
-            <button
-              onClick={() => navigate('/cruise-control')}
-              style={{
+        {/* Today's Meetings */}
+        <Card>
+          <SectionHeader
+            title="Today's Meetings"
+            icon={<Calendar size={18} />}
+            action={{ label: 'Add Meeting', onClick: () => console.log('Add meeting clicked') }}
+          />
+
+          {data.meetings.today.length === 0 ? (
+            <div style={{
+              padding: '32px',
+              textAlign: 'center',
+              color: colors.utility.secondaryText
+            }}>
+              <Calendar size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <div>No meetings scheduled for today</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {data.meetings.today.map((meeting) => (
+                <div
+                  key={meeting.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => navigate(`/customers/${meeting.customerId}`)}
+                >
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '8px',
+                    backgroundColor: colors.brand.primary + '15',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: colors.brand.primary
+                  }}>
+                    {getMeetingIcon(meeting.type)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', fontSize: '13px', color: colors.utility.primaryText }}>
+                      {meeting.title}
+                    </div>
+                    <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                      {meeting.customerName}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: colors.brand.primary
+                  }}>
+                    {meeting.time}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upcoming This Week */}
+          {data.meetings.upcoming.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <div style={{
                 fontSize: '12px',
-                color: colors.brand.primary,
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              View All <ChevronRight size={14} />
-            </button>
-          </div>
+                fontWeight: '600',
+                color: colors.utility.secondaryText,
+                marginBottom: '8px'
+              }}>
+                UPCOMING THIS WEEK
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {data.meetings.upcoming.slice(0, 3).map((meeting) => (
+                  <div
+                    key={meeting.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      borderLeft: `2px solid ${colors.brand.primary}40`,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => navigate(`/customers/${meeting.customerId}`)}
+                  >
+                    <span style={{ color: colors.utility.primaryText }}>{meeting.customerName}</span>
+                    <span style={{ color: colors.utility.secondaryText }}>{formatDate(meeting.date)} • {meeting.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
 
-          {/* Quick Stats */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '8px',
-            marginBottom: '16px'
-          }}>
-            <div style={{
-              padding: '10px',
-              backgroundColor: colors.semantic.error + '10',
-              borderRadius: '8px',
-              borderLeft: `3px solid ${colors.semantic.error}`
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: colors.semantic.error }}>
-                {data.pendingActions.criticalAlerts}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Critical</div>
-            </div>
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#F9731615',
-              borderRadius: '8px',
-              borderLeft: '3px solid #F97316'
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#F97316' }}>
-                {data.pendingActions.pendingSIPs}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>SIPs Due</div>
-            </div>
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#8B5CF615',
-              borderRadius: '8px',
-              borderLeft: '3px solid #8B5CF6'
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#8B5CF6' }}>
-                {data.pendingActions.goalsOffTrack}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Goals Off Track</div>
-            </div>
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#10B98115',
-              borderRadius: '8px',
-              borderLeft: '3px solid #10B981'
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#10B981' }}>
-                {data.pendingActions.birthdaysThisWeek}
-              </div>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Birthdays</div>
-            </div>
-          </div>
+        {/* Action Required */}
+        <Card style={{ gridRow: 'span 2' }}>
+          <SectionHeader
+            title="Action Required"
+            icon={<Bell size={18} />}
+            action={{ label: 'View All', onClick: () => navigate('/cruise-control') }}
+          />
 
-          {/* Recent Alerts List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {data.recentAlerts.slice(0, 5).map((alert) => (
+            {data.upcomingActions.slice(0, 6).map((action) => (
               <div
-                key={alert.id}
+                key={action.id}
                 style={{
                   padding: '12px',
                   backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
                   borderRadius: '8px',
-                  borderLeft: `3px solid ${getPriorityColor(alert.priority)}`,
+                  borderLeft: `3px solid ${getPriorityColor(action.priority)}`,
                   cursor: 'pointer'
                 }}
-                onClick={() => navigate(`/customers/${alert.id}`)}
+                onClick={() => navigate(`/customers/${action.customerId}`)}
               >
                 <div style={{
                   display: 'flex',
@@ -601,137 +730,160 @@ export const Dashboard: React.FC = () => {
                   alignItems: 'flex-start',
                   marginBottom: '4px'
                 }}>
-                  <div style={{ fontWeight: '600', fontSize: '13px', color: colors.utility.primaryText }}>
-                    {alert.customer}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: '600',
+                    fontSize: '13px',
+                    color: colors.utility.primaryText
+                  }}>
+                    <span>{getActionIcon(action.type)}</span>
+                    {action.customerName}
                   </div>
                   <span style={{
                     fontSize: '10px',
                     padding: '2px 6px',
                     borderRadius: '4px',
-                    backgroundColor: getPriorityColor(alert.priority) + '20',
-                    color: getPriorityColor(alert.priority),
+                    backgroundColor: getPriorityColor(action.priority) + '20',
+                    color: getPriorityColor(action.priority),
                     fontWeight: '600',
                     textTransform: 'uppercase'
                   }}>
-                    {alert.priority}
+                    {action.priority}
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                  {alert.type}
-                  {alert.amount && ` - ${formatCurrency(alert.amount)}`}
-                </div>
-                {alert.scheme && (
-                  <div style={{
-                    fontSize: '11px',
-                    color: colors.utility.secondaryText,
-                    marginTop: '2px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {alert.scheme}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Top Performing Schemes */}
-        <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Top Performers (1Y)
-            </h3>
-            <TrendingUp size={18} style={{ color: '#10B981' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {data.topSchemes.map((scheme, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '10px',
-                  backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                  borderRadius: '8px'
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontWeight: '500',
-                    fontSize: '13px',
-                    color: colors.utility.primaryText,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {scheme.name}
-                  </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                    {scheme.category} | {formatCurrency(scheme.aum, true)}
-                  </div>
+                  {action.title}
+                  {action.amount && ` • ${formatCurrency(action.amount)}`}
                 </div>
                 <div style={{
-                  fontWeight: '700',
-                  fontSize: '14px',
-                  color: '#10B981',
-                  marginLeft: '12px'
+                  fontSize: '11px',
+                  color: colors.utility.secondaryText,
+                  marginTop: '4px'
                 }}>
-                  +{scheme.returns1Y}%
+                  {action.description} • Due: {formatDate(action.dueDate)}
                 </div>
               </div>
             ))}
           </div>
         </Card>
 
-        {/* Sector Allocation */}
+        {/* Planned Withdrawals from Goals */}
         <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Sector Allocation
-            </h3>
-            <PieChart size={18} style={{ color: colors.utility.secondaryText }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {data.sectorAllocation.map((sector, i) => {
-              const sectorColors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280'];
-              return (
-                <div key={i}>
-                  <div style={{
+          <SectionHeader
+            title="Planned Withdrawals (Next 3 Months)"
+            icon={<Banknote size={18} />}
+          />
+
+          {data.plannedWithdrawals.length === 0 ? (
+            <div style={{
+              padding: '24px',
+              textAlign: 'center',
+              color: colors.utility.secondaryText
+            }}>
+              No withdrawals planned
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {data.plannedWithdrawals.slice(0, 4).map((withdrawal) => (
+                <div
+                  key={withdrawal.id}
+                  style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    marginBottom: '4px',
-                    fontSize: '13px'
-                  }}>
-                    <span style={{ color: colors.utility.primaryText }}>{sector.sector}</span>
-                    <span style={{ color: colors.utility.secondaryText }}>
-                      {sector.percentage}% ({formatCurrency(sector.value, true)})
-                    </span>
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '500', fontSize: '13px', color: colors.utility.primaryText }}>
+                      {withdrawal.customerName}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {withdrawal.goalName}
+                      {withdrawal.frequency !== 'one_time' && (
+                        <span style={{
+                          marginLeft: '6px',
+                          fontSize: '10px',
+                          padding: '1px 4px',
+                          backgroundColor: colors.brand.primary + '15',
+                          color: colors.brand.primary,
+                          borderRadius: '3px'
+                        }}>
+                          {withdrawal.frequency}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '600', fontSize: '13px', color: '#F97316' }}>
+                      {formatCurrency(withdrawal.amount, true)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {formatDate(withdrawal.withdrawalDate)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Report Generation Status */}
+        <Card>
+          <SectionHeader
+            title="Report Generation"
+            icon={<FileText size={18} />}
+          />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {data.reportStatus.map((report) => {
+              const statusConfig: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
+                pending: { color: '#F59E0B', bg: '#F59E0B15', icon: <Clock size={14} /> },
+                generating: { color: colors.brand.primary, bg: colors.brand.primary + '15', icon: <RefreshCw size={14} className="animate-spin" /> },
+                completed: { color: '#10B981', bg: '#10B98115', icon: <CheckCircle size={14} /> },
+                failed: { color: colors.semantic.error, bg: colors.semantic.error + '15', icon: <XCircle size={14} /> }
+              };
+              const config = statusConfig[report.status];
+
+              return (
+                <div
+                  key={report.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '500', fontSize: '13px', color: colors.utility.primaryText }}>
+                      {report.reportName}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {report.customersIncluded} customers • {formatDate(report.scheduledFor)}
+                    </div>
                   </div>
                   <div style={{
-                    height: '6px',
-                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#E2E8F0',
-                    borderRadius: '3px',
-                    overflow: 'hidden'
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: config.bg,
+                    color: config.color,
+                    fontSize: '12px',
+                    fontWeight: '500'
                   }}>
-                    <div style={{
-                      width: `${sector.percentage}%`,
-                      height: '100%',
-                      backgroundColor: sectorColors[i % sectorColors.length],
-                      borderRadius: '3px'
-                    }} />
+                    {config.icon}
+                    {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
                   </div>
                 </div>
               );
@@ -740,175 +892,81 @@ export const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Bottom Section */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '20px'
-      }}>
-        {/* Recent Transactions */}
-        <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              Recent Transactions
-            </h3>
-            <Calendar size={18} style={{ color: colors.utility.secondaryText }} />
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}` }}>
-                <th style={{ padding: '8px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Customer</th>
-                <th style={{ padding: '8px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Type</th>
-                <th style={{ padding: '8px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Scheme</th>
-                <th style={{ padding: '8px 0', textAlign: 'right', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Amount</th>
+      {/* Bottom Section - Recent Transactions */}
+      <Card>
+        <SectionHeader
+          title="Recent Transactions"
+          icon={<Clock size={18} />}
+          action={{ label: 'View All', onClick: () => navigate('/transactions') }}
+        />
+
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}` }}>
+              <th style={{ padding: '10px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Customer</th>
+              <th style={{ padding: '10px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Type</th>
+              <th style={{ padding: '10px 0', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Scheme</th>
+              <th style={{ padding: '10px 0', textAlign: 'right', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Amount</th>
+              <th style={{ padding: '10px 0', textAlign: 'right', fontSize: '11px', fontWeight: '600', color: colors.utility.secondaryText }}>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.recentTransactions.map((txn) => (
+              <tr
+                key={txn.id}
+                style={{
+                  borderBottom: `1px solid ${isDarkMode ? colors.utility.primaryText + '05' : '#F1F5F9'}`,
+                  cursor: 'pointer'
+                }}
+              >
+                <td style={{ padding: '12px 0', fontSize: '13px', color: colors.utility.primaryText }}>
+                  {txn.customerName}
+                </td>
+                <td style={{ padding: '12px 0' }}>
+                  <span style={{
+                    fontSize: '11px',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    backgroundColor: txn.type === 'Redemption' ? colors.semantic.error + '15' : '#10B98115',
+                    color: txn.type === 'Redemption' ? colors.semantic.error : '#10B981',
+                    fontWeight: '500'
+                  }}>
+                    {txn.type}
+                  </span>
+                </td>
+                <td style={{
+                  padding: '12px 0',
+                  fontSize: '12px',
+                  color: colors.utility.secondaryText,
+                  maxWidth: '250px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {txn.schemeName}
+                </td>
+                <td style={{
+                  padding: '12px 0',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText,
+                  textAlign: 'right'
+                }}>
+                  {formatCurrency(txn.amount)}
+                </td>
+                <td style={{
+                  padding: '12px 0',
+                  fontSize: '12px',
+                  color: colors.utility.secondaryText,
+                  textAlign: 'right'
+                }}>
+                  {formatDate(txn.date)}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {data.recentTransactions.map((txn) => (
-                <tr
-                  key={txn.id}
-                  style={{
-                    borderBottom: `1px solid ${isDarkMode ? colors.utility.primaryText + '05' : '#F1F5F9'}`,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <td style={{ padding: '10px 0', fontSize: '13px', color: colors.utility.primaryText }}>
-                    {txn.customer}
-                  </td>
-                  <td style={{ padding: '10px 0' }}>
-                    <span style={{
-                      fontSize: '11px',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      backgroundColor: txn.type === 'Redemption' ? colors.semantic.error + '15' : '#10B98115',
-                      color: txn.type === 'Redemption' ? colors.semantic.error : '#10B981',
-                      fontWeight: '500'
-                    }}>
-                      {txn.type}
-                    </span>
-                  </td>
-                  <td style={{
-                    padding: '10px 0',
-                    fontSize: '12px',
-                    color: colors.utility.secondaryText,
-                    maxWidth: '200px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {txn.scheme}
-                  </td>
-                  <td style={{
-                    padding: '10px 0',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: colors.utility.primaryText,
-                    textAlign: 'right'
-                  }}>
-                    {formatCurrency(txn.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-
-        {/* Customer Insights */}
-        <Card>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-              This Month's Activity
-            </h3>
-            <Activity size={18} style={{ color: colors.utility.secondaryText }} />
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '16px'
-          }}>
-            <div style={{
-              padding: '16px',
-              backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-              borderRadius: '10px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-                New Customers
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: colors.brand.primary }}>
-                +{data.customerInsights.newCustomersThisMonth}
-              </div>
-            </div>
-            <div style={{
-              padding: '16px',
-              backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-              borderRadius: '10px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-                Avg Investment
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#8B5CF6' }}>
-                {formatCurrency(data.customerInsights.avgInvestmentSize, true)}
-              </div>
-            </div>
-            <div style={{
-              padding: '16px',
-              backgroundColor: '#10B98110',
-              borderRadius: '10px'
-            }}>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-                Total Investments
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '700', color: '#10B981' }}>
-                {formatCurrency(data.customerInsights.totalInvestmentsThisMonth, true)}
-              </div>
-            </div>
-            <div style={{
-              padding: '16px',
-              backgroundColor: colors.semantic.error + '10',
-              borderRadius: '10px'
-            }}>
-              <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-                Total Redemptions
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '700', color: colors.semantic.error }}>
-                {formatCurrency(data.customerInsights.totalRedemptionsThisMonth, true)}
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            marginTop: '16px',
-            padding: '16px',
-            backgroundColor: colors.brand.primary + '10',
-            borderRadius: '10px',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-              Net Flow This Month
-            </div>
-            <div style={{
-              fontSize: '32px',
-              fontWeight: '700',
-              color: data.customerInsights.netFlowThisMonth >= 0 ? '#10B981' : colors.semantic.error
-            }}>
-              {data.customerInsights.netFlowThisMonth >= 0 ? '+' : ''}{formatCurrency(data.customerInsights.netFlowThisMonth, true)}
-            </div>
-          </div>
-        </Card>
-      </div>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 };
