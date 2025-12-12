@@ -3,7 +3,8 @@ import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ImportSession } from '../../types/import.types';
 import SessionMetrics from './SessionMetrics';
-import SessionRecordsTable from './SessionRecordsTable';
+import ImportResults from '../ETL/ImportResults';
+import { toastService } from '../../services/toast.service';
 
 interface SessionDetailsProps {
   session: ImportSession | null;
@@ -13,6 +14,10 @@ interface SessionDetailsProps {
 const SessionDetails: React.FC<SessionDetailsProps> = ({ session, onRefreshSessions }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  const handleError = (error: string) => {
+    toastService.error(error);
+  };
 
   if (!session) {
     return (
@@ -62,11 +67,20 @@ const SessionDetails: React.FC<SessionDetailsProps> = ({ session, onRefreshSessi
       flexDirection: 'column',
       gap: '24px'
     }}>
-      {/* Session Metrics */}
+      {/* Session Metrics with delete staging functionality */}
       <SessionMetrics session={session} onStagingDeleted={onRefreshSessions} />
 
-      {/* Session Records Table */}
-      <SessionRecordsTable session={session} />
+      {/* Import Results with Edit+Reprocess functionality */}
+      <ImportResults
+        sessionId={session.id}
+        onStartNewImport={() => {
+          // In dashboard context, just refresh sessions list
+          if (onRefreshSessions) {
+            onRefreshSessions();
+          }
+        }}
+        onError={handleError}
+      />
     </div>
   );
 };

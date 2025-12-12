@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import { toastService } from '../../services/toast.service';
 
 interface RecordEditModalProps {
   isOpen: boolean;
@@ -77,6 +78,7 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
 
       const token = localStorage.getItem('access_token');
       if (!token) {
+        toastService.error('Authentication token not found');
         onError('Authentication token not found');
         return;
       }
@@ -98,12 +100,15 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
       const result = await response.json();
 
       if (result.success) {
+        toastService.success(`Record #${record.row_number} saved. Click "Save & Reprocess" to process it.`);
         onSaveSuccess();
         onClose();
       } else {
+        toastService.error(result.error || 'Failed to save changes');
         onError(result.error || 'Failed to save changes');
       }
     } catch (error: any) {
+      toastService.error(error.message || 'Failed to save changes');
       onError(error.message || 'Failed to save changes');
     } finally {
       setIsSaving(false);
@@ -111,12 +116,16 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
   };
 
   const handleSaveAndReprocess = async () => {
+    const loadingToastId = toastService.loading(`Processing Record #${record.row_number}...`);
+
     try {
       setIsReprocessing(true);
 
       // First save the edits
       const token = localStorage.getItem('access_token');
       if (!token) {
+        toastService.dismiss(loadingToastId);
+        toastService.error('Authentication token not found');
         onError('Authentication token not found');
         return;
       }
@@ -138,6 +147,8 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
       const editResult = await editResponse.json();
 
       if (!editResult.success) {
+        toastService.dismiss(loadingToastId);
+        toastService.error(editResult.error || 'Failed to save changes');
         onError(editResult.error || 'Failed to save changes');
         return;
       }
@@ -157,14 +168,26 @@ const RecordEditModal: React.FC<RecordEditModalProps> = ({
       );
 
       const reprocessResult = await reprocessResponse.json();
+      toastService.dismiss(loadingToastId);
 
-      if (reprocessResult.success) {
-        onSaveSuccess();
-        onClose();
+      // Show result based on actual status (success, duplicate, orphan, failed)
+      const status = reprocessResult.status || (reprocessResult.success ? 'success' : 'failed');
+
+      if (status === 'success') {
+        toastService.success(`Record #${record.row_number} processed successfully!`);
+      } else if (status === 'duplicate') {
+        toastService.warning(`Record #${record.row_number} is a duplicate. ${reprocessResult.message || ''}`);
+      } else if (status === 'orphan') {
+        toastService.warning(`Record #${record.row_number} is orphan (no matching customer). ${reprocessResult.message || ''}`);
       } else {
-        onError(reprocessResult.error || 'Failed to reprocess record');
+        toastService.error(`Record #${record.row_number} failed: ${reprocessResult.message || 'Processing failed'}`);
       }
+
+      onSaveSuccess();
+      onClose();
     } catch (error: any) {
+      toastService.dismiss(loadingToastId);
+      toastService.error(error.message || 'Failed to save and reprocess');
       onError(error.message || 'Failed to save and reprocess');
     } finally {
       setIsReprocessing(false);
