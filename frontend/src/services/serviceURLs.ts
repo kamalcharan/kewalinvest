@@ -259,6 +259,7 @@ export const API_ENDPOINTS = {
     // Dashboard & Statistics (using existing endpoints)
     NAV_STATISTICS: `${API_BASE}/nav/statistics`,
     MARKET_STATISTICS: `${API_BASE}/market/statistics`,
+    MARKET_DETAILED_STATUS: `${API_BASE}/market/detailed-status`,
 
     // Alerts (using JTBD endpoints)
     ALERTS_UPCOMING: `${API_BASE}/jtbd/dashboard/upcoming-alerts`,

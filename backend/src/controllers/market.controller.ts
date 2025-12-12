@@ -455,6 +455,31 @@ export class MarketController {
     }
   };
 
+  /**
+   * GET /api/market/detailed-status
+   * Get detailed status for all indices including download, metrics, and gaps
+   * Used by Cruise Control -> Market Downloads UI
+   */
+  getDetailedStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.marketService.getDetailedIndexStatus();
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      SimpleLogger.error('MarketController', 'Failed to get detailed status', 'getDetailedStatus', {
+        error: error.message
+      });
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get detailed status'
+      });
+    }
+  };
+
   // ==================== HEALTH CHECK ====================
 
   /**
