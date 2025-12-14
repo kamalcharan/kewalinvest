@@ -168,7 +168,7 @@ CREATE TABLE t_customers (
     tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    pan VARCHAR(10),
+    pan VARCHAR(15),
     iwell_code VARCHAR(100),
     date_of_birth DATE,
     anniversary_date DATE,

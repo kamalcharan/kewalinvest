@@ -523,7 +523,7 @@ CREATE TABLE t_customers (
     is_active BOOLEAN DEFAULT true,
     
     -- Sensitive data stored as PLAIN TEXT
-    pan VARCHAR(10),
+    pan VARCHAR(15),
     iwell_code VARCHAR(100),
     
     -- Personal details
