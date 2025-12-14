@@ -276,6 +276,46 @@ COMMENT ON COLUMN t_customer_meetings.meeting_link IS 'Video call URL for video_
 COMMENT ON COLUMN t_customer_meetings.outcome IS 'Meeting outcome/summary after completion';
 
 -- ============================================================================
+-- TABLE: t_customer_aliases (Customer alias/grouping feature)
+-- Description: Stores alias definitions for virtually grouping duplicate customer profiles
+-- ============================================================================
+CREATE TABLE t_customer_aliases (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    alias_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_by INTEGER NOT NULL REFERENCES t_users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT true,
+    -- Ensure unique alias names per tenant
+    CONSTRAINT uq_alias_name_tenant UNIQUE (tenant_id, alias_name)
+);
+
+COMMENT ON TABLE t_customer_aliases IS 'Stores alias definitions for virtually grouping duplicate customer profiles';
+
+-- ============================================================================
+-- TABLE: t_customer_alias_members (Links customers to aliases)
+-- Description: Links customers to their alias group
+-- ============================================================================
+CREATE TABLE t_customer_alias_members (
+    id SERIAL PRIMARY KEY,
+    alias_id INTEGER NOT NULL REFERENCES t_customer_aliases(id) ON DELETE CASCADE,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
+    is_primary BOOLEAN DEFAULT false,
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    added_by INTEGER NOT NULL REFERENCES t_users(id),
+    -- Each customer can only be in one alias (prevent double-counting)
+    CONSTRAINT uq_customer_alias UNIQUE (customer_id),
+    -- Each alias can only have one primary customer
+    CONSTRAINT uq_alias_primary EXCLUDE (alias_id WITH =) WHERE (is_primary = true)
+);
+
+COMMENT ON TABLE t_customer_alias_members IS 'Links customers to their alias group';
+COMMENT ON COLUMN t_customer_alias_members.is_primary IS 'Identifies the primary customer record in the alias for display purposes';
+COMMENT ON CONSTRAINT uq_customer_alias ON t_customer_alias_members IS 'Each customer can only belong to one alias to prevent double-counting in aggregations';
+
+-- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
 -- ============================================================================
 DO $$

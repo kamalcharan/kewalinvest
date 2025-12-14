@@ -273,7 +273,19 @@ COMMENT ON INDEX idx_customer_meetings_customer IS 'Fast lookup for customer mee
 COMMENT ON INDEX idx_customer_meetings_upcoming IS 'Optimized for upcoming scheduled meetings query';
 
 -- ============================================================================
--- 2.3: CUSTOMER BOOKMARKS INDEXES
+-- 2.3: CUSTOMER ALIAS INDEXES
+-- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_customer_aliases_tenant ON t_customer_aliases(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_customer_aliases_created_by ON t_customer_aliases(created_by);
+CREATE INDEX IF NOT EXISTS idx_alias_members_alias ON t_customer_alias_members(alias_id);
+CREATE INDEX IF NOT EXISTS idx_alias_members_customer ON t_customer_alias_members(customer_id);
+
+COMMENT ON INDEX idx_customer_aliases_tenant IS 'Fast lookup for aliases by tenant';
+COMMENT ON INDEX idx_alias_members_alias IS 'Fast lookup for alias members by alias';
+COMMENT ON INDEX idx_alias_members_customer IS 'Fast lookup to find which alias a customer belongs to';
+
+-- ============================================================================
+-- 2.4: CUSTOMER BOOKMARKS INDEXES
 -- ============================================================================
 CREATE INDEX idx_customer_bookmarks_user ON t_customer_bookmarks USING btree (user_id, tenant_id, is_live, is_active);
 CREATE INDEX idx_customer_bookmarks_customer ON t_customer_bookmarks USING btree (customer_id, is_active);
@@ -728,6 +740,11 @@ CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON t_customers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_customer_bookmarks_updated_at BEFORE UPDATE ON t_customer_bookmarks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Customer alias trigger
+DROP TRIGGER IF EXISTS trigger_update_alias_timestamp ON t_customer_aliases;
+CREATE TRIGGER trigger_update_alias_timestamp BEFORE UPDATE ON t_customer_aliases
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_bookmark_reasons_updated_at BEFORE UPDATE ON m_bookmark_reasons
