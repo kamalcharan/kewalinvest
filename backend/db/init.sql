@@ -465,7 +465,7 @@ CREATE TABLE t_contacts (
     is_customer BOOLEAN DEFAULT false,
     
     -- Contact basic info
-    prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
+    prefix VARCHAR(20) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri', 'Shri', 'Smt', 'Kumari', 'Master', 'Late', 'Pandit', 'CA', 'Adv')),
     name VARCHAR(255) NOT NULL,
     
     -- System fields

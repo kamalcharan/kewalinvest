@@ -109,7 +109,7 @@ CREATE TABLE t_contacts (
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
     is_customer BOOLEAN DEFAULT false,
-    prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
+    prefix VARCHAR(20) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri', 'Shri', 'Smt', 'Kumari', 'Master', 'Late', 'Pandit', 'CA', 'Adv')),
     name VARCHAR(255) NOT NULL,
     normalized_name TEXT GENERATED ALWAYS AS (
         -- Normalize: Remove salutations, uppercase, remove special chars, normalize whitespace
