@@ -873,7 +873,7 @@ export class NavController {
       // GLOBAL CHECK: Check if today's NAV data already exists (downloaded by any tenant)
       const today = new Date().toISOString().split('T')[0];
       const existingNavQuery = `
-        SELECT nav_date, nav
+        SELECT nav_date, nav_value
         FROM t_nav_data
         WHERE scheme_id = $1 AND nav_date >= $2::date
         ORDER BY nav_date DESC
@@ -901,7 +901,7 @@ export class NavController {
             records_inserted: 0,
             records_updated: 0,
             nav_date: existingData.nav_date,
-            nav_value: existingData.nav,
+            nav_value: existingData.nav_value,
             source: 'already_available'
           },
           message: `NAV already up to date for ${schemeName}`
