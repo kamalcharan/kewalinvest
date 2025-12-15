@@ -376,7 +376,6 @@ export const SchedulerSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingJob, setEditingJob] = useState<JobType | null>(null);
-  const [activatingJob, setActivatingJob] = useState<string | null>(null);
 
   // Check if a job is configured for this tenant
   const isJobConfigured = (job: JobType): boolean => {
@@ -384,41 +383,6 @@ export const SchedulerSettings: React.FC = () => {
     if (job.is_global) return true;
     // Per-tenant jobs need tenant_cron_expression to be set
     return job.tenant_cron_expression !== null;
-  };
-
-  // Activate configuration for a job type
-  const handleActivateConfig = async (jobCode: string) => {
-    try {
-      setActivatingJob(jobCode);
-
-      // Find the job to get default values
-      const job = jobTypes.find(j => j.code === jobCode);
-      if (!job) {
-        throw new Error('Job not found');
-      }
-
-      // Create config with default values
-      const response = await apiService.post(
-        `${API_ENDPOINTS.JOBS.CONFIG(jobCode)}?is_live=true`,
-        {
-          schedule_type: job.default_schedule_type || 'daily',
-          cron_expression: job.default_cron_expression,
-          is_enabled: true,
-          max_retries: job.default_max_retries || 3
-        }
-      ) as any;
-
-      if (response.success) {
-        toastService.success(`${job.name} configuration activated successfully`);
-        await fetchJobTypes();
-      } else {
-        throw new Error(response.error || 'Failed to activate configuration');
-      }
-    } catch (err: any) {
-      toastService.error(err.message || 'Failed to activate configuration');
-    } finally {
-      setActivatingJob(null);
-    }
   };
 
   useEffect(() => {
@@ -672,107 +636,74 @@ export const SchedulerSettings: React.FC = () => {
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        {/* Show Activate button if not configured */}
+                        {/* Edit Button - Only show for editable and configured jobs */}
+                        {isJobConfigured(job) && isJobEditable(job.code) && (
+                          <button
+                            onClick={() => setEditingJob(job)}
+                            title="Edit Schedule"
+                            style={{
+                              padding: '6px',
+                              backgroundColor: 'transparent',
+                              color: colors.utility.secondaryText,
+                              border: `1px solid ${colors.utility.primaryText}20`,
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                              e.currentTarget.style.color = colors.brand.primary;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = colors.utility.secondaryText;
+                            }}
+                          >
+                            <Settings size={16} />
+                          </button>
+                        )}
+
+                        {/* Status Badge */}
                         {!isJobConfigured(job) ? (
-                          <>
-                            {/* Not Configured Badge */}
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '500',
-                              backgroundColor: `${colors.semantic.warning}15`,
-                              color: colors.semantic.warning
-                            }}>
-                              <AlertCircle size={12} />
-                              Not Configured
-                            </div>
-
-                            {/* Activate Configuration Button */}
-                            <button
-                              onClick={() => handleActivateConfig(job.code)}
-                              disabled={activatingJob === job.code}
-                              style={{
-                                padding: '6px 12px',
-                                backgroundColor: colors.brand.primary,
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: activatingJob === job.code ? 'not-allowed' : 'pointer',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                opacity: activatingJob === job.code ? 0.7 : 1
-                              }}
-                            >
-                              {activatingJob === job.code ? (
-                                <>
-                                  <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
-                                  Activating...
-                                </>
-                              ) : (
-                                'Activate Configuration'
-                              )}
-                            </button>
-                          </>
+                          // Not Configured Badge
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            backgroundColor: `${colors.semantic.warning}15`,
+                            color: colors.semantic.warning
+                          }}>
+                            <AlertCircle size={12} />
+                            Not Configured
+                          </div>
                         ) : (
-                          <>
-                            {/* Edit Button - Only show for editable and configured jobs */}
-                            {isJobEditable(job.code) && (
-                              <button
-                                onClick={() => setEditingJob(job)}
-                                title="Edit Schedule"
-                                style={{
-                                  padding: '6px',
-                                  backgroundColor: 'transparent',
-                                  color: colors.utility.secondaryText,
-                                  border: `1px solid ${colors.utility.primaryText}20`,
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
-                                  e.currentTarget.style.color = colors.brand.primary;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                  e.currentTarget.style.color = colors.utility.secondaryText;
-                                }}
-                              >
-                                <Settings size={16} />
-                              </button>
-                            )}
-
-                            {/* Status Badge - Configured */}
+                          // Active/Inactive Badge
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            backgroundColor: job.is_active ? `${colors.semantic.success}15` : `${colors.utility.secondaryText}15`,
+                            color: job.is_active ? colors.semantic.success : colors.utility.secondaryText
+                          }}>
                             <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '500',
-                              backgroundColor: job.is_active ? `${colors.semantic.success}15` : `${colors.utility.secondaryText}15`,
-                              color: job.is_active ? colors.semantic.success : colors.utility.secondaryText
-                            }}>
-                              <div style={{
-                                width: '6px',
-                                height: '6px',
-                                borderRadius: '50%',
-                                backgroundColor: job.is_active ? colors.semantic.success : colors.utility.secondaryText
-                              }} />
-                              {job.is_active ? 'Active' : 'Inactive'}
-                            </div>
-                          </>
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              backgroundColor: job.is_active ? colors.semantic.success : colors.utility.secondaryText
+                            }} />
+                            {job.is_active ? 'Active' : 'Inactive'}
+                          </div>
                         )}
                       </div>
                     </div>
