@@ -87,7 +87,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       case 'units':
         return value.toFixed(3);
       case 'nav':
-        return `₹${value.toFixed(2)}`;
+        return `₹${value.toFixed(4)}`; // Show 4 decimal places for NAV accuracy
       case 'market_value':
         return `₹${(value / 100000).toFixed(2)}L`;
       case 'percentage':
@@ -417,7 +417,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </tr>
                   )}
 
-                  {/* Expandable Rows - NAV */}
+                  {/* Expandable Rows - NAV (shows previous month's NAV used for calculation) */}
                   {isExpanded && (
                     <tr style={{
                       backgroundColor: `${colors.utility.primaryText}05`,
@@ -437,11 +437,19 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>💰</span>
                           <span>NAV</span>
+                          <span style={{
+                            fontSize: '9px',
+                            color: colors.utility.secondaryText,
+                            fontStyle: 'italic'
+                          }}>(prev month)</span>
                         </div>
                       </td>
                       {scheme.monthly_data.map((month: any, idx: number) => {
                         const hasData = month.has_nav_data || month.is_estimated;
                         const isEstimated = month.is_estimated;
+                        // Use the NAV that was used for market value calculation
+                        const navToShow = month.nav_used_for_calculation || month.closing_nav;
+                        const navSourceMonth = month.nav_source_month || '';
                         return (
                           <td
                             key={idx}
@@ -455,11 +463,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                                 : colors.semantic.error,
                               backgroundColor: idx === 0
                                 ? `${colors.brand.primary}10`
-                                : undefined
+                                : undefined,
+                              cursor: navSourceMonth ? 'help' : 'default'
                             }}
+                            title={navSourceMonth ? `NAV as of ${navSourceMonth}` : undefined}
                           >
                             {hasData
-                              ? `${formatValue(month.closing_nav, 'nav')}${isEstimated ? '**' : ''}`
+                              ? `${formatValue(navToShow, 'nav')}${isEstimated ? '**' : ''}`
                               : 'No data'}
                           </td>
                         );
@@ -570,7 +580,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         fontSize: '12px',
         color: colors.utility.secondaryText
       }}>
-        * Current month • ** NAV estimated (using latest available) • Click ▶ to expand metrics
+        * Current month • ** NAV estimated • NAV shows previous month's closing NAV (hover for details) • Market Value = Units × NAV
       </div>
 
       {/* Chart Modal */}
