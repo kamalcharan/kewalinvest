@@ -1147,7 +1147,7 @@ private async getGoalPortfolioValue(
       // Get goal data
       const goalQuery = `
         SELECT id, customer_id, title, jtbd_type, config_data,
-               is_in_watchlist, watchlist_added_at, watchlist_reason,
+               is_watchlisted, watchlist_added_at, watchlist_reason,
                updated_at
         FROM t_jtbd_configurations
         WHERE tenant_id = $1 AND is_live = $2 AND id = $3
@@ -1179,7 +1179,7 @@ private async getGoalPortfolioValue(
         performance_percentage: Math.round(performancePercentage * 100) / 100,
         is_on_track: performancePercentage >= 100,
         variance_percentage: Math.round((performancePercentage - 100) * 100) / 100,
-        is_in_watchlist: goal.is_in_watchlist || false,
+        is_in_watchlist: goal.is_watchlisted || false,
         watchlist_added_at: goal.watchlist_added_at,
         watchlist_reason: goal.watchlist_reason,
         last_calculated_at: new Date().toISOString()
@@ -1361,7 +1361,7 @@ private async getGoalPortfolioValue(
   ): Promise<void> {
     const query = `
       UPDATE t_jtbd_configurations
-      SET is_in_watchlist = true,
+      SET is_watchlisted = true,
           watchlist_added_at = NOW(),
           watchlist_reason = $1,
           updated_at = NOW()
@@ -1380,11 +1380,11 @@ private async getGoalPortfolioValue(
   ): Promise<void> {
     const query = `
       UPDATE t_jtbd_configurations
-      SET is_in_watchlist = false,
+      SET is_watchlisted = false,
           watchlist_added_at = NULL,
           watchlist_reason = NULL,
           updated_at = NOW()
-      WHERE tenant_id = $2 AND is_live = $3 AND id = $4
+      WHERE tenant_id = $1 AND is_live = $2 AND id = $3
     `;
     await this.db.query(query, [tenantId, isLive, goalId]);
   }
@@ -1402,7 +1402,7 @@ private async getGoalPortfolioValue(
       FROM t_jtbd_configurations
       WHERE tenant_id = $1 AND is_live = $2 AND customer_id = $3
         AND jtbd_type = 'goal_tracking' AND is_active = true
-        AND is_in_watchlist = true
+        AND is_watchlisted = true
       ORDER BY watchlist_added_at DESC
     `;
     const result = await this.db.query(query, [tenantId, isLive, customerId]);
