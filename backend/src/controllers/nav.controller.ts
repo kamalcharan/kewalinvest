@@ -989,6 +989,12 @@ export class NavController {
         schemeNavData
       );
 
+      // Update scheme download status for statistics tracking
+      await this.navService.updateSchemeNavStatus(schemeId, {
+        last_download_status: 'success',
+        last_download_date: new Date()
+      });
+
       SimpleLogger.info('NavController', 'Single scheme NAV download completed', 'downloadSchemeNav', {
         schemeCode,
         schemeName,
@@ -1016,6 +1022,22 @@ export class NavController {
       });
 
     } catch (error: any) {
+      // Update scheme download status on failure
+      try {
+        const schemeCode = req.params.schemeCode;
+        const schemeQuery = `SELECT id FROM t_scheme_details WHERE scheme_code = $1`;
+        const schemeResult = await pool.query(schemeQuery, [schemeCode]);
+        if (schemeResult.rows.length > 0) {
+          await this.navService.updateSchemeNavStatus(schemeResult.rows[0].id, {
+            last_download_status: 'failed',
+            last_download_error: error.message,
+            last_download_date: new Date()
+          });
+        }
+      } catch (statusError) {
+        // Ignore status update errors
+      }
+
       SimpleLogger.error('NavController', 'Failed to download scheme NAV', 'downloadSchemeNav', {
         schemeCode: req.params.schemeCode,
         error: error.message
