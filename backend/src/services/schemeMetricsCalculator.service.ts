@@ -247,12 +247,30 @@ export class SchemeMetricsCalculator {
       const pendingResult = await this.db.query(pendingDatesQuery, [schemeId]);
       const pendingDates = pendingResult.rows;
 
+      // Debug: Check total records vs pending
+      const totalQuery = `SELECT COUNT(*) as total, COUNT(metrics_calculated_at) as with_metrics FROM t_nav_data WHERE scheme_id = $1`;
+      const totalResult = await this.db.query(totalQuery, [schemeId]);
+      const { total, with_metrics } = totalResult.rows[0] || { total: 0, with_metrics: 0 };
+
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        'NAV data status for scheme',
+        'calculateAllPendingForScheme',
+        {
+          schemeId,
+          schemeCode: scheme.scheme_code,
+          totalRecords: total,
+          recordsWithMetrics: with_metrics,
+          pendingToCalculate: pendingDates.length
+        }
+      );
+
       if (pendingDates.length === 0) {
         SimpleLogger.info(
           'SchemeMetricsCalculator',
           'No pending dates to calculate',
           'calculateAllPendingForScheme',
-          { schemeId, schemeCode: scheme.scheme_code }
+          { schemeId, schemeCode: scheme.scheme_code, totalRecords: total, alreadyCalculated: with_metrics }
         );
 
         return {
