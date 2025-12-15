@@ -124,8 +124,26 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
           transition: 'all 0.2s ease'
         }}
       >
-        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {isLoading ? 'Loading...' : selectedIndex ? selectedIndex.index_name : placeholder}
+        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isLoading ? 'Loading...' : selectedIndex ? (
+            <>
+              {selectedIndex.index_name}
+              {selectedIndex.provider_enabled === false && (
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: '600',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: '#F59E0B20',
+                  color: '#D97706',
+                  textTransform: 'uppercase',
+                  flexShrink: 0
+                }}>
+                  Not Configured
+                </span>
+              )}
+            </>
+          ) : placeholder}
         </span>
         {selectedIndex && !disabled && (
           <span
@@ -271,56 +289,78 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
                   {searchQuery ? 'No matching indices found' : 'No indices available'}
                 </div>
               ) : (
-                filteredIndices.map((index, idx) => (
-                  <button
-                    key={index.id}
-                    onClick={() => handleSelect(index)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      backgroundColor: selectedIndex?.id === index.id
-                        ? colors.brand.primary + '20'
-                        : 'transparent',
-                      border: 'none',
-                      borderBottom: idx < filteredIndices.length - 1
-                        ? `1px solid ${colors.utility.primaryText}10`
-                        : 'none',
-                      color: colors.utility.primaryText,
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      textAlign: 'left',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedIndex?.id !== index.id) {
-                        e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedIndex?.id !== index.id) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
-                    }}
-                  >
-                    <div style={{
-                      fontWeight: selectedIndex?.id === index.id ? '600' : '500',
-                      marginBottom: '3px'
-                    }}>
-                      {index.index_name}
-                    </div>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.utility.secondaryText,
-                      display: 'flex',
-                      gap: '8px',
-                      alignItems: 'center'
-                    }}>
-                      <span>{index.index_code}</span>
-                      <span>•</span>
-                      <span style={{ textTransform: 'capitalize' }}>{index.category}</span>
-                    </div>
-                  </button>
-                ))
+                filteredIndices.map((index, idx) => {
+                  const isNotConfigured = index.provider_enabled === false;
+                  return (
+                    <button
+                      key={index.id}
+                      onClick={() => handleSelect(index)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        backgroundColor: selectedIndex?.id === index.id
+                          ? colors.brand.primary + '20'
+                          : 'transparent',
+                        border: 'none',
+                        borderBottom: idx < filteredIndices.length - 1
+                          ? `1px solid ${colors.utility.primaryText}10`
+                          : 'none',
+                        color: colors.utility.primaryText,
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        textAlign: 'left',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (selectedIndex?.id !== index.id) {
+                          e.currentTarget.style.backgroundColor = colors.brand.primary + '10';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (selectedIndex?.id !== index.id) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '3px'
+                      }}>
+                        <span style={{
+                          fontWeight: selectedIndex?.id === index.id ? '600' : '500'
+                        }}>
+                          {index.index_name}
+                        </span>
+                        {isNotConfigured && (
+                          <span style={{
+                            fontSize: '9px',
+                            fontWeight: '600',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#F59E0B20',
+                            color: '#D97706',
+                            textTransform: 'uppercase'
+                          }}>
+                            Not Configured
+                          </span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText,
+                        display: 'flex',
+                        gap: '8px',
+                        alignItems: 'center'
+                      }}>
+                        <span>{index.index_code}</span>
+                        <span>•</span>
+                        <span style={{ textTransform: 'capitalize' }}>{index.category}</span>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
