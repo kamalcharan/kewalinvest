@@ -20,6 +20,60 @@ interface HeaderProps {
   onToggleSidebar?: () => void;
 }
 
+// Simple Toggle Switch component
+interface ToggleSwitchProps {
+  checked: boolean;
+  onChange: () => void;
+  checkedColor?: string;
+  uncheckedColor?: string;
+  size?: 'sm' | 'md';
+}
+
+const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
+  checked,
+  onChange,
+  checkedColor = '#4F46E5',
+  uncheckedColor = '#9CA3AF',
+  size = 'md'
+}) => {
+  const sizes = {
+    sm: { width: 36, height: 20, circle: 16 },
+    md: { width: 44, height: 24, circle: 20 }
+  };
+  const s = sizes[size];
+
+  return (
+    <button
+      onClick={onChange}
+      style={{
+        width: s.width,
+        height: s.height,
+        borderRadius: s.height,
+        backgroundColor: checked ? checkedColor : uncheckedColor,
+        border: 'none',
+        cursor: 'pointer',
+        position: 'relative',
+        transition: 'background-color 0.2s ease',
+        padding: 0
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: checked ? s.width - s.circle - 2 : 2,
+          width: s.circle,
+          height: s.circle,
+          borderRadius: '50%',
+          backgroundColor: 'white',
+          transition: 'left 0.2s ease',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+        }}
+      />
+    </button>
+  );
+};
+
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
   const { theme, isDarkMode, toggleDarkMode, themes, currentThemeId, setTheme } = useTheme();
