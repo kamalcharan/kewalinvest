@@ -133,7 +133,45 @@ async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
       name: 'Portfolio Snapshot Generation',
       description: 'Generate monthly portfolio snapshots for all customers to enable performance tracking',
       default_cron_expression: '0 21 * * 5', // Friday 9 PM
-      default_max_retries: 3
+      default_max_retries: 3,
+      default_schedule_type: 'weekly',
+      is_global: false
+    },
+    {
+      code: 'DAILY_ALERTS',
+      name: 'Daily Alerts',
+      description: 'Process and generate daily alert cards for customers (birthdays, anniversaries, reminders)',
+      default_cron_expression: '0 20 * * *', // Daily 8 PM
+      default_max_retries: 3,
+      default_schedule_type: 'daily',
+      is_global: false
+    },
+    {
+      code: 'GOAL_CALCULATION',
+      name: 'Goal Calculation',
+      description: 'Recalculate all goals and create progress snapshots',
+      default_cron_expression: '30 20 * * 5', // Friday 8:30 PM
+      default_max_retries: 3,
+      default_schedule_type: 'weekly',
+      is_global: false
+    },
+    {
+      code: 'NAV_DOWNLOAD',
+      name: 'NAV Download',
+      description: 'Download daily NAV data for all tracked schemes',
+      default_cron_expression: '0 21 * * *', // Daily 9 PM
+      default_max_retries: 3,
+      default_schedule_type: 'daily',
+      is_global: true
+    },
+    {
+      code: 'MARKET_OHLC_DOWNLOAD',
+      name: 'Market OHLC Download',
+      description: 'Download daily OHLC data for all market indices',
+      default_cron_expression: '30 21 * * *', // Daily 9:30 PM
+      default_max_retries: 3,
+      default_schedule_type: 'daily',
+      is_global: true
     }
   ];
 
@@ -141,8 +179,8 @@ async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
     await client.query(
       `INSERT INTO m_job_types (
         code, name, description, default_cron_expression,
-        default_max_retries, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        default_max_retries, is_active, default_schedule_type, is_global
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (code) DO NOTHING`,
       [
         jobType.code,
@@ -150,7 +188,9 @@ async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
         jobType.description,
         jobType.default_cron_expression,
         jobType.default_max_retries,
-        true
+        true,
+        jobType.default_schedule_type,
+        jobType.is_global
       ]
     );
   }
@@ -160,7 +200,8 @@ async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
 
 /**
  * Seeds default job scheduler configurations for a tenant environment
- * Creates enabled scheduler configs for all active job types
+ * Creates enabled scheduler configs for per-tenant job types only
+ * Global jobs (NAV_DOWNLOAD, MARKET_OHLC_DOWNLOAD) are seeded separately with tenant_id = 0
  */
 async function seedJobSchedulerConfigs(
   tenantId: number,
@@ -168,11 +209,11 @@ async function seedJobSchedulerConfigs(
   isLive: boolean,
   client: PoolClient
 ): Promise<void> {
-  // Get all active job types
+  // Get per-tenant job types (is_global = false or NULL)
   const jobTypesResult = await client.query(
-    `SELECT code, default_cron_expression, default_max_retries
+    `SELECT code, default_cron_expression, default_max_retries, default_schedule_type
      FROM m_job_types
-     WHERE is_active = true`
+     WHERE is_active = true AND (is_global = false OR is_global IS NULL)`
   );
 
   const jobTypes = jobTypesResult.rows;
@@ -183,8 +224,8 @@ async function seedJobSchedulerConfigs(
       `INSERT INTO t_job_scheduler_configs (
         tenant_id, job_type, user_id, is_live,
         schedule_type, cron_expression, is_enabled, max_retries,
-        job_config
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        job_config, next_execution_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (tenant_id, job_type, is_live)
       DO UPDATE SET
         cron_expression = EXCLUDED.cron_expression,
@@ -195,16 +236,104 @@ async function seedJobSchedulerConfigs(
         jobType.code,
         userId,
         isLive,
-        'weekly', // Default to weekly schedule
-        jobType.default_cron_expression || '0 21 * * 5', // Default Friday 9 PM
+        jobType.default_schedule_type || 'daily',
+        jobType.default_cron_expression || '0 21 * * 5',
         true, // Enabled by default
         jobType.default_max_retries || 3,
-        '{}' // Empty job config (can be customized later)
+        '{}', // Empty job config (can be customized later)
+        calculateNextExecution(jobType.default_cron_expression || '0 21 * * 5')
       ]
     );
   }
 
-  console.log(`  ✅ Seeded ${jobTypes.length} job scheduler configs (is_live=${isLive})`);
+  console.log(`  ✅ Seeded ${jobTypes.length} per-tenant job scheduler configs (is_live=${isLive})`);
+
+  // Seed global jobs only once (use tenant_id = 0 for global jobs)
+  // Only seed for is_live = true to avoid duplicates
+  if (isLive) {
+    const globalJobTypesResult = await client.query(
+      `SELECT code, default_cron_expression, default_max_retries, default_schedule_type
+       FROM m_job_types
+       WHERE is_active = true AND is_global = true`
+    );
+
+    const globalJobTypes = globalJobTypesResult.rows;
+
+    for (const jobType of globalJobTypes) {
+      await client.query(
+        `INSERT INTO t_job_scheduler_configs (
+          tenant_id, job_type, user_id, is_live,
+          schedule_type, cron_expression, is_enabled, max_retries,
+          job_config, next_execution_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (tenant_id, job_type, is_live)
+        DO NOTHING`,
+        [
+          0, // tenant_id = 0 for global jobs
+          jobType.code,
+          userId,
+          true, // Global jobs always use is_live = true
+          jobType.default_schedule_type || 'daily',
+          jobType.default_cron_expression || '0 21 * * *',
+          true, // Enabled by default
+          jobType.default_max_retries || 3,
+          '{}',
+          calculateNextExecution(jobType.default_cron_expression || '0 21 * * *')
+        ]
+      );
+    }
+
+    if (globalJobTypes.length > 0) {
+      console.log(`  ✅ Ensured ${globalJobTypes.length} global job scheduler configs exist`);
+    }
+  }
+}
+
+/**
+ * Calculate next execution time from a cron expression
+ * Simple implementation for daily/weekly schedules
+ */
+function calculateNextExecution(cronExpression: string): Date {
+  const parts = cronExpression.split(' ');
+  if (parts.length !== 5) {
+    // Default to next day 9 PM
+    const nextRun = new Date();
+    nextRun.setDate(nextRun.getDate() + 1);
+    nextRun.setHours(21, 0, 0, 0);
+    return nextRun;
+  }
+
+  const [minuteStr, hourStr, , , dayOfWeekStr] = parts;
+  const minute = parseInt(minuteStr);
+  const hour = parseInt(hourStr);
+  const dayOfWeek = dayOfWeekStr === '*' ? null : parseInt(dayOfWeekStr);
+
+  const now = new Date();
+  const nextRun = new Date(now);
+  nextRun.setSeconds(0, 0);
+
+  if (dayOfWeek === null) {
+    // Daily schedule
+    nextRun.setHours(hour, minute, 0, 0);
+    if (nextRun <= now) {
+      nextRun.setDate(nextRun.getDate() + 1);
+    }
+  } else {
+    // Weekly schedule
+    const currentDay = now.getDay();
+    let daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
+    if (daysUntilTarget === 0) {
+      const targetTime = new Date(now);
+      targetTime.setHours(hour, minute, 0, 0);
+      if (now >= targetTime) {
+        daysUntilTarget = 7;
+      }
+    }
+    nextRun.setDate(now.getDate() + daysUntilTarget);
+    nextRun.setHours(hour, minute, 0, 0);
+  }
+
+  return nextRun;
 }
 
 /**
