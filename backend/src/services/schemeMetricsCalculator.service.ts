@@ -665,12 +665,15 @@ export class SchemeMetricsCalculator {
           metrics_calculated_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
         WHERE scheme_id = $1
-          AND nav_date = $2
+          AND nav_date = $2::date
       `;
+
+      // Format date as YYYY-MM-DD string to avoid timezone issues
+      const dateStr = date.toISOString().split('T')[0];
 
       const params = [
         schemeId,
-        date,
+        dateStr,
         metrics.daily_return,
         metrics.return_1w,
         metrics.return_1m,
