@@ -1909,14 +1909,22 @@ export class NavService {
         }
 
         // Determine metrics status
+        // Note: First 1-2 dates are always skipped (need 2+ data points for calculation)
+        // So we consider a scheme "calculated" if it has at most 2 pending AND significant calculated count
         let metricsStatus: 'calculated' | 'pending' | 'partial' = 'pending';
-        if (row.metrics_pending_count === 0 && row.metrics_calculated_count > 0) {
+        const pendingCount = parseInt(row.metrics_pending_count) || 0;
+        const calculatedCount = parseInt(row.metrics_calculated_count) || 0;
+
+        if (calculatedCount > 0 && pendingCount <= 2) {
+          // Fully calculated (or only first 1-2 dates skipped which is expected)
           metricsStatus = 'calculated';
           metricsCalculated++;
-        } else if (row.metrics_calculated_count > 0 && row.metrics_pending_count > 0) {
+        } else if (calculatedCount > 0 && pendingCount > 2) {
+          // Partially calculated - some dates still need metrics
           metricsStatus = 'partial';
           metricsPending++;
         } else {
+          // No calculations done yet
           metricsPending++;
         }
 
