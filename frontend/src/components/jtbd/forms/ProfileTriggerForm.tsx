@@ -598,7 +598,28 @@ const ProfileTriggerForm: React.FC<ProfileTriggerFormProps> = ({
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {/* Show why button is disabled */}
+            {!hasRequiredDate() && (
+              <div style={{
+                fontSize: '11px',
+                color: colors.semantic.warning,
+                backgroundColor: colors.semantic.warning + '15',
+                padding: '6px 10px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span>⚠️</span>
+                <span>
+                  {triggerType === 'birthday'
+                    ? 'Add birth date to customer profile first'
+                    : 'Add anniversary date to customer profile first'
+                  }
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={onCancel}
