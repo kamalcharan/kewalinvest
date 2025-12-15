@@ -424,9 +424,9 @@ export const NavTab: React.FC = () => {
                         disabled={actionLoading[`download_${scheme.scheme_code}`] || !scheme.daily_download_enabled || !scheme.has_gaps}
                         style={{
                           padding: '6px 10px',
-                          backgroundColor: (scheme.daily_download_enabled && scheme.has_gaps) ? colors.brand.primary : colors.utility.secondaryBackground,
+                          backgroundColor: (scheme.daily_download_enabled && scheme.has_gaps) ? colors.brand.primary : 'transparent',
                           color: (scheme.daily_download_enabled && scheme.has_gaps) ? '#FFF' : colors.utility.secondaryText,
-                          border: 'none',
+                          border: (scheme.daily_download_enabled && scheme.has_gaps) ? 'none' : `1px solid ${colors.brand.primary}50`,
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: '500',
@@ -450,9 +450,9 @@ export const NavTab: React.FC = () => {
                         disabled={actionLoading[`metrics_${scheme.scheme_id}`] || scheme.total_records === 0 || scheme.metrics_status === 'calculated'}
                         style={{
                           padding: '6px 10px',
-                          backgroundColor: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? '#9333EA' : colors.utility.secondaryBackground,
+                          backgroundColor: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? '#9333EA' : 'transparent',
                           color: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? '#FFF' : colors.utility.secondaryText,
-                          border: 'none',
+                          border: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? 'none' : '1px solid #9333EA50',
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: '500',
