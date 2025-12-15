@@ -139,7 +139,7 @@ export class NavDownloadExecutor implements JobExecutor {
     const query = `
       SELECT DISTINCT s.scheme_code, s.scheme_name
       FROM t_scheme_bookmarks sb
-      JOIN m_schemes s ON sb.scheme_id = s.id
+      JOIN t_scheme_masters s ON sb.scheme_id = s.id
       WHERE sb.is_active = true
       ORDER BY s.scheme_code
     `;
@@ -227,12 +227,12 @@ export class NavDownloadExecutor implements JobExecutor {
         latest_nav_date = (
           SELECT MAX(nav_date)
           FROM t_nav_data nd
-          JOIN m_schemes ms ON nd.scheme_code = ms.scheme_code
+          JOIN t_scheme_masters ms ON nd.scheme_code = ms.scheme_code
           WHERE ms.id = sb.scheme_id
         ),
         updated_at = CURRENT_TIMESTAMP
       WHERE sb.scheme_id IN (
-        SELECT id FROM m_schemes WHERE scheme_code = ANY($1)
+        SELECT id FROM t_scheme_masters WHERE scheme_code = ANY($1)
       )
     `;
 
