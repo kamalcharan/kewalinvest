@@ -421,58 +421,72 @@ export const MarketTab: React.FC = () => {
                     borderBottom: `1px solid ${dividerColor}`
                   }}>
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                      <button
-                        onClick={() => handleDownloadEOD(index.id, index.index_name)}
-                        disabled={actionLoading[`download_${index.id}`] || !index.provider_enabled}
-                        style={{
-                          padding: '6px 10px',
-                          backgroundColor: index.provider_enabled ? colors.brand.primary : colors.utility.secondaryBackground,
-                          color: index.provider_enabled ? '#FFF' : colors.utility.secondaryText,
-                          border: 'none',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          cursor: index.provider_enabled ? 'pointer' : 'not-allowed',
-                          opacity: actionLoading[`download_${index.id}`] ? 0.7 : 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                        title={index.provider_enabled ? 'Download EOD' : 'Provider not configured'}
-                      >
-                        {actionLoading[`download_${index.id}`] ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          <Download size={12} />
-                        )}
-                        EOD
-                      </button>
-                      <button
-                        onClick={() => handleCalculateMetrics(index.id, index.index_name)}
-                        disabled={actionLoading[`metrics_${index.id}`] || index.total_records === 0}
-                        style={{
-                          padding: '6px 10px',
-                          backgroundColor: index.total_records > 0 ? '#9333EA' : colors.utility.secondaryBackground,
-                          color: index.total_records > 0 ? '#FFF' : colors.utility.secondaryText,
-                          border: 'none',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          cursor: index.total_records > 0 ? 'pointer' : 'not-allowed',
-                          opacity: actionLoading[`metrics_${index.id}`] ? 0.7 : 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                        title={index.total_records > 0 ? 'Calculate Metrics' : 'No data available'}
-                      >
-                        {actionLoading[`metrics_${index.id}`] ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          <Calculator size={12} />
-                        )}
-                        Calc
-                      </button>
+                      {/* EOD Download Button - disabled when no gaps in last 2 weeks */}
+                      {(() => {
+                        const eodEnabled = index.provider_enabled && index.has_gaps;
+                        const eodLoading = actionLoading[`download_${index.id}`];
+                        return (
+                          <button
+                            onClick={() => handleDownloadEOD(index.id, index.index_name)}
+                            disabled={eodLoading || !eodEnabled}
+                            style={{
+                              padding: '6px 10px',
+                              backgroundColor: eodEnabled ? colors.brand.primary : 'transparent',
+                              color: eodEnabled ? '#FFF' : colors.brand.primary,
+                              border: eodEnabled ? 'none' : `1px solid ${colors.brand.primary}50`,
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              cursor: eodEnabled ? 'pointer' : 'not-allowed',
+                              opacity: eodLoading ? 0.7 : (eodEnabled ? 1 : 0.6),
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={!index.provider_enabled ? 'Provider not configured' : (!index.has_gaps ? 'Data is up to date' : 'Download EOD')}
+                          >
+                            {eodLoading ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Download size={12} />
+                            )}
+                            EOD
+                          </button>
+                        );
+                      })()}
+                      {/* Calc Metrics Button - disabled when metrics are calculated or no data */}
+                      {(() => {
+                        const calcEnabled = index.total_records > 0 && index.metrics_status !== 'calculated';
+                        const calcLoading = actionLoading[`metrics_${index.id}`];
+                        return (
+                          <button
+                            onClick={() => handleCalculateMetrics(index.id, index.index_name)}
+                            disabled={calcLoading || !calcEnabled}
+                            style={{
+                              padding: '6px 10px',
+                              backgroundColor: calcEnabled ? '#9333EA' : 'transparent',
+                              color: calcEnabled ? '#FFF' : '#9333EA',
+                              border: calcEnabled ? 'none' : `1px solid #9333EA50`,
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              cursor: calcEnabled ? 'pointer' : 'not-allowed',
+                              opacity: calcLoading ? 0.7 : (calcEnabled ? 1 : 0.6),
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={index.total_records === 0 ? 'No data available' : (index.metrics_status === 'calculated' ? 'Metrics up to date' : 'Calculate Metrics')}
+                          >
+                            {calcLoading ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Calculator size={12} />
+                            )}
+                            Calc
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>
