@@ -161,45 +161,64 @@ export class NavDownloadExecutor implements JobExecutor {
     let updated = 0;
     let failed = 0;
 
-    // Use bulk upsert for efficiency
     const client = await this.db.connect();
 
     try {
       await client.query('BEGIN');
 
-      // Group records by scheme_code for batch processing
-      const batchSize = 1000;
+      // First, get all scheme_ids for the scheme_codes we need
+      const schemeCodes = [...new Set(navRecords.map(r => r.scheme_code))];
+      const schemeQuery = `
+        SELECT id, scheme_code FROM t_scheme_details
+        WHERE scheme_code = ANY($1) AND is_active = true
+      `;
+      const schemeResult = await client.query(schemeQuery, [schemeCodes]);
+      const schemeMap = new Map(schemeResult.rows.map(r => [r.scheme_code, r.id]));
+
+      // Process records in batches
+      const batchSize = 500;
       for (let i = 0; i < navRecords.length; i += batchSize) {
         const batch = navRecords.slice(i, i + batchSize);
 
-        try {
-          // Build bulk upsert query
-          const values: any[] = [];
-          const placeholders: string[] = [];
-          let paramIndex = 1;
+        for (const record of batch) {
+          try {
+            const schemeId = schemeMap.get(record.scheme_code);
+            if (!schemeId) {
+              failed++;
+              continue; // Skip records without valid scheme_id
+            }
 
-          for (const record of batch) {
-            placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
-            values.push(record.scheme_code, record.nav_date, record.nav);
-          }
-
-          if (values.length > 0) {
             const upsertQuery = `
-              INSERT INTO t_nav_data (scheme_code, nav_date, nav)
-              VALUES ${placeholders.join(', ')}
-              ON CONFLICT (scheme_code, nav_date)
-              DO UPDATE SET nav = EXCLUDED.nav, updated_at = CURRENT_TIMESTAMP
+              INSERT INTO t_nav_data (
+                scheme_id, scheme_code, nav_date, nav_value,
+                repurchase_price, sale_price, is_live, data_source
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (scheme_id, nav_date, is_live)
+              DO UPDATE SET
+                nav_value = EXCLUDED.nav_value,
+                repurchase_price = EXCLUDED.repurchase_price,
+                sale_price = EXCLUDED.sale_price,
+                updated_at = CURRENT_TIMESTAMP
             `;
 
-            const result = await client.query(upsertQuery, values);
-            updated += result.rowCount || 0;
+            await client.query(upsertQuery, [
+              schemeId,
+              record.scheme_code,
+              record.nav_date,
+              record.nav_value,
+              record.repurchase_price || null,
+              record.sale_price || null,
+              true, // is_live
+              'daily' // data_source
+            ]);
+            updated++;
+          } catch (recordError: any) {
+            failed++;
+            errors.push({
+              scheme_code: record.scheme_code,
+              error_message: recordError.message
+            });
           }
-        } catch (batchError: any) {
-          failed += batch.length;
-          errors.push({
-            scheme_code: `batch_${i}`,
-            error_message: batchError.message
-          });
         }
       }
 
