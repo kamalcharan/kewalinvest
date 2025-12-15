@@ -58,6 +58,7 @@ export class GoalCalculatorService {
 
   /**
    * Calculate months to reach target amount
+   * Returns a reasonable maximum (600 months = 50 years) if target cannot be reached
    */
   private calculateMonthsToTarget(
     targetAmount: number,
@@ -65,25 +66,36 @@ export class GoalCalculatorService {
     monthlySIP: number,
     annualRate: number
   ): number {
+    const MAX_MONTHS = 600; // 50 years maximum
     const monthlyRate = annualRate / 12 / 100;
-    
+
+    // Edge case: target already reached
+    if (currentValue >= targetAmount) {
+      return 0;
+    }
+
+    // Edge case: no SIP and no current value - cannot reach target
+    if (monthlySIP === 0 && currentValue === 0) {
+      return MAX_MONTHS; // Return maximum instead of Infinity
+    }
+
     if (monthlySIP === 0) {
       // Only growth on existing corpus
-      if (currentValue === 0) return Infinity;
-      return Math.log(targetAmount / currentValue) / Math.log(1 + monthlyRate);
+      const months = Math.log(targetAmount / currentValue) / Math.log(1 + monthlyRate);
+      return Math.min(Math.ceil(months), MAX_MONTHS);
     }
-    
+
     // Solve FV equation for n (using numerical approximation)
     let months = 1;
     let fv = 0;
-    
-    while (fv < targetAmount && months < 1200) { // Max 100 years
+
+    while (fv < targetAmount && months < MAX_MONTHS) {
       fv = this.calculateFutureValue(currentValue, monthlySIP, annualRate, months);
       if (fv >= targetAmount) break;
       months++;
     }
-    
-    return months;
+
+    return Math.min(months, MAX_MONTHS);
   }
 
   /**
@@ -175,7 +187,17 @@ export class GoalCalculatorService {
     config: PriceBasedGoalConfig,
     currentPortfolioValue: number
   ): Promise<Partial<PriceBasedGoalConfig>> {
-    if (currentPortfolioValue >= config.target_amount) {
+    // Ensure we have valid values
+    const targetAmount = config.target_amount || 0;
+    const monthlyContribution = config.monthly_contribution || 0;
+
+    // Validation: target_amount must be positive
+    if (targetAmount <= 0) {
+      throw new Error('Target amount must be positive for price-based goals');
+    }
+
+    // Already achieved
+    if (currentPortfolioValue >= targetAmount) {
       return {
         current_value: currentPortfolioValue,
         projected_achievement_date: new Date().toISOString().split('T')[0],
@@ -189,23 +211,33 @@ export class GoalCalculatorService {
     const expectedReturnRate = 12; // Default return rate
 
     const monthsToTarget = this.calculateMonthsToTarget(
-      config.target_amount,
+      targetAmount,
       currentPortfolioValue,
-      config.monthly_contribution,
+      monthlyContribution,
       expectedReturnRate
     );
-    
+
+    // Ensure months is a valid, finite number
+    const validMonths = Math.min(
+      Math.max(0, Math.ceil(monthsToTarget)),
+      600 // 50 years max
+    );
+
     const achievementDate = new Date();
-    achievementDate.setMonth(achievementDate.getMonth() + Math.ceil(monthsToTarget));
-    
-    // Determine pace (compare with previous calculation if available)
+    achievementDate.setMonth(achievementDate.getMonth() + validMonths);
+
+    // Determine pace based on contribution level
     let paceStatus: 'ahead' | 'on_track' | 'behind' = 'on_track';
-    // This would compare with previous snapshot in real implementation
-    
+    if (monthlyContribution === 0 && currentPortfolioValue === 0) {
+      paceStatus = 'behind'; // No investment and no corpus
+    } else if (validMonths >= 600) {
+      paceStatus = 'behind'; // Taking too long to reach target
+    }
+
     return {
       current_value: currentPortfolioValue,
       projected_achievement_date: achievementDate.toISOString().split('T')[0],
-      months_to_achievement: Math.ceil(monthsToTarget),
+      months_to_achievement: validMonths,
       pace_status: paceStatus,
       pace_variance_months: 0 // Calculate based on previous snapshot
     };
