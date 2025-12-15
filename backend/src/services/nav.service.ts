@@ -1983,7 +1983,7 @@ export class NavService {
 
   /**
    * Detect gaps in NAV data for a scheme
-   * Only checks for missing trading days (excludes weekends)
+   * Only checks for missing trading days in the last 2 weeks (excludes weekends)
    */
   private async detectNavDataGaps(
     schemeId: number,
@@ -1995,16 +1995,33 @@ export class NavService {
     }
 
     try {
-      // Get all dates we have data for
+      // Only check last 2 weeks for gaps (historical gaps are not actionable)
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
+
+      // Get dates from last 2 weeks only
       const datesQuery = `
         SELECT DISTINCT nav_date as date
         FROM t_nav_data
         WHERE scheme_id = $1
+          AND nav_date >= $2::date
         ORDER BY nav_date
       `;
-      const datesResult = await this.db.query(datesQuery, [schemeId]);
+      const datesResult = await this.db.query(datesQuery, [schemeId, twoWeeksAgoStr]);
 
-      if (datesResult.rows.length < 2) {
+      // If no data in last 2 weeks, check if scheme has any recent data at all
+      if (datesResult.rows.length === 0) {
+        // No data in last 2 weeks - this is a gap if the scheme should have data
+        const latestDataDate = new Date(latestDate);
+        if (latestDataDate < twoWeeksAgo) {
+          // Latest data is older than 2 weeks - flag as gap
+          return [{
+            start_date: latestDate,
+            end_date: new Date().toISOString().split('T')[0],
+            missing_days: Math.floor((new Date().getTime() - latestDataDate.getTime()) / (1000 * 60 * 60 * 24))
+          }];
+        }
         return [];
       }
 
@@ -2016,9 +2033,9 @@ export class NavService {
       let currentGapStart: Date | null = null;
       let missingDays = 0;
 
-      // Iterate through date range and find gaps (only trading days)
-      const start = new Date(earliestDate);
-      const end = new Date(latestDate);
+      // Only check from 2 weeks ago to today
+      const start = new Date(twoWeeksAgo);
+      const end = new Date(); // Today
       const current = new Date(start);
 
       while (current <= end) {
