@@ -20,21 +20,21 @@ SSL: Disable/None
     docker push vikuna/kewalinvest-backend:latest
 
 
+   
+
+
+
+
+
+
+
+
+
+
+
+
     docker build -t vikuna/kewalinvest-frontend:latest ./frontend
     docker push vikuna/kewalinvest-frontend:latest
-
-
-
-
-
-
-
-
-
-
-
-
-N8N
 
 userid - nikhil@kevalinvest.com
 password - Kewal2025

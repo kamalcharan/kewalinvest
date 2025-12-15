@@ -1,33 +1,33 @@
-# Backend Dockerfile
-FROM node:18-alpine
+    # Backend Dockerfile
+    FROM node:18-alpine
 
-# Set working directory
-WORKDIR /app
+    # Set working directory
+    WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV=production
+    # Set production environment
+    ENV NODE_ENV=production
 
-# Install dependencies for building native modules
-RUN apk add --no-cache python3 make g++
+    # Install dependencies for building native modules
+    RUN apk add --no-cache python3 make g++
 
-# Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
+    # Copy package files
+    COPY package*.json ./
+    COPY tsconfig.json ./
 
-# Install dependencies (using npm install for flexibility)
-RUN npm install
+    # Install dependencies (using npm install for flexibility)
+    RUN npm install
 
-# Copy source code
-COPY . .
+    # Copy source code
+    COPY . .
 
-# Build TypeScript code
-RUN npm run build
+    # Build TypeScript code
+    RUN npm run build
 
-# Create UserFiles directory
-RUN mkdir -p /app/UserFiles
+    # Create UserFiles directory
+    RUN mkdir -p /app/UserFiles
 
-# Expose port
-EXPOSE 8080
+    # Expose port
+    EXPOSE 8080
 
-# Start the application in production mode
-CMD ["npm", "start"]
+    # Start the application in production mode
+    CMD ["npm", "start"]

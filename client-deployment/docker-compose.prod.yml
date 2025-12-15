@@ -4,10 +4,10 @@ services:
   # ============================================================================
   postgres:
     image: postgres:16-alpine
-    container_name: kewalinvest_db
+    container_name: vikuna
     environment:
-      POSTGRES_DB: ${DB_NAME:-kewalinvest}
-      POSTGRES_USER: ${DB_USER:-kewal_admin}
+      POSTGRES_DB: ${DB_NAME:-vikuna}
+      POSTGRES_USER: ${DB_USER:-vikuna_admin}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       # Performance tuning
       POSTGRES_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-100}
@@ -47,8 +47,8 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-kewalinvest}
-      DB_USER: ${DB_USER:-kewal_admin}
+      DB_NAME: ${DB_NAME:-vikuna}
+      DB_USER: ${DB_USER:-vikuna}
       DB_PASSWORD: ${DB_PASSWORD}
 
       # JWT Configuration
