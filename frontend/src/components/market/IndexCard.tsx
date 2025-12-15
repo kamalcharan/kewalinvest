@@ -73,6 +73,9 @@ const IndexCard: React.FC<IndexCardProps> = ({
 
   const status = getStatus();
 
+  // Check if provider is enabled
+  const isProviderEnabled = index.provider_enabled !== false;
+
   // Category color
   const getCategoryColor = () => {
     switch (index.category) {
@@ -119,8 +122,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
         gap: '12px',
         marginBottom: '12px'
       }}>
-        {/* Checkbox */}
-        {onSelect && (
+        {/* Checkbox - only show for enabled providers */}
+        {onSelect && isProviderEnabled && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -178,6 +181,21 @@ const IndexCard: React.FC<IndexCardProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Not Enabled Tag */}
+        {!isProviderEnabled && (
+          <div style={{
+            padding: '4px 10px',
+            backgroundColor: '#F59E0B15',
+            color: '#F59E0B',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: '600',
+            flexShrink: 0
+          }}>
+            Not Enabled
+          </div>
+        )}
 
         {/* Status Badge */}
         <div style={{
@@ -248,8 +266,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
         {onViewDashboard && (
           <button
             onClick={(e) => { e.stopPropagation(); onViewDashboard(index); }}
-            disabled={!hasData || isDownloading}
-            style={btnStyle(colors.brand.primary, !hasData || isDownloading)}
+            disabled={!isProviderEnabled || !hasData || isDownloading}
+            style={btnStyle(colors.brand.primary, !isProviderEnabled || !hasData || isDownloading)}
           >
             <BarChart2 size={14} />
             Dashboard
@@ -259,8 +277,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
         {onCalculateMetrics && (
           <button
             onClick={(e) => { e.stopPropagation(); onCalculateMetrics(index); }}
-            disabled={!hasData || isDownloading || isCalculating}
-            style={btnStyle('#10B981', !hasData || isDownloading || isCalculating)}
+            disabled={!isProviderEnabled || !hasData || isDownloading || isCalculating}
+            style={btnStyle('#10B981', !isProviderEnabled || !hasData || isDownloading || isCalculating)}
           >
             {isCalculating ? <RefreshCw size={14} className="animate-spin" /> : <BarChart2 size={14} />}
             {isCalculating ? 'Calculating...' : 'Metrics'}
@@ -269,8 +287,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
 
         <button
           onClick={(e) => { e.stopPropagation(); onDownloadHistorical(index); }}
-          disabled={isDownloading}
-          style={btnStyle(hasData ? '#8B5CF6' : colors.brand.primary, isDownloading)}
+          disabled={!isProviderEnabled || isDownloading}
+          style={btnStyle(hasData ? '#8B5CF6' : colors.brand.primary, !isProviderEnabled || isDownloading)}
         >
           <Download size={14} />
           {hasData ? 'More Data' : 'Download'}
@@ -278,8 +296,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
 
         <button
           onClick={(e) => { e.stopPropagation(); onDownloadEOD(index); }}
-          disabled={isDownloading}
-          style={btnStyle('#06B6D4', isDownloading)}
+          disabled={!isProviderEnabled || isDownloading}
+          style={btnStyle('#06B6D4', !isProviderEnabled || isDownloading)}
         >
           <RefreshCw size={14} />
           EOD
@@ -288,8 +306,8 @@ const IndexCard: React.FC<IndexCardProps> = ({
         {showDeleteButton && onDelete && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(index); }}
-            disabled={isDownloading || !hasData}
-            style={btnStyle('#EF4444', isDownloading || !hasData)}
+            disabled={!isProviderEnabled || isDownloading || !hasData}
+            style={btnStyle('#EF4444', !isProviderEnabled || isDownloading || !hasData)}
           >
             <Trash2 size={14} />
             Delete

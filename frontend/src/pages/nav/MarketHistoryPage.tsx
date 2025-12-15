@@ -82,14 +82,18 @@ const MarketHistoryPage: React.FC = () => {
   } = useMarketDashboard(filters);
 
   // ==================== BULK OPERATIONS HANDLERS ====================
-  
+
+  // Get only enabled indices (provider_enabled = true)
+  const enabledIndices = indices.filter(idx => idx.provider_enabled !== false);
+
   const handleSelectAll = useCallback(() => {
-    if (selectedIndices.size === indices.length) {
+    if (selectedIndices.size === enabledIndices.length) {
       setSelectedIndices(new Set());
     } else {
-      setSelectedIndices(new Set(indices.map(idx => idx.id)));
+      // Only select indices with provider_enabled = true
+      setSelectedIndices(new Set(enabledIndices.map(idx => idx.id)));
     }
-  }, [indices, selectedIndices]);
+  }, [enabledIndices, selectedIndices]);
 
   const handleSelectIndex = useCallback((indexId: number) => {
     const newSelected = new Set(selectedIndices);
@@ -490,7 +494,7 @@ const MarketHistoryPage: React.FC = () => {
   }, [refetchAll, startCalculationPolling]);
 
   // Calculate derived values
-  const isAllSelected = indices.length > 0 && selectedIndices.size === indices.length;
+  const isAllSelected = enabledIndices.length > 0 && selectedIndices.size === enabledIndices.length;
   const selectedCount = selectedIndices.size;
 
   // Error display
