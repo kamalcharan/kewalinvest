@@ -28,6 +28,7 @@ import AssetTypePerformanceChart from '../../components/visualizations/AssetType
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
 import TransactionTable from '../../components/transactions/TransactionTable';
+import TransactionDetails from '../../components/transactions/TransactionDetails';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
 import { IndexSelector } from '../../components/performance/IndexSelector';
@@ -71,6 +72,9 @@ const CustomerViewPage: React.FC = () => {
 
   // Meeting modal state
   const [showMeetingModal, setShowMeetingModal] = useState(false);
+
+  // Transaction detail modal state
+  const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
 
   // Goal mutation hooks
   const recalculateGoalMutation = useRecalculateGoal();
@@ -1358,7 +1362,8 @@ const CustomerViewPage: React.FC = () => {
                   transactions={transactions}
                   loading={transactionsLoading}
                   onRowClick={(transaction) => {
-                    navigate(`/transactions/${transaction.id}`);
+                    // Open modal instead of navigating away for better UX
+                    setSelectedTransactionId(transaction.id);
                   }}
                   onDelete={async (transactionId) => {
                     try {
@@ -1434,6 +1439,20 @@ const CustomerViewPage: React.FC = () => {
           isOpen={showMeetingModal}
           onClose={() => setShowMeetingModal(false)}
           onSuccess={() => setShowMeetingModal(false)}
+        />
+      )}
+
+      {/* Transaction Details Modal - Opens when clicking transaction row */}
+      {selectedTransactionId && (
+        <TransactionDetails
+          transactionId={selectedTransactionId}
+          onClose={() => setSelectedTransactionId(null)}
+          onUpdate={() => {
+            fetchTransactions(transactionsPagination.page);
+            refetchPortfolio();
+            queryClient.invalidateQueries({ queryKey: ['networth'] });
+            queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+          }}
         />
       )}
     </div>

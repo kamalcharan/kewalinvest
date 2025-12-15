@@ -198,6 +198,205 @@ export class SchemeMetricsCalculator {
   }
 
   /**
+   * Calculate metrics for ALL pending dates for a scheme
+   * This calculates metrics for every NAV record that doesn't have metrics_calculated_at set
+   * @param schemeId Scheme ID
+   * @param isLive Whether to use live or test data
+   * @returns Calculation result with count of calculated dates
+   */
+  async calculateAllPendingForScheme(
+    schemeId: number,
+    isLive: boolean = true
+  ): Promise<{
+    success: boolean;
+    schemeId: number;
+    totalDates: number;
+    calculatedDates: number;
+    skippedDates: number;
+    errors: string[];
+    executionTimeMs: number;
+  }> {
+    const startTime = Date.now();
+    const errors: string[] = [];
+    let calculatedDates = 0;
+    let skippedDates = 0;
+
+    try {
+      // Get scheme details
+      const schemeQuery = `
+        SELECT id, scheme_code, scheme_name
+        FROM t_scheme_details
+        WHERE id = $1 AND is_active = true
+      `;
+      const schemeResult = await this.db.query(schemeQuery, [schemeId]);
+
+      if (schemeResult.rows.length === 0) {
+        throw new Error(`Scheme not found: ${schemeId}`);
+      }
+
+      const scheme = schemeResult.rows[0];
+
+      // Get all NAV dates that need metrics calculation
+      const pendingDatesQuery = `
+        SELECT nav_date, nav_value
+        FROM t_nav_data
+        WHERE scheme_id = $1
+          AND metrics_calculated_at IS NULL
+        ORDER BY nav_date ASC
+      `;
+      const pendingResult = await this.db.query(pendingDatesQuery, [schemeId]);
+      const pendingDates = pendingResult.rows;
+
+      // Debug: Check total records vs pending
+      const totalQuery = `SELECT COUNT(*) as total, COUNT(metrics_calculated_at) as with_metrics FROM t_nav_data WHERE scheme_id = $1`;
+      const totalResult = await this.db.query(totalQuery, [schemeId]);
+      const { total, with_metrics } = totalResult.rows[0] || { total: 0, with_metrics: 0 };
+
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        'NAV data status for scheme',
+        'calculateAllPendingForScheme',
+        {
+          schemeId,
+          schemeCode: scheme.scheme_code,
+          totalRecords: total,
+          recordsWithMetrics: with_metrics,
+          pendingToCalculate: pendingDates.length
+        }
+      );
+
+      if (pendingDates.length === 0) {
+        SimpleLogger.info(
+          'SchemeMetricsCalculator',
+          'No pending dates to calculate',
+          'calculateAllPendingForScheme',
+          { schemeId, schemeCode: scheme.scheme_code, totalRecords: total, alreadyCalculated: with_metrics }
+        );
+
+        return {
+          success: true,
+          schemeId,
+          totalDates: 0,
+          calculatedDates: 0,
+          skippedDates: 0,
+          errors: [],
+          executionTimeMs: Date.now() - startTime
+        };
+      }
+
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        `Starting calculation for ${pendingDates.length} pending dates`,
+        'calculateAllPendingForScheme',
+        { schemeId, schemeCode: scheme.scheme_code, pendingCount: pendingDates.length }
+      );
+
+      // Get ALL NAV data for the scheme (needed for historical calculations)
+      const allNavData = await this.getNavDataForScheme(schemeId, undefined, isLive);
+
+      if (allNavData.length === 0) {
+        throw new Error(`No NAV data available for scheme ${scheme.scheme_code}`);
+      }
+
+      // Convert to PricePoint format
+      const allPricePoints: PricePoint[] = allNavData.map(nd => ({
+        date: new Date(nd.nav_date),
+        close: nd.nav_value,
+        open: nd.nav_value,
+        high: nd.nav_value,
+        low: nd.nav_value,
+        volume: 0
+      }));
+
+      // Calculate metrics for each pending date
+      for (const pendingDate of pendingDates) {
+        try {
+          const targetDate = new Date(pendingDate.nav_date);
+
+          // Get price points up to this date for calculation
+          const pricePointsUpToDate = allPricePoints.filter(pp => pp.date <= targetDate);
+
+          if (pricePointsUpToDate.length < 2) {
+            // Need at least 2 data points for meaningful calculations
+            skippedDates++;
+            continue;
+          }
+
+          const todayNav = pricePointsUpToDate[pricePointsUpToDate.length - 1];
+
+          // Calculate metrics
+          const calculatedMetrics = await marketMetricsCalculator.calculateMetricsForDate(
+            todayNav,
+            pricePointsUpToDate
+          );
+
+          // Store metrics
+          await this.storeMetrics(schemeId, targetDate, calculatedMetrics, isLive);
+          calculatedDates++;
+
+        } catch (dateError: any) {
+          errors.push(`Date ${pendingDate.nav_date}: ${dateError.message}`);
+          skippedDates++;
+        }
+      }
+
+      const executionTime = Date.now() - startTime;
+
+      SimpleLogger.info(
+        'SchemeMetricsCalculator',
+        'Completed calculating all pending dates',
+        'calculateAllPendingForScheme',
+        {
+          schemeId,
+          schemeCode: scheme.scheme_code,
+          totalDates: pendingDates.length,
+          calculatedDates,
+          skippedDates,
+          errors: errors.length,
+          executionTimeMs: executionTime
+        }
+      );
+
+      return {
+        success: true,
+        schemeId,
+        totalDates: pendingDates.length,
+        calculatedDates,
+        skippedDates,
+        errors,
+        executionTimeMs: executionTime
+      };
+
+    } catch (error: any) {
+      const executionTime = Date.now() - startTime;
+
+      SimpleLogger.error(
+        'SchemeMetricsCalculator',
+        'Failed to calculate all pending dates',
+        'calculateAllPendingForScheme',
+        {
+          schemeId,
+          error: error.message,
+          executionTimeMs: executionTime
+        },
+        undefined,
+        undefined,
+        error.stack
+      );
+
+      return {
+        success: false,
+        schemeId,
+        totalDates: 0,
+        calculatedDates,
+        skippedDates,
+        errors: [error.message, ...errors],
+        executionTimeMs: executionTime
+      };
+    }
+  }
+
+  /**
    * Calculate metrics for multiple schemes in batch
    * Processes schemes in batches without delays for maximum throughput
    *
@@ -484,12 +683,15 @@ export class SchemeMetricsCalculator {
           metrics_calculated_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
         WHERE scheme_id = $1
-          AND nav_date = $2
+          AND nav_date = $2::date
       `;
+
+      // Format date as YYYY-MM-DD string to avoid timezone issues
+      const dateStr = date.toISOString().split('T')[0];
 
       const params = [
         schemeId,
-        date,
+        dateStr,
         metrics.daily_return,
         metrics.return_1w,
         metrics.return_1m,

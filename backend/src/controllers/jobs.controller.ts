@@ -143,15 +143,16 @@ export class JobsController {
 
   /**
    * PUT /api/jobs/:jobType/config
-   * Update scheduler configuration for a job type
+   * Update scheduler configuration for a job type (creates if not exists)
    */
   updateConfig = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
+      const userId = req.user?.user_id;
       const isLiveParam = req.query.is_live as string;
       const jobType = req.params.jobType as JobType;
 
-      if (!tenantId) {
+      if (!tenantId || !userId) {
         res.status(401).json({
           success: false,
           error: 'Authentication required'
@@ -169,20 +170,40 @@ export class JobsController {
 
       const isLive = isLiveParam === 'true';
 
-      const request: UpdateJobConfigRequest = {
-        schedule_type: req.body.schedule_type,
-        cron_expression: req.body.cron_expression,
-        is_enabled: req.body.is_enabled,
-        max_retries: req.body.max_retries,
-        job_config: req.body.job_config
-      };
+      // Check if config exists
+      const existing = await this.schedulerService.getConfig(tenantId, isLive, jobType);
 
-      const config = await this.schedulerService.updateConfig(tenantId, isLive, jobType, request);
+      let config;
+
+      if (!existing) {
+        // Config doesn't exist - create it with the provided cron expression
+        const createRequest: CreateJobConfigRequest = {
+          user_id: userId,
+          schedule_type: req.body.schedule_type || 'daily',
+          cron_expression: req.body.cron_expression,
+          is_enabled: req.body.is_enabled ?? true,
+          max_retries: req.body.max_retries,
+          job_config: req.body.job_config
+        };
+
+        config = await this.schedulerService.createConfig(tenantId, isLive, jobType, createRequest);
+      } else {
+        // Config exists - update it
+        const request: UpdateJobConfigRequest = {
+          schedule_type: req.body.schedule_type,
+          cron_expression: req.body.cron_expression,
+          is_enabled: req.body.is_enabled,
+          max_retries: req.body.max_retries,
+          job_config: req.body.job_config
+        };
+
+        config = await this.schedulerService.updateConfig(tenantId, isLive, jobType, request);
+      }
 
       res.status(200).json({
         success: true,
         data: config,
-        message: `Job configuration updated successfully for ${jobType}`
+        message: `Job configuration ${existing ? 'updated' : 'created'} successfully for ${jobType}`
       } as UpdateJobConfigResponse);
 
     } catch (error: any) {
@@ -365,11 +386,12 @@ export class JobsController {
 
   /**
    * GET /api/jobs/types
-   * Get all available job types
+   * Get all available job types with tenant-specific configurations merged
    */
   getJobTypes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user?.tenant_id;
+      const isLiveParam = req.query.is_live as string;
 
       if (!tenantId) {
         res.status(401).json({
@@ -379,9 +401,25 @@ export class JobsController {
         return;
       }
 
-      // Query database for active job types
-      const query = `SELECT * FROM m_job_types WHERE is_active = true ORDER BY code`;
-      const result = await this.schedulerService['db'].query(query);
+      const isLive = isLiveParam === 'true';
+
+      // Query database for active job types AND merge with tenant-specific configs
+      // This ensures we display the tenant's configured cron expression, not the default
+      const query = `
+        SELECT
+          jt.*,
+          COALESCE(tc.cron_expression, jt.default_cron_expression) as default_cron_expression,
+          tc.is_enabled as tenant_is_enabled,
+          tc.cron_expression as tenant_cron_expression
+        FROM m_job_types jt
+        LEFT JOIN t_job_scheduler_configs tc
+          ON tc.job_type = jt.code
+          AND tc.tenant_id = $1
+          AND tc.is_live = $2
+        WHERE jt.is_active = true
+        ORDER BY jt.code
+      `;
+      const result = await this.schedulerService['db'].query(query, [tenantId, isLive]);
 
       res.status(200).json({
         success: true,

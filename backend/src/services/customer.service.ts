@@ -95,12 +95,22 @@ export class CustomerService {
       }
       // 'all' → no filter
 
-      // Search filter - name, family_head_name, and iwell_code
+      // Search filter - name, family_head_name, iwell_code, PAN, email, and mobile
       if (search && search.trim()) {
         whereConditions.push(`(
           LOWER(c.name) LIKE LOWER($${paramIndex}) OR
           LOWER(cust.family_head_name) LIKE LOWER($${paramIndex}) OR
-          CAST(cust.iwell_code AS TEXT) LIKE $${paramIndex}
+          CAST(cust.iwell_code AS TEXT) LIKE $${paramIndex} OR
+          LOWER(cust.pan) LIKE LOWER($${paramIndex}) OR
+          EXISTS (
+            SELECT 1 FROM t_contact_channels cc
+            WHERE cc.contact_id = c.id
+            AND cc.tenant_id = cust.tenant_id
+            AND cc.is_live = cust.is_live
+            AND cc.is_active = true
+            AND cc.channel_type IN ('email', 'mobile')
+            AND LOWER(cc.channel_value) LIKE LOWER($${paramIndex})
+          )
         )`);
         queryParams.push(`%${search.trim()}%`);
         paramIndex++;

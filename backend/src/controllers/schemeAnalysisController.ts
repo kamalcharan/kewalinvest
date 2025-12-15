@@ -79,7 +79,7 @@ export class SchemeAnalysisController {
         'calculateMetrics',
         {
           schemeId,
-          asOfDate: asOfDate?.toISOString().split('T')[0] || 'latest',
+          asOfDate: asOfDate?.toISOString().split('T')[0] || 'all_pending',
           recalculate: recalculate || false,
           userId: req.user?.user_id,
           tenantId: req.user?.tenant_id
@@ -88,10 +88,9 @@ export class SchemeAnalysisController {
         req.user?.tenant_id
       );
 
-      // Calculate metrics
-      const result = await schemeMetricsCalculator.calculateForScheme(
+      // Calculate metrics for ALL pending dates (not just latest)
+      const result = await schemeMetricsCalculator.calculateAllPendingForScheme(
         schemeId,
-        asOfDate,
         isLive
       );
 
@@ -101,17 +100,19 @@ export class SchemeAnalysisController {
         res.json({
           success: true,
           scheme_id: result.schemeId,
-          date: result.date,
-          metrics: result.metrics,
+          total_dates: result.totalDates,
+          calculated_dates: result.calculatedDates,
+          skipped_dates: result.skippedDates,
           calculation_time_ms: calculationTime,
-          message: result.error || 'Metrics calculated successfully'
+          message: result.totalDates === 0
+            ? 'All metrics already calculated'
+            : `Calculated metrics for ${result.calculatedDates} dates`
         });
       } else {
         res.status(500).json({
           success: false,
           scheme_id: result.schemeId,
-          date: result.date,
-          error: result.error || 'Failed to calculate metrics',
+          error: result.errors.join('; ') || 'Failed to calculate metrics',
           calculation_time_ms: calculationTime
         });
       }

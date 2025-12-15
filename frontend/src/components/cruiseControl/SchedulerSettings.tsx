@@ -19,6 +19,9 @@ interface JobType {
   failover_enabled: boolean;
   failover_cron_expression: string | null;
   is_global: boolean;
+  // Tenant-specific config fields (null if not configured)
+  tenant_is_enabled: boolean | null;
+  tenant_cron_expression: string | null;
 }
 
 interface EditModalProps {
@@ -28,16 +31,26 @@ interface EditModalProps {
   colors: any;
 }
 
-// Parse cron expression to get hour and minute
-const parseCron = (cron: string): { hour: string; minute: string } => {
+// Parse cron expression to get all parts
+const parseCron = (cron: string): { hour: string; minute: string; dayOfMonth: string; month: string; dayOfWeek: string } => {
   const parts = cron.split(' ');
-  if (parts.length >= 2) {
+  if (parts.length >= 5) {
     return {
       minute: parts[0].padStart(2, '0'),
-      hour: parts[1].padStart(2, '0')
+      hour: parts[1].padStart(2, '0'),
+      dayOfMonth: parts[2],
+      month: parts[3],
+      dayOfWeek: parts[4]
     };
   }
-  return { hour: '00', minute: '00' };
+  return { hour: '00', minute: '00', dayOfMonth: '*', month: '*', dayOfWeek: '*' };
+};
+
+// Check if a job type is editable (can change schedule)
+const isJobEditable = (jobCode: string): boolean => {
+  // NAV_DOWNLOAD and MARKET_OHLC_DOWNLOAD schedules cannot be changed
+  const nonEditableJobs = ['NAV_DOWNLOAD', 'MARKET_OHLC_DOWNLOAD'];
+  return !nonEditableJobs.includes(jobCode);
 };
 
 // Convert cron expression to human-readable format
@@ -95,10 +108,13 @@ const getJobTypeStyle = (code: string): { icon: string; color: string } => {
 
 // Edit Modal Component
 const EditScheduleModal: React.FC<EditModalProps> = ({ job, onClose, onSave, colors }) => {
-  const { hour: initialHour, minute: initialMinute } = parseCron(job.default_cron_expression);
-  const [hour, setHour] = useState(initialHour);
-  const [minute, setMinute] = useState(initialMinute);
+  const cronParts = parseCron(job.default_cron_expression);
+  const [hour, setHour] = useState(cronParts.hour);
+  const [minute, setMinute] = useState(cronParts.minute);
   const [saving, setSaving] = useState(false);
+
+  // Build preview cron preserving existing day fields
+  const getPreviewCron = () => `${minute} ${hour} ${cronParts.dayOfMonth} ${cronParts.month} ${cronParts.dayOfWeek}`;
 
   const handleSave = async () => {
     setSaving(true);
@@ -284,7 +300,7 @@ const EditScheduleModal: React.FC<EditModalProps> = ({ job, onClose, onSave, col
               color: colors.brand.primary,
               textAlign: 'center'
             }}>
-              Will run: <strong>{cronToHuman(`${minute} ${hour} * * *`)}</strong>
+              Will run: <strong>{cronToHuman(getPreviewCron())}</strong>
             </div>
           </div>
 
@@ -361,6 +377,14 @@ export const SchedulerSettings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editingJob, setEditingJob] = useState<JobType | null>(null);
 
+  // Check if a job is configured for this tenant
+  const isJobConfigured = (job: JobType): boolean => {
+    // Global jobs don't need per-tenant config check in the same way
+    if (job.is_global) return true;
+    // Per-tenant jobs need tenant_cron_expression to be set
+    return job.tenant_cron_expression !== null;
+  };
+
   useEffect(() => {
     fetchJobTypes();
   }, []);
@@ -383,11 +407,21 @@ export const SchedulerSettings: React.FC = () => {
 
   const handleSaveSchedule = async (jobCode: string, hour: string, minute: string) => {
     try {
-      // Build cron expression (minute hour * * *)
-      const cronExpression = `${minute} ${hour} * * *`;
+      // Find the job to get existing cron expression
+      const job = jobTypes.find(j => j.code === jobCode);
+      if (!job) {
+        throw new Error('Job not found');
+      }
 
+      // Parse existing cron to preserve day fields
+      const existingCron = parseCron(job.default_cron_expression);
+
+      // Build cron expression preserving day-of-month, month, day-of-week
+      const cronExpression = `${minute} ${hour} ${existingCron.dayOfMonth} ${existingCron.month} ${existingCron.dayOfWeek}`;
+
+      // Add is_live=true query parameter
       const response = await apiService.put(
-        API_ENDPOINTS.JOBS.CONFIG(jobCode),
+        `${API_ENDPOINTS.JOBS.CONFIG(jobCode)}?is_live=true`,
         { cron_expression: cronExpression }
       ) as any;
 
@@ -596,60 +630,81 @@ export const SchedulerSettings: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Right: Status + Edit Button */}
+                      {/* Right: Status + Actions */}
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        {/* Edit Button */}
-                        <button
-                          onClick={() => setEditingJob(job)}
-                          title="Edit Schedule"
-                          style={{
-                            padding: '6px',
-                            backgroundColor: 'transparent',
-                            color: colors.utility.secondaryText,
-                            border: `1px solid ${colors.utility.primaryText}20`,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
-                            e.currentTarget.style.color = colors.brand.primary;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = colors.utility.secondaryText;
-                          }}
-                        >
-                          <Settings size={16} />
-                        </button>
+                        {/* Edit Button - Only show for editable and configured jobs */}
+                        {isJobConfigured(job) && isJobEditable(job.code) && (
+                          <button
+                            onClick={() => setEditingJob(job)}
+                            title="Edit Schedule"
+                            style={{
+                              padding: '6px',
+                              backgroundColor: 'transparent',
+                              color: colors.utility.secondaryText,
+                              border: `1px solid ${colors.utility.primaryText}20`,
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                              e.currentTarget.style.color = colors.brand.primary;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = colors.utility.secondaryText;
+                            }}
+                          >
+                            <Settings size={16} />
+                          </button>
+                        )}
 
                         {/* Status Badge */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          backgroundColor: job.is_active ? `${colors.semantic.success}15` : `${colors.utility.secondaryText}15`,
-                          color: job.is_active ? colors.semantic.success : colors.utility.secondaryText
-                        }}>
+                        {!isJobConfigured(job) ? (
+                          // Not Configured Badge
                           <div style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            backgroundColor: job.is_active ? colors.semantic.success : colors.utility.secondaryText
-                          }} />
-                          {job.is_active ? 'Active' : 'Inactive'}
-                        </div>
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            backgroundColor: `${colors.semantic.warning}15`,
+                            color: colors.semantic.warning
+                          }}>
+                            <AlertCircle size={12} />
+                            Not Configured
+                          </div>
+                        ) : (
+                          // Active/Inactive Badge
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            backgroundColor: job.is_active ? `${colors.semantic.success}15` : `${colors.utility.secondaryText}15`,
+                            color: job.is_active ? colors.semantic.success : colors.utility.secondaryText
+                          }}>
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              backgroundColor: job.is_active ? colors.semantic.success : colors.utility.secondaryText
+                            }} />
+                            {job.is_active ? 'Active' : 'Inactive'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

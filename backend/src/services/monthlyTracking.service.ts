@@ -636,6 +636,15 @@ export class MonthlyTrackingService {
             const navMonth = navMonths[idx] || {};
             const marketValueMonth = marketValueMonths[idx] || {};
 
+            // Determine previous month name for tooltip
+            let prevMonthName = '';
+            if (idx > 0 && unitsMonths[idx - 1]) {
+              prevMonthName = unitsMonths[idx - 1].month_display || '';
+            } else if (idx === 0) {
+              // For first month, the "previous" NAV is actually the same month's closing NAV
+              prevMonthName = unitsMonth.month_display || '';
+            }
+
             return {
               month: unitsMonth.month,
               month_display: unitsMonth.month_display,
@@ -644,9 +653,11 @@ export class MonthlyTrackingService {
               units_added: unitsMonth.units_added,
               units_redeemed: unitsMonth.units_redeemed,
               closing_units: unitsMonth.closing_units,
-              // NAV data
+              // NAV data - show the NAV used for market value calculation (previous month's NAV)
               opening_nav: navMonth.opening_nav,
-              closing_nav: navMonth.closing_nav,
+              closing_nav: marketValueMonth.previous_month_nav || navMonth.closing_nav, // Use the NAV that was used for calculation
+              nav_used_for_calculation: marketValueMonth.previous_month_nav || navMonth.closing_nav,
+              nav_source_month: prevMonthName, // Which month the NAV is from
               nav_change: navMonth.nav_change,
               nav_change_percentage: navMonth.nav_change_percentage,
               has_nav_data: navMonth.closing_nav != null && navMonth.closing_nav !== undefined && navMonth.closing_nav > 0,

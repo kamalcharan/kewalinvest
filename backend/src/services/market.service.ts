@@ -1473,7 +1473,7 @@ export class MarketService {
           ist.last_metrics_calculated_at
         FROM t_market_indices mi
         LEFT JOIN index_stats ist ON ist.index_id = mi.id
-        WHERE mi.is_active = true
+        WHERE mi.is_active = true AND mi.provider_enabled = true
         ORDER BY mi.index_name
       `;
 
@@ -1518,11 +1518,15 @@ export class MarketService {
         }
 
         // Determine metrics status
+        // Allow up to 2 pending records (first dates are skipped as they need 2+ data points)
         let metricsStatus: 'calculated' | 'pending' | 'partial' = 'pending';
-        if (row.metrics_pending_count === 0 && row.metrics_calculated_count > 0) {
+        const calculatedCount = parseInt(row.metrics_calculated_count) || 0;
+        const pendingCount = parseInt(row.metrics_pending_count) || 0;
+
+        if (calculatedCount > 0 && pendingCount <= 2) {
           metricsStatus = 'calculated';
           metricsCalculated++;
-        } else if (row.metrics_calculated_count > 0 && row.metrics_pending_count > 0) {
+        } else if (calculatedCount > 0 && pendingCount > 2) {
           metricsStatus = 'partial';
           metricsPending++;
         } else {
@@ -1583,6 +1587,7 @@ export class MarketService {
   /**
    * Detect gaps in market data for an index
    * Only checks for missing trading days (excludes weekends)
+   * LIMITED TO LAST 2 WEEKS to avoid flagging old historical gaps
    */
   private async detectDataGaps(
     indexId: number,
@@ -1594,14 +1599,19 @@ export class MarketService {
     }
 
     try {
-      // Get all dates we have data for
+      // Only check gaps in the last 2 weeks
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      twoWeeksAgo.setHours(0, 0, 0, 0);
+
+      // Get all dates we have data for (last 2 weeks only)
       const datesQuery = `
         SELECT DISTINCT date
         FROM t_market_data_records
-        WHERE index_id = $1
+        WHERE index_id = $1 AND date >= $2
         ORDER BY date
       `;
-      const datesResult = await this.db.query(datesQuery, [indexId]);
+      const datesResult = await this.db.query(datesQuery, [indexId, twoWeeksAgo]);
 
       if (datesResult.rows.length < 2) {
         return [];
@@ -1616,7 +1626,9 @@ export class MarketService {
       let missingDays = 0;
 
       // Iterate through date range and find gaps (only trading days)
-      const start = new Date(earliestDate);
+      // Start from 2 weeks ago or earliest date, whichever is later
+      const earliestDateObj = new Date(earliestDate);
+      const start = earliestDateObj > twoWeeksAgo ? earliestDateObj : twoWeeksAgo;
       const end = new Date(latestDate);
       const current = new Date(start);
 

@@ -1133,40 +1133,8 @@ const NavBookmarksPage: React.FC = () => {
               }}>
                 {selectedBookmarkIds.size} schemes selected
               </span>
-              
+
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={handleBulkEnableDaily}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.semantic.success,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}
-                >
-                  Enable Daily Download
-                </button>
-                
-                <button
-                  onClick={handleBulkDisableDaily}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.semantic.warning,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}
-                >
-                  Disable Daily Download
-                </button>
-                
                 <button
                   onClick={handleBulkHistoricalDownload}
                   style={{
@@ -1182,8 +1150,8 @@ const NavBookmarksPage: React.FC = () => {
                 >
                   📥 Sequential Download
                 </button>
-                
-                {/* NEW: Bulk Calculate Metrics */}
+
+                {/* Bulk Calculate Metrics */}
                 <button
                   onClick={handleBulkCalculateMetrics}
                   style={{
@@ -1199,7 +1167,7 @@ const NavBookmarksPage: React.FC = () => {
                 >
                   📊 Calculate Metrics
                 </button>
-                
+
                 <button
                   onClick={handleBulkDelete}
                   style={{

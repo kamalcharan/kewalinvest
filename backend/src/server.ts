@@ -885,23 +885,47 @@ app.listen(PORT, async () => {
     console.log('✅ Import session restart capability ready');
     console.log('✅ Record editing and reprocessing ready');
     console.log('✅ System logs endpoints ready');
-    
+
     // CHANGED: Dynamic import and initialization of NAV Scheduler Service
     try {
       console.log('📅 Initializing NAV Scheduler Service...');
-      
+
       // Use dynamic import to avoid TypeScript compilation issues
       const { NavSchedulerService } = await import('./services/navScheduler.service');
       navScheduler = new NavSchedulerService();
       await navScheduler.initializeSchedulers();
-      
+
       console.log('✅ NAV Scheduler Service initialized successfully');
     } catch (schedulerError: any) {
       console.error('⚠️  NAV Scheduler initialization failed:', schedulerError.message);
       console.log('📅 NAV Scheduler will be available but no active schedules will run');
       // Don't fail server startup if scheduler fails - just log the error
     }
-    
+
+    // NEW: Initialize Generic Job Scheduler for DAILY_ALERTS, GOAL_CALCULATION, MARKET_OHLC, etc.
+    try {
+      console.log('📅 Initializing Generic Job Scheduler Service...');
+
+      const { jobSchedulerService } = await import('./services/jobScheduler.service');
+      const { registerAllJobExecutors } = await import('./jobs/index');
+
+      // Register all job executors (NAV, Market, Alerts, Goals, Snapshots)
+      registerAllJobExecutors(jobSchedulerService);
+
+      // Initialize scheduler (loads active configs and starts timers)
+      await jobSchedulerService.initializeScheduler();
+
+      console.log('✅ Generic Job Scheduler Service initialized successfully');
+      console.log('   - DAILY_ALERTS: Daily 8 PM (per-tenant)');
+      console.log('   - GOAL_CALCULATION: Friday 8:30 PM (per-tenant)');
+      console.log('   - MARKET_OHLC_DOWNLOAD: Daily 9:30 PM (global)');
+      console.log('   - PORTFOLIO_SNAPSHOT: Friday 9 PM (per-tenant)');
+    } catch (jobSchedulerError: any) {
+      console.error('⚠️  Generic Job Scheduler initialization failed:', jobSchedulerError.message);
+      console.log('📅 Jobs will need to be triggered manually');
+      // Don't fail server startup if scheduler fails - just log the error
+    }
+
     // Check N8N configuration
     if (process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_URL) {
       console.log('✅ N8N integration configured');

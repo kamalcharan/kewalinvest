@@ -855,7 +855,7 @@ export class NavController {
 
       // Get scheme details
       const schemeQuery = `
-        SELECT id, scheme_name FROM m_schemes WHERE scheme_code = $1
+        SELECT id, scheme_name FROM t_scheme_details WHERE scheme_code = $1
       `;
       const schemeResult = await pool.query(schemeQuery, [schemeCode]);
 
@@ -873,7 +873,7 @@ export class NavController {
       // GLOBAL CHECK: Check if today's NAV data already exists (downloaded by any tenant)
       const today = new Date().toISOString().split('T')[0];
       const existingNavQuery = `
-        SELECT nav_date, nav
+        SELECT nav_date, nav_value
         FROM t_nav_data
         WHERE scheme_id = $1 AND nav_date >= $2::date
         ORDER BY nav_date DESC
@@ -901,7 +901,7 @@ export class NavController {
             records_inserted: 0,
             records_updated: 0,
             nav_date: existingData.nav_date,
-            nav_value: existingData.nav,
+            nav_value: existingData.nav_value,
             source: 'already_available'
           },
           message: `NAV already up to date for ${schemeName}`
@@ -909,17 +909,65 @@ export class NavController {
         return;
       }
 
-      // NAV not available - download from AMFI
-      const amfiResponse = await this.amfiService.downloadDailyNavData({
-        requestId: `single_${schemeCode}_${Date.now()}`
-      });
+      // NAV not available - download from MFAPI (supports backfill)
+      // Get the last known NAV date to determine the date range for download
+      const lastNavQuery = `
+        SELECT MAX(nav_date) as last_date
+        FROM t_nav_data
+        WHERE scheme_id = $1
+      `;
+      const lastNavResult = await pool.query(lastNavQuery, [schemeId]);
+      const lastKnownDate = lastNavResult.rows[0]?.last_date;
 
-      if (!amfiResponse.success || !amfiResponse.data) {
-        throw new Error(amfiResponse.error || 'Failed to download NAV from AMFI');
+      // Calculate date range: from last known date (or 7 days ago) to today
+      const endDate = new Date();
+      let startDate: Date;
+      if (lastKnownDate) {
+        // Start from the day after last known date
+        startDate = new Date(lastKnownDate);
+        startDate.setDate(startDate.getDate() + 1);
+      } else {
+        // If no data exists, download last 7 days
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
       }
 
-      // Filter for just this scheme
-      const schemeNavData = amfiResponse.data.filter(record => record.scheme_code === schemeCode);
+      // If startDate is in the future (all data up to date), return success
+      if (startDate > endDate) {
+        res.json({
+          success: true,
+          data: {
+            scheme_code: schemeCode,
+            scheme_name: schemeName,
+            records_found: 0,
+            records_inserted: 0,
+            records_updated: 0,
+            message: 'NAV data already up to date'
+          }
+        });
+        return;
+      }
+
+      SimpleLogger.info('NavController', 'Downloading NAV from MFAPI', 'downloadSchemeNav', {
+        schemeCode,
+        schemeName,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        lastKnownDate: lastKnownDate || 'none'
+      }, user!.user_id, user!.tenant_id);
+
+      const mfapiResponse = await this.amfiService.downloadFromMFAPI(
+        schemeCode,
+        startDate,
+        endDate,
+        { requestId: `single_${schemeCode}_${Date.now()}` }
+      );
+
+      if (!mfapiResponse.success || !mfapiResponse.data) {
+        throw new Error(mfapiResponse.error || 'Failed to download NAV from MFAPI');
+      }
+
+      const schemeNavData = mfapiResponse.data;
 
       if (schemeNavData.length === 0) {
         res.status(200).json({
@@ -928,7 +976,7 @@ export class NavController {
             scheme_code: schemeCode,
             scheme_name: schemeName,
             records_found: 0,
-            message: 'No NAV data found for this scheme in today\'s AMFI data'
+            message: 'No new NAV data available for this scheme'
           }
         });
         return;
@@ -941,13 +989,20 @@ export class NavController {
         schemeNavData
       );
 
+      // Update scheme download status for statistics tracking
+      await this.navService.updateSchemeNavStatus(schemeId, {
+        last_download_status: 'success',
+        last_download_date: new Date()
+      });
+
       SimpleLogger.info('NavController', 'Single scheme NAV download completed', 'downloadSchemeNav', {
         schemeCode,
         schemeName,
         recordsFound: schemeNavData.length,
         inserted: upsertResult.inserted,
         updated: upsertResult.updated,
-        source: 'amfi'
+        source: 'mfapi',
+        dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
       }, user!.user_id, user!.tenant_id);
 
       res.json({
@@ -958,14 +1013,31 @@ export class NavController {
           records_found: schemeNavData.length,
           records_inserted: upsertResult.inserted,
           records_updated: upsertResult.updated,
-          nav_date: schemeNavData[0]?.nav_date,
-          nav_value: schemeNavData[0]?.nav_value,
-          source: 'downloaded'
+          nav_date: schemeNavData[schemeNavData.length - 1]?.nav_date,
+          nav_value: schemeNavData[schemeNavData.length - 1]?.nav_value,
+          source: 'mfapi',
+          backfilled_days: schemeNavData.length
         },
-        message: `NAV updated for ${schemeName}`
+        message: `NAV updated for ${schemeName} (${schemeNavData.length} days)`
       });
 
     } catch (error: any) {
+      // Update scheme download status on failure
+      try {
+        const schemeCode = req.params.schemeCode;
+        const schemeQuery = `SELECT id FROM t_scheme_details WHERE scheme_code = $1`;
+        const schemeResult = await pool.query(schemeQuery, [schemeCode]);
+        if (schemeResult.rows.length > 0) {
+          await this.navService.updateSchemeNavStatus(schemeResult.rows[0].id, {
+            last_download_status: 'failed',
+            last_download_error: error.message,
+            last_download_date: new Date()
+          });
+        }
+      } catch (statusError) {
+        // Ignore status update errors
+      }
+
       SimpleLogger.error('NavController', 'Failed to download scheme NAV', 'downloadSchemeNav', {
         schemeCode: req.params.schemeCode,
         error: error.message
