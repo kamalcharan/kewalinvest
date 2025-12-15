@@ -186,12 +186,14 @@ export class CustomerController {
       const { user, environment } = req;
       const isLive = environment === 'live';
       const customerId = parseInt(req.params.id);
-      const { addresses, is_active, ...customerData } = req.body as UpdateCustomerRequest & { addresses?: any[]; is_active?: boolean };
+      const { addresses, channels, is_active, ...customerData } = req.body as UpdateCustomerRequest & { addresses?: any[]; channels?: any[]; is_active?: boolean };
 
       console.log('=== UPDATE DEBUG START ===');
       console.log('Customer ID:', customerId);
       console.log('Addresses received:', JSON.stringify(addresses, null, 2));
       console.log('Addresses length:', addresses?.length || 'undefined');
+      console.log('Channels received:', JSON.stringify(channels, null, 2));
+      console.log('Channels length:', channels?.length || 'undefined');
       console.log('is_active:', is_active);
       console.log('=== UPDATE DEBUG END ===');
 
@@ -251,12 +253,87 @@ export class CustomerController {
         );
       }
 
+      // Handle channels if provided
+      if (channels && Array.isArray(channels) && channels.length > 0) {
+        // First, deactivate all existing channels for this contact
+        await client.query(
+          `UPDATE t_contact_channels
+           SET is_active = false, updated_at = CURRENT_TIMESTAMP
+           WHERE contact_id = $1 AND tenant_id = $2 AND is_live = $3`,
+          [contactId, user!.tenant_id, isLive]
+        );
+
+        // Then, upsert each channel
+        for (const channel of channels) {
+          try {
+            if (channel.id) {
+              // Update existing channel
+              await client.query(
+                `UPDATE t_contact_channels
+                 SET channel_type = $1, channel_value = $2, channel_subtype = $3,
+                     is_primary = $4, is_active = true, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $5 AND contact_id = $6 AND tenant_id = $7 AND is_live = $8`,
+                [
+                  channel.channel_type,
+                  channel.channel_value,
+                  channel.channel_subtype || 'personal',
+                  channel.is_primary || false,
+                  channel.id,
+                  contactId,
+                  user!.tenant_id,
+                  isLive
+                ]
+              );
+            } else {
+              // Insert new channel
+              await client.query(
+                `INSERT INTO t_contact_channels
+                 (contact_id, tenant_id, is_live, channel_type, channel_value, channel_subtype, is_primary)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                  contactId,
+                  user!.tenant_id,
+                  isLive,
+                  channel.channel_type,
+                  channel.channel_value,
+                  channel.channel_subtype || 'personal',
+                  channel.is_primary || false
+                ]
+              );
+            }
+          } catch (channelError: any) {
+            console.error('Error processing channel:', channelError);
+          }
+        }
+      }
+
       // Handle addresses if provided
       if (addresses && Array.isArray(addresses) && addresses.length > 0) {
         for (const address of addresses) {
           try {
             if (address.id) {
-              console.log('Existing address update not implemented for id:', address.id);
+              // Update existing address
+              await client.query(
+                `UPDATE t_customer_addresses
+                 SET address_type = $1, address_line1 = $2, address_line2 = $3,
+                     city = $4, state = $5, country = $6, pincode = $7,
+                     is_primary = $8, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $9 AND customer_id = $10 AND tenant_id = $11 AND is_live = $12`,
+                [
+                  address.address_type,
+                  address.address_line1,
+                  address.address_line2 || null,
+                  address.city,
+                  address.state,
+                  address.country || 'India',
+                  address.pincode,
+                  address.is_primary || false,
+                  address.id,
+                  customerId,
+                  user!.tenant_id,
+                  isLive
+                ]
+              );
             } else {
               await this.customerService.addAddress(
                 user!.tenant_id,

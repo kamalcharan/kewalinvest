@@ -91,7 +91,17 @@ const CustomerFormPage: React.FC = () => {
           date_of_death: formData.date_of_death || undefined,
           family_head_name: formData.family_head_name || undefined,
           family_head_iwell_code: formData.family_head_iwell_code || undefined,
-          onboarding_status: formData.onboarding_status
+          onboarding_status: formData.onboarding_status,
+          // Include channels for update
+          channels: formData.channels.map(ch => ({
+            id: ch.id,
+            channel_type: ch.channel_type,
+            channel_value: ch.channel_value,
+            channel_subtype: ch.channel_subtype || 'personal',
+            is_primary: ch.is_primary || false
+          })),
+          // Include addresses for update
+          addresses: formData.addresses
         };
 
         await updateCustomerMutation.mutateAsync({
