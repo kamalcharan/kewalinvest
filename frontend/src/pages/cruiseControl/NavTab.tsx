@@ -421,22 +421,22 @@ export const NavTab: React.FC = () => {
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                       <button
                         onClick={() => handleDownloadNAV(scheme.scheme_code, scheme.scheme_name)}
-                        disabled={actionLoading[`download_${scheme.scheme_code}`] || !scheme.daily_download_enabled}
+                        disabled={actionLoading[`download_${scheme.scheme_code}`] || !scheme.daily_download_enabled || !scheme.has_gaps}
                         style={{
                           padding: '6px 10px',
-                          backgroundColor: scheme.daily_download_enabled ? colors.brand.primary : colors.utility.secondaryBackground,
-                          color: scheme.daily_download_enabled ? '#FFF' : colors.utility.secondaryText,
+                          backgroundColor: (scheme.daily_download_enabled && scheme.has_gaps) ? colors.brand.primary : colors.utility.secondaryBackground,
+                          color: (scheme.daily_download_enabled && scheme.has_gaps) ? '#FFF' : colors.utility.secondaryText,
                           border: 'none',
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: '500',
-                          cursor: scheme.daily_download_enabled ? 'pointer' : 'not-allowed',
+                          cursor: (scheme.daily_download_enabled && scheme.has_gaps) ? 'pointer' : 'not-allowed',
                           opacity: actionLoading[`download_${scheme.scheme_code}`] ? 0.7 : 1,
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
                         }}
-                        title={scheme.daily_download_enabled ? 'Download NAV' : 'Daily download not enabled'}
+                        title={!scheme.daily_download_enabled ? 'Daily download not enabled' : !scheme.has_gaps ? 'Data is up to date' : 'Download NAV'}
                       >
                         {actionLoading[`download_${scheme.scheme_code}`] ? (
                           <Loader2 size={12} className="animate-spin" />
@@ -447,22 +447,22 @@ export const NavTab: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleCalculateMetrics(scheme.scheme_id, scheme.scheme_name)}
-                        disabled={actionLoading[`metrics_${scheme.scheme_id}`] || scheme.total_records === 0}
+                        disabled={actionLoading[`metrics_${scheme.scheme_id}`] || scheme.total_records === 0 || scheme.metrics_status === 'calculated'}
                         style={{
                           padding: '6px 10px',
-                          backgroundColor: scheme.total_records > 0 ? '#9333EA' : colors.utility.secondaryBackground,
-                          color: scheme.total_records > 0 ? '#FFF' : colors.utility.secondaryText,
+                          backgroundColor: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? '#9333EA' : colors.utility.secondaryBackground,
+                          color: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? '#FFF' : colors.utility.secondaryText,
                           border: 'none',
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: '500',
-                          cursor: scheme.total_records > 0 ? 'pointer' : 'not-allowed',
+                          cursor: (scheme.total_records > 0 && scheme.metrics_status !== 'calculated') ? 'pointer' : 'not-allowed',
                           opacity: actionLoading[`metrics_${scheme.scheme_id}`] ? 0.7 : 1,
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
                         }}
-                        title={scheme.total_records > 0 ? 'Calculate Metrics' : 'No data available'}
+                        title={scheme.total_records === 0 ? 'No data available' : scheme.metrics_status === 'calculated' ? 'Metrics up to date' : 'Calculate Metrics'}
                       >
                         {actionLoading[`metrics_${scheme.scheme_id}`] ? (
                           <Loader2 size={12} className="animate-spin" />
