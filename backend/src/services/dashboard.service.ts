@@ -414,7 +414,7 @@ export class DashboardService {
   }
 
   /**
-   * Get planned withdrawals - goals with target dates in the next N months
+   * Get planned withdrawals - actual withdrawals configured inside goals
    * Returns two sets: next 3 months and next 6 months
    */
   async getPlannedWithdrawals(tenantId: number, isLive: boolean): Promise<{
@@ -424,42 +424,56 @@ export class DashboardService {
     try {
       console.log('[Dashboard] getPlannedWithdrawals called - tenantId:', tenantId, 'isLive:', isLive);
 
-      // Query goals with target_date in the next 6 months
+      // Query withdrawals from within goals (config_data.withdrawals array)
+      // Uses jsonb_array_elements to unnest the withdrawals array
       const query = `
-        SELECT
-          j.id,
-          j.customer_id,
-          c.name as customer_name,
-          j.title as goal_name,
-          COALESCE((j.config_data->>'target_amount')::numeric, 0) as target_amount,
-          COALESCE((j.config_data->>'current_value')::numeric, 0) as current_value,
-          (j.config_data->>'target_date')::date as target_date,
-          (j.config_data->>'goal_type') as goal_type,
-          ((j.config_data->>'target_date')::date - CURRENT_DATE) as days_remaining
-        FROM t_jtbd_configurations j
-        JOIN t_customers cust ON cust.id = j.customer_id
-        JOIN t_contacts c ON c.id = cust.contact_id
-        WHERE j.tenant_id = $1
-          AND j.is_live = $2
-          AND j.is_active = true
-          AND j.jtbd_type = 'goal_tracking'
-          AND j.config_data->>'target_date' IS NOT NULL
-          AND (j.config_data->>'target_date')::date >= CURRENT_DATE
-          AND (j.config_data->>'target_date')::date <= CURRENT_DATE + INTERVAL '6 months'
-        ORDER BY (j.config_data->>'target_date')::date ASC
+        WITH goal_withdrawals AS (
+          SELECT
+            j.id as goal_id,
+            j.customer_id,
+            c.name as customer_name,
+            j.title as goal_name,
+            (j.config_data->>'goal_type') as goal_type,
+            w.value->>'id' as withdrawal_id,
+            (w.value->>'amount')::numeric as amount,
+            (w.value->>'withdrawal_date')::date as withdrawal_date,
+            w.value->>'reason' as reason,
+            ((w.value->>'withdrawal_date')::date - CURRENT_DATE) as days_remaining
+          FROM t_jtbd_configurations j
+          JOIN t_customers cust ON cust.id = j.customer_id
+          JOIN t_contacts c ON c.id = cust.contact_id
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN j.config_data->'withdrawals' IS NOT NULL
+                   AND jsonb_typeof(j.config_data->'withdrawals') = 'array'
+              THEN j.config_data->'withdrawals'
+              ELSE '[]'::jsonb
+            END
+          ) AS w(value)
+          WHERE j.tenant_id = $1
+            AND j.is_live = $2
+            AND j.is_active = true
+            AND j.jtbd_type = 'goal_tracking'
+            AND (j.config_data->>'has_withdrawals')::boolean = true
+        )
+        SELECT *
+        FROM goal_withdrawals
+        WHERE withdrawal_date >= CURRENT_DATE
+          AND withdrawal_date <= CURRENT_DATE + INTERVAL '6 months'
+        ORDER BY withdrawal_date ASC
       `;
 
       const result = await this.db.query(query, [tenantId, isLive]);
       console.log('[Dashboard] getPlannedWithdrawals result count:', result.rows.length);
 
       const allWithdrawals: PlannedWithdrawal[] = result.rows.map(row => ({
-        id: row.id,
+        id: row.goal_id,
         customerId: row.customer_id,
         customerName: row.customer_name,
         goalName: row.goal_name,
-        targetAmount: parseFloat(row.target_amount || 0),
-        currentValue: parseFloat(row.current_value || 0),
-        targetDate: row.target_date ? new Date(row.target_date).toISOString().split('T')[0] : '',
+        targetAmount: parseFloat(row.amount || 0),
+        currentValue: 0, // Not applicable for individual withdrawals
+        targetDate: row.withdrawal_date ? new Date(row.withdrawal_date).toISOString().split('T')[0] : '',
         daysRemaining: parseInt(row.days_remaining || 0),
         goalType: row.goal_type || 'time_based_goal'
       }));
