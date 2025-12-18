@@ -34,6 +34,7 @@ const GoalsListPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind' | 'active' | 'paused' | 'withdrawal'>(initialFilter);
   const [filterType, setFilterType] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
+  const [withdrawalPeriod, setWithdrawalPeriod] = useState<3 | 6>(3);
 
   useEffect(() => {
     fetchGoals();
@@ -41,7 +42,7 @@ const GoalsListPage: React.FC = () => {
 
   useEffect(() => {
     filterGoals();
-  }, [goals, searchTerm, filterStatus, filterType]);
+  }, [goals, searchTerm, filterStatus, filterType, withdrawalPeriod]);
 
   const fetchGoals = async () => {
     setIsLoading(true);
@@ -84,16 +85,16 @@ const GoalsListPage: React.FC = () => {
     } else if (filterStatus === 'paused') {
       filtered = filtered.filter(goal => !goal.is_active);
     } else if (filterStatus === 'withdrawal') {
-      // Filter goals with target_date in the next 6 months
+      // Filter goals with target_date in the next N months (based on withdrawalPeriod)
       const now = new Date();
-      const sixMonthsFromNow = new Date();
-      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+      const futureDate = new Date();
+      futureDate.setMonth(futureDate.getMonth() + withdrawalPeriod);
 
       filtered = filtered.filter(goal => {
         const config = goal.config_data as any;
         if (config?.target_date) {
           const targetDate = new Date(config.target_date);
-          return targetDate >= now && targetDate <= sixMonthsFromNow;
+          return targetDate >= now && targetDate <= futureDate;
         }
         return false;
       });
@@ -363,8 +364,57 @@ const GoalsListPage: React.FC = () => {
           <option value="behind">Needs Attention</option>
           <option value="active">Active Only</option>
           <option value="paused">Paused Only</option>
-          <option value="withdrawal">📅 Withdrawal Due (6 mo)</option>
+          <option value="withdrawal">📅 Withdrawal Due</option>
         </select>
+
+        {/* Withdrawal Period Toggle - only shown when withdrawal filter is active */}
+        {filterStatus === 'withdrawal' && (
+          <div style={{
+            display: 'flex',
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+            border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            <button
+              onClick={() => setWithdrawalPeriod(3)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '10px 14px',
+                backgroundColor: withdrawalPeriod === 3 ? colors.semantic.error : 'transparent',
+                color: withdrawalPeriod === 3 ? '#FFFFFF' : colors.utility.primaryText,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: withdrawalPeriod === 3 ? '600' : '400'
+              }}
+            >
+              <Calendar size={14} />
+              3 Months
+            </button>
+            <button
+              onClick={() => setWithdrawalPeriod(6)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '10px 14px',
+                backgroundColor: withdrawalPeriod === 6 ? colors.semantic.warning : 'transparent',
+                color: withdrawalPeriod === 6 ? '#FFFFFF' : colors.utility.primaryText,
+                border: 'none',
+                borderLeft: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: withdrawalPeriod === 6 ? '600' : '400'
+              }}
+            >
+              <Calendar size={14} />
+              6 Months
+            </button>
+          </div>
+        )}
 
         {/* Type Filter */}
         <select
