@@ -236,9 +236,10 @@ export class DailyAlertsExecutor implements JobExecutor {
 
       // Step 1: Find customers with birthdays in 7 days who don't have an active alert
       const birthdayCustomersQuery = `
-        SELECT c.id as customer_id, c.display_name, c.date_of_birth,
+        SELECT c.id as customer_id, ct.name as customer_name, c.date_of_birth,
                u.id as created_by_user_id
         FROM t_customers c
+        JOIN t_contacts ct ON c.contact_id = ct.id
         CROSS JOIN (
           SELECT id FROM t_users WHERE tenant_id = $1 AND is_active = true LIMIT 1
         ) u
@@ -274,7 +275,7 @@ export class DailyAlertsExecutor implements JobExecutor {
             customer.customer_id,
             customer.created_by_user_id,
             'birthday',
-            customer.display_name,
+            customer.customer_name,
             customer.date_of_birth,
             sevenDaysFromRef
           );
@@ -291,9 +292,10 @@ export class DailyAlertsExecutor implements JobExecutor {
 
       // Step 2: Find customers with anniversaries in 7 days who don't have an active alert
       const anniversaryCustomersQuery = `
-        SELECT c.id as customer_id, c.display_name, c.anniversary_date,
+        SELECT c.id as customer_id, ct.name as customer_name, c.anniversary_date,
                u.id as created_by_user_id
         FROM t_customers c
+        JOIN t_contacts ct ON c.contact_id = ct.id
         CROSS JOIN (
           SELECT id FROM t_users WHERE tenant_id = $1 AND is_active = true LIMIT 1
         ) u
@@ -329,7 +331,7 @@ export class DailyAlertsExecutor implements JobExecutor {
             customer.customer_id,
             customer.created_by_user_id,
             'anniversary',
-            customer.display_name,
+            customer.customer_name,
             customer.anniversary_date,
             sevenDaysFromRef
           );
