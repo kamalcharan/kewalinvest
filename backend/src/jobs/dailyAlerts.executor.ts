@@ -539,7 +539,7 @@ export class DailyAlertsExecutor implements JobExecutor {
 
   /**
    * Process import notifications for a specific reference date
-   * - Auto-acknowledges notifications that are 1+ day old relative to referenceDate
+   * - Auto-acknowledges notifications that are 1+ day old (created before referenceDate)
    * @param referenceDate - The date to use as "today" for processing
    */
   private async processImportNotificationsForDate(
@@ -556,10 +556,8 @@ export class DailyAlertsExecutor implements JobExecutor {
     };
 
     try {
-      const dayBeforeRef = new Date(referenceDate);
-      dayBeforeRef.setDate(dayBeforeRef.getDate() - 1);
-
-      // Auto-acknowledge import notifications older than 1 day relative to referenceDate
+      // Auto-acknowledge import notifications created before referenceDate (at least 1 day old)
+      // Example: If referenceDate = Dec 18, acknowledge anything created before Dec 18
       const autoAckQuery = `
         UPDATE t_jtbd_configurations
         SET completed_at = $4,
@@ -570,12 +568,12 @@ export class DailyAlertsExecutor implements JobExecutor {
           AND jtbd_type = 'import_notification'
           AND is_active = true
           AND completed_at IS NULL
-          AND created_at < $3
+          AND created_at::date < $3::date
         RETURNING id, customer_id
       `;
 
       const autoAckResult = await this.db.query(autoAckQuery, [
-        tenantId, isLive, dayBeforeRef, referenceDate
+        tenantId, isLive, referenceDate.toISOString().split('T')[0], referenceDate
       ]);
       result.autoAcknowledged = autoAckResult.rowCount || 0;
 
