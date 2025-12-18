@@ -223,17 +223,21 @@ export class DashboardService {
    */
   async getGoalsSummary(tenantId: number, isLive: boolean): Promise<GoalsSummary> {
     try {
+      // Goals are stored in t_jtbd_configurations with jtbd_type = 'goal_tracking'
+      // Progress data is in config_data JSON: target_amount, current_value, deviation_percentage
       const query = `
         SELECT
           COUNT(*) as total_goals,
-          COUNT(*) FILTER (WHERE progress_percentage >= 90) as on_track,
-          COUNT(*) FILTER (WHERE progress_percentage >= 50 AND progress_percentage < 90) as needs_attention,
-          COUNT(*) FILTER (WHERE progress_percentage < 50) as off_track,
-          MAX(last_calculation_date) as last_calculated_at,
-          COALESCE(SUM(target_amount), 0) as total_target_value,
-          COALESCE(SUM(current_value), 0) as current_value
-        FROM t_customer_goals
+          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric >= 0) as on_track,
+          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < 0
+                           AND (config_data->>'deviation_percentage')::numeric >= -20) as needs_attention,
+          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < -20) as off_track,
+          MAX(updated_at) as last_calculated_at,
+          COALESCE(SUM((config_data->>'target_amount')::numeric), 0) as total_target_value,
+          COALESCE(SUM((config_data->>'current_value')::numeric), 0) as current_value
+        FROM t_jtbd_configurations
         WHERE tenant_id = $1 AND is_live = $2 AND is_active = true
+          AND jtbd_type = 'goal_tracking'
       `;
       const result = await this.db.query(query, [tenantId, isLive]);
       const stats = result.rows[0];
