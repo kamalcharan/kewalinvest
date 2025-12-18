@@ -254,6 +254,38 @@ export class GoalService {
   }
 
   /**
+   * Get all goals across all customers (for tenant)
+   * Returns full goal data compatible with GoalConfiguration type
+   */
+  async getAllGoals(
+    tenantId: number,
+    isLive: boolean
+  ): Promise<any[]> {
+    try {
+      const query = `
+        SELECT
+          j.*,
+          c.name as customer_name
+        FROM t_jtbd_configurations j
+        JOIN t_customers cust ON cust.id = j.customer_id
+        JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.jtbd_type = 'goal_tracking'
+        ORDER BY j.is_active DESC, j.created_at DESC
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+
+      // Return raw rows with customer_name added
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting all goals:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get goal summary for customer
    */
   async getCustomerGoalSummary(

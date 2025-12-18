@@ -777,6 +777,36 @@ export class JTBDController {
   };
 
   /**
+   * GET /api/jtbd/dashboard/alert-counts
+   * Get alert counts by status for all tabs
+   */
+  getAlertCounts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const { JTBDDashboardService } = await import('../services/jtbd.dashboard.service');
+      const dashboardService = new JTBDDashboardService();
+
+      const counts = await dashboardService.getAlertCounts(
+        user!.tenant_id,
+        isLive
+      );
+
+      res.json({
+        success: true,
+        data: counts
+      });
+    } catch (error: any) {
+      console.error('Error getting alert counts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get alert counts'
+      });
+    }
+  };
+
+  /**
    * PATCH /api/jtbd/dashboard/alerts/:id/acknowledge
    * Acknowledge an alert (mark as completed with manual source)
    */

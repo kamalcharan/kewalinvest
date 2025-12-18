@@ -129,8 +129,9 @@ export const API_ENDPOINTS = {
     ALERTS_BY_DATE: `${API_BASE}/jtbd/dashboard/alerts-by-date`,
     COMMUNICATION_QUEUE: `${API_BASE}/jtbd/dashboard/communication-queue`,
     LATEST_ALERTS: `${API_BASE}/jtbd/dashboard/latest-alerts`,
-    VISIBLE_ALERTS: `${API_BASE}/jtbd/dashboard/visible-alerts`,  // NEW: For AlertsTab with visibility filtering
-    ACKNOWLEDGE_ALERT: (id: number) => `${API_BASE}/jtbd/dashboard/alerts/${id}/acknowledge`,  // NEW: Acknowledge alert
+    VISIBLE_ALERTS: `${API_BASE}/jtbd/dashboard/visible-alerts`,  // For AlertsTab with visibility filtering
+    ALERT_COUNTS: `${API_BASE}/jtbd/dashboard/alert-counts`,  // Get counts for all status tabs
+    ACKNOWLEDGE_ALERT: (id: number) => `${API_BASE}/jtbd/dashboard/alerts/${id}/acknowledge`,  // Acknowledge alert
     DISMISS_ALERT: (id: number) => `${API_BASE}/jtbd/dashboard/alerts/${id}/dismiss`,  // NEW: Dismiss alert
     CUSTOMER_SUMMARY: (customerId: number) => `${API_BASE}/jtbd/customer/${customerId}/summary`,
     CUSTOMER_SCHEMES: (customerId: number) => `${API_BASE}/jtbd/schemes/${customerId}`,
@@ -168,6 +169,7 @@ export const API_ENDPOINTS = {
   // Goal Management endpoints
   GOALS: {
     CREATE: `${API_BASE}/goals`,
+    GET_ALL: `${API_BASE}/goals/all`,
     GET_CUSTOMER_GOALS: (customerId: number) => `${API_BASE}/goals/customer/${customerId}`,
     GET: (id: number) => `${API_BASE}/goals/${id}`,
     UPDATE: (id: number) => `${API_BASE}/goals/${id}`,
@@ -772,7 +774,10 @@ export const JTBD_V2_URLS = {
 export const GOAL_URLS = {
   createGoal: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.GOALS.CREATE}${buildQueryParams({}, environment)}`,
-  
+
+  getAllGoals: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.GET_ALL}${buildQueryParams(params || {}, environment)}`,
+
   getCustomerGoals: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.GOALS.GET_CUSTOMER_GOALS(customerId)}${buildQueryParams(params || {}, environment)}`,
   

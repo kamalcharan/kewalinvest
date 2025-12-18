@@ -5,9 +5,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, Play, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import toastService from '../../services/toast.service';
 
 interface Alert {
   id: number;
@@ -39,6 +40,40 @@ interface VisibleAlertsResponse {
   };
 }
 
+interface AlertCounts {
+  all: number;
+  active: number;
+  acknowledged: number;
+  dismissed: number;
+}
+
+interface JobStatistics {
+  config: {
+    is_enabled: boolean;
+    cron_expression: string;
+    last_executed_at: string | null;
+    next_execution_at: string | null;
+    last_success_at: string | null;
+  };
+  is_running: boolean;
+  last_execution: {
+    status: 'success' | 'failed' | 'running';
+    execution_time: string;
+    execution_duration_ms: number;
+    execution_data?: {
+      alerts_triggered?: number;
+      alerts_processed?: number;
+      customers_affected?: number;
+      days_processed?: number;
+      start_date?: string;
+      end_date?: string;
+    };
+    error_message?: string;
+  } | null;
+  next_scheduled_run: string | null;
+  success_rate: number;
+}
+
 export const AlertsTab: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
@@ -49,6 +84,26 @@ export const AlertsTab: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<AlertCounts>({ all: 0, active: 0, acknowledged: 0, dismissed: 0 });
+  const [jobStats, setJobStats] = useState<JobStatistics | null>(null);
+  const [isTriggering, setIsTriggering] = useState(false);
+
+  // Fetch alert counts for all tabs
+  const fetchCounts = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const response = await apiService.get<{ success: boolean; data: AlertCounts }>(
+        API_ENDPOINTS.JTBD.ALERT_COUNTS
+      );
+
+      if (response.success && response.data) {
+        setCounts(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching alert counts:', err);
+    }
+  }, [isAuthenticated]);
 
   // Fetch alerts from API
   const fetchAlerts = useCallback(async () => {
@@ -74,6 +129,105 @@ export const AlertsTab: React.FC = () => {
       setLoading(false);
     }
   }, [isAuthenticated, filter]);
+
+  // Fetch job statistics
+  const fetchJobStats = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const response = await apiService.get<{ success: boolean; data: JobStatistics }>(
+        API_ENDPOINTS.JOBS.STATISTICS('DAILY_ALERTS')
+      );
+
+      if (response.success && response.data) {
+        setJobStats(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching job statistics:', err);
+    }
+  }, [isAuthenticated]);
+
+  // Trigger manual job execution with polling for completion
+  const triggerJob = async () => {
+    try {
+      setIsTriggering(true);
+      const response = await apiService.post<{ success: boolean; data: any }>(
+        API_ENDPOINTS.JOBS.EXECUTE('DAILY_ALERTS')
+      );
+
+      if (response.success) {
+        toastService.info('Alert job started. Processing...');
+
+        // Poll for job completion
+        const pollForCompletion = async () => {
+          const maxAttempts = 60; // Max 2 minutes of polling (2s intervals)
+          let attempts = 0;
+
+          const checkStatus = async (): Promise<void> => {
+            attempts++;
+            try {
+              const statsResponse = await apiService.get<{ success: boolean; data: JobStatistics }>(
+                API_ENDPOINTS.JOBS.STATISTICS('DAILY_ALERTS')
+              );
+
+              if (statsResponse.success && statsResponse.data) {
+                // Update stats in real-time
+                setJobStats(statsResponse.data);
+
+                // Check if still running
+                if (statsResponse.data.is_running) {
+                  if (attempts < maxAttempts) {
+                    setTimeout(checkStatus, 2000); // Poll every 2 seconds
+                  } else {
+                    setIsTriggering(false);
+                    toastService.warning('Job is taking longer than expected. Check back later.');
+                  }
+                } else {
+                  // Job completed - refresh all data
+                  setIsTriggering(false);
+                  const lastExec = statsResponse.data.last_execution;
+                  if (lastExec?.status === 'success') {
+                    const processed = lastExec.execution_data?.alerts_processed || 0;
+                    toastService.success(`Job completed! ${processed} alerts processed.`);
+                  } else if (lastExec?.status === 'failed') {
+                    toastService.error(`Job failed: ${lastExec.error_message || 'Unknown error'}`);
+                  }
+                  // Refresh alerts and counts
+                  fetchCounts();
+                  fetchAlerts();
+                }
+              }
+            } catch (err) {
+              console.error('Error polling job status:', err);
+              if (attempts < maxAttempts) {
+                setTimeout(checkStatus, 2000);
+              } else {
+                setIsTriggering(false);
+              }
+            }
+          };
+
+          // Start polling after a short delay
+          setTimeout(checkStatus, 1000);
+        };
+
+        pollForCompletion();
+      } else {
+        toastService.error('Failed to trigger alert job');
+        setIsTriggering(false);
+      }
+    } catch (err) {
+      console.error('Error triggering job:', err);
+      toastService.error('Failed to trigger alert job');
+      setIsTriggering(false);
+    }
+  };
+
+  // Fetch counts and job stats on mount
+  useEffect(() => {
+    fetchCounts();
+    fetchJobStats();
+  }, [fetchCounts, fetchJobStats]);
 
   // Fetch alerts on mount and when filter changes
   useEffect(() => {
@@ -198,6 +352,12 @@ export const AlertsTab: React.FC = () => {
             alert.id === alertId ? { ...alert, status: 'acknowledged' as const } : alert
           )
         );
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          active: Math.max(0, prev.active - 1),
+          acknowledged: prev.acknowledged + 1
+        }));
       }
     } catch (err) {
       console.error('Error acknowledging alert:', err);
@@ -216,6 +376,12 @@ export const AlertsTab: React.FC = () => {
             alert.id === alertId ? { ...alert, status: 'dismissed' as const } : alert
           )
         );
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          active: Math.max(0, prev.active - 1),
+          dismissed: prev.dismissed + 1
+        }));
       }
     } catch (err) {
       console.error('Error dismissing alert:', err);
@@ -247,8 +413,157 @@ export const AlertsTab: React.FC = () => {
     </svg>
   );
 
+  // Format relative time
+  const formatRelativeTime = (dateString: string | null): string => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const formatNextRun = (dateString: string | null): string => {
+    if (!dateString) return 'Not scheduled';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    if (diffMs < 0) return 'Overdue';
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 60) return `In ${diffMins}m`;
+    if (diffHours < 24) return `In ${diffHours}h`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div>
+      {/* Scheduler Status Card */}
+      <div style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        padding: '16px 20px',
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+          {/* Job Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {jobStats?.is_running ? (
+              <Loader2 size={18} style={{ color: colors.brand.primary }} className="animate-spin" />
+            ) : jobStats?.last_execution?.status === 'success' ? (
+              <CheckCircle size={18} style={{ color: colors.semantic.success }} />
+            ) : jobStats?.last_execution?.status === 'failed' ? (
+              <XCircle size={18} style={{ color: colors.semantic.error }} />
+            ) : (
+              <Clock size={18} style={{ color: colors.utility.secondaryText }} />
+            )}
+            <div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Daily Alerts Job</div>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                {jobStats?.is_running ? 'Running...' :
+                  jobStats?.last_execution?.status === 'success' ? 'Last run successful' :
+                  jobStats?.last_execution?.status === 'failed' ? 'Last run failed' : 'Not configured'}
+              </div>
+            </div>
+          </div>
+
+          {/* Last Run */}
+          <div>
+            <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Last Run</div>
+            <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
+              {formatRelativeTime(jobStats?.last_execution?.execution_time || null)}
+            </div>
+          </div>
+
+          {/* Next Scheduled */}
+          <div>
+            <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Next Scheduled</div>
+            <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
+              {formatNextRun(jobStats?.next_scheduled_run || null)}
+            </div>
+          </div>
+
+          {/* Last Execution Stats */}
+          {jobStats?.last_execution?.execution_data && (
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              padding: '6px 12px',
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '6px'
+            }}>
+              {/* Show days processed if catch-up happened */}
+              {(jobStats.last_execution.execution_data.days_processed || 0) > 1 && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#F59E0B' }}>
+                    {jobStats.last_execution.execution_data.days_processed}
+                  </div>
+                  <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Days</div>
+                </div>
+              )}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.brand.primary }}>
+                  {jobStats.last_execution.execution_data.alerts_triggered || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Triggered</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.semantic.success }}>
+                  {jobStats.last_execution.execution_data.alerts_processed || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Processed</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.utility.primaryText }}>
+                  {jobStats.last_execution.execution_data.customers_affected || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Customers</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Manual Trigger Button */}
+        <button
+          onClick={triggerJob}
+          disabled={isTriggering || jobStats?.is_running}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: '600',
+            backgroundColor: colors.brand.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: isTriggering || jobStats?.is_running ? 'not-allowed' : 'pointer',
+            opacity: isTriggering || jobStats?.is_running ? 0.6 : 1,
+            transition: 'all 0.2s'
+          }}
+        >
+          {isTriggering ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Play size={16} />
+          )}
+          {isTriggering ? 'Running...' : 'Run Now'}
+        </button>
+      </div>
+
       {/* Header with Refresh */}
       <div style={{
         display: 'flex',
@@ -270,8 +585,8 @@ export const AlertsTab: React.FC = () => {
               key={status}
               onClick={() => setFilter(status)}
               style={{
-                padding: '10px 20px',
-                fontSize: '14px',
+                padding: '10px 16px',
+                fontSize: '13px',
                 fontWeight: '600',
                 backgroundColor: filter === status ? colors.brand.primary : 'transparent',
                 color: filter === status ? 'white' : colors.utility.primaryText,
@@ -279,12 +594,31 @@ export const AlertsTab: React.FC = () => {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                textTransform: 'capitalize',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
             >
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-              {status === filter && ` (${alerts.length})`}
+              <span style={{
+                fontSize: '11px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                backgroundColor: filter === status
+                  ? 'rgba(255,255,255,0.25)'
+                  : status === 'active' && counts.active > 0
+                    ? colors.semantic.error + '20'
+                    : colors.utility.secondaryText + '15',
+                color: filter === status
+                  ? 'white'
+                  : status === 'active' && counts.active > 0
+                    ? colors.semantic.error
+                    : colors.utility.secondaryText,
+                fontWeight: '700'
+              }}>
+                {counts[status]}
+              </span>
             </button>
           ))}
         </div>

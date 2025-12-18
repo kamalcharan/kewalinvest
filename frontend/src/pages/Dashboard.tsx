@@ -67,16 +67,30 @@ interface DashboardData {
     dueDate: string;
     priority: 'critical' | 'high' | 'medium' | 'low';
   }>;
-  plannedWithdrawals: Array<{
-    id: number;
-    customerId: number;
-    customerName: string;
-    goalName: string;
-    goalType: string;
-    amount: number;
-    withdrawalDate: string;
-    frequency: 'one_time' | 'monthly' | 'quarterly' | 'yearly';
-  }>;
+  plannedWithdrawals: {
+    next3Months: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      goalName: string;
+      targetAmount: number;
+      currentValue: number;
+      targetDate: string;
+      daysRemaining: number;
+      goalType: string;
+    }>;
+    next6Months: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      goalName: string;
+      targetAmount: number;
+      currentValue: number;
+      targetDate: string;
+      daysRemaining: number;
+      goalType: string;
+    }>;
+  };
   meetings: {
     today: Array<{
       id: number;
@@ -158,7 +172,10 @@ const getEmptyData = (): DashboardData => ({
     snapshotStatus: { success: false, lastRun: null, customersProcessed: 0 }
   },
   upcomingActions: [],
-  plannedWithdrawals: [],
+  plannedWithdrawals: {
+    next3Months: [],
+    next6Months: []
+  },
   meetings: {
     today: [],
     upcoming: []
@@ -248,7 +265,11 @@ export const Dashboard: React.FC = () => {
             schemeName: txn.schemeName || 'Unknown',
             amount: txn.amount || 0,
             date: txn.date
-          }))
+          })),
+          plannedWithdrawals: {
+            next3Months: apiData.plannedWithdrawals?.next3Months || [],
+            next6Months: apiData.plannedWithdrawals?.next6Months || []
+          }
         }));
 
         setLastUpdated(new Date());
@@ -659,11 +680,11 @@ export const Dashboard: React.FC = () => {
         marginBottom: '24px'
       }}>
         {/* Goals Overview */}
-        <Card>
+        <Card style={{ alignSelf: 'start' }}>
           <SectionHeader
             title="Goals Overview"
             icon={<Target size={18} />}
-            action={{ label: 'View All', onClick: () => navigate('/customers') }}
+            action={{ label: 'View All', onClick: () => navigate('/goals') }}
           />
 
           {data.goalsSummary.totalGoals === 0 ? (
@@ -699,25 +720,27 @@ export const Dashboard: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Goal Progress Bar */}
-              <div style={{ marginBottom: '20px' }}>
+              {/* Compact Goal Progress */}
+              <div style={{ marginBottom: '12px' }}>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  marginBottom: '8px',
-                  fontSize: '13px'
+                  alignItems: 'center',
+                  marginBottom: '6px'
                 }}>
-                  <span style={{ color: colors.utility.secondaryText }}>Overall Progress</span>
-                  <span style={{ fontWeight: '600', color: colors.utility.primaryText }}>
+                  <span style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                    {formatCurrency(data.goalsSummary.currentValue, true)} of {formatCurrency(data.goalsSummary.totalTargetValue, true)}
+                  </span>
+                  <span style={{ fontWeight: '600', fontSize: '13px', color: colors.brand.primary }}>
                     {data.goalsSummary.totalTargetValue > 0
                       ? ((data.goalsSummary.currentValue / data.goalsSummary.totalTargetValue) * 100).toFixed(1)
                       : 0}%
                   </span>
                 </div>
                 <div style={{
-                  height: '10px',
+                  height: '8px',
                   backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#E2E8F0',
-                  borderRadius: '5px',
+                  borderRadius: '4px',
                   overflow: 'hidden'
                 }}>
                   <div style={{
@@ -726,72 +749,59 @@ export const Dashboard: React.FC = () => {
                       : 0}%`,
                     height: '100%',
                     backgroundColor: colors.brand.primary,
-                    borderRadius: '5px'
+                    borderRadius: '4px'
                   }} />
-                </div>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginTop: '6px',
-                  fontSize: '11px',
-                  color: colors.utility.secondaryText
-                }}>
-                  <span>{formatCurrency(data.goalsSummary.currentValue, true)}</span>
-                  <span>{formatCurrency(data.goalsSummary.totalTargetValue, true)}</span>
                 </div>
               </div>
 
-              {/* Goal Stats */}
+              {/* Goal Stats - More Compact */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                marginBottom: '12px'
+                gap: '8px'
               }}>
                 <div style={{
-                  padding: '12px',
+                  padding: '10px 8px',
                   backgroundColor: '#10B98115',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   textAlign: 'center'
                 }}>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#10B981' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#10B981' }}>
                     {data.goalsSummary.onTrack}
                   </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>On Track</div>
+                  <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>On Track</div>
                 </div>
                 <div style={{
-                  padding: '12px',
+                  padding: '10px 8px',
                   backgroundColor: '#F59E0B15',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   textAlign: 'center'
                 }}>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#F59E0B' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#F59E0B' }}>
                     {data.goalsSummary.needsAttention}
                   </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Needs Attention</div>
+                  <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>Attention</div>
                 </div>
                 <div style={{
-                  padding: '12px',
+                  padding: '10px 8px',
                   backgroundColor: colors.semantic.error + '15',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   textAlign: 'center'
                 }}>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: colors.semantic.error }}>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: colors.semantic.error }}>
                     {data.goalsSummary.offTrack}
                   </div>
-                  <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Off Track</div>
+                  <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>Off Track</div>
                 </div>
               </div>
 
               <div style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 color: colors.utility.secondaryText,
                 textAlign: 'center',
-                padding: '8px',
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                borderRadius: '6px'
+                marginTop: '10px'
               }}>
-                {data.goalsSummary.totalGoals} goals • Last calculated: {formatRelativeDate(data.goalsSummary.lastCalculatedAt)}
+                {data.goalsSummary.totalGoals} goals • Updated {formatRelativeDate(data.goalsSummary.lastCalculatedAt)}
               </div>
             </>
           )}
@@ -993,71 +1003,152 @@ export const Dashboard: React.FC = () => {
           )}
         </Card>
 
-        {/* Planned Withdrawals from Goals */}
-        <Card>
+        {/* Planned Withdrawals from Goals - Combined 3 & 6 Months (Stacked) */}
+        <Card style={{ alignSelf: 'start' }}>
           <SectionHeader
-            title="Planned Withdrawals (Next 3 Months)"
+            title="Planned Withdrawals"
             icon={<Banknote size={18} />}
+            action={{ label: 'View All', onClick: () => navigate('/goals?filter=withdrawal') }}
           />
 
-          {data.plannedWithdrawals.length === 0 ? (
+          {data.plannedWithdrawals.next3Months.length === 0 && data.plannedWithdrawals.next6Months.length === 0 ? (
             <div style={{
-              padding: '32px',
+              padding: '24px',
               textAlign: 'center',
               color: colors.utility.secondaryText
             }}>
-              <Banknote size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-              <div style={{ marginBottom: '8px' }}>No withdrawals planned</div>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                No goals are ending or have intermediate withdrawals in the next 3 months
-              </div>
+              <Banknote size={28} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <div style={{ fontSize: '12px' }}>No withdrawals in next 6 months</div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {data.plannedWithdrawals.slice(0, 4).map((withdrawal) => (
-                <div
-                  key={withdrawal.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '500', fontSize: '13px', color: colors.utility.primaryText }}>
-                      {withdrawal.customerName}
-                    </div>
-                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                      {withdrawal.goalName}
-                      {withdrawal.frequency !== 'one_time' && (
-                        <span style={{
-                          marginLeft: '6px',
-                          fontSize: '10px',
-                          padding: '1px 4px',
-                          backgroundColor: colors.brand.primary + '15',
-                          color: colors.brand.primary,
-                          borderRadius: '3px'
-                        }}>
-                          {withdrawal.frequency}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: '600', fontSize: '13px', color: '#F97316' }}>
-                      {formatCurrency(withdrawal.amount, true)}
-                    </div>
-                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                      {formatDate(withdrawal.withdrawalDate)}
-                    </div>
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Next 3 Months Section */}
+              <div>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.semantic.error,
+                  marginBottom: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <AlertTriangle size={12} />
+                  Next 3 Months ({data.plannedWithdrawals.next3Months.length})
                 </div>
-              ))}
+                {data.plannedWithdrawals.next3Months.length === 0 ? (
+                  <div style={{
+                    padding: '12px',
+                    textAlign: 'center',
+                    color: colors.utility.secondaryText,
+                    fontSize: '11px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '6px'
+                  }}>
+                    None
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {data.plannedWithdrawals.next3Months.slice(0, 3).map((withdrawal) => (
+                      <div
+                        key={withdrawal.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '6px 8px',
+                          backgroundColor: colors.semantic.error + '08',
+                          borderLeft: `3px solid ${colors.semantic.error}`,
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => navigate(`/customers/${withdrawal.customerId}/goals/${withdrawal.id}`)}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {withdrawal.customerName}
+                          </div>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {withdrawal.goalName}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '6px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '11px', color: colors.semantic.error }}>
+                            {formatCurrency(withdrawal.targetAmount, true)}
+                          </div>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>
+                            {withdrawal.daysRemaining}d
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 3-6 Months Section */}
+              <div>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: colors.semantic.warning,
+                  marginBottom: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Clock size={12} />
+                  3-6 Months ({data.plannedWithdrawals.next6Months.length})
+                </div>
+                {data.plannedWithdrawals.next6Months.length === 0 ? (
+                  <div style={{
+                    padding: '12px',
+                    textAlign: 'center',
+                    color: colors.utility.secondaryText,
+                    fontSize: '11px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '6px'
+                  }}>
+                    None
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {data.plannedWithdrawals.next6Months.slice(0, 3).map((withdrawal) => (
+                      <div
+                        key={withdrawal.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '6px 8px',
+                          backgroundColor: colors.semantic.warning + '08',
+                          borderLeft: `3px solid ${colors.semantic.warning}`,
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => navigate(`/customers/${withdrawal.customerId}/goals/${withdrawal.id}`)}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {withdrawal.customerName}
+                          </div>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {withdrawal.goalName}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '6px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '11px', color: colors.semantic.warning }}>
+                            {formatCurrency(withdrawal.targetAmount, true)}
+                          </div>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>
+                            {withdrawal.daysRemaining}d
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </Card>

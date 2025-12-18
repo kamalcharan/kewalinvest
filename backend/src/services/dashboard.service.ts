@@ -52,6 +52,18 @@ interface PendingAction {
   priority: 'critical' | 'high' | 'medium' | 'low';
 }
 
+interface PlannedWithdrawal {
+  id: number;
+  customerId: number;
+  customerName: string;
+  goalName: string;
+  targetAmount: number;
+  currentValue: number;
+  targetDate: string;
+  daysRemaining: number;
+  goalType: string;
+}
+
 export class DashboardService {
   private db: Pool;
 
@@ -223,22 +235,31 @@ export class DashboardService {
    */
   async getGoalsSummary(tenantId: number, isLive: boolean): Promise<GoalsSummary> {
     try {
+      // Goals are stored in t_jtbd_configurations with jtbd_type = 'goal_tracking'
+      // Progress data is in config_data JSON: target_amount, current_value, deviation_percentage
+      // Note: deviation_percentage may be NULL for newly created goals (not yet calculated)
+      console.log('[Dashboard] getGoalsSummary called - tenantId:', tenantId, 'isLive:', isLive);
+
       const query = `
         SELECT
           COUNT(*) as total_goals,
-          COUNT(*) FILTER (WHERE progress_percentage >= 90) as on_track,
-          COUNT(*) FILTER (WHERE progress_percentage >= 50 AND progress_percentage < 90) as needs_attention,
-          COUNT(*) FILTER (WHERE progress_percentage < 50) as off_track,
-          MAX(last_calculation_date) as last_calculated_at,
-          COALESCE(SUM(target_amount), 0) as total_target_value,
-          COALESCE(SUM(current_value), 0) as current_value
-        FROM t_customer_goals
+          COUNT(*) FILTER (WHERE COALESCE((config_data->>'deviation_percentage')::numeric, 0) >= 0) as on_track,
+          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < 0
+                           AND (config_data->>'deviation_percentage')::numeric >= -20) as needs_attention,
+          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < -20) as off_track,
+          MAX(updated_at) as last_calculated_at,
+          COALESCE(SUM((config_data->>'target_amount')::numeric), 0) as total_target_value,
+          COALESCE(SUM((config_data->>'current_value')::numeric), 0) as current_value
+        FROM t_jtbd_configurations
         WHERE tenant_id = $1 AND is_live = $2 AND is_active = true
+          AND jtbd_type = 'goal_tracking'
       `;
       const result = await this.db.query(query, [tenantId, isLive]);
       const stats = result.rows[0];
 
-      return {
+      console.log('[Dashboard] getGoalsSummary result:', stats);
+
+      const summary = {
         totalGoals: parseInt(stats?.total_goals || 0),
         onTrack: parseInt(stats?.on_track || 0),
         needsAttention: parseInt(stats?.needs_attention || 0),
@@ -247,10 +268,13 @@ export class DashboardService {
         totalTargetValue: parseFloat(stats?.total_target_value || 0),
         currentValue: parseFloat(stats?.current_value || 0)
       };
+
+      console.log('[Dashboard] getGoalsSummary returning:', summary);
+      return summary;
     } catch (error: any) {
       // If table/column doesn't exist, return empty data
       if (error.code === '42P01' || error.code === '42703') {
-        console.log('Goals table/columns do not exist yet, returning empty data');
+        console.log('[Dashboard] Goals table/columns do not exist yet, returning empty data. Error:', error.message);
         return {
           totalGoals: 0,
           onTrack: 0,
@@ -283,17 +307,19 @@ export class DashboardService {
           j.jtbd_type as type,
           j.title,
           j.description,
-          j.amount,
+          (j.config_data->>'amount')::numeric as amount,
           j.next_alert_date as due_date,
           j.priority,
           COUNT(*) OVER() as total_count,
           COUNT(*) FILTER (WHERE j.priority = 'critical') OVER() as critical_count
-        FROM t_jtbd j
+        FROM t_jtbd_configurations j
         JOIN t_customers cust ON cust.id = j.customer_id
         JOIN t_contacts c ON c.id = cust.contact_id
         WHERE j.tenant_id = $1
           AND j.is_live = $2
           AND j.is_active = true
+          AND j.completed_at IS NULL
+          AND j.jtbd_type != 'import_notification'
           AND j.next_alert_date IS NOT NULL
           AND j.next_alert_date <= CURRENT_DATE + INTERVAL '30 days'
         ORDER BY
@@ -385,6 +411,95 @@ export class DashboardService {
         return [];
       }
       console.error('Error getting recent transactions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get planned withdrawals - actual withdrawals configured inside goals
+   * Returns two sets: next 3 months and next 6 months
+   */
+  async getPlannedWithdrawals(tenantId: number, isLive: boolean): Promise<{
+    next3Months: PlannedWithdrawal[];
+    next6Months: PlannedWithdrawal[];
+  }> {
+    try {
+      console.log('[Dashboard] getPlannedWithdrawals called - tenantId:', tenantId, 'isLive:', isLive);
+
+      // Query withdrawals from within goals (config_data.withdrawals array)
+      // Uses jsonb_array_elements to unnest the withdrawals array
+      const query = `
+        WITH goal_withdrawals AS (
+          SELECT
+            j.id as goal_id,
+            j.customer_id,
+            c.name as customer_name,
+            j.title as goal_name,
+            (j.config_data->>'goal_type') as goal_type,
+            w.value->>'id' as withdrawal_id,
+            (w.value->>'amount')::numeric as amount,
+            (w.value->>'withdrawal_date')::date as withdrawal_date,
+            w.value->>'reason' as reason,
+            ((w.value->>'withdrawal_date')::date - CURRENT_DATE) as days_remaining
+          FROM t_jtbd_configurations j
+          JOIN t_customers cust ON cust.id = j.customer_id
+          JOIN t_contacts c ON c.id = cust.contact_id
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN j.config_data->'withdrawals' IS NOT NULL
+                   AND jsonb_typeof(j.config_data->'withdrawals') = 'array'
+              THEN j.config_data->'withdrawals'
+              ELSE '[]'::jsonb
+            END
+          ) AS w(value)
+          WHERE j.tenant_id = $1
+            AND j.is_live = $2
+            AND j.is_active = true
+            AND j.jtbd_type = 'goal_tracking'
+            AND (j.config_data->>'has_withdrawals')::boolean = true
+        )
+        SELECT *
+        FROM goal_withdrawals
+        WHERE withdrawal_date >= CURRENT_DATE
+          AND withdrawal_date <= CURRENT_DATE + INTERVAL '6 months'
+        ORDER BY withdrawal_date ASC
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      console.log('[Dashboard] getPlannedWithdrawals result count:', result.rows.length);
+
+      const allWithdrawals: PlannedWithdrawal[] = result.rows.map(row => ({
+        id: row.goal_id,
+        customerId: row.customer_id,
+        customerName: row.customer_name,
+        goalName: row.goal_name,
+        targetAmount: parseFloat(row.amount || 0),
+        currentValue: 0, // Not applicable for individual withdrawals
+        targetDate: row.withdrawal_date ? new Date(row.withdrawal_date).toISOString().split('T')[0] : '',
+        daysRemaining: parseInt(row.days_remaining || 0),
+        goalType: row.goal_type || 'time_based_goal'
+      }));
+
+      // Split into 3-month and 6-month buckets
+      const next3Months = allWithdrawals.filter(w => w.daysRemaining <= 90);
+      const next6Months = allWithdrawals.filter(w => w.daysRemaining > 90 && w.daysRemaining <= 180);
+
+      console.log('[Dashboard] getPlannedWithdrawals - next3Months:', next3Months.length, 'next6Months:', next6Months.length);
+
+      return {
+        next3Months,
+        next6Months
+      };
+    } catch (error: any) {
+      // If table/column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('[Dashboard] Planned withdrawals table/columns do not exist yet, returning empty data');
+        return {
+          next3Months: [],
+          next6Months: []
+        };
+      }
+      console.error('Error getting planned withdrawals:', error);
       throw error;
     }
   }
