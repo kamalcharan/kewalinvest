@@ -20,13 +20,14 @@ import {
 } from '../../utils/goalUtils';
 
 interface GoalCardProps {
-  goal: GoalConfiguration;
+  goal: GoalConfiguration & { customer_name?: string };
   onEdit?: (goalId: number) => void;
   onRecalculate?: (goalId: number) => void;
   onToggleWatchlist?: (goalId: number, isInWatchlist: boolean) => void;
   compact?: boolean;
   showAllocations?: boolean;
   hideActions?: boolean;
+  showCustomerName?: boolean;
 }
 
 const GoalCard: React.FC<GoalCardProps> = ({
@@ -36,7 +37,8 @@ const GoalCard: React.FC<GoalCardProps> = ({
   onToggleWatchlist,
   compact = false,
   showAllocations = true,
-  hideActions = false
+  hideActions = false,
+  showCustomerName = false
 }) => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
@@ -310,6 +312,35 @@ const GoalCard: React.FC<GoalCardProps> = ({
             }}>
               {config.goal_name}
             </div>
+
+            {/* Customer Name (optional) */}
+            {showCustomerName && goal.customer_name && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/customers/${goal.customer_id}`);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '10px',
+                  color: colors.brand.primary,
+                  marginBottom: '4px',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                  backgroundColor: colors.brand.primary + '10',
+                  borderRadius: '4px',
+                  width: 'fit-content'
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                {goal.customer_name}
+              </div>
+            )}
 
             {/* Priority */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

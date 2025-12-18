@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, Search, AlertCircle, User } from 'lucide-react';
+import { Target, Search, AlertCircle, User, LayoutGrid, Users } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api.service';
@@ -28,6 +28,7 @@ const GoalsListPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind' | 'active' | 'paused'>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
 
   useEffect(() => {
     fetchGoals();
@@ -361,10 +362,57 @@ const GoalsListPage: React.FC = () => {
             </option>
           ))}
         </select>
+
+        {/* View Mode Toggle */}
+        <div style={{
+          display: 'flex',
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+          borderRadius: '8px',
+          overflow: 'hidden'
+        }}>
+          <button
+            onClick={() => setViewMode('flat')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 14px',
+              backgroundColor: viewMode === 'flat' ? colors.brand.primary : 'transparent',
+              color: viewMode === 'flat' ? '#FFFFFF' : colors.utility.primaryText,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: viewMode === 'flat' ? '600' : '400'
+            }}
+          >
+            <LayoutGrid size={16} />
+            Flat
+          </button>
+          <button
+            onClick={() => setViewMode('grouped')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 14px',
+              backgroundColor: viewMode === 'grouped' ? colors.brand.primary : 'transparent',
+              color: viewMode === 'grouped' ? '#FFFFFF' : colors.utility.primaryText,
+              border: 'none',
+              borderLeft: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: viewMode === 'grouped' ? '600' : '400'
+            }}
+          >
+            <Users size={16} />
+            By Customer
+          </button>
+        </div>
       </div>
 
-      {/* Goals grouped by customer */}
-      {Object.keys(goalsByCustomer).length === 0 ? (
+      {/* Goals Display */}
+      {filteredGoals.length === 0 ? (
         <div style={{
           padding: '48px',
           textAlign: 'center',
@@ -375,7 +423,25 @@ const GoalsListPage: React.FC = () => {
         }}>
           {goals.length === 0 ? 'No goals found' : 'No goals match your filters'}
         </div>
+      ) : viewMode === 'flat' ? (
+        /* Flat View - All goals in a single grid */
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+          gap: '16px'
+        }}>
+          {filteredGoals.map(goal => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              onRecalculate={handleRecalculate}
+              showAllocations={true}
+              showCustomerName={true}
+            />
+          ))}
+        </div>
       ) : (
+        /* Grouped View - Goals organized by customer */
         Object.entries(goalsByCustomer).map(([customerName, { customerId, goals: customerGoals }]) => (
           <div key={customerName} style={{ marginBottom: '24px' }}>
             {/* Customer Header */}
