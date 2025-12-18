@@ -1008,6 +1008,7 @@ export const Dashboard: React.FC = () => {
           <SectionHeader
             title="Planned Withdrawals"
             icon={<Banknote size={18} />}
+            action={{ label: 'View All', onClick: () => navigate('/goals?filter=withdrawal') }}
           />
 
           {data.plannedWithdrawals.next3Months.length === 0 && data.plannedWithdrawals.next6Months.length === 0 ? (
@@ -1061,7 +1062,7 @@ export const Dashboard: React.FC = () => {
                           borderRadius: '4px',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
+                        onClick={() => navigate(`/customers/${withdrawal.customerId}/goals/${withdrawal.id}`)}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1125,7 +1126,7 @@ export const Dashboard: React.FC = () => {
                           borderRadius: '4px',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
+                        onClick={() => navigate(`/customers/${withdrawal.customerId}/goals/${withdrawal.id}`)}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

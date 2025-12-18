@@ -1,8 +1,8 @@
 // frontend/src/pages/goals/GoalsListPage.tsx
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Target, Search, AlertCircle, User, LayoutGrid, Users } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Target, Search, AlertCircle, User, LayoutGrid, Users, Calendar } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api.service';
@@ -17,16 +17,21 @@ interface GoalWithCustomer extends GoalConfiguration {
 
 const GoalsListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
   const { environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+
+  // Get initial filter from URL query param
+  const urlFilter = searchParams.get('filter');
+  const initialFilter = urlFilter === 'withdrawal' ? 'withdrawal' : 'all';
 
   const [goals, setGoals] = useState<GoalWithCustomer[]>([]);
   const [filteredGoals, setFilteredGoals] = useState<GoalWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind' | 'active' | 'paused'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind' | 'active' | 'paused' | 'withdrawal'>(initialFilter);
   const [filterType, setFilterType] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
 
@@ -78,6 +83,27 @@ const GoalsListPage: React.FC = () => {
       filtered = filtered.filter(goal => goal.is_active);
     } else if (filterStatus === 'paused') {
       filtered = filtered.filter(goal => !goal.is_active);
+    } else if (filterStatus === 'withdrawal') {
+      // Filter goals with target_date in the next 6 months
+      const now = new Date();
+      const sixMonthsFromNow = new Date();
+      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+
+      filtered = filtered.filter(goal => {
+        const config = goal.config_data as any;
+        if (config?.target_date) {
+          const targetDate = new Date(config.target_date);
+          return targetDate >= now && targetDate <= sixMonthsFromNow;
+        }
+        return false;
+      });
+
+      // Sort by target date (earliest first)
+      filtered.sort((a, b) => {
+        const dateA = new Date((a.config_data as any)?.target_date || '9999-12-31');
+        const dateB = new Date((b.config_data as any)?.target_date || '9999-12-31');
+        return dateA.getTime() - dateB.getTime();
+      });
     }
 
     // Type filter
@@ -337,6 +363,7 @@ const GoalsListPage: React.FC = () => {
           <option value="behind">Needs Attention</option>
           <option value="active">Active Only</option>
           <option value="paused">Paused Only</option>
+          <option value="withdrawal">📅 Withdrawal Due (6 mo)</option>
         </select>
 
         {/* Type Filter */}
