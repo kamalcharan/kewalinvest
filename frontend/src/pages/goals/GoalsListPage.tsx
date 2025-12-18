@@ -60,18 +60,19 @@ const GoalsListPage: React.FC = () => {
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(goal =>
-        goal.title.toLowerCase().includes(term) ||
-        goal.customer_name.toLowerCase().includes(term) ||
-        goal.config_data?.goal_name?.toLowerCase().includes(term)
-      );
+      filtered = filtered.filter(goal => {
+        const config = goal.config_data as any;
+        return goal.title.toLowerCase().includes(term) ||
+          goal.customer_name.toLowerCase().includes(term) ||
+          config?.goal_name?.toLowerCase().includes(term);
+      });
     }
 
     // Status filter
     if (filterStatus === 'on_track') {
-      filtered = filtered.filter(goal => goal.config_data?.on_track === true);
+      filtered = filtered.filter(goal => (goal.config_data as any)?.on_track === true);
     } else if (filterStatus === 'behind') {
-      filtered = filtered.filter(goal => goal.config_data?.on_track === false);
+      filtered = filtered.filter(goal => (goal.config_data as any)?.on_track === false);
     } else if (filterStatus === 'active') {
       filtered = filtered.filter(goal => goal.is_active);
     } else if (filterStatus === 'paused') {
@@ -109,10 +110,10 @@ const GoalsListPage: React.FC = () => {
   // Calculate summary stats
   const activeGoals = goals.filter(g => g.is_active);
   const totalGoals = goals.length;
-  const onTrackCount = activeGoals.filter(g => g.config_data?.on_track === true).length;
-  const behindCount = activeGoals.filter(g => g.config_data?.on_track === false).length;
-  const totalTargetAmount = activeGoals.reduce((sum, g) => sum + (g.config_data?.target_amount || 0), 0);
-  const totalCurrentValue = activeGoals.reduce((sum, g) => sum + (g.config_data?.current_value || 0), 0);
+  const onTrackCount = activeGoals.filter(g => (g.config_data as any)?.on_track === true).length;
+  const behindCount = activeGoals.filter(g => (g.config_data as any)?.on_track === false).length;
+  const totalTargetAmount = activeGoals.reduce((sum, g) => sum + ((g.config_data as any)?.target_amount || 0), 0);
+  const totalCurrentValue = activeGoals.reduce((sum, g) => sum + ((g.config_data as any)?.current_value || 0), 0);
 
   // Group goals by customer
   const goalsByCustomer = filteredGoals.reduce((acc, goal) => {
