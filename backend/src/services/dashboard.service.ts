@@ -295,12 +295,12 @@ export class DashboardService {
           j.jtbd_type as type,
           j.title,
           j.description,
-          j.amount,
+          (j.config_data->>'amount')::numeric as amount,
           j.next_alert_date as due_date,
           j.priority,
           COUNT(*) OVER() as total_count,
           COUNT(*) FILTER (WHERE j.priority = 'critical') OVER() as critical_count
-        FROM t_jtbd j
+        FROM t_jtbd_configurations j
         JOIN t_customers cust ON cust.id = j.customer_id
         JOIN t_contacts c ON c.id = cust.contact_id
         WHERE j.tenant_id = $1
