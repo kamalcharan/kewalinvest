@@ -85,25 +85,49 @@ const GoalsListPage: React.FC = () => {
     } else if (filterStatus === 'paused') {
       filtered = filtered.filter(goal => !goal.is_active);
     } else if (filterStatus === 'withdrawal') {
-      // Filter goals with target_date in the next N months (based on withdrawalPeriod)
+      // Filter goals that have withdrawals scheduled in the next N months
       const now = new Date();
       const futureDate = new Date();
       futureDate.setMonth(futureDate.getMonth() + withdrawalPeriod);
 
       filtered = filtered.filter(goal => {
         const config = goal.config_data as any;
-        if (config?.target_date) {
-          const targetDate = new Date(config.target_date);
-          return targetDate >= now && targetDate <= futureDate;
+
+        // Check if goal has withdrawals array (has_withdrawals = true)
+        if (config?.has_withdrawals && Array.isArray(config?.withdrawals)) {
+          // Check if any withdrawal is within the period
+          return config.withdrawals.some((w: any) => {
+            if (w?.withdrawal_date) {
+              const wDate = new Date(w.withdrawal_date);
+              return wDate >= now && wDate <= futureDate;
+            }
+            return false;
+          });
         }
+
         return false;
       });
 
-      // Sort by target date (earliest first)
+      // Sort by earliest withdrawal date
       filtered.sort((a, b) => {
-        const dateA = new Date((a.config_data as any)?.target_date || '9999-12-31');
-        const dateB = new Date((b.config_data as any)?.target_date || '9999-12-31');
-        return dateA.getTime() - dateB.getTime();
+        const getEarliestWithdrawal = (goal: GoalWithCustomer) => {
+          const config = goal.config_data as any;
+          let earliest = new Date('9999-12-31');
+
+          if (config?.withdrawals && Array.isArray(config.withdrawals)) {
+            config.withdrawals.forEach((w: any) => {
+              if (w?.withdrawal_date) {
+                const wDate = new Date(w.withdrawal_date);
+                if (wDate >= now && wDate < earliest) {
+                  earliest = wDate;
+                }
+              }
+            });
+          }
+          return earliest;
+        };
+
+        return getEarliestWithdrawal(a).getTime() - getEarliestWithdrawal(b).getTime();
       });
     }
 
