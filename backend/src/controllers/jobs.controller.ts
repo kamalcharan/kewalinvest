@@ -51,7 +51,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
       const config = await this.schedulerService.getConfig(tenantId, isLive, jobType);
 
       if (!config) {
@@ -103,7 +103,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       // Check if config already exists
       const existing = await this.schedulerService.getConfig(tenantId, isLive, jobType);
@@ -168,7 +168,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       // Check if config exists
       const existing = await this.schedulerService.getConfig(tenantId, isLive, jobType);
@@ -243,7 +243,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       console.log(`[JobsController] Manual trigger requested for ${jobType}, tenant ${tenantId} (${isLive ? 'live' : 'test'})`);
 
@@ -296,7 +296,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       const { executions, total } = await this.schedulerService.getExecutions(
         tenantId,
@@ -356,7 +356,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       const statistics = await this.schedulerService.getStatistics(tenantId, isLive, jobType);
 
@@ -401,7 +401,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       // Query database for active job types AND merge with tenant-specific configs
       // This ensures we display the tenant's configured cron expression, not the default
@@ -461,7 +461,7 @@ export class JobsController {
         return;
       }
 
-      const isLive = isLiveParam === 'true';
+      const isLive = isLiveParam !== 'false'; // Default to true (live mode)
 
       const config = await this.schedulerService.getConfig(tenantId, isLive, jobType);
       const stats = await this.schedulerService.getStatistics(tenantId, isLive, jobType);
