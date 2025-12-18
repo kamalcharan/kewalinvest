@@ -255,6 +255,7 @@ export class GoalService {
 
   /**
    * Get all goals across all customers (for tenant)
+   * Returns full goal data compatible with GoalConfiguration type
    */
   async getAllGoals(
     tenantId: number,
@@ -263,59 +264,21 @@ export class GoalService {
     try {
       const query = `
         SELECT
-          j.id,
-          j.customer_id,
-          c.name as customer_name,
-          j.title,
-          j.description,
-          j.priority,
-          j.is_active,
-          j.is_watchlisted,
-          j.watchlist_reason,
-          j.config_data,
-          j.created_at,
-          j.updated_at,
-          (j.config_data->>'goal_type') as goal_type,
-          (j.config_data->>'goal_name') as goal_name,
-          COALESCE((j.config_data->>'target_amount')::numeric, 0) as target_amount,
-          COALESCE((j.config_data->>'current_value')::numeric, 0) as current_value,
-          (j.config_data->>'target_date') as target_date,
-          COALESCE((j.config_data->>'deviation_percentage')::numeric, 0) as deviation_percentage,
-          COALESCE((j.config_data->>'on_track')::boolean, true) as on_track,
-          COALESCE((j.config_data->>'has_withdrawals')::boolean, false) as has_withdrawals
+          j.*,
+          c.name as customer_name
         FROM t_jtbd_configurations j
         JOIN t_customers cust ON cust.id = j.customer_id
         JOIN t_contacts c ON c.id = cust.contact_id
         WHERE j.tenant_id = $1
           AND j.is_live = $2
           AND j.jtbd_type = 'goal_tracking'
-          AND j.is_active = true
-        ORDER BY j.created_at DESC
+        ORDER BY j.is_active DESC, j.created_at DESC
       `;
 
       const result = await this.db.query(query, [tenantId, isLive]);
 
-      return result.rows.map(row => ({
-        id: row.id,
-        customerId: row.customer_id,
-        customerName: row.customer_name,
-        title: row.title,
-        description: row.description,
-        priority: row.priority,
-        isActive: row.is_active,
-        isWatchlisted: row.is_watchlisted,
-        watchlistReason: row.watchlist_reason,
-        goalType: row.goal_type,
-        goalName: row.goal_name,
-        targetAmount: parseFloat(row.target_amount) || 0,
-        currentValue: parseFloat(row.current_value) || 0,
-        targetDate: row.target_date,
-        deviationPercentage: parseFloat(row.deviation_percentage) || 0,
-        onTrack: row.on_track,
-        hasWithdrawals: row.has_withdrawals,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      }));
+      // Return raw rows with customer_name added
+      return result.rows;
     } catch (error) {
       console.error('Error getting all goals:', error);
       throw error;

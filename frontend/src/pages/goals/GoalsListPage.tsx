@@ -2,32 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, Search, AlertCircle, TrendingUp, TrendingDown, Calendar, User, Eye } from 'lucide-react';
+import { Target, Search, AlertCircle, User } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import GoalCard from '../../components/goals/GoalCard';
+import { GoalConfiguration } from '../../types/goal.types';
 
-interface Goal {
-  id: number;
-  customerId: number;
-  customerName: string;
-  title: string;
-  description: string;
-  priority: string;
-  isActive: boolean;
-  isWatchlisted: boolean;
-  watchlistReason: string | null;
-  goalType: string;
-  goalName: string;
-  targetAmount: number;
-  currentValue: number;
-  targetDate: string | null;
-  deviationPercentage: number;
-  onTrack: boolean;
-  hasWithdrawals: boolean;
-  createdAt: string;
-  updatedAt: string;
+// Extended type to include customer_name from the API
+interface GoalWithCustomer extends GoalConfiguration {
+  customer_name: string;
 }
 
 const GoalsListPage: React.FC = () => {
@@ -36,12 +21,12 @@ const GoalsListPage: React.FC = () => {
   const { environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
+  const [goals, setGoals] = useState<GoalWithCustomer[]>([]);
+  const [filteredGoals, setFilteredGoals] = useState<GoalWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'on_track' | 'behind' | 'active' | 'paused'>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
   useEffect(() => {
@@ -77,21 +62,25 @@ const GoalsListPage: React.FC = () => {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(goal =>
         goal.title.toLowerCase().includes(term) ||
-        goal.customerName.toLowerCase().includes(term) ||
-        goal.goalName?.toLowerCase().includes(term)
+        goal.customer_name.toLowerCase().includes(term) ||
+        goal.config_data?.goal_name?.toLowerCase().includes(term)
       );
     }
 
     // Status filter
     if (filterStatus === 'on_track') {
-      filtered = filtered.filter(goal => goal.onTrack);
+      filtered = filtered.filter(goal => goal.config_data?.on_track === true);
     } else if (filterStatus === 'behind') {
-      filtered = filtered.filter(goal => !goal.onTrack);
+      filtered = filtered.filter(goal => goal.config_data?.on_track === false);
+    } else if (filterStatus === 'active') {
+      filtered = filtered.filter(goal => goal.is_active);
+    } else if (filterStatus === 'paused') {
+      filtered = filtered.filter(goal => !goal.is_active);
     }
 
     // Type filter
     if (filterType !== 'all') {
-      filtered = filtered.filter(goal => goal.goalType === filterType);
+      filtered = filtered.filter(goal => goal.config_data?.goal_type === filterType);
     }
 
     setFilteredGoals(filtered);
@@ -105,46 +94,38 @@ const GoalsListPage: React.FC = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateStr: string | null): string => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const getGoalTypeLabel = (type: string): string => {
-    const labels: Record<string, string> = {
-      'time_based_goal': 'Time Based',
-      'price_based_goal': 'Price Based',
-      'time_and_price_goal': 'Time & Price'
-    };
-    return labels[type] || type;
-  };
-
-  const getProgressPercentage = (current: number, target: number): number => {
-    if (target <= 0) return 0;
-    return Math.min(100, Math.round((current / target) * 100));
-  };
-
-  const handleViewGoal = (customerId: number, goalId: number) => {
-    navigate(`/customers/${customerId}/goals/${goalId}`);
-  };
-
-  const handleViewCustomer = (customerId: number) => {
-    navigate(`/customers/${customerId}`);
+  const handleRecalculate = async (goalId: number) => {
+    try {
+      await apiService.post(API_ENDPOINTS.GOALS.RECALCULATE(goalId));
+      fetchGoals(); // Refresh after recalculation
+    } catch (err) {
+      console.error('Failed to recalculate goal:', err);
+    }
   };
 
   // Get unique goal types for filter
-  const goalTypes = Array.from(new Set(goals.map(g => g.goalType))).filter(Boolean);
+  const goalTypes = Array.from(new Set(goals.map(g => g.config_data?.goal_type).filter(Boolean)));
 
   // Calculate summary stats
+  const activeGoals = goals.filter(g => g.is_active);
   const totalGoals = goals.length;
-  const onTrackCount = goals.filter(g => g.onTrack).length;
-  const behindCount = goals.filter(g => !g.onTrack).length;
-  const totalTargetAmount = goals.reduce((sum, g) => sum + g.targetAmount, 0);
-  const totalCurrentValue = goals.reduce((sum, g) => sum + g.currentValue, 0);
+  const onTrackCount = activeGoals.filter(g => g.config_data?.on_track === true).length;
+  const behindCount = activeGoals.filter(g => g.config_data?.on_track === false).length;
+  const totalTargetAmount = activeGoals.reduce((sum, g) => sum + (g.config_data?.target_amount || 0), 0);
+  const totalCurrentValue = activeGoals.reduce((sum, g) => sum + (g.config_data?.current_value || 0), 0);
+
+  // Group goals by customer
+  const goalsByCustomer = filteredGoals.reduce((acc, goal) => {
+    const customerName = goal.customer_name || 'Unknown Customer';
+    if (!acc[customerName]) {
+      acc[customerName] = {
+        customerId: goal.customer_id,
+        goals: []
+      };
+    }
+    acc[customerName].goals.push(goal);
+    return acc;
+  }, {} as Record<string, { customerId: number; goals: GoalWithCustomer[] }>);
 
   if (isLoading) {
     return (
@@ -218,7 +199,7 @@ const GoalsListPage: React.FC = () => {
       {/* Summary Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
         gap: '16px',
         marginBottom: '24px'
       }}>
@@ -352,6 +333,8 @@ const GoalsListPage: React.FC = () => {
           <option value="all">All Status</option>
           <option value="on_track">On Track</option>
           <option value="behind">Needs Attention</option>
+          <option value="active">Active Only</option>
+          <option value="paused">Paused Only</option>
         </select>
 
         {/* Type Filter */}
@@ -370,237 +353,80 @@ const GoalsListPage: React.FC = () => {
         >
           <option value="all">All Types</option>
           {goalTypes.map(type => (
-            <option key={type} value={type}>{getGoalTypeLabel(type)}</option>
+            <option key={type} value={type}>
+              {type === 'time_based_goal' ? 'Time Based' :
+               type === 'price_based_goal' ? 'Price Based' :
+               type === 'time_and_price_goal' ? 'Time & Price' : type}
+            </option>
           ))}
         </select>
       </div>
 
-      {/* Goals Table */}
-      <div style={{
-        backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
-        borderRadius: '12px',
-        border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
-        overflow: 'hidden'
-      }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}>
-                <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Customer
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Goal
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Type
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Target
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Current
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Progress
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Target Date
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Status
-                </th>
-                <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: colors.utility.secondaryText }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredGoals.length === 0 ? (
-                <tr>
-                  <td colSpan={9} style={{
-                    padding: '48px 16px',
-                    textAlign: 'center',
-                    color: colors.utility.secondaryText
-                  }}>
-                    {goals.length === 0 ? 'No goals found' : 'No goals match your filters'}
-                  </td>
-                </tr>
-              ) : (
-                filteredGoals.map((goal, index) => {
-                  const progress = getProgressPercentage(goal.currentValue, goal.targetAmount);
-                  return (
-                    <tr
-                      key={goal.id}
-                      style={{
-                        borderTop: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
-                        backgroundColor: index % 2 === 0 ? 'transparent' : (isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)')
-                      }}
-                    >
-                      {/* Customer */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <button
-                          onClick={() => handleViewCustomer(goal.customerId)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: colors.brand.primary,
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            padding: 0
-                          }}
-                        >
-                          <User size={14} />
-                          {goal.customerName}
-                        </button>
-                      </td>
-
-                      {/* Goal Name */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          color: colors.utility.primaryText
-                        }}>
-                          {goal.title}
-                        </div>
-                        {goal.hasWithdrawals && (
-                          <div style={{
-                            fontSize: '11px',
-                            color: colors.semantic.info,
-                            marginTop: '2px'
-                          }}>
-                            Has planned withdrawals
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Type */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{
-                          fontSize: '12px',
-                          padding: '4px 8px',
-                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                          borderRadius: '4px',
-                          color: colors.utility.secondaryText
-                        }}>
-                          {getGoalTypeLabel(goal.goalType)}
-                        </span>
-                      </td>
-
-                      {/* Target Amount */}
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-                          {formatCurrency(goal.targetAmount)}
-                        </span>
-                      </td>
-
-                      {/* Current Value */}
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <span style={{ fontSize: '14px', color: colors.utility.primaryText }}>
-                          {formatCurrency(goal.currentValue)}
-                        </span>
-                      </td>
-
-                      {/* Progress */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                          <div style={{
-                            width: '60px',
-                            height: '6px',
-                            backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                            borderRadius: '3px',
-                            overflow: 'hidden'
-                          }}>
-                            <div style={{
-                              width: `${progress}%`,
-                              height: '100%',
-                              backgroundColor: progress >= 80 ? colors.semantic.success : progress >= 50 ? colors.semantic.warning : colors.semantic.error,
-                              borderRadius: '3px'
-                            }} />
-                          </div>
-                          <span style={{ fontSize: '12px', color: colors.utility.secondaryText, minWidth: '35px' }}>
-                            {progress}%
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Target Date */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '13px',
-                          color: colors.utility.secondaryText
-                        }}>
-                          <Calendar size={14} />
-                          {formatDate(goal.targetDate)}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <div style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          backgroundColor: goal.onTrack
-                            ? `${colors.semantic.success}20`
-                            : `${colors.semantic.warning}20`,
-                          color: goal.onTrack ? colors.semantic.success : colors.semantic.warning
-                        }}>
-                          {goal.onTrack ? (
-                            <>
-                              <TrendingUp size={12} />
-                              On Track
-                            </>
-                          ) : (
-                            <>
-                              <TrendingDown size={12} />
-                              Behind
-                            </>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleViewGoal(goal.customerId, goal.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '6px 12px',
-                            backgroundColor: colors.brand.primary,
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Eye size={14} />
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {/* Goals grouped by customer */}
+      {Object.keys(goalsByCustomer).length === 0 ? (
+        <div style={{
+          padding: '48px',
+          textAlign: 'center',
+          color: colors.utility.secondaryText,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+          borderRadius: '12px',
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
+        }}>
+          {goals.length === 0 ? 'No goals found' : 'No goals match your filters'}
         </div>
-      </div>
+      ) : (
+        Object.entries(goalsByCustomer).map(([customerName, { customerId, goals: customerGoals }]) => (
+          <div key={customerName} style={{ marginBottom: '24px' }}>
+            {/* Customer Header */}
+            <div
+              onClick={() => navigate(`/customers/${customerId}`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+                padding: '8px 12px',
+                backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F8FAFC',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
+              }}
+            >
+              <User size={18} style={{ color: colors.brand.primary }} />
+              <span style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: colors.brand.primary
+              }}>
+                {customerName}
+              </span>
+              <span style={{
+                fontSize: '13px',
+                color: colors.utility.secondaryText,
+                marginLeft: '8px'
+              }}>
+                ({customerGoals.length} goal{customerGoals.length !== 1 ? 's' : ''})
+              </span>
+            </div>
+
+            {/* Goal Cards Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+              gap: '16px'
+            }}>
+              {customerGoals.map(goal => (
+                <GoalCard
+                  key={goal.id}
+                  goal={goal}
+                  onRecalculate={handleRecalculate}
+                  showAllocations={true}
+                />
+              ))}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* Results count */}
       <div style={{
