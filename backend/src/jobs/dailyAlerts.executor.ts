@@ -99,7 +99,7 @@ export class DailyAlertsExecutor implements JobExecutor {
       executionData.start_date = startDate.toISOString().split('T')[0];
       executionData.end_date = today.toISOString().split('T')[0];
 
-      // Process each day from startDate to today
+      // Process each day from startDate to today (for profile triggers and time-based alerts)
       const currentDate = new Date(startDate);
       const customersSet = new Set<number>();
 
@@ -133,19 +133,20 @@ export class DailyAlertsExecutor implements JobExecutor {
           executionData.errors!.push(...timeBasedResult.errors);
         }
 
-        // Step 3: Auto-acknowledge import notifications for this date
-        const importResult = await this.processImportNotificationsForDate(
-          context.tenant_id,
-          context.is_live,
-          currentDate
-        );
-        executionData.alerts_processed += importResult.autoAcknowledged;
-        if (importResult.errors.length > 0) {
-          executionData.errors!.push(...importResult.errors);
-        }
-
         // Move to next day
         currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Step 3: Auto-acknowledge import notifications ONCE using TODAY's date
+      // This clears ALL notifications created before today, regardless of catch-up processing
+      const importResult = await this.processImportNotificationsForDate(
+        context.tenant_id,
+        context.is_live,
+        today
+      );
+      executionData.alerts_processed += importResult.autoAcknowledged;
+      if (importResult.errors.length > 0) {
+        executionData.errors!.push(...importResult.errors);
       }
 
       executionData.customers_affected = customersSet.size;
