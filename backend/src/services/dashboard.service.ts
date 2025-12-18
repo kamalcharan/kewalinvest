@@ -226,6 +226,8 @@ export class DashboardService {
       // Goals are stored in t_jtbd_configurations with jtbd_type = 'goal_tracking'
       // Progress data is in config_data JSON: target_amount, current_value, deviation_percentage
       // Note: deviation_percentage may be NULL for newly created goals (not yet calculated)
+      console.log('[Dashboard] getGoalsSummary called - tenantId:', tenantId, 'isLive:', isLive);
+
       const query = `
         SELECT
           COUNT(*) as total_goals,
@@ -243,7 +245,9 @@ export class DashboardService {
       const result = await this.db.query(query, [tenantId, isLive]);
       const stats = result.rows[0];
 
-      return {
+      console.log('[Dashboard] getGoalsSummary result:', stats);
+
+      const summary = {
         totalGoals: parseInt(stats?.total_goals || 0),
         onTrack: parseInt(stats?.on_track || 0),
         needsAttention: parseInt(stats?.needs_attention || 0),
@@ -252,10 +256,13 @@ export class DashboardService {
         totalTargetValue: parseFloat(stats?.total_target_value || 0),
         currentValue: parseFloat(stats?.current_value || 0)
       };
+
+      console.log('[Dashboard] getGoalsSummary returning:', summary);
+      return summary;
     } catch (error: any) {
       // If table/column doesn't exist, return empty data
       if (error.code === '42P01' || error.code === '42703') {
-        console.log('Goals table/columns do not exist yet, returning empty data');
+        console.log('[Dashboard] Goals table/columns do not exist yet, returning empty data. Error:', error.message);
         return {
           totalGoals: 0,
           onTrack: 0,
