@@ -507,9 +507,8 @@ export class JTBDDashboardService {
 
       // Add status filter
       if (status === 'active') {
+        // Show all active alerts that are not completed (no visibility window restriction)
         query += ` AND j.is_active = true AND j.completed_at IS NULL`;
-        // Add visibility window check for active alerts
-        query += ` AND is_alert_visible($1, $2, j.jtbd_type, j.next_alert_date, j.created_at, j.auto_expire_at, j.completed_at) = true`;
       } else if (status === 'acknowledged') {
         query += ` AND j.completed_at IS NOT NULL AND j.completion_source = 'manual'`;
       } else if (status === 'dismissed') {
@@ -587,6 +586,41 @@ export class JTBDDashboardService {
       await this.db.query(query, [alertId, tenantId, isLive, userId]);
     } catch (error) {
       console.error('Error dismissing alert:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get alert counts by status for all tabs
+   */
+  async getAlertCounts(
+    tenantId: number,
+    isLive: boolean
+  ): Promise<{ all: number; active: number; acknowledged: number; dismissed: number }> {
+    try {
+      const query = `
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE j.is_active = true AND j.completed_at IS NULL) as active,
+          COUNT(*) FILTER (WHERE j.completed_at IS NOT NULL AND j.completion_source = 'manual') as acknowledged,
+          COUNT(*) FILTER (WHERE j.is_active = false OR (j.completed_at IS NOT NULL AND j.completion_source != 'manual')) as dismissed
+        FROM t_jtbd_configurations j
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.jtbd_category = 'alert'
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      const row = result.rows[0];
+
+      return {
+        all: parseInt(row.total || 0),
+        active: parseInt(row.active || 0),
+        acknowledged: parseInt(row.acknowledged || 0),
+        dismissed: parseInt(row.dismissed || 0)
+      };
+    } catch (error) {
+      console.error('Error getting alert counts:', error);
       throw error;
     }
   }

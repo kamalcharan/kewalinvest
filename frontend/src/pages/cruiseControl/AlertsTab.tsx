@@ -39,6 +39,13 @@ interface VisibleAlertsResponse {
   };
 }
 
+interface AlertCounts {
+  all: number;
+  active: number;
+  acknowledged: number;
+  dismissed: number;
+}
+
 export const AlertsTab: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
@@ -49,6 +56,24 @@ export const AlertsTab: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<AlertCounts>({ all: 0, active: 0, acknowledged: 0, dismissed: 0 });
+
+  // Fetch alert counts for all tabs
+  const fetchCounts = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const response = await apiService.get<{ success: boolean; data: AlertCounts }>(
+        API_ENDPOINTS.JTBD.ALERT_COUNTS
+      );
+
+      if (response.success && response.data) {
+        setCounts(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching alert counts:', err);
+    }
+  }, [isAuthenticated]);
 
   // Fetch alerts from API
   const fetchAlerts = useCallback(async () => {
@@ -74,6 +99,11 @@ export const AlertsTab: React.FC = () => {
       setLoading(false);
     }
   }, [isAuthenticated, filter]);
+
+  // Fetch counts on mount
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
 
   // Fetch alerts on mount and when filter changes
   useEffect(() => {
@@ -198,6 +228,12 @@ export const AlertsTab: React.FC = () => {
             alert.id === alertId ? { ...alert, status: 'acknowledged' as const } : alert
           )
         );
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          active: Math.max(0, prev.active - 1),
+          acknowledged: prev.acknowledged + 1
+        }));
       }
     } catch (err) {
       console.error('Error acknowledging alert:', err);
@@ -216,6 +252,12 @@ export const AlertsTab: React.FC = () => {
             alert.id === alertId ? { ...alert, status: 'dismissed' as const } : alert
           )
         );
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          active: Math.max(0, prev.active - 1),
+          dismissed: prev.dismissed + 1
+        }));
       }
     } catch (err) {
       console.error('Error dismissing alert:', err);
@@ -270,8 +312,8 @@ export const AlertsTab: React.FC = () => {
               key={status}
               onClick={() => setFilter(status)}
               style={{
-                padding: '10px 20px',
-                fontSize: '14px',
+                padding: '10px 16px',
+                fontSize: '13px',
                 fontWeight: '600',
                 backgroundColor: filter === status ? colors.brand.primary : 'transparent',
                 color: filter === status ? 'white' : colors.utility.primaryText,
@@ -279,12 +321,31 @@ export const AlertsTab: React.FC = () => {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                textTransform: 'capitalize',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
             >
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-              {status === filter && ` (${alerts.length})`}
+              <span style={{
+                fontSize: '11px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                backgroundColor: filter === status
+                  ? 'rgba(255,255,255,0.25)'
+                  : status === 'active' && counts.active > 0
+                    ? colors.semantic.error + '20'
+                    : colors.utility.secondaryText + '15',
+                color: filter === status
+                  ? 'white'
+                  : status === 'active' && counts.active > 0
+                    ? colors.semantic.error
+                    : colors.utility.secondaryText,
+                fontWeight: '700'
+              }}>
+                {counts[status]}
+              </span>
             </button>
           ))}
         </div>

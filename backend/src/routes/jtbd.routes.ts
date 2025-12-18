@@ -25,6 +25,7 @@ router.get('/dashboard/alerts-by-date', jtbdController.getAlertsByDate);
 router.get('/dashboard/communication-queue', jtbdController.getCommunicationQueue);
 router.get('/dashboard/latest-alerts', jtbdController.getLatestAlerts);  // For header dropdown
 router.get('/dashboard/visible-alerts', jtbdController.getVisibleAlerts);  // For AlertsTab with visibility filtering
+router.get('/dashboard/alert-counts', jtbdController.getAlertCounts);  // Get counts for all status tabs
 router.patch('/dashboard/alerts/:id/acknowledge', jtbdController.acknowledgeAlert);  // Acknowledge alert
 router.patch('/dashboard/alerts/:id/dismiss', jtbdController.dismissAlert);  // Dismiss alert
 
