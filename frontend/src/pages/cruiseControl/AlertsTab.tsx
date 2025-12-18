@@ -147,7 +147,7 @@ export const AlertsTab: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  // Trigger manual job execution
+  // Trigger manual job execution with polling for completion
   const triggerJob = async () => {
     try {
       setIsTriggering(true);
@@ -156,20 +156,69 @@ export const AlertsTab: React.FC = () => {
       );
 
       if (response.success) {
-        toastService.success('Alert job triggered successfully');
-        // Refresh stats after a short delay
-        setTimeout(() => {
-          fetchJobStats();
-          fetchCounts();
-          fetchAlerts();
-        }, 2000);
+        toastService.info('Alert job started. Processing...');
+
+        // Poll for job completion
+        const pollForCompletion = async () => {
+          const maxAttempts = 60; // Max 2 minutes of polling (2s intervals)
+          let attempts = 0;
+
+          const checkStatus = async (): Promise<void> => {
+            attempts++;
+            try {
+              const statsResponse = await apiService.get<{ success: boolean; data: JobStatistics }>(
+                API_ENDPOINTS.JOBS.STATISTICS('DAILY_ALERTS')
+              );
+
+              if (statsResponse.success && statsResponse.data) {
+                // Update stats in real-time
+                setJobStats(statsResponse.data);
+
+                // Check if still running
+                if (statsResponse.data.is_running) {
+                  if (attempts < maxAttempts) {
+                    setTimeout(checkStatus, 2000); // Poll every 2 seconds
+                  } else {
+                    setIsTriggering(false);
+                    toastService.warning('Job is taking longer than expected. Check back later.');
+                  }
+                } else {
+                  // Job completed - refresh all data
+                  setIsTriggering(false);
+                  const lastExec = statsResponse.data.last_execution;
+                  if (lastExec?.status === 'success') {
+                    const processed = lastExec.execution_data?.alerts_processed || 0;
+                    toastService.success(`Job completed! ${processed} alerts processed.`);
+                  } else if (lastExec?.status === 'failed') {
+                    toastService.error(`Job failed: ${lastExec.error_message || 'Unknown error'}`);
+                  }
+                  // Refresh alerts and counts
+                  fetchCounts();
+                  fetchAlerts();
+                }
+              }
+            } catch (err) {
+              console.error('Error polling job status:', err);
+              if (attempts < maxAttempts) {
+                setTimeout(checkStatus, 2000);
+              } else {
+                setIsTriggering(false);
+              }
+            }
+          };
+
+          // Start polling after a short delay
+          setTimeout(checkStatus, 1000);
+        };
+
+        pollForCompletion();
       } else {
         toastService.error('Failed to trigger alert job');
+        setIsTriggering(false);
       }
     } catch (err) {
       console.error('Error triggering job:', err);
       toastService.error('Failed to trigger alert job');
-    } finally {
       setIsTriggering(false);
     }
   };
