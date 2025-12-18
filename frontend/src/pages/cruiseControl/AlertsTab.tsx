@@ -64,6 +64,9 @@ interface JobStatistics {
       alerts_triggered?: number;
       alerts_processed?: number;
       customers_affected?: number;
+      days_processed?: number;
+      start_date?: string;
+      end_date?: string;
     };
     error_message?: string;
   } | null;
@@ -452,6 +455,15 @@ export const AlertsTab: React.FC = () => {
               backgroundColor: colors.utility.primaryBackground,
               borderRadius: '6px'
             }}>
+              {/* Show days processed if catch-up happened */}
+              {(jobStats.last_execution.execution_data.days_processed || 0) > 1 && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#F59E0B' }}>
+                    {jobStats.last_execution.execution_data.days_processed}
+                  </div>
+                  <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Days</div>
+                </div>
+              )}
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: colors.brand.primary }}>
                   {jobStats.last_execution.execution_data.alerts_triggered || 0}
