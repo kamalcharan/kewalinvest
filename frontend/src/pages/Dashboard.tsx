@@ -1003,8 +1003,8 @@ export const Dashboard: React.FC = () => {
           )}
         </Card>
 
-        {/* Planned Withdrawals from Goals - Combined 3 & 6 Months */}
-        <Card style={{ gridColumn: 'span 2' }}>
+        {/* Planned Withdrawals from Goals - Combined 3 & 6 Months (Stacked) */}
+        <Card style={{ alignSelf: 'start' }}>
           <SectionHeader
             title="Planned Withdrawals"
             icon={<Banknote size={18} />}
@@ -1012,53 +1012,50 @@ export const Dashboard: React.FC = () => {
 
           {data.plannedWithdrawals.next3Months.length === 0 && data.plannedWithdrawals.next6Months.length === 0 ? (
             <div style={{
-              padding: '32px',
+              padding: '24px',
               textAlign: 'center',
               color: colors.utility.secondaryText
             }}>
-              <Banknote size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-              <div style={{ marginBottom: '8px' }}>No withdrawals planned</div>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                No goals are ending in the next 6 months
-              </div>
+              <Banknote size={28} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <div style={{ fontSize: '12px' }}>No withdrawals in next 6 months</div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Next 3 Months Section */}
               <div>
                 <div style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: '600',
                   color: colors.semantic.error,
-                  marginBottom: '10px',
+                  marginBottom: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <AlertTriangle size={14} />
+                  <AlertTriangle size={12} />
                   Next 3 Months ({data.plannedWithdrawals.next3Months.length})
                 </div>
                 {data.plannedWithdrawals.next3Months.length === 0 ? (
                   <div style={{
-                    padding: '16px',
+                    padding: '12px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText,
-                    fontSize: '12px',
+                    fontSize: '11px',
                     backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
                     borderRadius: '6px'
                   }}>
-                    No withdrawals in next 3 months
+                    None
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {data.plannedWithdrawals.next3Months.slice(0, 4).map((withdrawal) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {data.plannedWithdrawals.next3Months.slice(0, 3).map((withdrawal) => (
                       <div
                         key={withdrawal.id}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          padding: '8px 10px',
+                          padding: '6px 8px',
                           backgroundColor: colors.semantic.error + '08',
                           borderLeft: `3px solid ${colors.semantic.error}`,
                           borderRadius: '4px',
@@ -1067,19 +1064,19 @@ export const Dashboard: React.FC = () => {
                         onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: '500', fontSize: '12px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {withdrawal.customerName}
                           </div>
-                          <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {withdrawal.goalName}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
-                          <div style={{ fontWeight: '600', fontSize: '12px', color: colors.semantic.error }}>
+                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '6px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '11px', color: colors.semantic.error }}>
                             {formatCurrency(withdrawal.targetAmount, true)}
                           </div>
-                          <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                            {withdrawal.daysRemaining}d • {formatDate(withdrawal.targetDate)}
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>
+                            {withdrawal.daysRemaining}d
                           </div>
                         </div>
                       </div>
@@ -1091,38 +1088,38 @@ export const Dashboard: React.FC = () => {
               {/* 3-6 Months Section */}
               <div>
                 <div style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: '600',
                   color: colors.semantic.warning,
-                  marginBottom: '10px',
+                  marginBottom: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <Clock size={14} />
+                  <Clock size={12} />
                   3-6 Months ({data.plannedWithdrawals.next6Months.length})
                 </div>
                 {data.plannedWithdrawals.next6Months.length === 0 ? (
                   <div style={{
-                    padding: '16px',
+                    padding: '12px',
                     textAlign: 'center',
                     color: colors.utility.secondaryText,
-                    fontSize: '12px',
+                    fontSize: '11px',
                     backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
                     borderRadius: '6px'
                   }}>
-                    No withdrawals in 3-6 month window
+                    None
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {data.plannedWithdrawals.next6Months.slice(0, 4).map((withdrawal) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {data.plannedWithdrawals.next6Months.slice(0, 3).map((withdrawal) => (
                       <div
                         key={withdrawal.id}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          padding: '8px 10px',
+                          padding: '6px 8px',
                           backgroundColor: colors.semantic.warning + '08',
                           borderLeft: `3px solid ${colors.semantic.warning}`,
                           borderRadius: '4px',
@@ -1131,19 +1128,19 @@ export const Dashboard: React.FC = () => {
                         onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: '500', fontSize: '12px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: '500', fontSize: '11px', color: colors.utility.primaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {withdrawal.customerName}
                           </div>
-                          <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {withdrawal.goalName}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
-                          <div style={{ fontWeight: '600', fontSize: '12px', color: colors.semantic.warning }}>
+                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '6px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '11px', color: colors.semantic.warning }}>
                             {formatCurrency(withdrawal.targetAmount, true)}
                           </div>
-                          <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                            {withdrawal.daysRemaining}d • {formatDate(withdrawal.targetDate)}
+                          <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>
+                            {withdrawal.daysRemaining}d
                           </div>
                         </div>
                       </div>
