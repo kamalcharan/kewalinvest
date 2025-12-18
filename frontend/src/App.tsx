@@ -52,6 +52,7 @@ import AliasDetailPage from './pages/AliasDetailPage';
 import GoalWizardPage from './pages/goals/GoalWizardPage';
 import GoalSetupPage from './pages/goals/GoalSetupPage';
 import GoalDetailsPage from './pages/goals/GoalDetailsPage';
+import GoalsListPage from './pages/goals/GoalsListPage';
 
 // Transaction pages
 import TransactionListPage from './pages/transactions/TransactionListPage';
@@ -101,6 +102,7 @@ function App() {
                 <Route path="aliases/:aliasId" element={<AliasDetailPage />} />
 
                 {/* Goal Routes */}
+                <Route path="goals" element={<GoalsListPage />} />
                 <Route path="customers/:customerId/goals/new" element={<GoalWizardPage />} />
                 <Route path="customers/:customerId/goals/:goalId" element={<GoalDetailsPage />} />
                 <Route path="customers/:customerId/goals/:goalId/edit" element={<GoalSetupPage />} />

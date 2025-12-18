@@ -168,6 +168,7 @@ export const API_ENDPOINTS = {
   // Goal Management endpoints
   GOALS: {
     CREATE: `${API_BASE}/goals`,
+    GET_ALL: `${API_BASE}/goals/all`,
     GET_CUSTOMER_GOALS: (customerId: number) => `${API_BASE}/goals/customer/${customerId}`,
     GET: (id: number) => `${API_BASE}/goals/${id}`,
     UPDATE: (id: number) => `${API_BASE}/goals/${id}`,
@@ -772,7 +773,10 @@ export const JTBD_V2_URLS = {
 export const GOAL_URLS = {
   createGoal: (environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.GOALS.CREATE}${buildQueryParams({}, environment)}`,
-  
+
+  getAllGoals: (params?: Record<string, any>, environment?: 'live' | 'test') =>
+    `${API_ENDPOINTS.GOALS.GET_ALL}${buildQueryParams(params || {}, environment)}`,
+
   getCustomerGoals: (customerId: number, params?: Record<string, any>, environment?: 'live' | 'test') =>
     `${API_ENDPOINTS.GOALS.GET_CUSTOMER_GOALS(customerId)}${buildQueryParams(params || {}, environment)}`,
   

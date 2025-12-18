@@ -14,6 +14,7 @@ router.use(environmentMiddleware);
 
 // CRUD operations
 router.post('/', goalController.createGoal);
+router.get('/all', goalController.getAllGoals);
 router.get('/customer/:customerId', goalController.getCustomerGoals);
 router.get('/:id', goalController.getGoal);
 router.put('/:id', goalController.updateGoal);

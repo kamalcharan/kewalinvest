@@ -684,7 +684,7 @@ export const Dashboard: React.FC = () => {
           <SectionHeader
             title="Goals Overview"
             icon={<Target size={18} />}
-            action={{ label: 'View All', onClick: () => navigate('/customers') }}
+            action={{ label: 'View All', onClick: () => navigate('/goals') }}
           />
 
           {data.goalsSummary.totalGoals === 0 ? (

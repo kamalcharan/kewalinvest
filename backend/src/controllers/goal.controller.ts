@@ -105,6 +105,33 @@ export class GoalController {
   };
 
   /**
+   * GET /api/goals/all
+   * Get all goals across all customers
+   */
+  getAllGoals = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+
+      const goals = await this.goalService.getAllGoals(
+        user!.tenant_id,
+        isLive
+      );
+
+      res.json({
+        success: true,
+        data: goals
+      });
+    } catch (error: any) {
+      console.error('Error getting all goals:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get all goals'
+      });
+    }
+  };
+
+  /**
    * GET /api/goals/customer/:customerId
    * Get all goals for a customer
    */
