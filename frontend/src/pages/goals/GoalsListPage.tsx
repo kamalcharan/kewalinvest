@@ -177,7 +177,7 @@ const GoalsListPage: React.FC = () => {
           onClick={fetchGoals}
           style={{
             padding: '8px 16px',
-            backgroundColor: colors.primary.main,
+            backgroundColor: colors.brand.primary,
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -223,10 +223,10 @@ const GoalsListPage: React.FC = () => {
         marginBottom: '24px'
       }}>
         <div style={{
-          backgroundColor: colors.utility.surface,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
           borderRadius: '12px',
           padding: '16px',
-          border: `1px solid ${colors.utility.borderColor}`
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
         }}>
           <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
             Total Goals
@@ -237,10 +237,10 @@ const GoalsListPage: React.FC = () => {
         </div>
 
         <div style={{
-          backgroundColor: colors.utility.surface,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
           borderRadius: '12px',
           padding: '16px',
-          border: `1px solid ${colors.utility.borderColor}`
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
         }}>
           <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
             On Track
@@ -251,10 +251,10 @@ const GoalsListPage: React.FC = () => {
         </div>
 
         <div style={{
-          backgroundColor: colors.utility.surface,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
           borderRadius: '12px',
           padding: '16px',
-          border: `1px solid ${colors.utility.borderColor}`
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
         }}>
           <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
             Needs Attention
@@ -265,10 +265,10 @@ const GoalsListPage: React.FC = () => {
         </div>
 
         <div style={{
-          backgroundColor: colors.utility.surface,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
           borderRadius: '12px',
           padding: '16px',
-          border: `1px solid ${colors.utility.borderColor}`
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
         }}>
           <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
             Total Target
@@ -279,15 +279,15 @@ const GoalsListPage: React.FC = () => {
         </div>
 
         <div style={{
-          backgroundColor: colors.utility.surface,
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
           borderRadius: '12px',
           padding: '16px',
-          border: `1px solid ${colors.utility.borderColor}`
+          border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`
         }}>
           <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
             Current Value
           </div>
-          <div style={{ fontSize: '20px', fontWeight: '700', color: colors.primary.main }}>
+          <div style={{ fontSize: '20px', fontWeight: '700', color: colors.brand.primary }}>
             {formatCurrency(totalCurrentValue)}
           </div>
         </div>
@@ -326,8 +326,8 @@ const GoalsListPage: React.FC = () => {
             style={{
               width: '100%',
               padding: '10px 12px 10px 40px',
-              backgroundColor: colors.utility.surface,
-              border: `1px solid ${colors.utility.borderColor}`,
+              backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+              border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
               borderRadius: '8px',
               color: colors.utility.primaryText,
               fontSize: '14px'
@@ -341,8 +341,8 @@ const GoalsListPage: React.FC = () => {
           onChange={(e) => setFilterStatus(e.target.value as any)}
           style={{
             padding: '10px 12px',
-            backgroundColor: colors.utility.surface,
-            border: `1px solid ${colors.utility.borderColor}`,
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+            border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
             borderRadius: '8px',
             color: colors.utility.primaryText,
             fontSize: '14px',
@@ -360,8 +360,8 @@ const GoalsListPage: React.FC = () => {
           onChange={(e) => setFilterType(e.target.value)}
           style={{
             padding: '10px 12px',
-            backgroundColor: colors.utility.surface,
-            border: `1px solid ${colors.utility.borderColor}`,
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+            border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
             borderRadius: '8px',
             color: colors.utility.primaryText,
             fontSize: '14px',
@@ -377,9 +377,9 @@ const GoalsListPage: React.FC = () => {
 
       {/* Goals Table */}
       <div style={{
-        backgroundColor: colors.utility.surface,
+        backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
         borderRadius: '12px',
-        border: `1px solid ${colors.utility.borderColor}`,
+        border: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
         overflow: 'hidden'
       }}>
         <div style={{ overflowX: 'auto' }}>
@@ -433,7 +433,7 @@ const GoalsListPage: React.FC = () => {
                     <tr
                       key={goal.id}
                       style={{
-                        borderTop: `1px solid ${colors.utility.borderColor}`,
+                        borderTop: `1px solid ${isDarkMode ? colors.utility.primaryText + '10' : '#E2E8F0'}`,
                         backgroundColor: index % 2 === 0 ? 'transparent' : (isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)')
                       }}
                     >
@@ -448,7 +448,7 @@ const GoalsListPage: React.FC = () => {
                             background: 'none',
                             border: 'none',
                             cursor: 'pointer',
-                            color: colors.primary.main,
+                            color: colors.brand.primary,
                             fontSize: '14px',
                             fontWeight: '500',
                             padding: 0
@@ -581,7 +581,7 @@ const GoalsListPage: React.FC = () => {
                             alignItems: 'center',
                             gap: '4px',
                             padding: '6px 12px',
-                            backgroundColor: colors.primary.main,
+                            backgroundColor: colors.brand.primary,
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
