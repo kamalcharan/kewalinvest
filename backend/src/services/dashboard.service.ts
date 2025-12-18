@@ -318,6 +318,8 @@ export class DashboardService {
         WHERE j.tenant_id = $1
           AND j.is_live = $2
           AND j.is_active = true
+          AND j.completed_at IS NULL
+          AND j.jtbd_type != 'import_notification'
           AND j.next_alert_date IS NOT NULL
           AND j.next_alert_date <= CURRENT_DATE + INTERVAL '30 days'
         ORDER BY
