@@ -225,10 +225,11 @@ export class DashboardService {
     try {
       // Goals are stored in t_jtbd_configurations with jtbd_type = 'goal_tracking'
       // Progress data is in config_data JSON: target_amount, current_value, deviation_percentage
+      // Note: deviation_percentage may be NULL for newly created goals (not yet calculated)
       const query = `
         SELECT
           COUNT(*) as total_goals,
-          COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric >= 0) as on_track,
+          COUNT(*) FILTER (WHERE COALESCE((config_data->>'deviation_percentage')::numeric, 0) >= 0) as on_track,
           COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < 0
                            AND (config_data->>'deviation_percentage')::numeric >= -20) as needs_attention,
           COUNT(*) FILTER (WHERE (config_data->>'deviation_percentage')::numeric < -20) as off_track,
