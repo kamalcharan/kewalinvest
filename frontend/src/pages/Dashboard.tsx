@@ -679,8 +679,8 @@ export const Dashboard: React.FC = () => {
         gap: '20px',
         marginBottom: '24px'
       }}>
-          {/* Goals Overview */}
-        <Card>
+        {/* Goals Overview */}
+        <Card style={{ alignSelf: 'start' }}>
           <SectionHeader
             title="Goals Overview"
             icon={<Target size={18} />}
