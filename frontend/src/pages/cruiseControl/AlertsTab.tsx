@@ -5,9 +5,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, Play, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
+import toastService from '../../services/toast.service';
 
 interface Alert {
   id: number;
@@ -46,6 +47,30 @@ interface AlertCounts {
   dismissed: number;
 }
 
+interface JobStatistics {
+  config: {
+    is_enabled: boolean;
+    cron_expression: string;
+    last_executed_at: string | null;
+    next_execution_at: string | null;
+    last_success_at: string | null;
+  };
+  is_running: boolean;
+  last_execution: {
+    status: 'success' | 'failed' | 'running';
+    execution_time: string;
+    execution_duration_ms: number;
+    execution_data?: {
+      alerts_triggered?: number;
+      alerts_processed?: number;
+      customers_affected?: number;
+    };
+    error_message?: string;
+  } | null;
+  next_scheduled_run: string | null;
+  success_rate: number;
+}
+
 export const AlertsTab: React.FC = () => {
   const navigate = useNavigate();
   const { theme, isDarkMode } = useTheme();
@@ -57,6 +82,8 @@ export const AlertsTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<AlertCounts>({ all: 0, active: 0, acknowledged: 0, dismissed: 0 });
+  const [jobStats, setJobStats] = useState<JobStatistics | null>(null);
+  const [isTriggering, setIsTriggering] = useState(false);
 
   // Fetch alert counts for all tabs
   const fetchCounts = useCallback(async () => {
@@ -100,10 +127,55 @@ export const AlertsTab: React.FC = () => {
     }
   }, [isAuthenticated, filter]);
 
-  // Fetch counts on mount
+  // Fetch job statistics
+  const fetchJobStats = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const response = await apiService.get<{ success: boolean; data: JobStatistics }>(
+        API_ENDPOINTS.JOBS.STATISTICS('DAILY_ALERTS')
+      );
+
+      if (response.success && response.data) {
+        setJobStats(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching job statistics:', err);
+    }
+  }, [isAuthenticated]);
+
+  // Trigger manual job execution
+  const triggerJob = async () => {
+    try {
+      setIsTriggering(true);
+      const response = await apiService.post<{ success: boolean; data: any }>(
+        API_ENDPOINTS.JOBS.EXECUTE('DAILY_ALERTS')
+      );
+
+      if (response.success) {
+        toastService.success('Alert job triggered successfully');
+        // Refresh stats after a short delay
+        setTimeout(() => {
+          fetchJobStats();
+          fetchCounts();
+          fetchAlerts();
+        }, 2000);
+      } else {
+        toastService.error('Failed to trigger alert job');
+      }
+    } catch (err) {
+      console.error('Error triggering job:', err);
+      toastService.error('Failed to trigger alert job');
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
+  // Fetch counts and job stats on mount
   useEffect(() => {
     fetchCounts();
-  }, [fetchCounts]);
+    fetchJobStats();
+  }, [fetchCounts, fetchJobStats]);
 
   // Fetch alerts on mount and when filter changes
   useEffect(() => {
@@ -289,8 +361,148 @@ export const AlertsTab: React.FC = () => {
     </svg>
   );
 
+  // Format relative time
+  const formatRelativeTime = (dateString: string | null): string => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const formatNextRun = (dateString: string | null): string => {
+    if (!dateString) return 'Not scheduled';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    if (diffMs < 0) return 'Overdue';
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 60) return `In ${diffMins}m`;
+    if (diffHours < 24) return `In ${diffHours}h`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div>
+      {/* Scheduler Status Card */}
+      <div style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderRadius: '12px',
+        padding: '16px 20px',
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+          {/* Job Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {jobStats?.is_running ? (
+              <Loader2 size={18} style={{ color: colors.brand.primary }} className="animate-spin" />
+            ) : jobStats?.last_execution?.status === 'success' ? (
+              <CheckCircle size={18} style={{ color: colors.semantic.success }} />
+            ) : jobStats?.last_execution?.status === 'failed' ? (
+              <XCircle size={18} style={{ color: colors.semantic.error }} />
+            ) : (
+              <Clock size={18} style={{ color: colors.utility.secondaryText }} />
+            )}
+            <div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Daily Alerts Job</div>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: colors.utility.primaryText }}>
+                {jobStats?.is_running ? 'Running...' :
+                  jobStats?.last_execution?.status === 'success' ? 'Last run successful' :
+                  jobStats?.last_execution?.status === 'failed' ? 'Last run failed' : 'Not configured'}
+              </div>
+            </div>
+          </div>
+
+          {/* Last Run */}
+          <div>
+            <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Last Run</div>
+            <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
+              {formatRelativeTime(jobStats?.last_execution?.execution_time || null)}
+            </div>
+          </div>
+
+          {/* Next Scheduled */}
+          <div>
+            <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Next Scheduled</div>
+            <div style={{ fontSize: '13px', fontWeight: '500', color: colors.utility.primaryText }}>
+              {formatNextRun(jobStats?.next_scheduled_run || null)}
+            </div>
+          </div>
+
+          {/* Last Execution Stats */}
+          {jobStats?.last_execution?.execution_data && (
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              padding: '6px 12px',
+              backgroundColor: colors.utility.primaryBackground,
+              borderRadius: '6px'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.brand.primary }}>
+                  {jobStats.last_execution.execution_data.alerts_triggered || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Triggered</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.semantic.success }}>
+                  {jobStats.last_execution.execution_data.alerts_processed || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Processed</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: colors.utility.primaryText }}>
+                  {jobStats.last_execution.execution_data.customers_affected || 0}
+                </div>
+                <div style={{ fontSize: '9px', color: colors.utility.secondaryText }}>Customers</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Manual Trigger Button */}
+        <button
+          onClick={triggerJob}
+          disabled={isTriggering || jobStats?.is_running}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: '600',
+            backgroundColor: colors.brand.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: isTriggering || jobStats?.is_running ? 'not-allowed' : 'pointer',
+            opacity: isTriggering || jobStats?.is_running ? 0.6 : 1,
+            transition: 'all 0.2s'
+          }}
+        >
+          {isTriggering ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Play size={16} />
+          )}
+          {isTriggering ? 'Running...' : 'Run Now'}
+        </button>
+      </div>
+
       {/* Header with Refresh */}
       <div style={{
         display: 'flex',
