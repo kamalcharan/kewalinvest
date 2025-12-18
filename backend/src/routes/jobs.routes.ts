@@ -3,15 +3,14 @@
 
 import { Router } from 'express';
 import { JobsController } from '../controllers/jobs.controller';
-import { authMiddleware } from '../middleware/auth.middleware'; // CHANGE THIS
-import { environmentMiddleware } from '../middleware/environment.middleware'; // ADD THIS
-import { JobSchedulerService } from '../services/jobScheduler.service';
+import { authMiddleware } from '../middleware/auth.middleware';
+import { environmentMiddleware } from '../middleware/environment.middleware';
+import { jobSchedulerService } from '../services/jobScheduler.service';
 
 const router = Router();
 
-// Create scheduler service instance
-const schedulerService = new JobSchedulerService();
-const controller = new JobsController(schedulerService);
+// Use the singleton scheduler service (executors are registered on this instance)
+const controller = new JobsController(jobSchedulerService);
 
 // Apply middleware globally to all routes
 router.use(authMiddleware); // ADD THIS
@@ -81,6 +80,5 @@ router.get('/:jobType/statistics', controller.getStatistics); // REMOVE authenti
  */
 router.get('/:jobType/health', controller.healthCheck); // REMOVE authenticate
 
-// Export both router and scheduler service (for server initialization)
+// Export router (scheduler service is exported from jobScheduler.service.ts)
 export default router;
-export { schedulerService };
