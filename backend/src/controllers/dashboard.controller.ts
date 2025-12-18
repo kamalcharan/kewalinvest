@@ -147,15 +147,17 @@ export class DashboardController {
       console.log('[DashboardController] getDashboard called for tenant:', user!.tenant_id, 'isLive:', isLive);
 
       // Fetch all data in parallel
-      const [summary, downloadStatus, goalsSummary, pendingActions, recentTransactions] = await Promise.all([
+      const [summary, downloadStatus, goalsSummary, pendingActions, recentTransactions, plannedWithdrawals] = await Promise.all([
         this.dashboardService.getSummary(user!.tenant_id, isLive),
         this.dashboardService.getDownloadStatus(user!.tenant_id, isLive),
         this.dashboardService.getGoalsSummary(user!.tenant_id, isLive),
         this.dashboardService.getPendingActions(user!.tenant_id, isLive, 10),
-        this.dashboardService.getRecentTransactions(user!.tenant_id, isLive, 10)
+        this.dashboardService.getRecentTransactions(user!.tenant_id, isLive, 10),
+        this.dashboardService.getPlannedWithdrawals(user!.tenant_id, isLive)
       ]);
 
       console.log('[DashboardController] recentTransactions count:', recentTransactions.length);
+      console.log('[DashboardController] plannedWithdrawals:', plannedWithdrawals);
 
       res.json({
         success: true,
@@ -164,7 +166,8 @@ export class DashboardController {
           downloadStatus,
           goalsSummary,
           pendingActions,
-          recentTransactions
+          recentTransactions,
+          plannedWithdrawals
         }
       });
     } catch (error: any) {

@@ -67,16 +67,30 @@ interface DashboardData {
     dueDate: string;
     priority: 'critical' | 'high' | 'medium' | 'low';
   }>;
-  plannedWithdrawals: Array<{
-    id: number;
-    customerId: number;
-    customerName: string;
-    goalName: string;
-    goalType: string;
-    amount: number;
-    withdrawalDate: string;
-    frequency: 'one_time' | 'monthly' | 'quarterly' | 'yearly';
-  }>;
+  plannedWithdrawals: {
+    next3Months: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      goalName: string;
+      targetAmount: number;
+      currentValue: number;
+      targetDate: string;
+      daysRemaining: number;
+      goalType: string;
+    }>;
+    next6Months: Array<{
+      id: number;
+      customerId: number;
+      customerName: string;
+      goalName: string;
+      targetAmount: number;
+      currentValue: number;
+      targetDate: string;
+      daysRemaining: number;
+      goalType: string;
+    }>;
+  };
   meetings: {
     today: Array<{
       id: number;
@@ -158,7 +172,10 @@ const getEmptyData = (): DashboardData => ({
     snapshotStatus: { success: false, lastRun: null, customersProcessed: 0 }
   },
   upcomingActions: [],
-  plannedWithdrawals: [],
+  plannedWithdrawals: {
+    next3Months: [],
+    next6Months: []
+  },
   meetings: {
     today: [],
     upcoming: []
@@ -248,7 +265,11 @@ export const Dashboard: React.FC = () => {
             schemeName: txn.schemeName || 'Unknown',
             amount: txn.amount || 0,
             date: txn.date
-          }))
+          })),
+          plannedWithdrawals: {
+            next3Months: apiData.plannedWithdrawals?.next3Months || [],
+            next6Months: apiData.plannedWithdrawals?.next6Months || []
+          }
         }));
 
         setLastUpdated(new Date());
@@ -993,14 +1014,14 @@ export const Dashboard: React.FC = () => {
           )}
         </Card>
 
-        {/* Planned Withdrawals from Goals */}
+        {/* Planned Withdrawals from Goals - Next 3 Months */}
         <Card>
           <SectionHeader
             title="Planned Withdrawals (Next 3 Months)"
             icon={<Banknote size={18} />}
           />
 
-          {data.plannedWithdrawals.length === 0 ? (
+          {data.plannedWithdrawals.next3Months.length === 0 ? (
             <div style={{
               padding: '32px',
               textAlign: 'center',
@@ -1009,12 +1030,12 @@ export const Dashboard: React.FC = () => {
               <Banknote size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
               <div style={{ marginBottom: '8px' }}>No withdrawals planned</div>
               <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
-                No goals are ending or have intermediate withdrawals in the next 3 months
+                No goals are ending in the next 3 months
               </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {data.plannedWithdrawals.slice(0, 4).map((withdrawal) => (
+              {data.plannedWithdrawals.next3Months.slice(0, 5).map((withdrawal) => (
                 <div
                   key={withdrawal.id}
                   style={{
@@ -1034,26 +1055,91 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
                       {withdrawal.goalName}
-                      {withdrawal.frequency !== 'one_time' && (
-                        <span style={{
-                          marginLeft: '6px',
-                          fontSize: '10px',
-                          padding: '1px 4px',
-                          backgroundColor: colors.brand.primary + '15',
-                          color: colors.brand.primary,
-                          borderRadius: '3px'
-                        }}>
-                          {withdrawal.frequency}
-                        </span>
-                      )}
+                      <span style={{
+                        marginLeft: '6px',
+                        fontSize: '10px',
+                        padding: '1px 4px',
+                        backgroundColor: withdrawal.daysRemaining <= 30 ? colors.semantic.error + '15' : colors.semantic.warning + '15',
+                        color: withdrawal.daysRemaining <= 30 ? colors.semantic.error : colors.semantic.warning,
+                        borderRadius: '3px'
+                      }}>
+                        {withdrawal.daysRemaining} days
+                      </span>
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: '600', fontSize: '13px', color: '#F97316' }}>
-                      {formatCurrency(withdrawal.amount, true)}
+                      {formatCurrency(withdrawal.targetAmount, true)}
                     </div>
                     <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
-                      {formatDate(withdrawal.withdrawalDate)}
+                      {formatDate(withdrawal.targetDate)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Planned Withdrawals from Goals - Next 6 Months */}
+        <Card>
+          <SectionHeader
+            title="Planned Withdrawals (3-6 Months)"
+            icon={<Banknote size={18} />}
+          />
+
+          {data.plannedWithdrawals.next6Months.length === 0 ? (
+            <div style={{
+              padding: '32px',
+              textAlign: 'center',
+              color: colors.utility.secondaryText
+            }}>
+              <Banknote size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <div style={{ marginBottom: '8px' }}>No withdrawals planned</div>
+              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>
+                No goals are ending in the 3-6 month window
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {data.plannedWithdrawals.next6Months.slice(0, 5).map((withdrawal) => (
+                <div
+                  key={withdrawal.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F8FAFC',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => navigate(`/customers/${withdrawal.customerId}`)}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '500', fontSize: '13px', color: colors.utility.primaryText }}>
+                      {withdrawal.customerName}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {withdrawal.goalName}
+                      <span style={{
+                        marginLeft: '6px',
+                        fontSize: '10px',
+                        padding: '1px 4px',
+                        backgroundColor: colors.brand.primary + '15',
+                        color: colors.brand.primary,
+                        borderRadius: '3px'
+                      }}>
+                        {withdrawal.daysRemaining} days
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '600', fontSize: '13px', color: colors.utility.primaryText }}>
+                      {formatCurrency(withdrawal.targetAmount, true)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {formatDate(withdrawal.targetDate)}
                     </div>
                   </div>
                 </div>

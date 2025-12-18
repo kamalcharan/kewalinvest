@@ -52,6 +52,18 @@ interface PendingAction {
   priority: 'critical' | 'high' | 'medium' | 'low';
 }
 
+interface PlannedWithdrawal {
+  id: number;
+  customerId: number;
+  customerName: string;
+  goalName: string;
+  targetAmount: number;
+  currentValue: number;
+  targetDate: string;
+  daysRemaining: number;
+  goalType: string;
+}
+
 export class DashboardService {
   private db: Pool;
 
@@ -397,6 +409,81 @@ export class DashboardService {
         return [];
       }
       console.error('Error getting recent transactions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get planned withdrawals - goals with target dates in the next N months
+   * Returns two sets: next 3 months and next 6 months
+   */
+  async getPlannedWithdrawals(tenantId: number, isLive: boolean): Promise<{
+    next3Months: PlannedWithdrawal[];
+    next6Months: PlannedWithdrawal[];
+  }> {
+    try {
+      console.log('[Dashboard] getPlannedWithdrawals called - tenantId:', tenantId, 'isLive:', isLive);
+
+      // Query goals with target_date in the next 6 months
+      const query = `
+        SELECT
+          j.id,
+          j.customer_id,
+          c.name as customer_name,
+          j.title as goal_name,
+          COALESCE((j.config_data->>'target_amount')::numeric, 0) as target_amount,
+          COALESCE((j.config_data->>'current_value')::numeric, 0) as current_value,
+          (j.config_data->>'target_date')::date as target_date,
+          (j.config_data->>'goal_type') as goal_type,
+          ((j.config_data->>'target_date')::date - CURRENT_DATE) as days_remaining
+        FROM t_jtbd_configurations j
+        JOIN t_customers cust ON cust.id = j.customer_id
+        JOIN t_contacts c ON c.id = cust.contact_id
+        WHERE j.tenant_id = $1
+          AND j.is_live = $2
+          AND j.is_active = true
+          AND j.jtbd_type = 'goal_tracking'
+          AND j.config_data->>'target_date' IS NOT NULL
+          AND (j.config_data->>'target_date')::date >= CURRENT_DATE
+          AND (j.config_data->>'target_date')::date <= CURRENT_DATE + INTERVAL '6 months'
+        ORDER BY (j.config_data->>'target_date')::date ASC
+      `;
+
+      const result = await this.db.query(query, [tenantId, isLive]);
+      console.log('[Dashboard] getPlannedWithdrawals result count:', result.rows.length);
+
+      const allWithdrawals: PlannedWithdrawal[] = result.rows.map(row => ({
+        id: row.id,
+        customerId: row.customer_id,
+        customerName: row.customer_name,
+        goalName: row.goal_name,
+        targetAmount: parseFloat(row.target_amount || 0),
+        currentValue: parseFloat(row.current_value || 0),
+        targetDate: row.target_date ? new Date(row.target_date).toISOString().split('T')[0] : '',
+        daysRemaining: parseInt(row.days_remaining || 0),
+        goalType: row.goal_type || 'time_based_goal'
+      }));
+
+      // Split into 3-month and 6-month buckets
+      const next3Months = allWithdrawals.filter(w => w.daysRemaining <= 90);
+      const next6Months = allWithdrawals.filter(w => w.daysRemaining > 90 && w.daysRemaining <= 180);
+
+      console.log('[Dashboard] getPlannedWithdrawals - next3Months:', next3Months.length, 'next6Months:', next6Months.length);
+
+      return {
+        next3Months,
+        next6Months
+      };
+    } catch (error: any) {
+      // If table/column doesn't exist, return empty data
+      if (error.code === '42P01' || error.code === '42703') {
+        console.log('[Dashboard] Planned withdrawals table/columns do not exist yet, returning empty data');
+        return {
+          next3Months: [],
+          next6Months: []
+        };
+      }
+      console.error('Error getting planned withdrawals:', error);
       throw error;
     }
   }
