@@ -2,7 +2,7 @@
 // Hooks for fetching system status, migrations, and health check data
 
 import { useQuery } from '@tanstack/react-query';
-import api from '../services/api';
+import apiService from '../services/api.service';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -114,22 +114,22 @@ export interface HealthCheckResponse {
 // ============================================================================
 
 const fetchMigrations = async (): Promise<MigrationsResponse> => {
-  const response = await api.get('/system/migrations');
+  const response = await apiService.get('/system/migrations');
   return response.data;
 };
 
 const fetchDatabaseStatus = async (): Promise<DatabaseStatusResponse> => {
-  const response = await api.get('/system/database-status');
+  const response = await apiService.get('/system/database-status');
   return response.data;
 };
 
 const fetchTenantDataStatus = async (): Promise<TenantDataStatusResponse> => {
-  const response = await api.get('/system/tenant-data-status');
+  const response = await apiService.get('/system/tenant-data-status');
   return response.data;
 };
 
 const fetchHealthCheck = async (): Promise<HealthCheckResponse> => {
-  const response = await api.get('/system/health-check');
+  const response = await apiService.get('/system/health-check');
   return response.data;
 };
 
