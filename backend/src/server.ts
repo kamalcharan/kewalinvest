@@ -39,6 +39,7 @@ import goalInvestmentAllocationRoutes from './routes/goalInvestmentAllocation.ro
 import networthRoutes from './routes/networth.routes'; // Release 1.1 - Cycle 2: NetworthViewer
 import dashboardRoutes from './routes/dashboard.routes'; // Main Dashboard API
 import aliasRoutes from './routes/alias.routes'; // Customer Alias feature
+import systemRoutes from './routes/system.routes'; // System admin routes (migrations, DB status)
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -247,6 +248,7 @@ app.use('/api', goalInvestmentAllocationRoutes); // Release 1.1 - Phase 2: Goal-
 app.use('/api/networth', networthRoutes); // Release 1.1 - Cycle 2: NetworthViewer APIs
 app.use('/api/dashboard', dashboardRoutes); // Main Dashboard API
 app.use('/api/aliases', aliasRoutes); // Customer Alias feature
+app.use('/api/system', systemRoutes); // System admin routes (migrations, tenant status, health checks)
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);

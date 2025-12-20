@@ -14,7 +14,8 @@ import {
   Bug,
   Target,
   Bell,
-  Link2
+  Link2,
+  Activity
 } from 'lucide-react';
 
 // ============================================================================
@@ -155,6 +156,13 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'System Logs',
         path: '/admin/logs',
         icon: Bug
+      },
+      {
+        id: 'system_status',
+        name: 'System Status',
+        path: '/admin/status',
+        icon: Activity,
+        adminOnly: true
       }
     ]
   }
@@ -255,11 +263,15 @@ export const isActiveRoute = (currentPath: string, itemPath: string): boolean =>
     return currentPath === '/contacts' || currentPath.startsWith('/contacts/');
   }
 
-  // Handle admin/logs route
+  // Handle admin routes
   if (itemPath === '/admin/logs') {
     return currentPath === '/admin/logs';
   }
-  
+
+  if (itemPath === '/admin/status') {
+    return currentPath === '/admin/status';
+  }
+
   return currentPath.startsWith(itemPath);
 };
 
@@ -328,6 +340,13 @@ export const getBreadcrumbs = (currentPath: string): NavigationItem[] => {
         path: '/admin/logs',
         icon: Bug
       });
+    } else if (currentPath === '/admin/status') {
+      breadcrumbs.push({
+        id: 'system_status',
+        name: 'System Status',
+        path: '/admin/status',
+        icon: Activity
+      });
     }
   }
   // Handle contact routes
@@ -390,7 +409,8 @@ export const FEATURE_FLAGS = {
   ai_insights: false,      // AI-powered insights (future feature)
   notifications: true,     // Notification system
   nav_tracking: true,      // NAV tracking system
-  system_logs: true        // System logs feature
+  system_logs: true,       // System logs feature
+  system_status: true      // System status feature (migrations, health)
 };
 
 // ============================================================================
@@ -416,7 +436,8 @@ export const getFilteredNavigationMenu = (isSuperAdmin: boolean = false): Naviga
       if ((item.id === 'etl_dashboard' || item.id === 'etl_upload') && !FEATURE_FLAGS.etl_system) return false;
       if (item.id === 'data_management' && !FEATURE_FLAGS.import_export) return false;
       if (item.id === 'system_logs' && !FEATURE_FLAGS.system_logs) return false;
-      
+      if (item.id === 'system_status' && !FEATURE_FLAGS.system_status) return false;
+
       // NEW: Filter by admin status
       if (item.adminOnly && !isSuperAdmin) {
         console.log(`🚫 NAVIGATION: Hiding admin-only item: ${item.name}`);
