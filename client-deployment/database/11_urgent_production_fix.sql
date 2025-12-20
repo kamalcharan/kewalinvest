@@ -1,21 +1,19 @@
 -- ============================================================================
 -- File: 11_urgent_production_fix.sql
 -- Description: URGENT production fix for signup/login failures
--- Problem: m_job_types schema mismatch between emergency fix and main schema
+-- Problem: Missing is_admin column + m_job_types missing/wrong schema
 -- Date: 2025-12-20
 -- ============================================================================
 --
--- ISSUE IDENTIFIED:
--- =================
--- The 10_emergency_schema_fix.sql created m_job_types with WRONG schema:
---   - Emergency fix: id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE
---   - Main schema:   code VARCHAR(50) PRIMARY KEY (no id column)
---
--- This causes t_job_scheduler_configs foreign key issues and breaks signup.
+-- ISSUES IDENTIFIED:
+-- ==================
+-- 1. t_tenants missing 'is_admin' column - breaks LOGIN
+-- 2. m_job_types table missing or has wrong schema - breaks SIGNUP
 --
 -- FIX STRATEGY:
 -- =============
--- 1. RENAME m_job_types to m_job_types_wrong_schema if it has wrong schema (preserves data)
+-- 0. Add is_admin column to t_tenants (fixes login)
+-- 1. RENAME m_job_types to m_job_types_wrong_schema if it has wrong schema
 -- 2. Recreate m_job_types with CORRECT schema (code as PRIMARY KEY, no id)
 -- 3. Re-seed all data
 -- 4. Fix t_job_scheduler_configs foreign key if needed
@@ -31,6 +29,24 @@ BEGIN
     RAISE NOTICE 'URGENT PRODUCTION FIX - Starting';
     RAISE NOTICE 'Date: %', NOW();
     RAISE NOTICE '==============================================';
+END $$;
+
+-- ============================================================================
+-- STEP 0: Add missing is_admin column to t_tenants (CRITICAL FOR LOGIN)
+-- ============================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 't_tenants'
+        AND column_name = 'is_admin'
+    ) THEN
+        ALTER TABLE t_tenants ADD COLUMN is_admin BOOLEAN DEFAULT false;
+        RAISE NOTICE '✓ Added is_admin column to t_tenants';
+    ELSE
+        RAISE NOTICE 't_tenants.is_admin column already exists';
+    END IF;
 END $$;
 
 -- ============================================================================
