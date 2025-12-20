@@ -200,8 +200,10 @@ async function seedGlobalJobTypes(client: PoolClient): Promise<void> {
 
 /**
  * Seeds default job scheduler configurations for a tenant environment
- * Creates enabled scheduler configs for per-tenant job types only
- * Global jobs (NAV_DOWNLOAD, MARKET_OHLC_DOWNLOAD) are seeded separately with tenant_id = 0
+ * Creates enabled scheduler configs for per-tenant job types only (is_global = false)
+ *
+ * NOTE: Global jobs (NAV_DOWNLOAD, MARKET_OHLC_DOWNLOAD) are NOT stored in t_job_scheduler_configs
+ * They are executed by the scheduler service using m_job_types configuration directly
  */
 async function seedJobSchedulerConfigs(
   tenantId: number,
@@ -248,45 +250,9 @@ async function seedJobSchedulerConfigs(
 
   console.log(`  ✅ Seeded ${jobTypes.length} per-tenant job scheduler configs (is_live=${isLive})`);
 
-  // Seed global jobs only once (use tenant_id = 0 for global jobs)
-  // Only seed for is_live = true to avoid duplicates
-  if (isLive) {
-    const globalJobTypesResult = await client.query(
-      `SELECT code, default_cron_expression, default_max_retries, default_schedule_type
-       FROM m_job_types
-       WHERE is_active = true AND is_global = true`
-    );
-
-    const globalJobTypes = globalJobTypesResult.rows;
-
-    for (const jobType of globalJobTypes) {
-      await client.query(
-        `INSERT INTO t_job_scheduler_configs (
-          tenant_id, job_type, user_id, is_live,
-          schedule_type, cron_expression, is_enabled, max_retries,
-          job_config, next_execution_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (tenant_id, job_type, is_live)
-        DO NOTHING`,
-        [
-          0, // tenant_id = 0 for global jobs
-          jobType.code,
-          userId,
-          true, // Global jobs always use is_live = true
-          jobType.default_schedule_type || 'daily',
-          jobType.default_cron_expression || '0 21 * * *',
-          true, // Enabled by default
-          jobType.default_max_retries || 3,
-          '{}',
-          calculateNextExecution(jobType.default_cron_expression || '0 21 * * *')
-        ]
-      );
-    }
-
-    if (globalJobTypes.length > 0) {
-      console.log(`  ✅ Ensured ${globalJobTypes.length} global job scheduler configs exist`);
-    }
-  }
+  // NOTE: Global jobs (NAV_DOWNLOAD, MARKET_OHLC_DOWNLOAD) are NOT seeded in t_job_scheduler_configs
+  // They are handled by the scheduler service directly using m_job_types configuration
+  // This avoids foreign key issues with non-existent tenant_id = 0
 }
 
 /**
