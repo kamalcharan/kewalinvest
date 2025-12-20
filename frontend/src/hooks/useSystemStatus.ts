@@ -109,27 +109,33 @@ export interface HealthCheckResponse {
   timestamp: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  error?: string;
+}
+
 // ============================================================================
 // API FUNCTIONS
 // ============================================================================
 
 const fetchMigrations = async (): Promise<MigrationsResponse> => {
-  const response = await apiService.get('/system/migrations');
+  const response = await apiService.get('/system/migrations') as ApiResponse<MigrationsResponse>;
   return response.data;
 };
 
 const fetchDatabaseStatus = async (): Promise<DatabaseStatusResponse> => {
-  const response = await apiService.get('/system/database-status');
+  const response = await apiService.get('/system/database-status') as ApiResponse<DatabaseStatusResponse>;
   return response.data;
 };
 
 const fetchTenantDataStatus = async (): Promise<TenantDataStatusResponse> => {
-  const response = await apiService.get('/system/tenant-data-status');
+  const response = await apiService.get('/system/tenant-data-status') as ApiResponse<TenantDataStatusResponse>;
   return response.data;
 };
 
 const fetchHealthCheck = async (): Promise<HealthCheckResponse> => {
-  const response = await apiService.get('/system/health-check');
+  const response = await apiService.get('/system/health-check') as ApiResponse<HealthCheckResponse>;
   return response.data;
 };
 
