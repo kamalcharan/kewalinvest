@@ -76,15 +76,17 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- SECTION 2: CHECK m_job_types DATA (Only if table exists)
+-- SECTION 2: CHECK m_job_types DATA AND SCHEMA (Critical for signup)
 -- ============================================================================
 DO $$
 DECLARE
     v_count INTEGER;
     v_active_count INTEGER;
     v_codes TEXT;
+    v_has_id_column BOOLEAN;
+    v_pk_column TEXT;
 BEGIN
-    RAISE NOTICE '=== SECTION 2: m_job_types DATA ===';
+    RAISE NOTICE '=== SECTION 2: m_job_types DATA & SCHEMA ===';
 
     IF NOT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'm_job_types') THEN
         RAISE NOTICE '  TABLE DOES NOT EXIST - Cannot check data';
@@ -93,12 +95,47 @@ BEGIN
         RETURN;
     END IF;
 
+    -- CHECK SCHEMA: m_job_types should have 'code' as PRIMARY KEY, NOT 'id'
+    SELECT EXISTS(
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'm_job_types'
+        AND column_name = 'id'
+    ) INTO v_has_id_column;
+
+    -- Get primary key column
+    SELECT a.attname INTO v_pk_column
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE i.indrelid = 'm_job_types'::regclass AND i.indisprimary;
+
+    RAISE NOTICE '';
+    RAISE NOTICE '  Schema Check:';
+    RAISE NOTICE '    Primary Key column: %', COALESCE(v_pk_column, '(unknown)');
+    RAISE NOTICE '    Has "id" column:    %', v_has_id_column;
+
+    IF v_has_id_column THEN
+        RAISE NOTICE '';
+        RAISE NOTICE '  !!! CRITICAL: m_job_types has WRONG SCHEMA !!!';
+        RAISE NOTICE '  The table was created with "id" as PRIMARY KEY (from emergency fix)';
+        RAISE NOTICE '  but it should have "code" as PRIMARY KEY (from 02_tables.sql)';
+        RAISE NOTICE '';
+        RAISE NOTICE '  ACTION: Run 11_urgent_production_fix.sql to fix the schema';
+        RAISE NOTICE '';
+    ELSIF v_pk_column = 'code' THEN
+        RAISE NOTICE '    Schema Status:      ✓ CORRECT (code is PRIMARY KEY)';
+    ELSE
+        RAISE NOTICE '    Schema Status:      ⚠ UNEXPECTED (check manually)';
+    END IF;
+
     SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true) INTO v_count, v_active_count FROM m_job_types;
     SELECT string_agg(code, ', ' ORDER BY code) INTO v_codes FROM m_job_types;
 
-    RAISE NOTICE '  Total records: %', v_count;
-    RAISE NOTICE '  Active records: %', v_active_count;
-    RAISE NOTICE '  Codes: %', COALESCE(v_codes, '(none)');
+    RAISE NOTICE '';
+    RAISE NOTICE '  Data Check:';
+    RAISE NOTICE '    Total records:  %', v_count;
+    RAISE NOTICE '    Active records: %', v_active_count;
+    RAISE NOTICE '    Codes: %', COALESCE(v_codes, '(none)');
 
     IF v_count = 0 THEN
         RAISE NOTICE '';
@@ -110,7 +147,7 @@ BEGIN
         RAISE NOTICE '  !!! WARNING: m_job_types has only % records (expected 5) !!!', v_count;
         RAISE NOTICE '  ACTION: Run 09_old_tenant_seed.sql to add missing types';
     ELSE
-        RAISE NOTICE '  Status: OK (5 required, % found)', v_count;
+        RAISE NOTICE '    Data Status:    ✓ OK (5 required, % found)', v_count;
     END IF;
 
     RAISE NOTICE '';
