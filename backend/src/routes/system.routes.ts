@@ -37,7 +37,7 @@ const requireAdmin = async (req: AuthenticatedRequest, res: Response, next: Func
       return res.status(403).json({ detail: 'Admin access required' });
     }
 
-    next();
+    return next();
   } catch (error: any) {
     console.error('Admin check error:', error);
     return res.status(500).json({ detail: 'Failed to verify admin status' });
