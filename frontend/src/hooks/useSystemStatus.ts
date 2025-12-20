@@ -114,23 +114,19 @@ export interface HealthCheckResponse {
 // ============================================================================
 
 const fetchMigrations = async (): Promise<MigrationsResponse> => {
-  const response = await api.get('/system/migrations');
-  return response.data;
+  return api.get<MigrationsResponse>('/system/migrations');
 };
 
 const fetchDatabaseStatus = async (): Promise<DatabaseStatusResponse> => {
-  const response = await api.get('/system/database-status');
-  return response.data;
+  return api.get<DatabaseStatusResponse>('/system/database-status');
 };
 
 const fetchTenantDataStatus = async (): Promise<TenantDataStatusResponse> => {
-  const response = await api.get('/system/tenant-data-status');
-  return response.data;
+  return api.get<TenantDataStatusResponse>('/system/tenant-data-status');
 };
 
 const fetchHealthCheck = async (): Promise<HealthCheckResponse> => {
-  const response = await api.get('/system/health-check');
-  return response.data;
+  return api.get<HealthCheckResponse>('/system/health-check');
 };
 
 // ============================================================================
