@@ -1,12 +1,14 @@
 // frontend/src/components/portfolio/NetworthProjectionChart.tsx
 // Supports both: Customer Networth View (customerId) and Individual Goal View (goalId)
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Target, ArrowDown } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Target, ArrowDown, Maximize2, Minimize2, Camera } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNetworthHistory, useNetworthSummary } from '../../hooks/usePortfolioData';
 import { useGoal, useGoalHistory } from '../../hooks/useGoals';
 import { PortfolioService } from '../../services/portfolio.service';
 import { isTimeAndPriceGoal, isPriceBasedGoal, isTimeBasedGoal } from '../../types/goal.types';
+import { toggleFullscreen, isFullscreen, onFullscreenChange, isFullscreenSupported } from '../../utils/fullscreenUtils';
+import { exportChartToPNG, generateFilename } from '../../utils/exportUtils';
 
 interface NetworthProjectionChartProps {
   // Customer networth mode (provide customerId)
@@ -37,7 +39,7 @@ interface WithdrawalMarker {
 
 type TimeframePeriod = '1M' | '1Y' | '2Y' | '3Y' | '4Y' | '5Y' | 'CUSTOM';
 type DataGranularity = 'monthly' | 'quarterly' | '6months' | 'yearly';
-type ChartType = 'line' | 'area';
+type ChartType = 'line' | 'smooth' | 'area';
 
 interface AssetTypeSelection {
   code: string;
@@ -86,6 +88,31 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const [dataGranularity, setDataGranularity] = useState<DataGranularity>('monthly');
   const [chartType, setChartType] = useState<ChartType>('line');
 
+  // Fullscreen state
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
+
+  // Chart element ID for fullscreen and export
+  const chartElementId = `networth-projection-chart-${customerId || goalId || 'default'}`;
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+    const cleanup = onFullscreenChange(handleFullscreenChange);
+    return cleanup;
+  }, []);
+
+  // Fullscreen handler
+  const handleFullscreenToggle = useCallback(async () => {
+    try {
+      await toggleFullscreen(chartElementId);
+    } catch (error) {
+      console.error('Fullscreen toggle failed:', error);
+    }
+  }, [chartElementId]);
+
   // Tooltip state
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -94,6 +121,28 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   // Hooks have built-in enabled: goalId > 0, so they won't fetch if goalId is 0
   const { data: goalData, isLoading: goalLoading } = useGoal(goalId || 0);
   const { data: goalHistoryData, isLoading: goalHistoryLoading } = useGoalHistory(goalId || 0);
+
+  // Export PNG handler (must be after goalData is declared)
+  const handleExportPNG = useCallback(async () => {
+    try {
+      setExportStatus('exporting');
+      const filename = generateFilename(
+        isGoalMode ? (goalData?.title || 'Goal') : 'Networth',
+        'projection-chart'
+      );
+      const result = await exportChartToPNG(chartElementId, { filename });
+      if (result.success) {
+        setExportStatus('success');
+        setTimeout(() => setExportStatus('idle'), 2000);
+      } else {
+        throw new Error(result.error || 'Export failed');
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      setExportStatus('error');
+      setTimeout(() => setExportStatus('idle'), 3000);
+    }
+  }, [chartElementId, isGoalMode, goalData]);
 
   // Extract goal-specific data
   const goalConfig = useMemo(() => {
@@ -564,6 +613,50 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const xScale = (index: number) => padding.left + (index / (displayAllValues.length - 1)) * chartInnerWidth;
   const yScale = (value: number) => padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
 
+  // Helper function to generate smooth bezier curve path
+  const generateSmoothPath = (values: number[], startIndex: number = 0): string => {
+    if (values.length < 2) return '';
+
+    const points = values.map((v, i) => ({
+      x: xScale(startIndex + i),
+      y: yScale(v)
+    }));
+
+    let path = `M ${points[0].x},${points[0].y}`;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+
+      // Calculate control points for smooth curve (Catmull-Rom to Bezier)
+      const tension = 0.3;
+      const cp1x = p1.x + (p2.x - p0.x) * tension;
+      const cp1y = p1.y + (p2.y - p0.y) * tension;
+      const cp2x = p2.x - (p3.x - p1.x) * tension;
+      const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+      path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+    }
+
+    return path;
+  };
+
+  // Generate smooth historical path (single color, no segments)
+  const smoothHistoricalPath = useMemo(() => {
+    if (chartType !== 'smooth' || historicalValues.length < 2) return '';
+    return generateSmoothPath(historicalValues, 0);
+  }, [chartType, historicalValues, displayAllValues.length]);
+
+  // Generate smooth projection path
+  const smoothProjectionPath = useMemo(() => {
+    if (chartType !== 'smooth' || displayProjectionValues.length < 1) return '';
+    // Include last historical point to connect smoothly
+    const combinedValues = [historicalValues[historicalValues.length - 1], ...displayProjectionValues];
+    return generateSmoothPath(combinedValues, historicalValues.length - 1);
+  }, [chartType, historicalValues, displayProjectionValues, displayAllValues.length]);
+
   // Generate paths - with segments for RED when decreasing
   // Build historical path with segments (green for growth, RED for ANY decrease)
   const historicalSegments: { path: string; color: string }[] = [];
@@ -687,12 +780,15 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
   return (
     <div
+      id={chartElementId}
       ref={chartContainerRef}
       style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderRadius: '12px',
-        padding: '24px',
-        width: '100%'
+        backgroundColor: isFullscreenMode ? colors.utility.primaryBackground : colors.utility.secondaryBackground,
+        borderRadius: isFullscreenMode ? '0' : '12px',
+        padding: isFullscreenMode ? '32px' : '24px',
+        width: '100%',
+        height: isFullscreenMode ? '100vh' : 'auto',
+        overflow: isFullscreenMode ? 'auto' : 'visible'
       }}
     >
       {/* Header */}
@@ -888,6 +984,65 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             )}
           </div>
           )}
+
+          {/* Fullscreen Button */}
+          {isFullscreenSupported() && (
+            <button
+              onClick={handleFullscreenToggle}
+              title={isFullscreenMode ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                backgroundColor: 'transparent',
+                color: colors.utility.primaryText,
+                fontSize: '11px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {isFullscreenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {isFullscreenMode ? 'Exit' : 'Full'}
+            </button>
+          )}
+
+          {/* Export PNG Button */}
+          <button
+            onClick={handleExportPNG}
+            disabled={exportStatus === 'exporting'}
+            title="Export chart as PNG"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: `1px solid ${
+                exportStatus === 'success' ? '#10B981' :
+                exportStatus === 'error' ? '#EF4444' :
+                colors.utility.primaryText + '20'
+              }`,
+              backgroundColor: exportStatus === 'success' ? '#10B98115' :
+                exportStatus === 'error' ? '#EF444415' : 'transparent',
+              color: exportStatus === 'success' ? '#10B981' :
+                exportStatus === 'error' ? '#EF4444' :
+                colors.utility.primaryText,
+              fontSize: '11px',
+              fontWeight: '500',
+              cursor: exportStatus === 'exporting' ? 'wait' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: exportStatus === 'exporting' ? 0.7 : 1
+            }}
+          >
+            <Camera size={14} />
+            {exportStatus === 'exporting' ? '...' :
+             exportStatus === 'success' ? '✓' :
+             exportStatus === 'error' ? '✗' : 'PNG'}
+          </button>
         </div>
       </div>
 
@@ -939,7 +1094,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             borderRadius: '6px',
             padding: '2px'
           }}>
-            {(['line', 'area'] as ChartType[]).map(t => (
+            {(['line', 'smooth', 'area'] as ChartType[]).map(t => (
               <button
                 key={t}
                 onClick={() => setChartType(t)}
@@ -1172,33 +1327,65 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             </>
           )}
 
-          {/* Historical line segments (green for growth, RED for decrease) */}
-          {historicalSegments.map((segment, i) => (
-            <path
-              key={`hist-seg-${i}`}
-              d={segment.path}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ))}
+          {/* Historical line - smooth curve or segmented based on chartType */}
+          {chartType === 'smooth' ? (
+            // Single smooth curve for historical data
+            smoothHistoricalPath && (
+              <path
+                d={smoothHistoricalPath}
+                fill="none"
+                stroke="#10B981"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )
+          ) : (
+            // Segmented lines (green for growth, RED for decrease)
+            historicalSegments.map((segment, i) => (
+              <path
+                key={`hist-seg-${i}`}
+                d={segment.path}
+                fill="none"
+                stroke={segment.color}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))
+          )}
 
-          {/* Projection segments (green for growth, red for withdrawal drops) */}
-          {projectionSegments.map((segment, i) => (
-            <path
-              key={i}
-              d={segment.path}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray="8,4"
-              opacity="0.9"
-            />
-          ))}
+          {/* Projection line - smooth curve or segmented based on chartType */}
+          {chartType === 'smooth' ? (
+            // Single smooth curve for projection data
+            smoothProjectionPath && (
+              <path
+                d={smoothProjectionPath}
+                fill="none"
+                stroke="#10B981"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="8,4"
+                opacity="0.9"
+              />
+            )
+          ) : (
+            // Segmented lines (green for growth, red for drops)
+            projectionSegments.map((segment, i) => (
+              <path
+                key={i}
+                d={segment.path}
+                fill="none"
+                stroke={segment.color}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="8,4"
+                opacity="0.9"
+              />
+            ))
+          )}
 
           {/* Historical dots - DOUBLED SIZE with hover */}
           {historicalValues.map((value, i) => (
