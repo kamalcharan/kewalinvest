@@ -644,18 +644,15 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   };
 
   // Generate smooth historical path (single color, no segments)
-  const smoothHistoricalPath = useMemo(() => {
-    if (chartType !== 'smooth' || historicalValues.length < 2) return '';
-    return generateSmoothPath(historicalValues, 0);
-  }, [chartType, historicalValues, displayAllValues.length]);
+  // Not using useMemo since this is after early returns - computed on each render when needed
+  const smoothHistoricalPath = chartType === 'smooth' && historicalValues.length >= 2
+    ? generateSmoothPath(historicalValues, 0)
+    : '';
 
   // Generate smooth projection path
-  const smoothProjectionPath = useMemo(() => {
-    if (chartType !== 'smooth' || displayProjectionValues.length < 1) return '';
-    // Include last historical point to connect smoothly
-    const combinedValues = [historicalValues[historicalValues.length - 1], ...displayProjectionValues];
-    return generateSmoothPath(combinedValues, historicalValues.length - 1);
-  }, [chartType, historicalValues, displayProjectionValues, displayAllValues.length]);
+  const smoothProjectionPath = chartType === 'smooth' && displayProjectionValues.length >= 1
+    ? generateSmoothPath([historicalValues[historicalValues.length - 1], ...displayProjectionValues], historicalValues.length - 1)
+    : '';
 
   // Generate paths - with segments for RED when decreasing
   // Build historical path with segments (green for growth, RED for ANY decrease)
