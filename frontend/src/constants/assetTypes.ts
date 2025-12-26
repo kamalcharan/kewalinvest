@@ -1,34 +1,45 @@
 // frontend/src/constants/assetTypes.ts
 // Centralized asset type constants for consistent styling across the application
+// NOTE: These should match asset types configured in m_asset_types database table
 
 /**
  * Asset Type Color Palette
  * Each asset type has a unique, distinguishable color for charts and visualizations
+ * Matches DB m_asset_types table codes
  */
 export const ASSET_TYPE_COLORS: Record<string, string> = {
-  MF: '#4F46E5',      // Indigo - Mutual Funds
-  EQUITY: '#10B981',  // Emerald - Direct Equity
-  GOLD: '#F59E0B',    // Amber - Gold
-  SILVER: '#6B7280',  // Gray - Silver
-  RE: '#8B5CF6',      // Violet - Real Estate
-  FD: '#3B82F6',      // Blue - Fixed Deposits
-  PPF: '#EC4899',     // Pink - PPF
-  NSC: '#14B8A6',     // Teal - NSC
-  BONDS: '#F97316',   // Orange - Bonds
-  OTHER: '#9CA3AF'    // Slate Gray - Other/Unknown
+  // Primary asset types (from DB m_asset_types)
+  MF: '#4F46E5',           // Indigo - Mutual Fund
+  EQUITY: '#10B981',       // Emerald - Direct Equity
+  GOLD: '#F59E0B',         // Amber - Gold
+  SILVER: '#6B7280',       // Gray - Silver
+  FD: '#3B82F6',           // Blue - Fixed Deposit
+  PPF: '#EC4899',          // Pink - Public Provident Fund
+  EPF: '#14B8A6',          // Teal - Employee Provident Fund
+  NPS: '#8B5CF6',          // Violet - National Pension System
+  REAL_ESTATE: '#F97316',  // Orange - Real Estate
+  INSURANCE: '#06B6D4',    // Cyan - Insurance
+  // Additional asset types (for future DB additions)
+  NSC: '#84CC16',          // Lime - National Savings Certificate
+  BONDS: '#EF4444',        // Red - Bonds
+  OTHER: '#9CA3AF'         // Slate Gray - Other/Unknown (fallback)
 };
 
 /**
  * Asset Type Icons (emoji-based)
+ * Matches DB m_asset_types table codes
  */
 export const ASSET_TYPE_ICONS: Record<string, string> = {
   MF: '📊',
   EQUITY: '📈',
   GOLD: '🪙',
   SILVER: '🥈',
-  RE: '🏠',
   FD: '🏦',
   PPF: '🏛️',
+  EPF: '💼',
+  NPS: '🎯',
+  REAL_ESTATE: '🏠',
+  INSURANCE: '🛡️',
   NSC: '📜',
   BONDS: '📄',
   OTHER: '💰'
@@ -36,16 +47,21 @@ export const ASSET_TYPE_ICONS: Record<string, string> = {
 
 /**
  * Asset Type Display Names
+ * NOTE: Display names should come from API (asset_type_name from DB)
+ * This is only used as fallback when API data is not available
  */
 export const ASSET_TYPE_NAMES: Record<string, string> = {
-  MF: 'Mutual Funds',
-  EQUITY: 'Direct Equity',
+  MF: 'Mutual Fund',
+  EQUITY: 'Equity',
   GOLD: 'Gold',
   SILVER: 'Silver',
-  RE: 'Real Estate',
-  FD: 'Fixed Deposits',
-  PPF: 'PPF',
-  NSC: 'NSC',
+  FD: 'Fixed Deposit',
+  PPF: 'Public Provident Fund',
+  EPF: 'Employee Provident Fund',
+  NPS: 'National Pension System',
+  REAL_ESTATE: 'Real Estate',
+  INSURANCE: 'Insurance',
+  NSC: 'National Savings Certificate',
   BONDS: 'Bonds',
   OTHER: 'Other'
 };

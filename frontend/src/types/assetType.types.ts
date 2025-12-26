@@ -29,6 +29,7 @@ export interface CustomerAssetAssignment {
   assigned_by_name?: string;
 }
 
+// Asset type codes matching m_asset_types table in database
 export enum AssetTypeCode {
   MF = 'MF',
   GOLD = 'GOLD',
@@ -36,7 +37,11 @@ export enum AssetTypeCode {
   EQUITY = 'EQUITY',
   FD = 'FD',
   PPF = 'PPF',
+  EPF = 'EPF',
+  NPS = 'NPS',
+  REAL_ESTATE = 'REAL_ESTATE',
+  INSURANCE = 'INSURANCE',
+  // Additional codes (not in default seed but may be added)
   NSC = 'NSC',
-  RE = 'RE',
   BONDS = 'BONDS'
 }

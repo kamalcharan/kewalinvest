@@ -328,17 +328,22 @@ export interface NetworthApiResponse<T> {
 
 /**
  * Default colors for asset types (for consistent charting)
+ * Matches DB m_asset_types table codes
  */
 export const ASSET_TYPE_COLORS: Record<string, string> = {
-  MF: '#4F46E5',      // Indigo - Mutual Funds
-  EQUITY: '#10B981',  // Emerald - Direct Equity
-  GOLD: '#F59E0B',    // Amber - Gold
-  SILVER: '#6B7280',  // Gray - Silver
-  RE: '#8B5CF6',      // Violet - Real Estate
-  FD: '#3B82F6',      // Blue - Fixed Deposits
-  PPF: '#EC4899',     // Pink - PPF
-  NSC: '#14B8A6',     // Teal - NSC
-  OTHER: '#9CA3AF',   // Light Gray - Other
+  MF: '#4F46E5',           // Indigo - Mutual Fund
+  EQUITY: '#10B981',       // Emerald - Direct Equity
+  GOLD: '#F59E0B',         // Amber - Gold
+  SILVER: '#6B7280',       // Gray - Silver
+  FD: '#3B82F6',           // Blue - Fixed Deposit
+  PPF: '#EC4899',          // Pink - Public Provident Fund
+  EPF: '#14B8A6',          // Teal - Employee Provident Fund
+  NPS: '#8B5CF6',          // Violet - National Pension System
+  REAL_ESTATE: '#F97316',  // Orange - Real Estate
+  INSURANCE: '#06B6D4',    // Cyan - Insurance
+  NSC: '#84CC16',          // Lime - National Savings Certificate
+  BONDS: '#EF4444',        // Red - Bonds
+  OTHER: '#9CA3AF',        // Light Gray - Other
 };
 
 /**

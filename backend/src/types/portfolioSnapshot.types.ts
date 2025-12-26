@@ -199,7 +199,7 @@ export interface PortfolioSnapshotData {
   total_units: number;
   total_schemes: number;
   // Multi-asset support fields
-  asset_type_code?: string;           // 'MF', 'RE', 'GOLD', 'FD', etc.
+  asset_type_code?: string;           // 'MF', 'REAL_ESTATE', 'GOLD', 'FD', 'EPF', 'NPS', etc.
   investment_plan_id?: number | null; // FK to t_customer_asset_assignments
   calculation_method?: SnapshotCalculationMethod;  // 'NAV' or 'ASSUMPTION'
   growth_rate_applied?: number | null; // Rate used for assumption-based calculation
