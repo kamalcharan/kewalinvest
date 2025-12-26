@@ -36,6 +36,8 @@ interface WithdrawalMarker {
 }
 
 type TimeframePeriod = '1M' | '1Y' | '2Y' | '3Y' | '4Y' | '5Y' | 'CUSTOM';
+type DataGranularity = 'monthly' | 'quarterly' | '6months' | 'yearly';
+type ChartType = 'line' | 'area';
 
 interface AssetTypeSelection {
   code: string;
@@ -81,6 +83,8 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const [showAssetSelector, setShowAssetSelector] = useState(false);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>(['ALL']);
   const [assumptionRate, setAssumptionRate] = useState(8); // Default 8% annual growth
+  const [dataGranularity, setDataGranularity] = useState<DataGranularity>('monthly');
+  const [chartType, setChartType] = useState<ChartType>('line');
 
   // Tooltip state
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -344,6 +348,36 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     return { projectionValues: projections, projectionDates: dates, withdrawalIndices: withdrawalIdx };
   }, [historicalValues, assumptionRate, dateRange.projectionMonths, effectiveWithdrawals, showProjection, isGoalMode, goalConfig]);
 
+  // Get granularity step (months per data point) and label
+  const granularityConfig = useMemo(() => {
+    switch (dataGranularity) {
+      case 'quarterly': return { step: 3, label: 'Quarterly' };
+      case '6months': return { step: 6, label: '6-Monthly' };
+      case 'yearly': return { step: 12, label: 'Yearly' };
+      default: return { step: 1, label: 'Monthly' };
+    }
+  }, [dataGranularity]);
+
+  // Aggregate projection data based on granularity
+  const aggregatedProjection = useMemo(() => {
+    if (granularityConfig.step === 1) {
+      // No aggregation needed for monthly
+      return { values: projectionValues, dates: projectionDates };
+    }
+
+    const aggregatedValues: number[] = [];
+    const aggregatedDates: string[] = [];
+
+    for (let i = 0; i < projectionValues.length; i += granularityConfig.step) {
+      // Take the value at the end of each period
+      const endIndex = Math.min(i + granularityConfig.step - 1, projectionValues.length - 1);
+      aggregatedValues.push(projectionValues[endIndex]);
+      aggregatedDates.push(projectionDates[endIndex]);
+    }
+
+    return { values: aggregatedValues, dates: aggregatedDates };
+  }, [projectionValues, projectionDates, granularityConfig.step]);
+
   // Handle asset type selection
   const handleAssetTypeToggle = (code: string) => {
     if (code === 'ALL') {
@@ -383,31 +417,31 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   };
 
   // Format date for tooltip (e.g., "November 2024" or "Jan 2025")
+  // Uses display dates (aggregated projection)
   const formatTooltipDate = (index: number): string => {
-    const allDates = [...historicalDates, ...projectionDates];
-    if (index >= 0 && index < allDates.length) {
-      const dateStr = allDates[index];
+    const tooltipDates = [...historicalDates, ...displayProjectionDates];
+    if (index >= 0 && index < tooltipDates.length) {
+      const dateStr = tooltipDates[index];
       const date = new Date(dateStr);
       return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     }
     return '';
   };
 
-  // Get tooltip info for an index
+  // Get tooltip info for an index - uses displayProjectionValues
   const getTooltipInfo = (index: number) => {
     const isProjection = index >= historicalValues.length;
     const value = isProjection
-      ? projectionValues[index - historicalValues.length]
+      ? displayProjectionValues[index - historicalValues.length]
       : historicalValues[index];
-    const isWithdrawal = withdrawalIndices.includes(index);
 
-    // Calculate change from previous month
+    // Calculate change from previous period
     let changePercent = 0;
     let changeAmount = 0;
     let isDecreasing = false;
     if (index > 0) {
       const prevValue = index >= historicalValues.length
-        ? (index === historicalValues.length ? historicalValues[historicalValues.length - 1] : projectionValues[index - historicalValues.length - 1])
+        ? (index === historicalValues.length ? historicalValues[historicalValues.length - 1] : displayProjectionValues[index - historicalValues.length - 1])
         : historicalValues[index - 1];
       changeAmount = value - prevValue;
       changePercent = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0;
@@ -418,7 +452,6 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       date: formatTooltipDate(index),
       value,
       isProjection,
-      isWithdrawal,
       isDecreasing,
       changePercent,
       changeAmount
@@ -509,19 +542,26 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     ? ((projectedNetworth - currentNetworth) / currentNetworth) * 100
     : 0;
 
-  // Combine all values for scale calculation
+  // Use aggregated projection for display
+  const displayProjectionValues = aggregatedProjection.values;
+  const displayProjectionDates = aggregatedProjection.dates;
+
+  // Combine all values for scale calculation (use raw values for proper min/max)
   const allValues = [...historicalValues, ...projectionValues];
   const minValue = Math.min(...allValues) * 0.95;
   const maxValue = Math.max(...allValues) * 1.05;
   const valueRange = maxValue - minValue;
+
+  // Combined display values for chart rendering
+  const displayAllValues = [...historicalValues, ...displayProjectionValues];
 
   // Chart dimensions
   const padding = { top: 20, right: 20, bottom: 40, left: 60 };
   const chartHeight = height - padding.top - padding.bottom;
   const chartInnerWidth = chartWidth - padding.left - padding.right;
 
-  // Scale functions
-  const xScale = (index: number) => padding.left + (index / (allValues.length - 1)) * chartInnerWidth;
+  // Scale functions - use displayAllValues for x positioning
+  const xScale = (index: number) => padding.left + (index / (displayAllValues.length - 1)) * chartInnerWidth;
   const yScale = (value: number) => padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
 
   // Generate paths - with segments for RED when decreasing
@@ -582,14 +622,15 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const projectionStartY = yScale(historicalValues[historicalValues.length - 1]);
 
   // Build projection path with segments (green for growth, RED for ANY decrease)
+  // Uses displayProjectionValues for aggregated rendering
   const projectionSegments: { path: string; color: string }[] = [];
 
-  if (projectionValues.length > 0) {
+  if (displayProjectionValues.length > 0) {
     let prevValue = historicalValues[historicalValues.length - 1];
     let currentSegmentPath = `M ${projectionStartX},${projectionStartY}`;
     let currentSegmentIsDecreasing = false;
 
-    projectionValues.forEach((v, i) => {
+    displayProjectionValues.forEach((v, i) => {
       const pointIndex = historicalValues.length + i;
       const x = xScale(pointIndex);
       const y = yScale(v);
@@ -610,7 +651,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
           // Start new segment from previous point
           const prevX = xScale(pointIndex - 1);
-          const prevY = yScale(projectionValues[i - 1]);
+          const prevY = yScale(displayProjectionValues[i - 1]);
           currentSegmentPath = `M ${prevX},${prevY} L ${x},${y}`;
           currentSegmentIsDecreasing = isDecreasing;
         } else {
@@ -637,8 +678,8 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     minValue + (valueRange * i) / (yTicks - 1)
   );
 
-  // X-axis labels (show every few months)
-  const allDates = [...historicalDates, ...projectionDates];
+  // X-axis labels (show every few months) - use display dates
+  const allDates = [...historicalDates, ...displayProjectionDates];
   const xTickInterval = Math.max(1, Math.floor(allDates.length / 6));
 
   // Dot size - DOUBLED as requested
@@ -681,7 +722,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           }}>
             {isGoalMode
               ? `${historicalDates.length} snapshots${showProjection ? ` • ${projectionDates.length}M projection @ ${assumptionRate}%` : ''}`
-              : `Historical performance + projected growth @ ${assumptionRate}% p.a.`
+              : `Historical + ${granularityConfig.label} projection @ ${assumptionRate}% p.a.`
             }
           </p>
         </div>
@@ -737,7 +778,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
                 <option value="" disabled style={{ color: colors.utility.secondaryText }}>
                   More...
                 </option>
-                {[6, 7, 8, 9, 10, 12, 15, 20].map(years => (
+                {[6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 35, 40, 45, 50].map(years => (
                   <option key={years} value={years} style={{ color: colors.utility.primaryText, backgroundColor: colors.utility.secondaryBackground }}>
                     {years}Y
                   </option>
@@ -847,6 +888,78 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             )}
           </div>
           )}
+        </div>
+      </div>
+
+      {/* Granularity and Chart Type Toggles */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '16px',
+        marginBottom: '16px',
+        flexWrap: 'wrap'
+      }}>
+        {/* Data Granularity Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Data:</span>
+          <div style={{
+            display: 'flex',
+            backgroundColor: colors.utility.primaryBackground,
+            borderRadius: '6px',
+            padding: '2px'
+          }}>
+            {(['monthly', 'quarterly', '6months', 'yearly'] as DataGranularity[]).map(g => (
+              <button
+                key={g}
+                onClick={() => setDataGranularity(g)}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: dataGranularity === g ? colors.brand.primary : 'transparent',
+                  color: dataGranularity === g ? 'white' : colors.utility.secondaryText,
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {g === 'monthly' ? 'M' : g === 'quarterly' ? 'Q' : g === '6months' ? '6M' : 'Y'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chart Type Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Chart:</span>
+          <div style={{
+            display: 'flex',
+            backgroundColor: colors.utility.primaryBackground,
+            borderRadius: '6px',
+            padding: '2px'
+          }}>
+            {(['line', 'area'] as ChartType[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setChartType(t)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: chartType === t ? colors.brand.primary : 'transparent',
+                  color: chartType === t ? 'white' : colors.utility.secondaryText,
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1004,7 +1117,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           </g>
 
           {/* Vertical line separating historical from projection */}
-          {historicalValues.length > 0 && projectionValues.length > 0 && (
+          {historicalValues.length > 0 && displayProjectionValues.length > 0 && (
             <line
               x1={xScale(historicalValues.length - 1)}
               y1={padding.top}
@@ -1014,6 +1127,49 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
               strokeWidth="1"
               strokeDasharray="4,4"
             />
+          )}
+
+          {/* Area fill for chart type 'area' */}
+          {chartType === 'area' && (
+            <>
+              {/* Historical area fill - gradient from green to transparent */}
+              <defs>
+                <linearGradient id="historicalGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity="0.05" />
+                </linearGradient>
+                <linearGradient id="projectionGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#10B981" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              {/* Historical area */}
+              {historicalValues.length > 1 && (
+                <path
+                  d={`
+                    M ${xScale(0)},${yScale(historicalValues[0])}
+                    ${historicalValues.slice(1).map((v, i) => `L ${xScale(i + 1)},${yScale(v)}`).join(' ')}
+                    L ${xScale(historicalValues.length - 1)},${padding.top + chartHeight}
+                    L ${xScale(0)},${padding.top + chartHeight}
+                    Z
+                  `}
+                  fill="url(#historicalGradient)"
+                />
+              )}
+              {/* Projection area */}
+              {displayProjectionValues.length > 0 && (
+                <path
+                  d={`
+                    M ${xScale(historicalValues.length - 1)},${yScale(historicalValues[historicalValues.length - 1])}
+                    ${displayProjectionValues.map((v, i) => `L ${xScale(historicalValues.length + i)},${yScale(v)}`).join(' ')}
+                    L ${xScale(historicalValues.length + displayProjectionValues.length - 1)},${padding.top + chartHeight}
+                    L ${xScale(historicalValues.length - 1)},${padding.top + chartHeight}
+                    Z
+                  `}
+                  fill="url(#projectionGradient)"
+                />
+              )}
+            </>
           )}
 
           {/* Historical line segments (green for growth, RED for decrease) */}
@@ -1066,14 +1222,13 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
             />
           ))}
 
-          {/* Projection dots - DOUBLED SIZE with hover */}
-          {projectionValues.map((value, i) => {
+          {/* Projection dots - DOUBLED SIZE with hover - uses displayProjectionValues */}
+          {displayProjectionValues.map((value, i) => {
             const pointIndex = historicalValues.length + i;
-            const isWithdrawal = withdrawalIndices.includes(pointIndex);
             // Check if value decreased from previous point
             const prevValue = i === 0
               ? historicalValues[historicalValues.length - 1]
-              : projectionValues[i - 1];
+              : displayProjectionValues[i - 1];
             const isDecreasing = value < prevValue;
             // RED for any decrease, GREEN for growth
             const dotColor = isDecreasing ? '#EF4444' : '#10B981';
@@ -1088,7 +1243,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
                 fill="white"
                 stroke={dotColor}
                 strokeWidth={isHovered ? 3.5 : 2.5}
-                strokeDasharray={isWithdrawal ? "0" : "2,2"}
+                strokeDasharray="2,2"
                 style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
                 onMouseEnter={(e) => {
                   setHoveredIndex(pointIndex);
@@ -1255,7 +1410,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
                 letterSpacing: '0.5px'
               }}>
                 {info.isProjection
-                  ? (info.isWithdrawal ? 'Withdrawal Month' : (info.isDecreasing ? 'Decline' : 'Projected'))
+                  ? (info.isDecreasing ? 'Decline' : 'Projected')
                   : 'Historical'}
               </div>
 
