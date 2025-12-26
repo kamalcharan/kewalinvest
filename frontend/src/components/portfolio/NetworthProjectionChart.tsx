@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Target, ArrowDown } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useNetworthHistory, useNetworthSummary, useAssetTypes } from '../../hooks/usePortfolioData';
+import { useNetworthHistory, useNetworthSummary } from '../../hooks/usePortfolioData';
 import { useGoal, useGoalHistory } from '../../hooks/useGoals';
 import { PortfolioService } from '../../services/portfolio.service';
 import { isTimeAndPriceGoal, isPriceBasedGoal, isTimeBasedGoal } from '../../types/goal.types';
@@ -35,7 +35,7 @@ interface WithdrawalMarker {
   date: string; // YYYY-MM-DD
 }
 
-type TimeframePeriod = '1M' | '3M' | '6M' | '1Y' | '24M';
+type TimeframePeriod = '1M' | '1Y' | '2Y' | '3Y' | '4Y' | '5Y' | 'CUSTOM';
 
 interface AssetTypeSelection {
   code: string;
@@ -77,6 +77,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
   // State
   const [timeframePeriod, setTimeframePeriod] = useState<TimeframePeriod>('1Y');
+  const [customYears, setCustomYears] = useState<number>(10); // For extended projections (6-20 years)
   const [showAssetSelector, setShowAssetSelector] = useState(false);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>(['ALL']);
   const [assumptionRate, setAssumptionRate] = useState(8); // Default 8% annual growth
@@ -174,21 +175,29 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         displayHistoricalMonths = 1;
         projectionMonths = 1;
         break;
-      case '3M':
-        displayHistoricalMonths = 3;
-        projectionMonths = 3;
-        break;
-      case '6M':
-        displayHistoricalMonths = 6;
-        projectionMonths = 6;
-        break;
       case '1Y':
         displayHistoricalMonths = 12;
         projectionMonths = 12;
         break;
-      case '24M':
+      case '2Y':
         displayHistoricalMonths = 24;
-        projectionMonths = 24;  // Project 24 months for 24M view
+        projectionMonths = 24;
+        break;
+      case '3Y':
+        displayHistoricalMonths = 24; // Show max 24 months history
+        projectionMonths = 36;
+        break;
+      case '4Y':
+        displayHistoricalMonths = 24;
+        projectionMonths = 48;
+        break;
+      case '5Y':
+        displayHistoricalMonths = 24;
+        projectionMonths = 60;
+        break;
+      case 'CUSTOM':
+        displayHistoricalMonths = 24;
+        projectionMonths = customYears * 12; // Convert years to months
         break;
       default:
         displayHistoricalMonths = 12;
@@ -201,7 +210,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
       displayHistoricalMonths,
       projectionMonths
     };
-  }, [timeframePeriod]);
+  }, [timeframePeriod, customYears]);
 
   // ===== CUSTOMER MODE: Fetch networth data =====
   const { data: summaryData, isLoading: summaryLoading } = useNetworthSummary(
@@ -219,49 +228,28 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     { enabled: !isGoalMode && (!!customerId || !!familyHeadIwellcode) }
   );
 
-  // Fetch ALL asset types from master data (DB-driven) - only in customer mode
-  const { data: assetTypesData } = useAssetTypes({ enabled: !isGoalMode });
-
-  // Build asset type options from MASTER DATA + summary data
+  // Build asset type options from customer's actual asset types only
+  // Only shows asset types the customer has data for (not all master data)
   const assetTypeOptions = useMemo((): AssetTypeSelection[] => {
     const options: AssetTypeSelection[] = [
       { code: 'ALL', name: 'All Assets', selected: selectedAssetTypes.includes('ALL'), color: colors.brand.primary, hasData: true }
     ];
 
-    // Get asset types that customer actually has
-    const customerAssetTypes = new Set(
-      summaryData?.data?.by_asset_type?.map(at => at.asset_type_code) || []
-    );
-
-    // Use master data for all asset types
-    const masterAssetTypes = assetTypesData?.data?.asset_types || assetTypesData?.asset_types || [];
-
-    if (masterAssetTypes.length > 0) {
-      // Add all asset types from master data
-      masterAssetTypes.forEach(at => {
-        options.push({
-          code: at.asset_type_code,
-          name: at.asset_type_name,
-          selected: selectedAssetTypes.includes(at.asset_type_code),
-          color: PortfolioService.getAssetTypeColor(at.asset_type_code),
-          hasData: customerAssetTypes.has(at.asset_type_code)
-        });
-      });
-    } else if (summaryData?.data?.by_asset_type) {
-      // Fallback to summary data if master data not loaded
+    // Only add asset types that customer actually has (from by_asset_type)
+    if (summaryData?.data?.by_asset_type) {
       summaryData.data.by_asset_type.forEach(at => {
         options.push({
           code: at.asset_type_code,
           name: at.asset_type_name,
           selected: selectedAssetTypes.includes(at.asset_type_code),
           color: PortfolioService.getAssetTypeColor(at.asset_type_code),
-          hasData: true
+          hasData: true // All items shown are selectable
         });
       });
     }
 
     return options;
-  }, [summaryData, assetTypesData, selectedAssetTypes, colors.brand.primary]);
+  }, [summaryData, selectedAssetTypes, colors.brand.primary]);
 
   // Process historical data - slice to display only the requested months
   // Works for both goal mode and customer networth mode
@@ -700,9 +688,9 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
 
         {/* Controls */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          {/* Timeframe selector - NOW INCLUDES 1M */}
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {(['1M', '3M', '6M', '1Y', '24M'] as TimeframePeriod[]).map(period => (
+          {/* Timeframe selector */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {(['1M', '1Y', '2Y', '3Y', '4Y', '5Y'] as TimeframePeriod[]).map(period => (
               <button
                 key={period}
                 onClick={() => setTimeframePeriod(period)}
@@ -721,6 +709,50 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
                 {period}
               </button>
             ))}
+            {/* Custom years dropdown for 6-20 years */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <select
+                value={timeframePeriod === 'CUSTOM' ? customYears : ''}
+                onChange={(e) => {
+                  const years = parseInt(e.target.value);
+                  if (years) {
+                    setCustomYears(years);
+                    setTimeframePeriod('CUSTOM');
+                  }
+                }}
+                style={{
+                  padding: '6px 8px',
+                  borderRadius: '6px',
+                  border: timeframePeriod === 'CUSTOM' ? 'none' : `1px solid ${colors.utility.primaryText}20`,
+                  backgroundColor: timeframePeriod === 'CUSTOM' ? colors.brand.primary : 'transparent',
+                  color: timeframePeriod === 'CUSTOM' ? 'white' : colors.utility.secondaryText,
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  paddingRight: '24px',
+                  minWidth: '70px'
+                }}
+              >
+                <option value="" disabled style={{ color: colors.utility.secondaryText }}>
+                  More...
+                </option>
+                {[6, 7, 8, 9, 10, 12, 15, 20].map(years => (
+                  <option key={years} value={years} style={{ color: colors.utility.primaryText, backgroundColor: colors.utility.secondaryBackground }}>
+                    {years}Y
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={12}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  pointerEvents: 'none',
+                  color: timeframePeriod === 'CUSTOM' ? 'white' : colors.utility.secondaryText
+                }}
+              />
+            </div>
           </div>
 
           {/* Asset selector dropdown - only in customer networth mode */}
@@ -1337,7 +1369,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         )}
       </div>
 
-      {/* Assumption Rate Slider - MAX INCREASED TO 30% */}
+      {/* Growth Rate Input */}
       <div style={{
         marginTop: '16px',
         padding: '12px 16px',
@@ -1345,28 +1377,43 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         borderRadius: '8px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px'
+        gap: '12px'
       }}>
         <span style={{ fontSize: '12px', color: colors.utility.secondaryText, whiteSpace: 'nowrap' }}>
           Growth Rate:
         </span>
-        <input
-          type="range"
-          min="4"
-          max="30"
-          step="0.5"
-          value={assumptionRate}
-          onChange={e => setAssumptionRate(parseFloat(e.target.value))}
-          style={{ flex: 1, accentColor: colors.brand.primary }}
-        />
-        <span style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: colors.brand.primary,
-          minWidth: '45px'
-        }}>
-          {assumptionRate}%
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <input
+            type="number"
+            step="0.5"
+            value={assumptionRate}
+            onChange={e => {
+              const value = parseFloat(e.target.value);
+              if (!isNaN(value)) {
+                setAssumptionRate(value);
+              }
+            }}
+            style={{
+              width: '70px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: `1px solid ${colors.utility.primaryText}20`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.brand.primary,
+              fontSize: '14px',
+              fontWeight: '600',
+              textAlign: 'center',
+              outline: 'none'
+            }}
+          />
+          <span style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: colors.brand.primary
+          }}>
+            % p.a.
+          </span>
+        </div>
       </div>
     </div>
   );
