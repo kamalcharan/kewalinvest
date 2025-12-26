@@ -176,7 +176,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             color: colors.utility.secondaryText,
             margin: '8px 0 0 0'
           }}>
-            Click ▶ to expand and view Units, NAV, Market Value, and Performance metrics
+            Performance (MoM) shown by default • Click ▶ to expand Units, NAV, Market Value
           </p>
         </div>
 
@@ -365,14 +365,31 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         </button>
                       </div>
                     </td>
-                    <td colSpan={monthHeaders.length} style={{
-                      padding: '12px',
-                      textAlign: 'center',
-                      fontSize: '11px',
-                      color: colors.utility.secondaryText
-                    }}>
-                      {isExpanded ? 'Click to collapse' : 'Click to expand metrics'}
-                    </td>
+                    {/* Show Performance (MoM) values directly in scheme row */}
+                    {scheme.monthly_data.map((month: any, idx: number) => {
+                      const changePercentage = month.month_change_percentage || 0;
+                      return (
+                        <td
+                          key={idx}
+                          style={{
+                            padding: '12px',
+                            textAlign: 'right',
+                            fontWeight: '600',
+                            fontSize: '12px',
+                            color: changePercentage >= 0
+                              ? colors.semantic.success
+                              : colors.semantic.error,
+                            backgroundColor: idx === 0
+                              ? `${colors.brand.primary}10`
+                              : (schemeIdx % 2 === 0
+                                ? colors.utility.secondaryBackground
+                                : colors.utility.primaryBackground)
+                          }}
+                        >
+                          {formatValue(changePercentage, 'percentage')}
+                        </td>
+                      );
+                    })}
                   </tr>
 
                   {/* Expandable Rows - Units */}
@@ -471,7 +488,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   {isExpanded && (
                     <tr style={{
                       backgroundColor: `${colors.utility.primaryText}05`,
-                      borderBottom: `1px solid ${colors.utility.primaryText}05`
+                      borderBottom: `1px solid ${colors.utility.primaryText}10`
                     }}>
                       <td style={{
                         padding: '8px 16px 8px 48px',
@@ -509,52 +526,6 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </tr>
                   )}
 
-                  {/* Expandable Rows - Performance */}
-                  {isExpanded && (
-                    <tr style={{
-                      backgroundColor: `${colors.utility.primaryText}05`,
-                      borderBottom: `1px solid ${colors.utility.primaryText}10`
-                    }}>
-                      <td style={{
-                        padding: '8px 16px 8px 48px',
-                        fontSize: '12px',
-                        color: colors.utility.primaryText,
-                        fontWeight: '500',
-                        position: 'sticky',
-                        left: 0,
-                        backgroundColor: `${colors.utility.primaryText}05`,
-                        zIndex: 2,
-                        boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>📈</span>
-                          <span>Performance (MoM)</span>
-                        </div>
-                      </td>
-                      {scheme.monthly_data.map((month: any, idx: number) => {
-                        const changePercentage = month.month_change_percentage || 0;
-                        return (
-                          <td
-                            key={idx}
-                            style={{
-                              padding: '8px 12px',
-                              textAlign: 'right',
-                              fontWeight: '500',
-                              fontSize: '12px',
-                              color: changePercentage >= 0
-                                ? colors.semantic.success
-                                : colors.semantic.error,
-                              backgroundColor: idx === 0
-                                ? `${colors.brand.primary}10`
-                                : undefined
-                            }}
-                          >
-                            {formatValue(changePercentage, 'percentage')}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
                 </React.Fragment>
               );
             })}
@@ -570,7 +541,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         fontSize: '12px',
         color: colors.utility.secondaryText
       }}>
-        * Current month • ** NAV estimated (using latest available) • Click ▶ to expand metrics
+        * Current month • ** NAV estimated (using latest available) • Click ▶ to expand Units, NAV, Market Value
       </div>
 
       {/* Chart Modal */}
