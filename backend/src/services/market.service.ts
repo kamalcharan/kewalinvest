@@ -492,6 +492,24 @@ export class MarketService {
               throw new Error('Missing required fields (index_id, date, open, or close)');
             }
 
+            // Validate date is not in the future
+            const recordDate = new Date(record.date);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            if (recordDate > today) {
+              SimpleLogger.warn('MarketService', 'Skipping future date record', 'upsertMarketData', {
+                indexId: record.index_id,
+                date: record.date,
+                recordDate: recordDate.toISOString()
+              });
+              errors.push({
+                date: record.date instanceof Date ? record.date.toISOString() : String(record.date),
+                error: 'Future date not allowed'
+              });
+              await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+              continue;
+            }
+
             processedIndexIds.add(record.index_id);
 
             const upsertQuery = `
