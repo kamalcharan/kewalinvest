@@ -657,14 +657,14 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             {/* Total Portfolio MoM Row - Summary at bottom */}
             {totalPortfolioMoM.length > 0 && (
               <tr style={{
-                borderTop: `2px solid ${colors.brand.primary}40`,
-                backgroundColor: `${colors.brand.primary}08`
+                borderTop: `3px solid ${colors.brand.primary}`,
+                backgroundColor: `${colors.brand.primary}15`
               }}>
                 <td style={{
                   padding: '14px 16px',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: `${colors.brand.primary}08`,
+                  backgroundColor: `${colors.brand.primary}15`,
                   zIndex: 2,
                   boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
                 }}>
@@ -715,8 +715,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           ? colors.semantic.success
                           : colors.semantic.error,
                         backgroundColor: idx === 0
-                          ? `${colors.brand.primary}15`
-                          : `${colors.brand.primary}08`
+                          ? `${colors.brand.primary}25`
+                          : `${colors.brand.primary}15`
                       }}
                     >
                       {formatValue(momPercentage, 'percentage')}
@@ -729,13 +729,14 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             {/* Market Performance MoM Row - Benchmark comparison */}
             {marketMoM.length > 0 && (
               <tr style={{
-                backgroundColor: `${colors.semantic.warning}08`
+                borderTop: `1px solid ${colors.semantic.warning}40`,
+                backgroundColor: `${colors.semantic.warning}12`
               }}>
                 <td style={{
                   padding: '14px 16px',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: `${colors.semantic.warning}08`,
+                  backgroundColor: `${colors.semantic.warning}12`,
                   zIndex: 2,
                   boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
                 }}>
@@ -786,8 +787,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           ? colors.semantic.success
                           : colors.semantic.error,
                         backgroundColor: idx === 0
-                          ? `${colors.semantic.warning}15`
-                          : `${colors.semantic.warning}08`
+                          ? `${colors.semantic.warning}20`
+                          : `${colors.semantic.warning}12`
                       }}
                     >
                       {formatValue(momPercentage, 'percentage')}
