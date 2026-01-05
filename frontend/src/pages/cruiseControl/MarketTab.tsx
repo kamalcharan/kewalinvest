@@ -9,6 +9,19 @@ import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
 import { StatCard } from '../../components/cruiseControl/shared/StatCard';
 import { StatusBadge } from '../../components/cruiseControl/shared/StatusBadge';
+import { parseDate } from '../../utils/formatters';
+
+// Safe date formatting helper that handles DD-MM-YYYY vs MM-DD-YYYY ambiguity
+const formatDateSafe = (dateValue: string | null | undefined): string => {
+  if (!dateValue) return '--';
+  const date = parseDate(dateValue);
+  if (!date) return '--';
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 interface IndexStatus {
   id: number;
@@ -454,7 +467,7 @@ export const MarketTab: React.FC = () => {
                     <StatusBadge status={index.download_status} type="download" />
                     {index.last_download_at && (
                       <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                        {new Date(index.last_download_at).toLocaleDateString()}
+                        {formatDateSafe(index.last_download_at)}
                       </div>
                     )}
                   </td>
@@ -491,7 +504,7 @@ export const MarketTab: React.FC = () => {
                   }}>
                     {index.earliest_date && index.latest_date ? (
                       <div style={{ fontSize: '12px', color: colors.utility.primaryText }}>
-                        {new Date(index.earliest_date).toLocaleDateString()} - {new Date(index.latest_date).toLocaleDateString()}
+                        {formatDateSafe(index.earliest_date)} - {formatDateSafe(index.latest_date)}
                         <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
                           {index.total_records} records
                         </div>
@@ -600,7 +613,7 @@ export const MarketTab: React.FC = () => {
                             }}
                           >
                             <span style={{ fontWeight: '500' }}>
-                              {new Date(gap.start_date).toLocaleDateString()} - {new Date(gap.end_date).toLocaleDateString()}
+                              {formatDateSafe(gap.start_date)} - {formatDateSafe(gap.end_date)}
                             </span>
                             <span style={{ color: colors.utility.secondaryText, marginLeft: '6px' }}>
                               ({gap.missing_days} day{gap.missing_days > 1 ? 's' : ''})

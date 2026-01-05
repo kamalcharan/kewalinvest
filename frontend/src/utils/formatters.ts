@@ -2,6 +2,67 @@
 // Formatting utilities for chart display values
 
 /**
+ * Safely parse a date string into a Date object
+ * Handles ISO format (YYYY-MM-DD), PostgreSQL dates, and various ambiguous formats
+ * @param dateValue - Date string or Date object
+ * @returns Parsed Date object or null if invalid
+ */
+export function parseDate(dateValue: string | Date | null | undefined): Date | null {
+  if (!dateValue) return null;
+
+  // If already a Date object, return it
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+
+  const dateStr = String(dateValue).trim();
+
+  // Try ISO format first (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // Handle DD-MM-YYYY or DD/MM/YYYY format
+  const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // Handle MM-DD-YYYY format (US format) - only if month > 12, it's definitely DD-MM
+  const parts = dateStr.split(/[-/]/);
+  if (parts.length === 3) {
+    const [first, second, third] = parts.map(p => parseInt(p));
+    // If first number > 12, it must be a day (DD-MM-YYYY)
+    if (first > 12 && second <= 12) {
+      const date = new Date(third, second - 1, first);
+      if (!isNaN(date.getTime())) return date;
+    }
+  }
+
+  // Fallback to native parsing
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
+ * Format a date value to display string
+ * @param dateValue - Date string or Date object
+ * @param options - Intl.DateTimeFormat options
+ * @returns Formatted date string
+ */
+export function formatDate(
+  dateValue: string | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' }
+): string {
+  const date = parseDate(dateValue);
+  if (!date) return '--';
+  return date.toLocaleDateString('en-IN', options);
+}
+
+/**
  * Format price value with Indian Rupee symbol
  * @param value - Price value to format
  * @param decimals - Number of decimal places (default: 2)
@@ -146,8 +207,8 @@ export function formatChartValue(
  */
 export function formatTooltipLabel(dateString: string): string {
   try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
+    const date = parseDate(dateString);
+    if (!date) {
       return dateString;
     }
     return date.toLocaleDateString('en-IN', {
@@ -172,8 +233,8 @@ export function formatXAxisDate(
   granularity: 'daily' | 'weekly' | 'monthly'
 ): string {
   try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
+    const date = parseDate(dateString);
+    if (!date) {
       return dateString;
     }
 
