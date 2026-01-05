@@ -173,45 +173,26 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     });
   }, [schemes, monthHeaders]);
 
-  // Calculate Asset Allocation MoM for each asset type
-  // Groups schemes by category (Equity, Debt, Gold, Hybrid) and calculates MoM
+  // Calculate Asset Allocation MoM for each MF category
+  // Groups schemes by their category field and calculates MoM
   const assetAllocationMoM = useMemo((): AssetMoMData[] => {
     if (schemes.length === 0 || !monthHeaders.length) return [];
 
-    // Group schemes by category
-    const assetGroups: { [key: string]: any[] } = {
-      'Equity': [],
-      'Debt': [],
-      'Gold': [],
-      'Hybrid': [],
-      'Other': []
-    };
+    // Group schemes by their actual category field
+    const categoryGroups: { [key: string]: any[] } = {};
 
     schemes.forEach((scheme: any) => {
-      const category = scheme.category || 'Other';
-      if (category.toLowerCase().includes('equity') || category.toLowerCase().includes('multicap') ||
-          category.toLowerCase().includes('flexi') || category.toLowerCase().includes('focused') ||
-          category.toLowerCase().includes('largecap') || category.toLowerCase().includes('midcap') ||
-          category.toLowerCase().includes('smallcap')) {
-        assetGroups['Equity'].push(scheme);
-      } else if (category.toLowerCase().includes('debt') || category.toLowerCase().includes('liquid') ||
-                 category.toLowerCase().includes('overnight') || category.toLowerCase().includes('gilt') ||
-                 category.toLowerCase().includes('money market') || category.toLowerCase().includes('bond')) {
-        assetGroups['Debt'].push(scheme);
-      } else if (category.toLowerCase().includes('gold') || category.toLowerCase().includes('commodity')) {
-        assetGroups['Gold'].push(scheme);
-      } else if (category.toLowerCase().includes('hybrid') || category.toLowerCase().includes('balanced') ||
-                 category.toLowerCase().includes('arbitrage') || category.toLowerCase().includes('multi asset')) {
-        assetGroups['Hybrid'].push(scheme);
-      } else {
-        assetGroups['Other'].push(scheme);
+      const category = scheme.category || 'Uncategorized';
+      if (!categoryGroups[category]) {
+        categoryGroups[category] = [];
       }
+      categoryGroups[category].push(scheme);
     });
 
-    // Calculate MoM for each asset type
+    // Calculate MoM for each category
     const result: AssetMoMData[] = [];
 
-    Object.entries(assetGroups).forEach(([assetType, groupSchemes]) => {
+    Object.entries(categoryGroups).forEach(([category, groupSchemes]) => {
       if (groupSchemes.length === 0) return;
 
       const monthlyData = monthHeaders.map((_: any, monthIdx: number) => {
@@ -244,9 +225,16 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       });
 
       result.push({
-        assetType,
+        assetType: category,
         monthlyData: monthlyDataWithMoM
       });
+    });
+
+    // Sort by current month market value (descending)
+    result.sort((a, b) => {
+      const aValue = a.monthlyData[0]?.totalMarketValue || 0;
+      const bValue = b.monthlyData[0]?.totalMarketValue || 0;
+      return bValue - aValue;
     });
 
     return result;
@@ -949,25 +937,36 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               </tr>
             )}
 
-            {/* Asset Allocation Tab - Asset type based view */}
+            {/* Asset Allocation Tab - Category based view */}
             {activeTab === 'asset' && assetAllocationMoM.map((assetData: AssetMoMData, assetIdx: number) => {
-              // Define colors for each asset type
-              const assetColors: { [key: string]: string } = {
-                'Equity': '#8B5CF6',   // Purple
-                'Debt': '#3B82F6',     // Blue
-                'Gold': '#F59E0B',     // Amber
-                'Hybrid': '#10B981',   // Emerald
-                'Other': '#6B7280'     // Gray
-              };
-              const assetColor = assetColors[assetData.assetType] || assetColors['Other'];
+              // Generate consistent color for each category using hash
+              const categoryColors = [
+                '#8B5CF6', // Purple
+                '#3B82F6', // Blue
+                '#10B981', // Emerald
+                '#F59E0B', // Amber
+                '#EC4899', // Pink
+                '#14B8A6', // Teal
+                '#F97316', // Orange
+                '#06B6D4', // Cyan
+                '#84CC16', // Lime
+                '#EF4444', // Red
+              ];
+              const colorIndex = assetData.assetType.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % categoryColors.length;
+              const assetColor = categoryColors[colorIndex];
 
-              // Define icons for each asset type
-              const assetIcons: { [key: string]: string } = {
-                'Equity': '📈',
-                'Debt': '🏦',
-                'Gold': '🥇',
-                'Hybrid': '⚖️',
-                'Other': '📊'
+              // Get icon based on category keywords
+              const getIcon = (category: string): string => {
+                const lowerCat = category.toLowerCase();
+                if (lowerCat.includes('equity') || lowerCat.includes('largecap') || lowerCat.includes('midcap') ||
+                    lowerCat.includes('smallcap') || lowerCat.includes('multicap') || lowerCat.includes('flexi') ||
+                    lowerCat.includes('elss') || lowerCat.includes('focused')) return '📈';
+                if (lowerCat.includes('debt') || lowerCat.includes('liquid') || lowerCat.includes('overnight') ||
+                    lowerCat.includes('gilt') || lowerCat.includes('bond') || lowerCat.includes('money market')) return '🏦';
+                if (lowerCat.includes('gold') || lowerCat.includes('commodity')) return '🥇';
+                if (lowerCat.includes('hybrid') || lowerCat.includes('balanced') || lowerCat.includes('arbitrage') ||
+                    lowerCat.includes('multi asset')) return '⚖️';
+                return '📊';
               };
 
               return (
@@ -1005,7 +1004,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         backgroundColor: `${assetColor}15`,
                         fontSize: '16px'
                       }}>
-                        {assetIcons[assetData.assetType]}
+                        {getIcon(assetData.assetType)}
                       </div>
                       <div>
                         <div style={{
