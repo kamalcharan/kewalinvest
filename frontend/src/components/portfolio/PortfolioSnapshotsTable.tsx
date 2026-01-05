@@ -2,9 +2,9 @@
 // Portfolio Snapshots Table with tree structure showing all metrics
 // Each scheme has 4 expandable rows: Units, NAV, Market Value, Performance
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
 import { SchemeChartsModal } from './SchemeChartsModal';
 
@@ -144,6 +144,44 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
   const allExpanded = expandedSchemes.size === schemes.length;
   const allCollapsed = expandedSchemes.size === 0;
+
+  // Calculate Total Portfolio MoM for each month
+  // Sum market values across all schemes, then calculate MoM %
+  const totalPortfolioMoM = useMemo(() => {
+    if (schemes.length === 0 || !monthHeaders.length) return [];
+
+    // For each month index, sum all schemes' market_value
+    const totals = monthHeaders.map((_: any, monthIdx: number) => {
+      let totalMarketValue = 0;
+
+      schemes.forEach((scheme: any) => {
+        const monthData = scheme.monthly_data?.[monthIdx];
+        if (monthData?.market_value) {
+          totalMarketValue += monthData.market_value;
+        }
+      });
+
+      return { totalMarketValue };
+    });
+
+    // Calculate MoM % for each month
+    // Note: Data is in reverse chronological order (newest first)
+    // So index 0 is current month, index 1 is previous month, etc.
+    return totals.map((current, idx) => {
+      const previousIdx = idx + 1; // Previous month is next index (older)
+      const previous = totals[previousIdx];
+
+      let momPercentage = 0;
+      if (previous && previous.totalMarketValue > 0) {
+        momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
+      }
+
+      return {
+        totalMarketValue: current.totalMarketValue,
+        momPercentage: Math.round(momPercentage * 100) / 100
+      };
+    });
+  }, [schemes, monthHeaders]);
 
   return (
     <div style={{
@@ -529,6 +567,78 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                 </React.Fragment>
               );
             })}
+
+            {/* Total Portfolio MoM Row - Summary at bottom */}
+            {totalPortfolioMoM.length > 0 && (
+              <tr style={{
+                borderTop: `2px solid ${colors.brand.primary}40`,
+                backgroundColor: `${colors.brand.primary}08`
+              }}>
+                <td style={{
+                  padding: '14px 16px',
+                  position: 'sticky',
+                  left: 0,
+                  backgroundColor: `${colors.brand.primary}08`,
+                  zIndex: 2,
+                  boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      backgroundColor: `${colors.brand.primary}20`
+                    }}>
+                      <Wallet size={16} color={colors.brand.primary} />
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: '700',
+                        color: colors.brand.primary,
+                        fontSize: '14px'
+                      }}>
+                        Total Portfolio
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText
+                      }}>
+                        Performance (MoM)
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {totalPortfolioMoM.map((monthData, idx) => {
+                  const momPercentage = monthData.momPercentage || 0;
+                  return (
+                    <td
+                      key={idx}
+                      style={{
+                        padding: '14px 12px',
+                        textAlign: 'right',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        color: momPercentage >= 0
+                          ? colors.semantic.success
+                          : colors.semantic.error,
+                        backgroundColor: idx === 0
+                          ? `${colors.brand.primary}15`
+                          : `${colors.brand.primary}08`
+                      }}
+                    >
+                      {formatValue(momPercentage, 'percentage')}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
