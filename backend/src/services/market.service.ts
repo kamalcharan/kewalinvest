@@ -492,6 +492,24 @@ export class MarketService {
               throw new Error('Missing required fields (index_id, date, open, or close)');
             }
 
+            // Validate date is not in the future
+            const recordDate = new Date(record.date);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            if (recordDate > today) {
+              SimpleLogger.warn('MarketService', 'Skipping future date record', 'upsertMarketData', {
+                indexId: record.index_id,
+                date: record.date,
+                recordDate: recordDate.toISOString()
+              });
+              errors.push({
+                date: record.date instanceof Date ? record.date.toISOString() : String(record.date),
+                error: 'Future date not allowed'
+              });
+              await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+              continue;
+            }
+
             processedIndexIds.add(record.index_id);
 
             const upsertQuery = `
@@ -1604,6 +1622,15 @@ export class MarketService {
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
       twoWeeksAgo.setHours(0, 0, 0, 0);
 
+      // Calculate yesterday (last business day) as the end date for gap detection
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      // Skip weekends - go back to last trading day
+      while (yesterday.getDay() === 0 || yesterday.getDay() === 6) {
+        yesterday.setDate(yesterday.getDate() - 1);
+      }
+
       // Get all dates we have data for (last 2 weeks only)
       const datesQuery = `
         SELECT DISTINCT date
@@ -1612,10 +1639,6 @@ export class MarketService {
         ORDER BY date
       `;
       const datesResult = await this.db.query(datesQuery, [indexId, twoWeeksAgo]);
-
-      if (datesResult.rows.length < 2) {
-        return [];
-      }
 
       const existingDates = new Set(
         datesResult.rows.map(r => new Date(r.date).toISOString().split('T')[0])
@@ -1627,9 +1650,10 @@ export class MarketService {
 
       // Iterate through date range and find gaps (only trading days)
       // Start from 2 weeks ago or earliest date, whichever is later
+      // End at yesterday (last trading day), not at latestDate
       const earliestDateObj = new Date(earliestDate);
       const start = earliestDateObj > twoWeeksAgo ? earliestDateObj : twoWeeksAgo;
-      const end = new Date(latestDate);
+      const end = yesterday; // FIX: Use yesterday instead of latestDate
       const current = new Date(start);
 
       while (current <= end) {

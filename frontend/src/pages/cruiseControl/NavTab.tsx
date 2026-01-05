@@ -3,12 +3,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw, Play } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
 import { StatCard } from '../../components/cruiseControl/shared/StatCard';
 import { StatusBadge } from '../../components/cruiseControl/shared/StatusBadge';
+import { parseDate } from '../../utils/formatters';
+
+// Safe date formatting helper that handles DD-MM-YYYY vs MM-DD-YYYY ambiguity
+const formatDateSafe = (dateValue: string | null | undefined): string => {
+  if (!dateValue) return '--';
+  const date = parseDate(dateValue);
+  if (!date) return '--';
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 interface SchemeStatus {
   id: number;
@@ -58,6 +71,7 @@ export const NavTab: React.FC = () => {
   const [data, setData] = useState<DetailedStatusResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
   const [expandedGaps, setExpandedGaps] = useState<{ [key: number]: boolean }>({});
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     fetchDetailedStatus();
@@ -137,6 +151,58 @@ export const NavTab: React.FC = () => {
     }));
   };
 
+  // Run Now: Download daily NAV for all bookmarked schemes, then calculate metrics
+  const handleRunNow = async () => {
+    try {
+      setIsRunning(true);
+
+      // Step 1: Download daily NAV for all bookmarked schemes
+      toastService.info('Starting NAV downloads for all bookmarked schemes...');
+      const navResponse = await apiService.post(API_ENDPOINTS.NAV.DOWNLOAD_DAILY) as any;
+
+      if (navResponse?.success && navResponse?.data) {
+        const navData = navResponse.data;
+        const successful = navData.successful ?? navData.success_count ?? navData.downloaded ?? 0;
+        const failed = navData.failed ?? navData.failed_count ?? 0;
+        toastService.success(`NAV downloads completed: ${successful} successful, ${failed} failed`);
+      } else {
+        toastService.success('NAV downloads triggered');
+      }
+
+      // Step 2: Calculate metrics for all schemes with data
+      toastService.info('Starting metrics calculation for all schemes...');
+
+      // Get all scheme IDs that need metrics calculation
+      const schemesNeedingMetrics = data?.schemes
+        .filter(scheme => scheme.total_records > 0)
+        .map(scheme => scheme.scheme_id) || [];
+
+      if (schemesNeedingMetrics.length > 0) {
+        const metricsResponse = await apiService.post(
+          API_ENDPOINTS.SCHEME_ANALYSIS.BATCH_CALCULATE,
+          { scheme_ids: schemesNeedingMetrics, recalculate: false }
+        ) as any;
+
+        if (metricsResponse?.success && metricsResponse?.data) {
+          const metricsData = metricsResponse.data;
+          const successful = metricsData.successful ?? metricsData.success_count ?? metricsData.calculated ?? 0;
+          toastService.success(`Metrics calculation completed: ${successful} successful`);
+        } else {
+          toastService.success('Metrics calculation triggered');
+        }
+      }
+
+      // Refresh data
+      await fetchDetailedStatus();
+      toastService.success('Run Now completed successfully!');
+    } catch (err: any) {
+      console.error('Error in Run Now:', err);
+      toastService.error(`Run Now failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -203,25 +269,57 @@ export const NavTab: React.FC = () => {
         }}>
           NAV Scheme Status
         </h3>
-        <button
-          onClick={fetchDetailedStatus}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            backgroundColor: colors.brand.primary,
-            color: '#FFF',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: '500',
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {/* Run Now Button - Downloads NAV for all + Calculates metrics */}
+          <button
+            onClick={handleRunNow}
+            disabled={isRunning}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.brand.primary,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
+            }}
+            title="Download NAV for all bookmarked schemes and calculate metrics"
+          >
+            {isRunning ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Play size={14} />
+            )}
+            {isRunning ? 'Running...' : 'Run Now'}
+          </button>
+          {/* Refresh Button */}
+          <button
+            onClick={fetchDetailedStatus}
+            disabled={isRunning}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.brand.primary,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
+            }}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -367,7 +465,7 @@ export const NavTab: React.FC = () => {
                     <StatusBadge status={scheme.download_status} type="download" />
                     {scheme.last_download_at && (
                       <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                        {new Date(scheme.last_download_at).toLocaleDateString()}
+                        {formatDateSafe(scheme.last_download_at)}
                       </div>
                     )}
                   </td>
@@ -404,7 +502,7 @@ export const NavTab: React.FC = () => {
                   }}>
                     {scheme.earliest_date && scheme.latest_date ? (
                       <div style={{ fontSize: '12px', color: colors.utility.primaryText }}>
-                        {new Date(scheme.earliest_date).toLocaleDateString()} - {new Date(scheme.latest_date).toLocaleDateString()}
+                        {formatDateSafe(scheme.earliest_date)} - {formatDateSafe(scheme.latest_date)}
                         <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
                           {scheme.total_records} records
                         </div>
@@ -499,7 +597,7 @@ export const NavTab: React.FC = () => {
                             }}
                           >
                             <span style={{ fontWeight: '500' }}>
-                              {new Date(gap.start_date).toLocaleDateString()} - {new Date(gap.end_date).toLocaleDateString()}
+                              {formatDateSafe(gap.start_date)} - {formatDateSafe(gap.end_date)}
                             </span>
                             <span style={{ color: colors.utility.secondaryText, marginLeft: '6px' }}>
                               ({gap.missing_days} day{gap.missing_days > 1 ? 's' : ''})

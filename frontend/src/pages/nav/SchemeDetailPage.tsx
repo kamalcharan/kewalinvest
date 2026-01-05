@@ -15,6 +15,7 @@ import {
   useSaveChartPreference,
 } from '../../hooks/useChartPreferences';
 import { getDateRangeFromPeriod } from '../../utils/timeRangeHelper';
+import { parseDate } from '../../utils/formatters';
 import type { TimePeriod } from '../../utils/timeRangeHelper';
 import type { SchemeMetricsResponse } from '../../types/nav.types';
 import type { ChartType, ViewMode, DisplayMode, Granularity } from '../../types/chartViewer.types';
@@ -280,7 +281,9 @@ const SchemeDetailPage: React.FC = () => {
   const formatDate = (dateValue: string | Date | null | undefined): string => {
     if (!dateValue) return 'N/A';
     try {
-      const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+      // Use safe date parsing to handle DD-MM-YYYY vs MM-DD-YYYY ambiguity
+      const date = parseDate(dateValue);
+      if (!date) return 'N/A';
       return date.toLocaleDateString('en-IN', {
         year: 'numeric',
         month: 'short',
