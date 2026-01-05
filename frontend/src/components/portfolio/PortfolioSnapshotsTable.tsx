@@ -4,20 +4,37 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
+import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
 
 interface PortfolioSnapshotsTableProps {
   customerId: number;
   months?: number;
+  benchmarkIndexId?: number; // Default: 1 (Nifty 50)
+  benchmarkName?: string;    // Default: "Nifty 50"
 }
 
 type ExpandedRowType = 'units' | 'nav' | 'market_value' | 'performance';
 
+// Interfaces for MoM calculations
+interface TotalMoMData {
+  totalMarketValue: number;
+  momPercentage: number;
+}
+
+interface MarketMoMData {
+  closePrice: number;
+  momPercentage: number;
+  month: string;
+}
+
 export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = ({
   customerId,
   months = 12,
+  benchmarkIndexId = 1, // Nifty 50
+  benchmarkName = 'Nifty 50',
 }) => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -29,6 +46,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
     months
+  );
+
+  // Fetch benchmark index data (monthly granularity)
+  const { data: benchmarkData } = useIndexReturnsTimeSeries(
+    benchmarkIndexId,
+    ['1m'],
+    'monthly'
   );
 
   const schemes = data?.data?.schemes || [];
@@ -97,6 +121,112 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     }
   };
 
+  // Get month headers from first scheme's data (needed for useMemo below)
+  const monthHeaders = schemes[0]?.monthly_data || [];
+
+  // Calculate Total Portfolio MoM for each month
+  // Sum market values across all schemes, then calculate MoM %
+  // MUST be before early returns to follow React Hooks rules
+  const totalPortfolioMoM = useMemo((): TotalMoMData[] => {
+    if (schemes.length === 0 || !monthHeaders.length) return [];
+
+    // For each month index, sum all schemes' market_value
+    const totals = monthHeaders.map((_: any, monthIdx: number) => {
+      let totalMarketValue = 0;
+
+      schemes.forEach((scheme: any) => {
+        const monthData = scheme.monthly_data?.[monthIdx];
+        if (monthData?.market_value) {
+          totalMarketValue += monthData.market_value;
+        }
+      });
+
+      return { totalMarketValue };
+    });
+
+    // Calculate MoM % for each month
+    // Note: Data is in reverse chronological order (newest first)
+    // So index 0 is current month, index 1 is previous month, etc.
+    return totals.map((current: { totalMarketValue: number }, idx: number) => {
+      const previousIdx = idx + 1; // Previous month is next index (older)
+      const previous = totals[previousIdx];
+
+      let momPercentage = 0;
+      if (previous && previous.totalMarketValue > 0) {
+        momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
+      }
+
+      return {
+        totalMarketValue: current.totalMarketValue,
+        momPercentage: Math.round(momPercentage * 100) / 100
+      };
+    });
+  }, [schemes, monthHeaders]);
+
+  // Calculate Market (Benchmark) MoM for each month
+  // Uses benchmark index data to show market performance alongside portfolio
+  const marketMoM = useMemo((): MarketMoMData[] => {
+    if (!benchmarkData || !Array.isArray(benchmarkData) || benchmarkData.length === 0) return [];
+    if (monthHeaders.length === 0) return [];
+
+    // Sort benchmark data by date descending (newest first) to match portfolio data order
+    const sortedBenchmark = [...benchmarkData].sort((a: any, b: any) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return dateB - dateA;
+    });
+
+    // Create a map of month (YYYY-MM) to benchmark data
+    const benchmarkByMonth = new Map<string, any>();
+    sortedBenchmark.forEach((record: any) => {
+      const date = new Date(record.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Only keep the latest (last day) record for each month
+      if (!benchmarkByMonth.has(monthKey)) {
+        benchmarkByMonth.set(monthKey, record);
+      }
+    });
+
+    // Map portfolio months to benchmark data
+    const result: MarketMoMData[] = [];
+
+    for (let i = 0; i < monthHeaders.length; i++) {
+      const monthData = monthHeaders[i];
+      if (!monthData?.month) {
+        result.push({ closePrice: 0, momPercentage: 0, month: '' });
+        continue;
+      }
+
+      // month format is "YYYY-MM"
+      const monthKey = monthData.month;
+      const currentBenchmark = benchmarkByMonth.get(monthKey);
+
+      // Get previous month's benchmark
+      const prevMonthData = monthHeaders[i + 1];
+      const prevMonthKey = prevMonthData?.month;
+      const prevBenchmark = prevMonthKey ? benchmarkByMonth.get(prevMonthKey) : null;
+
+      let momPercentage = 0;
+      const closePrice = currentBenchmark?.close || 0;
+
+      if (currentBenchmark && prevBenchmark && prevBenchmark.close > 0) {
+        momPercentage = ((currentBenchmark.close - prevBenchmark.close) / prevBenchmark.close) * 100;
+      }
+
+      result.push({
+        closePrice,
+        momPercentage: Math.round(momPercentage * 100) / 100,
+        month: monthKey
+      });
+    }
+
+    return result;
+  }, [benchmarkData, monthHeaders]);
+
+  const allExpanded = expandedSchemes.size === schemes.length;
+  const allCollapsed = expandedSchemes.size === 0;
+
+  // Early returns AFTER all hooks
   if (isLoading) {
     return (
       <div style={{
@@ -138,50 +268,6 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       </div>
     );
   }
-
-  // Get month headers from first scheme's data
-  const monthHeaders = schemes[0]?.monthly_data || [];
-
-  const allExpanded = expandedSchemes.size === schemes.length;
-  const allCollapsed = expandedSchemes.size === 0;
-
-  // Calculate Total Portfolio MoM for each month
-  // Sum market values across all schemes, then calculate MoM %
-  const totalPortfolioMoM = useMemo(() => {
-    if (schemes.length === 0 || !monthHeaders.length) return [];
-
-    // For each month index, sum all schemes' market_value
-    const totals = monthHeaders.map((_: any, monthIdx: number) => {
-      let totalMarketValue = 0;
-
-      schemes.forEach((scheme: any) => {
-        const monthData = scheme.monthly_data?.[monthIdx];
-        if (monthData?.market_value) {
-          totalMarketValue += monthData.market_value;
-        }
-      });
-
-      return { totalMarketValue };
-    });
-
-    // Calculate MoM % for each month
-    // Note: Data is in reverse chronological order (newest first)
-    // So index 0 is current month, index 1 is previous month, etc.
-    return totals.map((current, idx) => {
-      const previousIdx = idx + 1; // Previous month is next index (older)
-      const previous = totals[previousIdx];
-
-      let momPercentage = 0;
-      if (previous && previous.totalMarketValue > 0) {
-        momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
-      }
-
-      return {
-        totalMarketValue: current.totalMarketValue,
-        momPercentage: Math.round(momPercentage * 100) / 100
-      };
-    });
-  }, [schemes, monthHeaders]);
 
   return (
     <div style={{
@@ -615,7 +701,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </div>
                   </div>
                 </td>
-                {totalPortfolioMoM.map((monthData, idx) => {
+                {totalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
                   const momPercentage = monthData.momPercentage || 0;
                   return (
                     <td
@@ -631,6 +717,77 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         backgroundColor: idx === 0
                           ? `${colors.brand.primary}15`
                           : `${colors.brand.primary}08`
+                      }}
+                    >
+                      {formatValue(momPercentage, 'percentage')}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
+
+            {/* Market Performance MoM Row - Benchmark comparison */}
+            {marketMoM.length > 0 && (
+              <tr style={{
+                backgroundColor: `${colors.semantic.warning}08`
+              }}>
+                <td style={{
+                  padding: '14px 16px',
+                  position: 'sticky',
+                  left: 0,
+                  backgroundColor: `${colors.semantic.warning}08`,
+                  zIndex: 2,
+                  boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      backgroundColor: `${colors.semantic.warning}20`
+                    }}>
+                      <LineChart size={16} color={colors.semantic.warning} />
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: '700',
+                        color: colors.semantic.warning,
+                        fontSize: '14px'
+                      }}>
+                        {benchmarkName}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText
+                      }}>
+                        Market Performance (MoM)
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {marketMoM.map((monthData: MarketMoMData, idx: number) => {
+                  const momPercentage = monthData.momPercentage || 0;
+                  return (
+                    <td
+                      key={idx}
+                      style={{
+                        padding: '14px 12px',
+                        textAlign: 'right',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        color: momPercentage >= 0
+                          ? colors.semantic.success
+                          : colors.semantic.error,
+                        backgroundColor: idx === 0
+                          ? `${colors.semantic.warning}15`
+                          : `${colors.semantic.warning}08`
                       }}
                     >
                       {formatValue(momPercentage, 'percentage')}
