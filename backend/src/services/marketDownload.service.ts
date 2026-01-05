@@ -554,6 +554,7 @@ export class MarketDownloadService {
   /**
    * Download EOD data for all active indices
    * Used by scheduler
+   * MODIFIED: Now fills gaps by downloading historical data when latest_date is older than yesterday
    */
   async downloadEODForAllIndices(): Promise<{
     total: number;
@@ -563,7 +564,7 @@ export class MarketDownloadService {
     results: DownloadResult[];
   }> {
     const startTime = Date.now();
-    
+
     try {
       SimpleLogger.info('MarketDownload', 'Starting bulk EOD download for all indices', 'downloadEODForAllIndices');
 
@@ -590,9 +591,19 @@ export class MarketDownloadService {
         };
       }
 
+      // Calculate yesterday (last business day) for gap detection
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      // Skip weekends
+      while (yesterday.getDay() === 0 || yesterday.getDay() === 6) {
+        yesterday.setDate(yesterday.getDate() - 1);
+      }
+
       SimpleLogger.info('MarketDownload', 'Processing EOD for provider-enabled indices', 'downloadEODForAllIndices', {
         totalIndices: indices.length,
-        enabledIndices: enabledIndices.length
+        enabledIndices: enabledIndices.length,
+        targetDate: yesterday.toISOString().split('T')[0]
       });
 
       const results: DownloadResult[] = [];
@@ -603,17 +614,54 @@ export class MarketDownloadService {
       // Download for each enabled index with rate limiting
       for (let i = 0; i < enabledIndices.length; i++) {
         const index = enabledIndices[i];
-        
-        SimpleLogger.info('MarketDownload', `Processing EOD for index ${i + 1}/${enabledIndices.length}`, 'downloadEODForAllIndices', {
-          indexId: index.id,
-          indexName: index.index_name
-        });
 
-        const result = await this.downloadEODData(index.id);
+        // Check if there's a gap to fill
+        let result: DownloadResult;
+        const latestDate = index.latest_date ? new Date(index.latest_date) : null;
+
+        if (latestDate) {
+          latestDate.setHours(0, 0, 0, 0);
+
+          // If latest data is older than yesterday, download historical range to fill gap
+          if (latestDate < yesterday) {
+            const startDate = new Date(latestDate);
+            startDate.setDate(startDate.getDate() + 1); // Start from day after latest
+
+            SimpleLogger.info('MarketDownload', `Filling gap for index ${i + 1}/${enabledIndices.length}`, 'downloadEODForAllIndices', {
+              indexId: index.id,
+              indexName: index.index_name,
+              latestDate: latestDate.toISOString().split('T')[0],
+              gapStart: startDate.toISOString().split('T')[0],
+              gapEnd: yesterday.toISOString().split('T')[0]
+            });
+
+            // Download historical data to fill the gap
+            result = await this.downloadHistoricalData(index.id, startDate, yesterday, false);
+          } else {
+            // Data is up to date, just try EOD for today
+            SimpleLogger.info('MarketDownload', `Processing EOD for index ${i + 1}/${enabledIndices.length}`, 'downloadEODForAllIndices', {
+              indexId: index.id,
+              indexName: index.index_name,
+              latestDate: latestDate.toISOString().split('T')[0],
+              status: 'up_to_date'
+            });
+
+            result = await this.downloadEODData(index.id);
+          }
+        } else {
+          // No data at all, download EOD
+          SimpleLogger.info('MarketDownload', `Processing EOD for index ${i + 1}/${enabledIndices.length} (no existing data)`, 'downloadEODForAllIndices', {
+            indexId: index.id,
+            indexName: index.index_name
+          });
+
+          result = await this.downloadEODData(index.id);
+        }
+
         results.push(result);
 
         if (result.success) {
-          if (result.recordsSkipped > 0) {
+          if (result.recordsSkipped > 0 && result.recordsInserted === 0) {
             skipped++;
           } else {
             successful++;
