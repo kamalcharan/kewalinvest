@@ -999,23 +999,44 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Get date range from customer's first and last transactions
-   * FIXED: Changed to t_transaction_table, txn_date, and portfolio_flag
+   * Get date range from customer's first and last transactions AND non-MF asset start dates
+   * FIXED: Now considers both MF transactions and non-MF asset start_date from t_customer_asset_assignments
+   * This ensures snapshots are generated from the earliest date across all asset types
    */
   private async getCustomerDateRange(
     customerId: number,
     tenantId: number,
     isLive: boolean
   ): Promise<CustomerDateRange> {
+    // Query both MF transactions and non-MF asset start dates
     const query = `
-      SELECT 
-        MIN(txn_date) as first_transaction_date,
-        MAX(txn_date) as last_transaction_date
-      FROM t_transaction_table
-      WHERE customer_id = $1
-        AND tenant_id = $2
-        AND is_live = $3
-        AND portfolio_flag = true
+      WITH mf_dates AS (
+        SELECT
+          MIN(txn_date) as first_date,
+          MAX(txn_date) as last_date
+        FROM t_transaction_table
+        WHERE customer_id = $1
+          AND tenant_id = $2
+          AND is_live = $3
+          AND portfolio_flag = true
+      ),
+      asset_dates AS (
+        SELECT
+          MIN(start_date) as first_date,
+          MAX(start_date) as last_date
+        FROM t_customer_asset_assignments caa
+        INNER JOIN m_asset_types at ON caa.asset_type_id = at.id
+        WHERE caa.customer_id = $1
+          AND caa.tenant_id = $2
+          AND caa.is_live = $3
+          AND caa.is_active = true
+          AND caa.has_started = true
+          AND at.asset_type_code != 'MF'
+      )
+      SELECT
+        LEAST(mf.first_date, ad.first_date) as first_transaction_date,
+        GREATEST(mf.last_date, ad.last_date, CURRENT_DATE) as last_transaction_date
+      FROM mf_dates mf, asset_dates ad
     `;
 
     const result = await this.db.query(query, [customerId, tenantId, isLive]);
@@ -1024,9 +1045,19 @@ export class PortfolioSnapshotService {
       return { firstTransactionDate: null, lastTransactionDate: null };
     }
 
+    const row = result.rows[0];
+
+    // If both dates are null, no MF transactions and no non-MF assets
+    if (!row.first_transaction_date && !row.last_transaction_date) {
+      console.log(`[SnapshotService] No MF transactions or non-MF assets for customer ${customerId}`);
+      return { firstTransactionDate: null, lastTransactionDate: null };
+    }
+
+    console.log(`[SnapshotService] Customer ${customerId} date range: ${row.first_transaction_date} to ${row.last_transaction_date}`);
+
     return {
-      firstTransactionDate: result.rows[0].first_transaction_date,
-      lastTransactionDate: result.rows[0].last_transaction_date
+      firstTransactionDate: row.first_transaction_date,
+      lastTransactionDate: row.last_transaction_date
     };
   }
 
@@ -1262,6 +1293,13 @@ export class PortfolioSnapshotService {
 
       for (const plan of plans) {
         try {
+          // Skip if snapshot month is before the asset's start_date
+          const planStartDate = new Date(plan.start_date);
+          if (snapshotMonthEnd < planStartDate) {
+            console.log(`[SnapshotService]   Skipping ${plan.asset_type_code} plan ${plan.id}: snapshot month ${snapshotMonthEnd.toISOString().split('T')[0]} is before start_date ${planStartDate.toISOString().split('T')[0]}`);
+            continue;
+          }
+
           // Calculate snapshot data for this plan
           const snapshotData = this.calculateAssetSnapshotData(plan, snapshotMonthEnd);
 
