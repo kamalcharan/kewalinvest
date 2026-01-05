@@ -18,6 +18,7 @@ import {
   useEffectiveChartColor,
 } from '../../hooks/useChartPreferences';
 import { getDateRangeFromPeriod } from '../../utils/timeRangeHelper';
+import { parseDate } from '../../utils/formatters';
 import type { TimePeriod } from '../../utils/timeRangeHelper';
 import type { IndexMetrics } from '../../types/marketAnalysis.types';
 import type { ChartType, ViewMode, DisplayMode, Granularity } from '../../types/chartViewer.types';
@@ -107,18 +108,22 @@ const IndexDetailPage: React.FC = () => {
   // Transform API data to ChartViewer format
   const chartData = useMemo(() => {
     if (!returnsTimeSeries || returnsTimeSeries.length === 0) return [];
-    
+
     return returnsTimeSeries
       .filter(item => item.close !== null && item.close !== undefined && !isNaN(Number(item.close)))
-      .map(item => ({
-        date: new Date(item.date).toLocaleDateString('en-IN'),
-        value: Number(item.close),
-        open: item.open ? Number(item.open) : null,
-        high: item.high ? Number(item.high) : null,
-        low: item.low ? Number(item.low) : null,
-        volume: item.volume ? Number(item.volume) : null,
-        rawDate: new Date(item.date).getTime()
-      }));
+      .map(item => {
+        // Use imported parseDate for safe date parsing (handles DD-MM-YYYY vs MM-DD-YYYY)
+        const parsedDate = parseDate(item.date) || new Date(0);
+        return {
+          date: parsedDate.toLocaleDateString('en-IN'),
+          value: Number(item.close),
+          open: item.open ? Number(item.open) : null,
+          high: item.high ? Number(item.high) : null,
+          low: item.low ? Number(item.low) : null,
+          volume: item.volume ? Number(item.volume) : null,
+          rawDate: parsedDate.getTime()
+        };
+      });
   }, [returnsTimeSeries]);
 
   // EVENT HANDLERS
@@ -291,7 +296,9 @@ const IndexDetailPage: React.FC = () => {
   const formatDate = (dateValue: string | Date | null | undefined): string => {
     if (!dateValue) return 'N/A';
     try {
-      const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+      // Use safe date parsing to handle DD-MM-YYYY vs MM-DD-YYYY ambiguity
+      const date = parseDate(dateValue);
+      if (!date) return 'N/A';
       return date.toLocaleDateString('en-IN', {
         year: 'numeric',
         month: 'short',

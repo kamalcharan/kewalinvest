@@ -9,6 +9,19 @@ import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
 import { StatCard } from '../../components/cruiseControl/shared/StatCard';
 import { StatusBadge } from '../../components/cruiseControl/shared/StatusBadge';
+import { parseDate } from '../../utils/formatters';
+
+// Safe date formatting helper that handles DD-MM-YYYY vs MM-DD-YYYY ambiguity
+const formatDateSafe = (dateValue: string | null | undefined): string => {
+  if (!dateValue) return '--';
+  const date = parseDate(dateValue);
+  if (!date) return '--';
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 interface IndexStatus {
   id: number;
@@ -57,7 +70,7 @@ export const MarketTab: React.FC = () => {
   const [data, setData] = useState<DetailedStatusResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
   const [expandedGaps, setExpandedGaps] = useState<{ [key: number]: boolean }>({});
-  const [isRunningJob, setIsRunningJob] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     fetchDetailedStatus();
@@ -189,6 +202,55 @@ export const MarketTab: React.FC = () => {
       console.error('Error triggering market download job:', err);
       toastService.error('Failed to trigger job');
       setIsRunningJob(false);
+  // Run Now: Download EOD for all indices with gaps, then calculate metrics
+  const handleRunNow = async () => {
+    try {
+      setIsRunning(true);
+
+      // Step 1: Download EOD for all indices
+      toastService.info('Starting EOD downloads for all indices...');
+      const eodResponse = await apiService.post(API_ENDPOINTS.MARKET.DOWNLOAD_EOD_ALL) as any;
+
+      if (eodResponse?.success && eodResponse?.data) {
+        const eodData = eodResponse.data;
+        const successful = eodData.successful ?? eodData.success_count ?? 0;
+        const failed = eodData.failed ?? eodData.failed_count ?? 0;
+        toastService.success(`EOD downloads completed: ${successful} successful, ${failed} failed`);
+      } else {
+        toastService.success('EOD downloads triggered');
+      }
+
+      // Step 2: Calculate metrics for all indices
+      toastService.info('Starting metrics calculation for all indices...');
+
+      // Get all index IDs that need metrics calculation
+      const indicesNeedingMetrics = data?.indices
+        .filter(idx => idx.provider_enabled && idx.total_records > 0)
+        .map(idx => idx.id) || [];
+
+      if (indicesNeedingMetrics.length > 0) {
+        const metricsResponse = await apiService.post(
+          API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS,
+          { index_ids: indicesNeedingMetrics, recalculate: false }
+        ) as any;
+
+        if (metricsResponse?.success && metricsResponse?.data) {
+          const metricsData = metricsResponse.data;
+          const successful = metricsData.successful ?? metricsData.success_count ?? metricsData.calculated ?? 0;
+          toastService.success(`Metrics calculation completed: ${successful} successful`);
+        } else {
+          toastService.success('Metrics calculation triggered');
+        }
+      }
+
+      // Refresh data
+      await fetchDetailedStatus();
+      toastService.success('Run Now completed successfully!');
+    } catch (err: any) {
+      console.error('Error in Run Now:', err);
+      toastService.error('Run Now failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -243,7 +305,7 @@ export const MarketTab: React.FC = () => {
 
   return (
     <div>
-      {/* Header with Refresh Button */}
+      {/* Header with Run Now and Refresh Buttons */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -262,12 +324,18 @@ export const MarketTab: React.FC = () => {
           <button
             onClick={handleRunNow}
             disabled={isRunningJob}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {/* Run Now Button - Downloads EOD for all + Calculates metrics */}
+          <button
+            onClick={handleRunNow}
+            disabled={isRunning}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               padding: '8px 16px',
               backgroundColor: colors.semantic.success,
+              backgroundColor: colors.brand.primary,
               color: '#FFF',
               border: 'none',
               borderRadius: '6px',
@@ -278,6 +346,13 @@ export const MarketTab: React.FC = () => {
             }}
           >
             {isRunningJob ? (
+              fontWeight: '600',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
+            }}
+            title="Download EOD for all indices and calculate metrics"
+          >
+            {isRunning ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <Play size={14} />
@@ -286,6 +361,12 @@ export const MarketTab: React.FC = () => {
           </button>
           <button
             onClick={fetchDetailedStatus}
+            {isRunning ? 'Running...' : 'Run Now'}
+          </button>
+          {/* Refresh Button */}
+          <button
+            onClick={fetchDetailedStatus}
+            disabled={isRunning}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -298,6 +379,8 @@ export const MarketTab: React.FC = () => {
               fontSize: '13px',
               fontWeight: '500',
               cursor: 'pointer'
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
             }}
           >
             <RefreshCw size={14} />
@@ -449,7 +532,7 @@ export const MarketTab: React.FC = () => {
                     <StatusBadge status={index.download_status} type="download" />
                     {index.last_download_at && (
                       <div style={{ fontSize: '10px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                        {new Date(index.last_download_at).toLocaleDateString()}
+                        {formatDateSafe(index.last_download_at)}
                       </div>
                     )}
                   </td>
@@ -486,7 +569,7 @@ export const MarketTab: React.FC = () => {
                   }}>
                     {index.earliest_date && index.latest_date ? (
                       <div style={{ fontSize: '12px', color: colors.utility.primaryText }}>
-                        {new Date(index.earliest_date).toLocaleDateString()} - {new Date(index.latest_date).toLocaleDateString()}
+                        {formatDateSafe(index.earliest_date)} - {formatDateSafe(index.latest_date)}
                         <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
                           {index.total_records} records
                         </div>
@@ -595,7 +678,7 @@ export const MarketTab: React.FC = () => {
                             }}
                           >
                             <span style={{ fontWeight: '500' }}>
-                              {new Date(gap.start_date).toLocaleDateString()} - {new Date(gap.end_date).toLocaleDateString()}
+                              {formatDateSafe(gap.start_date)} - {formatDateSafe(gap.end_date)}
                             </span>
                             <span style={{ color: colors.utility.secondaryText, marginLeft: '6px' }}>
                               ({gap.missing_days} day{gap.missing_days > 1 ? 's' : ''})
