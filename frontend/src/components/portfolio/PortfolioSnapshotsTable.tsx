@@ -980,7 +980,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               </tr>
             )}
 
-            {/* Asset Allocation Tab - Asset type based view */}
+            {/* Asset Allocation Tab - Asset type based view (2 rows per asset: Value + MoM %) */}
             {activeTab === 'asset' && assetAllocationMoM.map((assetData: any, assetIdx: number) => {
               // Use color from data or get from constants
               const assetColor = assetData.color || getAssetTypeColor(assetData.assetType);
@@ -989,86 +989,126 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               const displayName = assetData.assetTypeName || assetData.assetType;
               // Get current value from first month
               const currentValue = assetData.monthlyData[0]?.totalMarketValue || 0;
+              const bgColor = assetIdx % 2 === 0
+                ? colors.utility.secondaryBackground
+                : colors.utility.primaryBackground;
 
               return (
-                <tr
-                  key={assetData.assetType}
-                  style={{
-                    borderBottom: `1px solid ${colors.utility.primaryText}10`,
-                    backgroundColor: assetIdx % 2 === 0
-                      ? colors.utility.secondaryBackground
-                      : colors.utility.primaryBackground
-                  }}
-                >
-                  <td style={{
-                    padding: '14px 16px',
-                    position: 'sticky',
-                    left: 0,
-                    backgroundColor: assetIdx % 2 === 0
-                      ? colors.utility.secondaryBackground
-                      : colors.utility.primaryBackground,
-                    zIndex: 2,
-                    boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                <React.Fragment key={assetData.assetType}>
+                  {/* Row 1: Asset Name + Market Values */}
+                  <tr style={{
+                    borderBottom: `1px solid ${colors.utility.primaryText}05`,
+                    backgroundColor: bgColor
                   }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px'
+                    <td style={{
+                      padding: '14px 16px',
+                      position: 'sticky',
+                      left: 0,
+                      backgroundColor: bgColor,
+                      zIndex: 2,
+                      boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
                     }}>
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '8px',
-                        backgroundColor: `${assetColor}15`,
-                        fontSize: '16px'
+                        gap: '10px'
                       }}>
-                        {assetIcon}
-                      </div>
-                      <div>
                         <div style={{
-                          fontWeight: '700',
-                          color: assetColor,
-                          fontSize: '14px'
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          backgroundColor: `${assetColor}15`,
+                          fontSize: '16px'
                         }}>
-                          {displayName}
+                          {assetIcon}
                         </div>
-                        <div style={{
-                          fontSize: '11px',
-                          color: colors.utility.secondaryText
-                        }}>
-                          {formatValue(currentValue, 'market_value')} • MoM %
+                        <div>
+                          <div style={{
+                            fontWeight: '700',
+                            color: assetColor,
+                            fontSize: '14px'
+                          }}>
+                            {displayName}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: colors.utility.secondaryText
+                          }}>
+                            Market Value
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  {assetData.monthlyData.map((monthData: any, idx: number) => {
-                    const momPercentage = monthData.momPercentage || 0;
-                    return (
+                    </td>
+                    {assetData.monthlyData.map((monthData: any, idx: number) => (
                       <td
                         key={idx}
                         style={{
-                          padding: '14px 12px',
+                          padding: '12px 12px',
                           textAlign: 'right',
                           fontWeight: '600',
-                          fontSize: '13px',
-                          color: momPercentage >= 0
-                            ? colors.semantic.success
-                            : colors.semantic.error,
-                          backgroundColor: idx === 0
-                            ? `${assetColor}12`
-                            : (assetIdx % 2 === 0
-                              ? colors.utility.secondaryBackground
-                              : colors.utility.primaryBackground)
+                          fontSize: '12px',
+                          color: colors.utility.primaryText,
+                          backgroundColor: idx === 0 ? `${assetColor}10` : bgColor
                         }}
                       >
-                        {formatValue(momPercentage, 'percentage')}
+                        {formatValue(monthData.totalMarketValue, 'market_value')}
                       </td>
-                    );
-                  })}
-                </tr>
+                    ))}
+                  </tr>
+
+                  {/* Row 2: MoM Percentage */}
+                  <tr style={{
+                    borderBottom: `1px solid ${colors.utility.primaryText}10`,
+                    backgroundColor: bgColor
+                  }}>
+                    <td style={{
+                      padding: '8px 16px 14px 16px',
+                      position: 'sticky',
+                      left: 0,
+                      backgroundColor: bgColor,
+                      zIndex: 2,
+                      boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        paddingLeft: '42px' // Align with text above (32px icon + 10px gap)
+                      }}>
+                        <div style={{
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText,
+                          fontWeight: '500'
+                        }}>
+                          📈 Performance (MoM)
+                        </div>
+                      </div>
+                    </td>
+                    {assetData.monthlyData.map((monthData: any, idx: number) => {
+                      const momPercentage = monthData.momPercentage || 0;
+                      return (
+                        <td
+                          key={idx}
+                          style={{
+                            padding: '8px 12px 14px 12px',
+                            textAlign: 'right',
+                            fontWeight: '600',
+                            fontSize: '12px',
+                            color: momPercentage >= 0
+                              ? colors.semantic.success
+                              : colors.semantic.error,
+                            backgroundColor: idx === 0 ? `${assetColor}10` : bgColor
+                          }}
+                        >
+                          {formatValue(momPercentage, 'percentage')}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </React.Fragment>
               );
             })}
 
