@@ -219,6 +219,14 @@ export class PortfolioSnapshotService {
 
           monthsProcessed += months.length;
 
+          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
+          const nonMfPlans = await this.getCustomerInvestmentPlans(
+            customer.customer_id,
+            params.tenant_id,
+            params.is_live
+          );
+          const hasNonMfAssets = nonMfPlans.length > 0;
+
           // Generate/update snapshot for each month
           for (const monthEnd of months) {
             try {
@@ -252,16 +260,19 @@ export class PortfolioSnapshotService {
               }
 
               // ==================== NON-MF ASSET SNAPSHOTS ====================
-              // Generate snapshots for all non-MF investment plans for this month
-              const assetResult = await this.generateAssetSnapshots(
-                customer.customer_id,
-                monthEnd,
-                params.tenant_id,
-                params.is_live
-              );
+              // Only process if customer has non-MF assets (skip expensive query for most customers)
+              if (hasNonMfAssets) {
+                const assetResult = await this.generateAssetSnapshotsWithPlans(
+                  customer.customer_id,
+                  monthEnd,
+                  params.tenant_id,
+                  params.is_live,
+                  nonMfPlans
+                );
 
-              snapshotsCreated += assetResult.created;
-              snapshotsUpdated += assetResult.updated;
+                snapshotsCreated += assetResult.created;
+                snapshotsUpdated += assetResult.updated;
+              }
 
             } catch (error: any) {
               console.error(`[SnapshotService] Error processing month ${monthEnd.toISOString()} for customer ${customer.customer_id}:`, error);
@@ -356,6 +367,14 @@ export class PortfolioSnapshotService {
       // Process each customer
       for (const customer of customers) {
         try {
+          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
+          const nonMfPlans = await this.getCustomerInvestmentPlans(
+            customer.customer_id,
+            request.tenant_id,
+            request.is_live
+          );
+          const hasNonMfAssets = nonMfPlans.length > 0;
+
           for (const monthEnd of months) {
             try {
               // ==================== MF SNAPSHOT ====================
@@ -386,16 +405,19 @@ export class PortfolioSnapshotService {
               }
 
               // ==================== NON-MF ASSET SNAPSHOTS ====================
-              // Generate snapshots for all non-MF investment plans for this month
-              const assetResult = await this.generateAssetSnapshots(
-                customer.customer_id,
-                monthEnd,
-                request.tenant_id,
-                request.is_live
-              );
+              // Only process if customer has non-MF assets (skip expensive query for most customers)
+              if (hasNonMfAssets) {
+                const assetResult = await this.generateAssetSnapshotsWithPlans(
+                  customer.customer_id,
+                  monthEnd,
+                  request.tenant_id,
+                  request.is_live,
+                  nonMfPlans
+                );
 
-              snapshotsCreated += assetResult.created;
-              snapshotsUpdated += assetResult.updated;
+                snapshotsCreated += assetResult.created;
+                snapshotsUpdated += assetResult.updated;
+              }
 
               monthsProcessed++;
 
@@ -562,13 +584,24 @@ export class PortfolioSnapshotService {
           // Generate month list
           const months = this.generateMonthList(firstTransactionDate, lastTransactionDate);
           console.log(`[SnapshotService]   - Months to process: ${months.length}`);
-          
+
           if (months.length === 0) {
             console.log(`[SnapshotService]   ⚠️  No months generated for customer ${customer.customer_id}`);
             continue;
           }
 
           monthsProcessed += months.length;
+
+          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
+          const nonMfPlans = await this.getCustomerInvestmentPlans(
+            customer.customer_id,
+            params.tenant_id,
+            params.is_live
+          );
+          const hasNonMfAssets = nonMfPlans.length > 0;
+          if (hasNonMfAssets) {
+            console.log(`[SnapshotService]   - Non-MF assets: ${nonMfPlans.length} plans`);
+          }
 
           for (const monthEnd of months) {
             // ==================== MF SNAPSHOT ====================
@@ -600,19 +633,22 @@ export class PortfolioSnapshotService {
             }
 
             // ==================== NON-MF ASSET SNAPSHOTS ====================
-            // Generate snapshots for all non-MF investment plans for this month
-            const assetResult = await this.generateAssetSnapshots(
-              customer.customer_id,
-              monthEnd,
-              params.tenant_id,
-              params.is_live
-            );
+            // Only process if customer has non-MF assets (skip expensive query for most customers)
+            if (hasNonMfAssets) {
+              const assetResult = await this.generateAssetSnapshotsWithPlans(
+                customer.customer_id,
+                monthEnd,
+                params.tenant_id,
+                params.is_live,
+                nonMfPlans
+              );
 
-            snapshotsCreated += assetResult.created;
-            snapshotsSkipped += assetResult.updated; // For generateMissing, updated counts as skipped
+              snapshotsCreated += assetResult.created;
+              snapshotsSkipped += assetResult.updated; // For generateMissing, updated counts as skipped
 
-            if (assetResult.created > 0 || assetResult.updated > 0) {
-              console.log(`[SnapshotService]     → Assets: ${assetResult.created} created, ${assetResult.updated} updated`);
+              if (assetResult.created > 0 || assetResult.updated > 0) {
+                console.log(`[SnapshotService]     → Assets: ${assetResult.created} created, ${assetResult.updated} updated`);
+              }
             }
           }
 
@@ -1332,6 +1368,62 @@ export class PortfolioSnapshotService {
       return result;
     } catch (error: any) {
       console.error(`[SnapshotService] Error generating asset snapshots for customer ${customerId}:`, error);
+      result.errors.push(error.message);
+      return result;
+    }
+  }
+
+  /**
+   * OPTIMIZED: Generate snapshots for non-MF assets using pre-fetched plans
+   * Avoids repeated database queries when processing multiple months
+   */
+  async generateAssetSnapshotsWithPlans(
+    customerId: number,
+    snapshotMonthEnd: Date,
+    tenantId: number,
+    isLive: boolean,
+    plans: InvestmentPlanForSnapshot[]
+  ): Promise<{ created: number; updated: number; errors: string[] }> {
+    const result = { created: 0, updated: 0, errors: [] as string[] };
+
+    try {
+      for (const plan of plans) {
+        try {
+          // Skip if snapshot month is before the asset's start_date
+          const planStartDate = new Date(plan.start_date);
+          if (snapshotMonthEnd < planStartDate) {
+            continue;
+          }
+
+          // Calculate snapshot data for this plan
+          const snapshotData = this.calculateAssetSnapshotData(plan, snapshotMonthEnd);
+
+          // Check if snapshot already exists for this plan
+          const existing = await this.getExistingSnapshot(
+            customerId,
+            snapshotMonthEnd,
+            tenantId,
+            isLive,
+            plan.asset_type_code,
+            plan.id
+          );
+
+          if (existing) {
+            await this.updateSnapshot(existing.id, snapshotData);
+            result.updated++;
+          } else {
+            await this.createSnapshot(snapshotData);
+            result.created++;
+          }
+        } catch (error: any) {
+          const errorMsg = `Plan ${plan.id} (${plan.asset_type_code}): ${error.message}`;
+          result.errors.push(errorMsg);
+        }
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error(`[SnapshotService] Error in generateAssetSnapshotsWithPlans for customer ${customerId}:`, error);
       result.errors.push(error.message);
       return result;
     }
