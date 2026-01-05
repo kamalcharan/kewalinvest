@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart } from 'lucide-react';
 import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
@@ -17,6 +17,7 @@ interface PortfolioSnapshotsTableProps {
 }
 
 type ExpandedRowType = 'units' | 'nav' | 'market_value' | 'performance';
+type TabType = 'mf' | 'asset';
 
 // Interfaces for MoM calculations
 interface TotalMoMData {
@@ -28,6 +29,14 @@ interface MarketMoMData {
   closePrice: number;
   momPercentage: number;
   month: string;
+}
+
+interface AssetMoMData {
+  assetType: string;
+  monthlyData: {
+    totalMarketValue: number;
+    momPercentage: number;
+  }[];
 }
 
 export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = ({
@@ -42,6 +51,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const [expandedSchemes, setExpandedSchemes] = useState<Set<string>>(new Set());
   const [selectedScheme, setSelectedScheme] = useState<any>(null);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('mf');
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
@@ -163,6 +173,85 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     });
   }, [schemes, monthHeaders]);
 
+  // Calculate Asset Allocation MoM for each asset type
+  // Groups schemes by category (Equity, Debt, Gold, Hybrid) and calculates MoM
+  const assetAllocationMoM = useMemo((): AssetMoMData[] => {
+    if (schemes.length === 0 || !monthHeaders.length) return [];
+
+    // Group schemes by category
+    const assetGroups: { [key: string]: any[] } = {
+      'Equity': [],
+      'Debt': [],
+      'Gold': [],
+      'Hybrid': [],
+      'Other': []
+    };
+
+    schemes.forEach((scheme: any) => {
+      const category = scheme.category || 'Other';
+      if (category.toLowerCase().includes('equity') || category.toLowerCase().includes('multicap') ||
+          category.toLowerCase().includes('flexi') || category.toLowerCase().includes('focused') ||
+          category.toLowerCase().includes('largecap') || category.toLowerCase().includes('midcap') ||
+          category.toLowerCase().includes('smallcap')) {
+        assetGroups['Equity'].push(scheme);
+      } else if (category.toLowerCase().includes('debt') || category.toLowerCase().includes('liquid') ||
+                 category.toLowerCase().includes('overnight') || category.toLowerCase().includes('gilt') ||
+                 category.toLowerCase().includes('money market') || category.toLowerCase().includes('bond')) {
+        assetGroups['Debt'].push(scheme);
+      } else if (category.toLowerCase().includes('gold') || category.toLowerCase().includes('commodity')) {
+        assetGroups['Gold'].push(scheme);
+      } else if (category.toLowerCase().includes('hybrid') || category.toLowerCase().includes('balanced') ||
+                 category.toLowerCase().includes('arbitrage') || category.toLowerCase().includes('multi asset')) {
+        assetGroups['Hybrid'].push(scheme);
+      } else {
+        assetGroups['Other'].push(scheme);
+      }
+    });
+
+    // Calculate MoM for each asset type
+    const result: AssetMoMData[] = [];
+
+    Object.entries(assetGroups).forEach(([assetType, groupSchemes]) => {
+      if (groupSchemes.length === 0) return;
+
+      const monthlyData = monthHeaders.map((_: any, monthIdx: number) => {
+        let totalMarketValue = 0;
+
+        groupSchemes.forEach((scheme: any) => {
+          const monthData = scheme.monthly_data?.[monthIdx];
+          if (monthData?.market_value) {
+            totalMarketValue += monthData.market_value;
+          }
+        });
+
+        return { totalMarketValue };
+      });
+
+      // Calculate MoM %
+      const monthlyDataWithMoM = monthlyData.map((current: { totalMarketValue: number }, idx: number) => {
+        const previousIdx = idx + 1;
+        const previous = monthlyData[previousIdx];
+
+        let momPercentage = 0;
+        if (previous && previous.totalMarketValue > 0) {
+          momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
+        }
+
+        return {
+          totalMarketValue: current.totalMarketValue,
+          momPercentage: Math.round(momPercentage * 100) / 100
+        };
+      });
+
+      result.push({
+        assetType,
+        monthlyData: monthlyDataWithMoM
+      });
+    });
+
+    return result;
+  }, [schemes, monthHeaders]);
+
   // Calculate Market (Benchmark) MoM for each month
   // Uses benchmark index data to show market performance alongside portfolio
   const marketMoM = useMemo((): MarketMoMData[] => {
@@ -278,69 +367,130 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       {/* Header */}
       <div style={{
         padding: '20px',
-        borderBottom: `2px solid ${colors.utility.primaryText}20`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        borderBottom: `2px solid ${colors.utility.primaryText}20`
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <TrendingUp size={20} color={colors.brand.primary} />
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: colors.utility.primaryText,
-              margin: '0'
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={20} color={colors.brand.primary} />
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                color: colors.utility.primaryText,
+                margin: '0'
+              }}>
+                Portfolio Snapshots - {months} Month View
+              </h3>
+            </div>
+            <p style={{
+              fontSize: '12px',
+              color: colors.utility.secondaryText,
+              margin: '8px 0 0 0'
             }}>
-              Portfolio Snapshots - {months} Month View
-            </h3>
+              {activeTab === 'mf'
+                ? 'Performance (MoM) shown by default • Click ▶ to expand Units, NAV, Market Value'
+                : 'Asset allocation grouped by category • Equity, Debt, Gold, Hybrid'}
+            </p>
           </div>
-          <p style={{
-            fontSize: '12px',
-            color: colors.utility.secondaryText,
-            margin: '8px 0 0 0'
-          }}>
-            Performance (MoM) shown by default • Click ▶ to expand Units, NAV, Market Value
-          </p>
+
+          {/* Expand/Collapse All Button - Only for MF tab */}
+          {activeTab === 'mf' && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={expandAll}
+                disabled={allExpanded}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: allExpanded ? colors.utility.secondaryText : colors.brand.primary,
+                  backgroundColor: allExpanded ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
+                  border: `1px solid ${allExpanded ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+                  borderRadius: '6px',
+                  cursor: allExpanded ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: allExpanded ? 0.5 : 1
+                }}
+              >
+                Expand All
+              </button>
+              <button
+                onClick={collapseAll}
+                disabled={allCollapsed}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: allCollapsed ? colors.utility.secondaryText : colors.brand.primary,
+                  backgroundColor: allCollapsed ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
+                  border: `1px solid ${allCollapsed ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+                  borderRadius: '6px',
+                  cursor: allCollapsed ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: allCollapsed ? 0.5 : 1
+                }}
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Expand/Collapse All Button */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Horizontal Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          backgroundColor: colors.utility.primaryBackground,
+          padding: '4px',
+          borderRadius: '8px',
+          width: 'fit-content'
+        }}>
           <button
-            onClick={expandAll}
-            disabled={allExpanded}
+            onClick={() => setActiveTab('mf')}
             style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              fontWeight: '500',
-              color: allExpanded ? colors.utility.secondaryText : colors.brand.primary,
-              backgroundColor: allExpanded ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
-              border: `1px solid ${allExpanded ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: activeTab === 'mf' ? colors.brand.primary : colors.utility.secondaryText,
+              backgroundColor: activeTab === 'mf' ? colors.utility.secondaryBackground : 'transparent',
+              border: 'none',
               borderRadius: '6px',
-              cursor: allExpanded ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               transition: 'all 0.2s',
-              opacity: allExpanded ? 0.5 : 1
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: activeTab === 'mf' ? `0 2px 4px ${colors.utility.primaryText}10` : 'none'
             }}
           >
-            Expand All
+            <BarChart3 size={16} />
+            MF Allocation
           </button>
           <button
-            onClick={collapseAll}
-            disabled={allCollapsed}
+            onClick={() => setActiveTab('asset')}
             style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              fontWeight: '500',
-              color: allCollapsed ? colors.utility.secondaryText : colors.brand.primary,
-              backgroundColor: allCollapsed ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
-              border: `1px solid ${allCollapsed ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: activeTab === 'asset' ? colors.brand.primary : colors.utility.secondaryText,
+              backgroundColor: activeTab === 'asset' ? colors.utility.secondaryBackground : 'transparent',
+              border: 'none',
               borderRadius: '6px',
-              cursor: allCollapsed ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               transition: 'all 0.2s',
-              opacity: allCollapsed ? 0.5 : 1
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: activeTab === 'asset' ? `0 2px 4px ${colors.utility.primaryText}10` : 'none'
             }}
           >
-            Collapse All
+            <PieChart size={16} />
+            Asset Allocation
           </button>
         </div>
       </div>
@@ -407,7 +557,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             </tr>
           </thead>
           <tbody>
-            {schemes.map((scheme: any, schemeIdx: number) => {
+            {/* MF Allocation Tab - Scheme-based view */}
+            {activeTab === 'mf' && schemes.map((scheme: any, schemeIdx: number) => {
               const isExpanded = expandedSchemes.has(scheme.scheme_code);
 
               return (
@@ -654,8 +805,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               );
             })}
 
-            {/* Total Portfolio MoM Row - Summary at bottom */}
-            {totalPortfolioMoM.length > 0 && (
+            {/* Total Portfolio MoM Row - Summary at bottom (MF tab only) */}
+            {activeTab === 'mf' && totalPortfolioMoM.length > 0 && (
               <tr style={{
                 borderTop: `3px solid ${colors.brand.primary}`,
                 backgroundColor: `${colors.brand.primary}15`
@@ -726,8 +877,255 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               </tr>
             )}
 
-            {/* Market Performance MoM Row - Benchmark comparison */}
-            {marketMoM.length > 0 && (
+            {/* Market Performance MoM Row - Benchmark comparison (MF tab only) */}
+            {activeTab === 'mf' && marketMoM.length > 0 && (
+              <tr style={{
+                borderTop: `1px solid ${colors.semantic.warning}40`,
+                backgroundColor: `${colors.semantic.warning}12`
+              }}>
+                <td style={{
+                  padding: '14px 16px',
+                  position: 'sticky',
+                  left: 0,
+                  backgroundColor: `${colors.semantic.warning}12`,
+                  zIndex: 2,
+                  boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      backgroundColor: `${colors.semantic.warning}20`
+                    }}>
+                      <LineChart size={16} color={colors.semantic.warning} />
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: '700',
+                        color: colors.semantic.warning,
+                        fontSize: '14px'
+                      }}>
+                        {benchmarkName}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText
+                      }}>
+                        Market Performance (MoM)
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {marketMoM.map((monthData: MarketMoMData, idx: number) => {
+                  const momPercentage = monthData.momPercentage || 0;
+                  return (
+                    <td
+                      key={idx}
+                      style={{
+                        padding: '14px 12px',
+                        textAlign: 'right',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        color: momPercentage >= 0
+                          ? colors.semantic.success
+                          : colors.semantic.error,
+                        backgroundColor: idx === 0
+                          ? `${colors.semantic.warning}20`
+                          : `${colors.semantic.warning}12`
+                      }}
+                    >
+                      {formatValue(momPercentage, 'percentage')}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
+
+            {/* Asset Allocation Tab - Asset type based view */}
+            {activeTab === 'asset' && assetAllocationMoM.map((assetData: AssetMoMData, assetIdx: number) => {
+              // Define colors for each asset type
+              const assetColors: { [key: string]: string } = {
+                'Equity': '#8B5CF6',   // Purple
+                'Debt': '#3B82F6',     // Blue
+                'Gold': '#F59E0B',     // Amber
+                'Hybrid': '#10B981',   // Emerald
+                'Other': '#6B7280'     // Gray
+              };
+              const assetColor = assetColors[assetData.assetType] || assetColors['Other'];
+
+              // Define icons for each asset type
+              const assetIcons: { [key: string]: string } = {
+                'Equity': '📈',
+                'Debt': '🏦',
+                'Gold': '🥇',
+                'Hybrid': '⚖️',
+                'Other': '📊'
+              };
+
+              return (
+                <tr
+                  key={assetData.assetType}
+                  style={{
+                    borderBottom: `1px solid ${colors.utility.primaryText}10`,
+                    backgroundColor: assetIdx % 2 === 0
+                      ? colors.utility.secondaryBackground
+                      : colors.utility.primaryBackground
+                  }}
+                >
+                  <td style={{
+                    padding: '14px 16px',
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: assetIdx % 2 === 0
+                      ? colors.utility.secondaryBackground
+                      : colors.utility.primaryBackground,
+                    zIndex: 2,
+                    boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        backgroundColor: `${assetColor}15`,
+                        fontSize: '16px'
+                      }}>
+                        {assetIcons[assetData.assetType]}
+                      </div>
+                      <div>
+                        <div style={{
+                          fontWeight: '700',
+                          color: assetColor,
+                          fontSize: '14px'
+                        }}>
+                          {assetData.assetType}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: colors.utility.secondaryText
+                        }}>
+                          Performance (MoM)
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  {assetData.monthlyData.map((monthData, idx: number) => {
+                    const momPercentage = monthData.momPercentage || 0;
+                    return (
+                      <td
+                        key={idx}
+                        style={{
+                          padding: '14px 12px',
+                          textAlign: 'right',
+                          fontWeight: '600',
+                          fontSize: '13px',
+                          color: momPercentage >= 0
+                            ? colors.semantic.success
+                            : colors.semantic.error,
+                          backgroundColor: idx === 0
+                            ? `${assetColor}12`
+                            : (assetIdx % 2 === 0
+                              ? colors.utility.secondaryBackground
+                              : colors.utility.primaryBackground)
+                        }}
+                      >
+                        {formatValue(momPercentage, 'percentage')}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+
+            {/* Total Portfolio MoM Row - Summary at bottom (Asset tab) */}
+            {activeTab === 'asset' && totalPortfolioMoM.length > 0 && (
+              <tr style={{
+                borderTop: `3px solid ${colors.brand.primary}`,
+                backgroundColor: `${colors.brand.primary}15`
+              }}>
+                <td style={{
+                  padding: '14px 16px',
+                  position: 'sticky',
+                  left: 0,
+                  backgroundColor: `${colors.brand.primary}15`,
+                  zIndex: 2,
+                  boxShadow: `2px 0 4px ${colors.utility.primaryText}10`
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      backgroundColor: `${colors.brand.primary}20`
+                    }}>
+                      <Wallet size={16} color={colors.brand.primary} />
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: '700',
+                        color: colors.brand.primary,
+                        fontSize: '14px'
+                      }}>
+                        Total Portfolio
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText
+                      }}>
+                        Performance (MoM)
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {totalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
+                  const momPercentage = monthData.momPercentage || 0;
+                  return (
+                    <td
+                      key={idx}
+                      style={{
+                        padding: '14px 12px',
+                        textAlign: 'right',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        color: momPercentage >= 0
+                          ? colors.semantic.success
+                          : colors.semantic.error,
+                        backgroundColor: idx === 0
+                          ? `${colors.brand.primary}25`
+                          : `${colors.brand.primary}15`
+                      }}
+                    >
+                      {formatValue(momPercentage, 'percentage')}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
+
+            {/* Market Performance MoM Row - Benchmark comparison (Asset tab) */}
+            {activeTab === 'asset' && marketMoM.length > 0 && (
               <tr style={{
                 borderTop: `1px solid ${colors.semantic.warning}40`,
                 backgroundColor: `${colors.semantic.warning}12`
