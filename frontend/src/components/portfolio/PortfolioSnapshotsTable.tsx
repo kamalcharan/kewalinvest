@@ -5,9 +5,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart } from 'lucide-react';
-import { usePortfolioSnapshots } from '../../hooks/usePortfolioData';
+import { usePortfolioSnapshots, useNetworthSummary, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
+import { getAssetTypeColor, getAssetTypeIcon } from '../../constants/assetTypes';
 
 interface PortfolioSnapshotsTableProps {
   customerId: number;
@@ -39,6 +40,18 @@ interface AssetMoMData {
   }[];
 }
 
+// Interface for Asset Type allocation display
+interface AssetTypeAllocation {
+  asset_type_code: string;
+  asset_type_name: string;
+  current_value: number;
+  total_invested: number;
+  total_returns: number;
+  return_percentage: number;
+  allocation_percentage: number;
+  calculation_method: 'NAV' | 'ASSUMPTION' | 'MIXED';
+}
+
 export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = ({
   customerId,
   months = 12,
@@ -65,7 +78,35 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     'monthly'
   );
 
+  // Fetch networth summary for asset types breakdown
+  const { data: networthData } = useNetworthSummary(
+    { customerId },
+    { enabled: customerId > 0 }
+  );
+
+  // Calculate date range for networth history (last N months)
+  const dateRange = useMemo(() => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0]
+    };
+  }, [months]);
+
+  // Fetch networth history for asset type MoM calculations
+  const { data: networthHistoryData } = useNetworthHistory(
+    {
+      customerId,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate
+    },
+    { enabled: customerId > 0 }
+  );
+
   const schemes = data?.data?.schemes || [];
+  const assetTypes = networthData?.data?.by_asset_type || [];
 
   // Initialize with all schemes expanded by default
   useEffect(() => {
@@ -173,72 +214,74 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     });
   }, [schemes, monthHeaders]);
 
-  // Calculate Asset Allocation MoM for each MF category
-  // Groups schemes by their category field and calculates MoM
-  const assetAllocationMoM = useMemo((): AssetMoMData[] => {
-    if (schemes.length === 0 || !monthHeaders.length) return [];
+  // Calculate Asset Allocation data from networth summary
+  // Shows all asset types (MF, Gold, FD, etc.) with current values
+  const assetAllocationData = useMemo(() => {
+    if (!assetTypes || assetTypes.length === 0) return [];
 
-    // Group schemes by their actual category field
-    const categoryGroups: { [key: string]: any[] } = {};
-
-    schemes.forEach((scheme: any) => {
-      const category = scheme.category || 'Uncategorized';
-      if (!categoryGroups[category]) {
-        categoryGroups[category] = [];
-      }
-      categoryGroups[category].push(scheme);
+    // Sort: non-MF assets first (by value), then MF
+    const sorted = [...assetTypes].sort((a: any, b: any) => {
+      // MF goes last
+      if (a.asset_type_code === 'MF' && b.asset_type_code !== 'MF') return 1;
+      if (a.asset_type_code !== 'MF' && b.asset_type_code === 'MF') return -1;
+      // Sort by current value descending
+      return b.current_value - a.current_value;
     });
 
-    // Calculate MoM for each category
-    const result: AssetMoMData[] = [];
+    return sorted;
+  }, [assetTypes]);
 
-    Object.entries(categoryGroups).forEach(([category, groupSchemes]) => {
-      if (groupSchemes.length === 0) return;
+  // Calculate Asset Allocation MoM from networth history
+  // Uses actual asset type breakdown with historical values
+  const assetAllocationMoM = useMemo((): AssetMoMData[] => {
+    // Use networth history if available
+    if (networthHistoryData?.data?.chart_ready?.by_asset_type) {
+      const chartData = networthHistoryData.data.chart_ready;
+      const dates = chartData.dates || [];
 
-      const monthlyData = monthHeaders.map((_: any, monthIdx: number) => {
-        let totalMarketValue = 0;
+      // Reverse to get newest first (like portfolio snapshots)
+      const reversedDates = [...dates].reverse();
 
-        groupSchemes.forEach((scheme: any) => {
-          const monthData = scheme.monthly_data?.[monthIdx];
-          if (monthData?.market_value) {
-            totalMarketValue += monthData.market_value;
+      return chartData.by_asset_type.map((assetType: any) => {
+        // Reverse values to match dates order
+        const reversedValues = [...assetType.values].reverse();
+
+        const monthlyData = reversedValues.map((value: number, idx: number) => {
+          const previousIdx = idx + 1;
+          const previousValue = reversedValues[previousIdx];
+
+          let momPercentage = 0;
+          if (previousValue && previousValue > 0) {
+            momPercentage = ((value - previousValue) / previousValue) * 100;
           }
+
+          return {
+            totalMarketValue: value,
+            momPercentage: Math.round(momPercentage * 100) / 100
+          };
         });
 
-        return { totalMarketValue };
-      });
-
-      // Calculate MoM %
-      const monthlyDataWithMoM = monthlyData.map((current: { totalMarketValue: number }, idx: number) => {
-        const previousIdx = idx + 1;
-        const previous = monthlyData[previousIdx];
-
-        let momPercentage = 0;
-        if (previous && previous.totalMarketValue > 0) {
-          momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
-        }
-
         return {
-          totalMarketValue: current.totalMarketValue,
-          momPercentage: Math.round(momPercentage * 100) / 100
+          assetType: assetType.asset_type_code,
+          assetTypeName: assetType.asset_type_name,
+          color: assetType.color,
+          monthlyData
         };
       });
+    }
 
-      result.push({
-        assetType: category,
-        monthlyData: monthlyDataWithMoM
-      });
-    });
+    // Fallback: use current networth summary data (no history)
+    if (!assetAllocationData || assetAllocationData.length === 0) return [];
 
-    // Sort by current month market value (descending)
-    result.sort((a, b) => {
-      const aValue = a.monthlyData[0]?.totalMarketValue || 0;
-      const bValue = b.monthlyData[0]?.totalMarketValue || 0;
-      return bValue - aValue;
-    });
-
-    return result;
-  }, [schemes, monthHeaders]);
+    return assetAllocationData.map((asset: any) => ({
+      assetType: asset.asset_type_code,
+      assetTypeName: asset.asset_type_name,
+      monthlyData: [{
+        totalMarketValue: asset.current_value,
+        momPercentage: 0
+      }]
+    }));
+  }, [networthHistoryData, assetAllocationData]);
 
   // Calculate Market (Benchmark) MoM for each month
   // Uses benchmark index data to show market performance alongside portfolio
@@ -382,7 +425,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             }}>
               {activeTab === 'mf'
                 ? 'Performance (MoM) shown by default • Click ▶ to expand Units, NAV, Market Value'
-                : 'Asset allocation grouped by category • Equity, Debt, Gold, Hybrid'}
+                : 'Asset allocation by type • MF, Gold, FD, Real Estate, etc.'}
             </p>
           </div>
 
@@ -937,37 +980,15 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               </tr>
             )}
 
-            {/* Asset Allocation Tab - Category based view */}
-            {activeTab === 'asset' && assetAllocationMoM.map((assetData: AssetMoMData, assetIdx: number) => {
-              // Generate consistent color for each category using hash
-              const categoryColors = [
-                '#8B5CF6', // Purple
-                '#3B82F6', // Blue
-                '#10B981', // Emerald
-                '#F59E0B', // Amber
-                '#EC4899', // Pink
-                '#14B8A6', // Teal
-                '#F97316', // Orange
-                '#06B6D4', // Cyan
-                '#84CC16', // Lime
-                '#EF4444', // Red
-              ];
-              const colorIndex = assetData.assetType.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % categoryColors.length;
-              const assetColor = categoryColors[colorIndex];
-
-              // Get icon based on category keywords
-              const getIcon = (category: string): string => {
-                const lowerCat = category.toLowerCase();
-                if (lowerCat.includes('equity') || lowerCat.includes('largecap') || lowerCat.includes('midcap') ||
-                    lowerCat.includes('smallcap') || lowerCat.includes('multicap') || lowerCat.includes('flexi') ||
-                    lowerCat.includes('elss') || lowerCat.includes('focused')) return '📈';
-                if (lowerCat.includes('debt') || lowerCat.includes('liquid') || lowerCat.includes('overnight') ||
-                    lowerCat.includes('gilt') || lowerCat.includes('bond') || lowerCat.includes('money market')) return '🏦';
-                if (lowerCat.includes('gold') || lowerCat.includes('commodity')) return '🥇';
-                if (lowerCat.includes('hybrid') || lowerCat.includes('balanced') || lowerCat.includes('arbitrage') ||
-                    lowerCat.includes('multi asset')) return '⚖️';
-                return '📊';
-              };
+            {/* Asset Allocation Tab - Asset type based view */}
+            {activeTab === 'asset' && assetAllocationMoM.map((assetData: any, assetIdx: number) => {
+              // Use color from data or get from constants
+              const assetColor = assetData.color || getAssetTypeColor(assetData.assetType);
+              const assetIcon = getAssetTypeIcon(assetData.assetType);
+              // Display name: use assetTypeName if available, otherwise assetType code
+              const displayName = assetData.assetTypeName || assetData.assetType;
+              // Get current value from first month
+              const currentValue = assetData.monthlyData[0]?.totalMarketValue || 0;
 
               return (
                 <tr
@@ -1004,7 +1025,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         backgroundColor: `${assetColor}15`,
                         fontSize: '16px'
                       }}>
-                        {getIcon(assetData.assetType)}
+                        {assetIcon}
                       </div>
                       <div>
                         <div style={{
@@ -1012,18 +1033,18 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           color: assetColor,
                           fontSize: '14px'
                         }}>
-                          {assetData.assetType}
+                          {displayName}
                         </div>
                         <div style={{
                           fontSize: '11px',
                           color: colors.utility.secondaryText
                         }}>
-                          Performance (MoM)
+                          {formatValue(currentValue, 'market_value')} • MoM %
                         </div>
                       </div>
                     </div>
                   </td>
-                  {assetData.monthlyData.map((monthData, idx: number) => {
+                  {assetData.monthlyData.map((monthData: any, idx: number) => {
                     const momPercentage = monthData.momPercentage || 0;
                     return (
                       <td
