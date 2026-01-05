@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw, Play } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
@@ -57,6 +57,7 @@ export const MarketTab: React.FC = () => {
   const [data, setData] = useState<DetailedStatusResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
   const [expandedGaps, setExpandedGaps] = useState<{ [key: number]: boolean }>({});
+  const [isRunningJob, setIsRunningJob] = useState(false);
 
   useEffect(() => {
     fetchDetailedStatus();
@@ -139,6 +140,58 @@ export const MarketTab: React.FC = () => {
     }));
   };
 
+  const handleRunNow = async () => {
+    try {
+      setIsRunningJob(true);
+      const response = await apiService.post(
+        API_ENDPOINTS.JOBS.EXECUTE('MARKET_OHLC_DOWNLOAD')
+      ) as any;
+
+      if (response.success) {
+        toastService.info('Market download job started. Processing...');
+
+        // Poll for job completion
+        const maxAttempts = 60; // Max 2 minutes
+        let attempts = 0;
+
+        const checkStatus = async (): Promise<void> => {
+          attempts++;
+          try {
+            const statsResponse = await apiService.get(
+              API_ENDPOINTS.JOBS.STATISTICS('MARKET_OHLC_DOWNLOAD')
+            ) as any;
+
+            if (statsResponse.success && statsResponse.data) {
+              if (statsResponse.data.is_running) {
+                if (attempts < maxAttempts) {
+                  setTimeout(checkStatus, 2000);
+                } else {
+                  setIsRunningJob(false);
+                  toastService.warning('Job is still running. Refresh to check status.');
+                }
+              } else {
+                setIsRunningJob(false);
+                toastService.success('Market download job completed!');
+                await fetchDetailedStatus();
+              }
+            }
+          } catch (err) {
+            setIsRunningJob(false);
+          }
+        };
+
+        setTimeout(checkStatus, 2000);
+      } else {
+        toastService.error(response.error || 'Failed to trigger job');
+        setIsRunningJob(false);
+      }
+    } catch (err: any) {
+      console.error('Error triggering market download job:', err);
+      toastService.error('Failed to trigger job');
+      setIsRunningJob(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -205,25 +258,52 @@ export const MarketTab: React.FC = () => {
         }}>
           Market Index Status
         </h3>
-        <button
-          onClick={fetchDetailedStatus}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            backgroundColor: colors.brand.primary,
-            color: '#FFF',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: '500',
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={handleRunNow}
+            disabled={isRunningJob}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.semantic.success,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: isRunningJob ? 'not-allowed' : 'pointer',
+              opacity: isRunningJob ? 0.7 : 1
+            }}
+          >
+            {isRunningJob ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Play size={14} />
+            )}
+            {isRunningJob ? 'Running...' : 'Run Now'}
+          </button>
+          <button
+            onClick={fetchDetailedStatus}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.brand.primary,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}

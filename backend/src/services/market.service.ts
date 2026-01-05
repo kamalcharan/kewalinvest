@@ -1629,7 +1629,12 @@ export class MarketService {
       // Start from 2 weeks ago or earliest date, whichever is later
       const earliestDateObj = new Date(earliestDate);
       const start = earliestDateObj > twoWeeksAgo ? earliestDateObj : twoWeeksAgo;
-      const end = new Date(latestDate);
+
+      // Fix: Check gaps up to TODAY (yesterday if before market hours), not just up to latest data
+      // This ensures we detect gaps between latest data and current date
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = today;
       const current = new Date(start);
 
       while (current <= end) {
