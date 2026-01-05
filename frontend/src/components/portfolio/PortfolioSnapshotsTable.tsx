@@ -233,7 +233,10 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
   // Calculate Asset Allocation MoM from networth history
   // Uses actual asset type breakdown with historical values
+  // Aligns data to match MF tab's month count (uses monthHeaders length)
   const assetAllocationMoM = useMemo((): AssetMoMData[] => {
+    const targetMonths = monthHeaders.length || months;
+
     // Use networth history if available
     if (networthHistoryData?.data?.chart_ready?.by_asset_type) {
       const chartData = networthHistoryData.data.chart_ready;
@@ -242,13 +245,31 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       // Reverse to get newest first (like portfolio snapshots)
       const reversedDates = [...dates].reverse();
 
-      return chartData.by_asset_type.map((assetType: any) => {
-        // Reverse values to match dates order
+      // Sort: non-MF assets first, then MF
+      const sortedAssetTypes = [...chartData.by_asset_type].sort((a: any, b: any) => {
+        if (a.asset_type_code === 'MF' && b.asset_type_code !== 'MF') return 1;
+        if (a.asset_type_code !== 'MF' && b.asset_type_code === 'MF') return -1;
+        // Sort by latest value descending
+        const aLatest = a.values[a.values.length - 1] || 0;
+        const bLatest = b.values[b.values.length - 1] || 0;
+        return bLatest - aLatest;
+      });
+
+      return sortedAssetTypes.map((assetType: any) => {
+        // Reverse values to match dates order (newest first)
         const reversedValues = [...assetType.values].reverse();
 
-        const monthlyData = reversedValues.map((value: number, idx: number) => {
+        // Pad to match target months count if needed
+        const paddedValues = [...reversedValues];
+        while (paddedValues.length < targetMonths) {
+          paddedValues.push(0); // Pad older months with 0
+        }
+        // Trim if more data than needed
+        const finalValues = paddedValues.slice(0, targetMonths);
+
+        const monthlyData = finalValues.map((value: number, idx: number) => {
           const previousIdx = idx + 1;
-          const previousValue = reversedValues[previousIdx];
+          const previousValue = finalValues[previousIdx];
 
           let momPercentage = 0;
           if (previousValue && previousValue > 0) {
@@ -273,15 +294,20 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     // Fallback: use current networth summary data (no history)
     if (!assetAllocationData || assetAllocationData.length === 0) return [];
 
-    return assetAllocationData.map((asset: any) => ({
-      assetType: asset.asset_type_code,
-      assetTypeName: asset.asset_type_name,
-      monthlyData: [{
-        totalMarketValue: asset.current_value,
+    // Create padded data to match target months
+    return assetAllocationData.map((asset: any) => {
+      const monthlyData = Array(targetMonths).fill(null).map((_, idx) => ({
+        totalMarketValue: idx === 0 ? asset.current_value : 0,
         momPercentage: 0
-      }]
-    }));
-  }, [networthHistoryData, assetAllocationData]);
+      }));
+
+      return {
+        assetType: asset.asset_type_code,
+        assetTypeName: asset.asset_type_name,
+        monthlyData
+      };
+    });
+  }, [networthHistoryData, assetAllocationData, monthHeaders.length, months]);
 
   // Calculate Market (Benchmark) MoM for each month
   // Uses benchmark index data to show market performance alongside portfolio
