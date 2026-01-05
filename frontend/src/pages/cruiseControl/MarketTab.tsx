@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Download, Calculator, RefreshCw, Play } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toastService from '../../services/toast.service';
@@ -57,6 +57,7 @@ export const MarketTab: React.FC = () => {
   const [data, setData] = useState<DetailedStatusResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
   const [expandedGaps, setExpandedGaps] = useState<{ [key: number]: boolean }>({});
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     fetchDetailedStatus();
@@ -139,6 +140,55 @@ export const MarketTab: React.FC = () => {
     }));
   };
 
+  // Run Now: Download EOD for all indices with gaps, then calculate metrics
+  const handleRunNow = async () => {
+    try {
+      setIsRunning(true);
+
+      // Step 1: Download EOD for all indices
+      toastService.info('Starting EOD downloads for all indices...');
+      const eodResponse = await apiService.post(API_ENDPOINTS.MARKET.DOWNLOAD_EOD_ALL) as any;
+
+      if (eodResponse.success) {
+        const eodData = eodResponse.data;
+        toastService.success(`EOD downloads completed: ${eodData.successful || 0} successful, ${eodData.failed || 0} failed`);
+      } else {
+        toastService.warning('EOD download completed with issues');
+      }
+
+      // Step 2: Calculate metrics for all indices
+      toastService.info('Starting metrics calculation for all indices...');
+
+      // Get all index IDs that need metrics calculation
+      const indicesNeedingMetrics = data?.indices
+        .filter(idx => idx.provider_enabled && idx.total_records > 0)
+        .map(idx => idx.id) || [];
+
+      if (indicesNeedingMetrics.length > 0) {
+        const metricsResponse = await apiService.post(
+          API_ENDPOINTS.MARKET_ANALYSIS.BULK_CALCULATE_METRICS,
+          { index_ids: indicesNeedingMetrics, recalculate: false }
+        ) as any;
+
+        if (metricsResponse.success) {
+          const metricsData = metricsResponse.data;
+          toastService.success(`Metrics calculation completed: ${metricsData.successful || 0} successful`);
+        } else {
+          toastService.warning('Metrics calculation completed with issues');
+        }
+      }
+
+      // Refresh data
+      await fetchDetailedStatus();
+      toastService.success('Run Now completed successfully!');
+    } catch (err: any) {
+      console.error('Error in Run Now:', err);
+      toastService.error('Run Now failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -190,7 +240,7 @@ export const MarketTab: React.FC = () => {
 
   return (
     <div>
-      {/* Header with Refresh Button */}
+      {/* Header with Run Now and Refresh Buttons */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -205,25 +255,57 @@ export const MarketTab: React.FC = () => {
         }}>
           Market Index Status
         </h3>
-        <button
-          onClick={fetchDetailedStatus}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            backgroundColor: colors.brand.primary,
-            color: '#FFF',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: '500',
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {/* Run Now Button - Downloads EOD for all + Calculates metrics */}
+          <button
+            onClick={handleRunNow}
+            disabled={isRunning}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.semantic.success,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
+            }}
+            title="Download EOD for all indices and calculate metrics"
+          >
+            {isRunning ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Play size={14} />
+            )}
+            {isRunning ? 'Running...' : 'Run Now'}
+          </button>
+          {/* Refresh Button */}
+          <button
+            onClick={fetchDetailedStatus}
+            disabled={isRunning}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: colors.brand.primary,
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.7 : 1
+            }}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
