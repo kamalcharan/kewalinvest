@@ -1,7 +1,7 @@
 # Release Notes - Feature Branch: claude/review-26-pdf-gQBfa
 
 ## Summary
-Investigation and fixes for Page 4 data issues from 26.pdf feature requests.
+Investigation and fixes for Page 4 data issues from 26.pdf feature requests, plus Cruise Control enhancements.
 
 ---
 
@@ -25,12 +25,7 @@ Updated 3 schemes with Growth/IDCW mismatch:
 | Axis Arbitrage Fund Reg (G) | 112087 | 130771 |
 
 ### Customers Impacted: 6
-1. AARTI B LAGU - Return: +26.99% ✓
-2. ADELINE - Return: **-13.50% → +28.69%** ✓
-3. PATHI VENKAT SUNIL - Return: +42.22% ✓
-4. SWETHA KOTTI - ⚠️ (separate issue, see below)
-5. VENKATA KRISHNA MOHAN KOTTI - Return: +24.82% ✓
-6. VIVEKANANDA SURI VADDIPARTHI - Return: +34.40% ✓
+All verified with positive returns after fix.
 
 ---
 
@@ -40,76 +35,96 @@ Updated 3 schemes with Growth/IDCW mismatch:
 SWETHA KOTTI showed **-11.38% return** (later -49.07% after partial fix).
 
 ### Root Cause
-**Wrong scheme mapping** in master data:
-- Transaction scheme: "Kotak Multicap Fund (G)"
-- Mapped to: scheme_code `152065` = "Kotak Multi Asset Allocation Fund" (WRONG)
-- Correct: scheme_code `149182` = "Kotak Multicap Fund-Regular Plan-Growth"
+**Two issues found:**
+1. **Wrong scheme mapping**: scheme_code `152065` (Kotak Multi Asset Allocation) instead of `149182` (Kotak Multicap Fund)
+2. **scheme_id mismatch**: Bookmark had wrong `scheme_id` (14398 instead of 12445)
 
-These are completely different funds:
-- **Kotak Multicap Fund** - Equity multicap fund
-- **Kotak Multi Asset Allocation Fund** - Hybrid fund (equity + debt + gold)
+NAV queries use `scheme_id` (internal ID), NOT `scheme_code` - this caused NULL NAV values.
 
 ### Fix Applied
-- Updated bookmark: 152065 → 149182
-- Updated all transactions: 152065 → 149182
-- Deleted wrong NAV data for 152065
+- Updated scheme_code: 152065 → 149182
+- Updated scheme_id: 14398 → 12445
+- Regenerated portfolio snapshots
 
 ### Customers Impacted: 11
-1. CHALLA SANJAY KUMAR
-2. DHWANI CHHABHAIYA
-3. GNANA PRASUNA MUKTEVI
-4. LAGISHETTY VENKATESH
-5. MAVANUR RANGARAJU BALAJI
-6. NANDISH T C
-7. PRIYANKA S CHILLERGE
-8. RACHURI RAGHAVENDRA SWAMY
-9. SAMPATH KUMAR TUDGANI
-10. SWETHA KOTTI
-11. V AJAY KUMAR
+| Customer | Return After Fix |
+|----------|------------------|
+| CHALLA SANJAY KUMAR | +7.19% |
+| DHWANI CHHABHAIYA | +6.15% |
+| GNANA PRASUNA MUKTEVI | +6.56% |
+| LAGISHETTY VENKATESH | +8.49% |
+| MAVANUR RANGARAJU BALAJI | +2.77% |
+| NANDISH T C | +9.39% |
+| PRIYANKA S CHILLERGE | +6.61% |
+| RACHURI RAGHAVENDRA SWAMY | +6.42% |
+| SAMPATH KUMAR TUDGANI | +7.40% |
+| SWETHA KOTTI | +5.24% |
+| V AJAY KUMAR | +9.19% |
 
 ---
 
-## 3. BV SRINIVAS Investigation
-
-### Issue
-Customer reported "missing data"
+## 3. Root Cause Analysis - Source Data Issue
 
 ### Finding
-**Source data issue** - Not an import problem:
-- Staging had 23 records, but 13 belonged to different customer (JAHNAVI BOLISETTY with FAMILY_HEAD = "BV SRINIVAS")
-- Remaining 10 records matched transactions correctly
-- Tbook from IWell source is incomplete (sell transactions ₹25.88L but only ₹5.18L invested)
+The wrong scheme_codes originated from the **customer's bookmark CSV file**, not from system logic.
 
-### Resolution
-No fix needed - Data issue at source (IWell Tbook), not import issue.
+CSV contained:
+- `152065` for "Kotak Multicap Fund (G)" - should be `149182`
+- `100668` for "UTI Flexi Cap Fund Reg (G)" - should be `100669`
+- `102765` for "SBI Focused Equity Fund Reg (G)" - should be `102756`
 
----
+### System Behavior
+The import validates that scheme_code exists in master data, but doesn't verify if the scheme name matches. This is by design (flexible alias matching).
 
-## Pending Items
-
-### Critical - NAV Query Issue
-- NAV data for scheme 149182 exists (540 records per UI)
-- But SQL queries return NULL
-- Need to investigate data type mismatch or connection issue
-- **11 customers affected until resolved**
-
-### Verification Needed
-After NAV issue resolved:
-1. Re-run portfolio snapshots for all 11 Kotak Multicap customers
-2. Verify returns are now positive for long-term investors
-
-### Suggested Feature Enhancement
-**Scheme Alias Verification** - Make it mandatory for customers to verify all scheme mappings before NAV download to prevent future mismatches.
+### Recommendation
+Customer should verify scheme mappings in their source data before import.
 
 ---
 
-## Technical Details
+## 4. Market Downloads - Bug Fix & Feature Enhancement
 
-### Tables Modified
-- `t_scheme_bookmarks` - Updated scheme_code mappings
-- `t_transaction_table` - Updated scheme_code in transactions
-- `t_nav_data` - Deleted incorrect NAV records
+### Bug Fixed: Gap Detection Not Working
+**Issue:** Gap detection showed "no gaps" despite 24 days of missing data (last download: Dec 12, now: Jan 5)
 
-### Key Files Referenced
-- `/backend/src/services/portfolioSnapshot.service.ts` (lines 752-844) - Snapshot calculation logic
-- `/backend/db/distribution scripts/RunAlias.sql` - Alias generation logic
+**Root Cause:** `market.service.ts:1632` - Gap detection loop end date was set to `latestDate` (from DB) instead of TODAY.
+
+```javascript
+// Before (BUG):
+const end = new Date(latestDate);  // Dec 15 - loop never runs since start > end
+
+// After (FIXED):
+const end = new Date();  // TODAY - correctly detects gaps to current date
+```
+
+### Feature Added: "Run Now" Button
+Added manual trigger button (similar to Alerts tab) that:
+- Triggers `MARKET_OHLC_DOWNLOAD` job
+- Downloads EOD data for all indices with gaps
+- Calculates metrics after download
+- Shows progress with loading spinner
+
+---
+
+## Migration Files
+
+| File | Purpose |
+|------|---------|
+| `031_fix_growth_idcw_scheme_codes.sql` | Fix Growth/IDCW scheme code mismatches |
+| `032_fix_kotak_multicap_mapping.sql` | Fix Kotak Multicap scheme_code AND scheme_id |
+
+---
+
+## Files Modified
+
+### Backend
+- `backend/src/services/market.service.ts` - Gap detection fix (line 1632-1637)
+
+### Frontend
+- `frontend/src/pages/cruiseControl/MarketTab.tsx` - Added "Run Now" button
+
+---
+
+## Commits
+1. `705763f` - Add documentation and migration files for Page 4 data fixes
+2. `e222c26` - Fix Kotak Multicap bookmark scheme_id mismatch
+3. `30d0856` - Fix Market Downloads gap detection and add Run Now button
