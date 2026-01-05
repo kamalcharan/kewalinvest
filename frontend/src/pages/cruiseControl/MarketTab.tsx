@@ -149,11 +149,13 @@ export const MarketTab: React.FC = () => {
       toastService.info('Starting EOD downloads for all indices...');
       const eodResponse = await apiService.post(API_ENDPOINTS.MARKET.DOWNLOAD_EOD_ALL) as any;
 
-      if (eodResponse.success) {
+      if (eodResponse?.success && eodResponse?.data) {
         const eodData = eodResponse.data;
-        toastService.success(`EOD downloads completed: ${eodData.successful || 0} successful, ${eodData.failed || 0} failed`);
+        const successful = eodData.successful ?? eodData.success_count ?? 0;
+        const failed = eodData.failed ?? eodData.failed_count ?? 0;
+        toastService.success(`EOD downloads completed: ${successful} successful, ${failed} failed`);
       } else {
-        toastService.warning('EOD download completed with issues');
+        toastService.success('EOD downloads triggered');
       }
 
       // Step 2: Calculate metrics for all indices
@@ -170,11 +172,12 @@ export const MarketTab: React.FC = () => {
           { index_ids: indicesNeedingMetrics, recalculate: false }
         ) as any;
 
-        if (metricsResponse.success) {
+        if (metricsResponse?.success && metricsResponse?.data) {
           const metricsData = metricsResponse.data;
-          toastService.success(`Metrics calculation completed: ${metricsData.successful || 0} successful`);
+          const successful = metricsData.successful ?? metricsData.success_count ?? metricsData.calculated ?? 0;
+          toastService.success(`Metrics calculation completed: ${successful} successful`);
         } else {
-          toastService.warning('Metrics calculation completed with issues');
+          toastService.success('Metrics calculation triggered');
         }
       }
 
@@ -265,7 +268,7 @@ export const MarketTab: React.FC = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '8px 16px',
-              backgroundColor: colors.semantic.success,
+              backgroundColor: colors.brand.primary,
               color: '#FFF',
               border: 'none',
               borderRadius: '6px',
