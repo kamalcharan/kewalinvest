@@ -632,10 +632,65 @@ export class NavService {
         request.download_time || '22:00'
       ]);
 
+      // Auto-generate aliases for this bookmarked scheme
+      // Alias creation failures should NOT block bookmark creation
+      let aliasesCreated = 0;
+
+      // Alias 1: scheme_name from master data (always create)
+      if (scheme.scheme_name?.trim()) {
+        try {
+          const aliasResult = await client.query(`
+            INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
+            VALUES ($1, $2, $3, 'bookmark_master', $4)
+            ON CONFLICT (alias_name_normalized) DO NOTHING
+            RETURNING id
+          `, [scheme.id, scheme.scheme_code, scheme.scheme_name.trim(), userId]);
+          if (aliasResult.rows.length > 0) aliasesCreated++;
+        } catch (aliasError: any) {
+          console.warn(`[NavService] Alias creation failed for scheme_name "${scheme.scheme_name}":`, aliasError.message);
+        }
+      }
+
+      // Alias 2: scheme_nav_name from master data (if different from scheme_name)
+      if (scheme.scheme_nav_name?.trim()) {
+        const normalizedName = scheme.scheme_name?.trim().toUpperCase().replace(/\s+/g, ' ') || '';
+        const normalizedNavName = scheme.scheme_nav_name.trim().toUpperCase().replace(/\s+/g, ' ');
+
+        if (normalizedName !== normalizedNavName) {
+          try {
+            const aliasResult = await client.query(`
+              INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
+              VALUES ($1, $2, $3, 'bookmark_master', $4)
+              ON CONFLICT (alias_name_normalized) DO NOTHING
+              RETURNING id
+            `, [scheme.id, scheme.scheme_code, scheme.scheme_nav_name.trim(), userId]);
+            if (aliasResult.rows.length > 0) aliasesCreated++;
+          } catch (aliasError: any) {
+            console.warn(`[NavService] Alias creation failed for scheme_nav_name "${scheme.scheme_nav_name}":`, aliasError.message);
+          }
+        }
+      }
+
+      // Alias 3: User's custom alias (if provided) - for transaction import matching
+      if (request.custom_alias?.trim()) {
+        try {
+          const aliasResult = await client.query(`
+            INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
+            VALUES ($1, $2, $3, 'user_custom', $4)
+            ON CONFLICT (alias_name_normalized) DO NOTHING
+            RETURNING id
+          `, [scheme.id, scheme.scheme_code, request.custom_alias.trim(), userId]);
+          if (aliasResult.rows.length > 0) aliasesCreated++;
+        } catch (aliasError: any) {
+          console.warn(`[NavService] Alias creation failed for custom alias "${request.custom_alias}":`, aliasError.message);
+        }
+      }
+
       await client.query('COMMIT');
 
       SimpleLogger.info('NavService', 'Scheme bookmarked successfully', 'addBookmark', {
-        tenantId, userId, schemeId: request.scheme_id, schemeCode: scheme.scheme_code, aliasName: request.alias_name
+        tenantId, userId, schemeId: request.scheme_id, schemeCode: scheme.scheme_code,
+        aliasName: request.alias_name, customAlias: request.custom_alias, aliasesCreated
       }, userId, tenantId);
 
       return result.rows[0];

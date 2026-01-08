@@ -22,7 +22,12 @@ const NavSearchPage: React.FC = () => {
   const [isSearched, setIsSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookmarkingIds, setBookmarkingIds] = useState<Set<number>>(new Set());
-  
+
+  // Modal state for custom alias input
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [selectedSchemeForBookmark, setSelectedSchemeForBookmark] = useState<SchemeSearchResult | null>(null);
+  const [customAliasInput, setCustomAliasInput] = useState('');
+
   const [lastSearchTime, setLastSearchTime] = useState<number>(0);
   const SEARCH_COOLDOWN = 500;
   
@@ -122,15 +127,35 @@ const NavSearchPage: React.FC = () => {
     }
   };
 
-  const handleBookmark = async (scheme: SchemeSearchResult) => {
+  // Show modal when user clicks bookmark
+  const handleBookmarkClick = (scheme: SchemeSearchResult) => {
     if (bookmarkingIds.has(scheme.id)) return;
+    setSelectedSchemeForBookmark(scheme);
+    setCustomAliasInput('');
+    setShowAliasModal(true);
+  };
+
+  // Close the alias modal
+  const closeAliasModal = () => {
+    setShowAliasModal(false);
+    setSelectedSchemeForBookmark(null);
+    setCustomAliasInput('');
+  };
+
+  // Confirm bookmark with optional custom alias
+  const confirmBookmark = async () => {
+    if (!selectedSchemeForBookmark) return;
+
+    const scheme = selectedSchemeForBookmark;
+    closeAliasModal();
 
     setBookmarkingIds(prev => new Set(prev).add(scheme.id));
 
     try {
       const bookmarkRequest: CreateBookmarkRequest = {
         scheme_id: scheme.id,
-        daily_download_enabled: true, 
+        custom_alias: customAliasInput.trim() || undefined, // Include custom alias if provided
+        daily_download_enabled: true,
         download_time: '23:00'
       };
 
@@ -149,7 +174,10 @@ const NavSearchPage: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['nav', 'bookmarks'] });
         queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
 
-        toastService.success(`${scheme.scheme_name} bookmarked successfully`);
+        const aliasMsg = customAliasInput.trim()
+          ? ` with custom alias "${customAliasInput.trim()}"`
+          : '';
+        toastService.success(`${scheme.scheme_name} bookmarked successfully${aliasMsg}`);
 
         setTimeout(() => {
           navigate('/nav/dashboard');
@@ -475,7 +503,7 @@ const NavSearchPage: React.FC = () => {
 
                     <div style={{ marginLeft: '16px' }}>
                       <button
-                        onClick={() => handleBookmark(scheme)}
+                        onClick={() => handleBookmarkClick(scheme)}
                         disabled={scheme.is_bookmarked || bookmarkingIds.has(scheme.id)}
                         style={{
                           padding: '10px 20px',
@@ -673,6 +701,142 @@ const NavSearchPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Custom Alias Modal */}
+      {showAliasModal && selectedSchemeForBookmark && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+          }}>
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: colors.utility.primaryText,
+              marginTop: 0,
+              marginBottom: '8px'
+            }}>
+              Bookmark Scheme
+            </h3>
+
+            <p style={{
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              marginBottom: '16px',
+              lineHeight: '1.5'
+            }}>
+              <strong>{selectedSchemeForBookmark.scheme_name}</strong>
+            </p>
+
+            <div style={{
+              backgroundColor: colors.brand.primary + '10',
+              border: `1px solid ${colors.brand.primary}30`,
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '20px'
+            }}>
+              <p style={{
+                fontSize: '14px',
+                color: colors.utility.primaryText,
+                margin: 0,
+                lineHeight: '1.5'
+              }}>
+                Would you like to add a <strong>custom alias</strong> for this scheme?
+                This helps match the scheme name in your <strong>Transaction Sheet import</strong>.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: colors.utility.primaryText,
+                marginBottom: '8px'
+              }}>
+                Custom Alias Name (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="Enter the scheme name as it appears in your transaction sheets..."
+                value={customAliasInput}
+                onChange={(e) => setCustomAliasInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '8px',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+                autoFocus
+              />
+              <p style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText,
+                margin: '8px 0 0 0'
+              }}>
+                Leave empty to skip adding a custom alias
+              </p>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={closeAliasModal}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: 'transparent',
+                  color: colors.utility.secondaryText,
+                  border: `1px solid ${colors.utility.secondaryText}`,
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBookmark}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: colors.brand.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                {customAliasInput.trim() ? 'Bookmark with Alias' : 'Bookmark'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin {

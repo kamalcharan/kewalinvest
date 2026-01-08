@@ -95,6 +95,7 @@ export interface BookmarkSearchParams {
 export interface CreateBookmarkRequest {
   scheme_id: number;
   alias_name?: string;
+  custom_alias?: string; // User's custom alias for transaction import matching
   daily_download_enabled?: boolean;
   download_time?: string;
 }

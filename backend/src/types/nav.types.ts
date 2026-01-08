@@ -36,6 +36,7 @@ export interface SchemeBookmark {
 export interface CreateSchemeBookmarkRequest {
   scheme_id: number;
   alias_name?: string; // ADDED: Optional custom name during creation
+  custom_alias?: string; // User's custom alias for transaction import matching (saved to t_scheme_aliases)
   daily_download_enabled?: boolean;
   download_time?: string;
 }
