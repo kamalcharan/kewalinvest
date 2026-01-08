@@ -82,17 +82,27 @@ class ApiService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           console.log('❌ RESPONSE: 401 Unauthorized detected');
           console.log('❌ RESPONSE: Is retry?', originalRequest._retry);
-          console.log('❌ RESPONSE: Triggering logout...');
-          
+
           originalRequest._retry = true;
-          
-          // Clear auth data
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('tenant_id');
-          localStorage.removeItem('user');
-          
-          // Redirect to login
-          window.location.href = '/login';
+
+          // Don't redirect if already on login/register page
+          // This allows toast messages to show for invalid credentials
+          const currentPath = window.location.pathname;
+          const isOnAuthPage = currentPath === '/login' || currentPath === '/register';
+
+          if (!isOnAuthPage) {
+            console.log('❌ RESPONSE: Triggering logout and redirect...');
+
+            // Clear auth data
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('tenant_id');
+            localStorage.removeItem('user');
+
+            // Redirect to login
+            window.location.href = '/login';
+          } else {
+            console.log('❌ RESPONSE: On auth page, skipping redirect to show error toast');
+          }
         }
 
         // Format error message
