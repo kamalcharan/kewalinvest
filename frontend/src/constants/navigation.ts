@@ -122,12 +122,13 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         path: '/cruise-control',
         icon: Settings
       },
-      {
-        id: 'course_correction',
-        name: 'Course Correction',
-        path: '/data-ops/course-correction',
-        icon: GitBranch
-      },
+      // Course Correction - hidden until fully working
+      // {
+      //   id: 'course_correction',
+      //   name: 'Course Correction',
+      //   path: '/data-ops/course-correction',
+      //   icon: GitBranch
+      // },
     ]
   },
   {
