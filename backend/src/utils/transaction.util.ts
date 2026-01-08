@@ -269,13 +269,31 @@ export class TransactionUtil {
     }
 
     if (filters.scheme_code) {
-      // Search by scheme_code OR scheme_name (case-insensitive partial match)
-      conditions.push(`(
-        LOWER(scheme_code) LIKE LOWER($${paramIndex}) OR
-        LOWER(scheme_name) LIKE LOWER($${paramIndex})
-      )`);
-      params.push(`%${filters.scheme_code}%`);
-      paramIndex++;
+      // Split search term into keywords and search for ALL of them (AND logic)
+      // This allows searching "HDFC Midcap" to find schemes containing BOTH words
+      const keywords = filters.scheme_code.trim().split(/\s+/).filter((k: string) => k.length > 0);
+
+      if (keywords.length === 1) {
+        // Single keyword - simple search
+        conditions.push(`(
+          LOWER(scheme_code) LIKE LOWER($${paramIndex}) OR
+          LOWER(scheme_name) LIKE LOWER($${paramIndex})
+        )`);
+        params.push(`%${keywords[0]}%`);
+        paramIndex++;
+      } else {
+        // Multiple keywords - ALL must match (AND logic)
+        const keywordConditions = keywords.map((keyword: string) => {
+          const condition = `(
+            LOWER(scheme_code) LIKE LOWER($${paramIndex}) OR
+            LOWER(scheme_name) LIKE LOWER($${paramIndex})
+          )`;
+          params.push(`%${keyword}%`);
+          paramIndex++;
+          return condition;
+        });
+        conditions.push(`(${keywordConditions.join(' AND ')})`);
+      }
     }
 
     if (filters.start_date) {

@@ -130,6 +130,16 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     }
   }, [searchNotification]);
 
+  // Debounce scheme search - wait 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (schemeSearch !== (filters.scheme_code || '')) {
+        handleFilterChange('scheme_code', schemeSearch || undefined);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [schemeSearch]);
+
   // Handle filter changes
   const handleFilterChange = (key: keyof TransactionFiltersType, value: any) => {
     setFilters(prev => ({
@@ -689,12 +699,9 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 </div>
                 <input
                   type="text"
-                  placeholder="Search by code or name..."
+                  placeholder="Search by code or name (e.g. HDFC Midcap)..."
                   value={schemeSearch}
-                  onChange={(e) => {
-                    setSchemeSearch(e.target.value);
-                    handleFilterChange('scheme_code', e.target.value || undefined);
-                  }}
+                  onChange={(e) => setSchemeSearch(e.target.value)}
                   disabled={loading}
                   style={{
                     width: '100%',
