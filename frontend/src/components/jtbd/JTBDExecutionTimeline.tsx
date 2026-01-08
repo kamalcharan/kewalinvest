@@ -34,11 +34,6 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
 
   const executions = executionsData?.executions || [];
 
-  // DEBUG: Log fetched executions
-  console.log('[JTBDExecutionTimeline] Fetched executions:', executions);
-  console.log('[JTBDExecutionTimeline] Active tab:', activeTab);
-  console.log('[JTBDExecutionTimeline] Type filter:', typeFilter);
-
   // Filter and group executions
   const { filteredExecutions, groupedByDate } = useMemo(() => {
     let filtered = [...executions];
@@ -85,9 +80,6 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
 
     // Filter by type
     if (typeFilter !== 'all') {
-      console.log('[JTBDExecutionTimeline] Type filter active:', typeFilter);
-      console.log('[JTBDExecutionTimeline] Before type filtering:', filtered.length, 'executions');
-
       switch (typeFilter) {
         case 'meetings':
           filtered = filtered.filter(ex =>
@@ -97,15 +89,9 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           );
           break;
         case 'sip_plans':
-          console.log('[JTBDExecutionTimeline] Filtering for SIP plans, looking for type:', JTBD_TYPE.GOAL_SIP_PLAN);
-          console.log('[JTBDExecutionTimeline] All execution types:', executions.map(e => e.execution_type));
-          filtered = filtered.filter(ex => {
-            const matches = ex.execution_type === JTBD_TYPE.GOAL_SIP_PLAN;
-            if (!matches) {
-              console.log('[JTBDExecutionTimeline] Execution filtered out:', ex.id, ex.title, 'type:', ex.execution_type);
-            }
-            return matches;
-          });
+          filtered = filtered.filter(ex =>
+            ex.execution_type === JTBD_TYPE.GOAL_SIP_PLAN
+          );
           break;
         case 'alerts':
           filtered = filtered.filter(ex =>
@@ -115,8 +101,6 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
           );
           break;
       }
-
-      console.log('[JTBDExecutionTimeline] After type filtering:', filtered.length, 'executions');
     }
 
     // Sort by scheduled date
@@ -136,47 +120,69 @@ export const JTBDExecutionTimeline: React.FC<JTBDExecutionTimelineProps> = ({ cu
       grouped[dateKey].push(ex);
     });
 
-    // DEBUG: Log filtering results
-    console.log('[JTBDExecutionTimeline] After filtering:', filtered.length, 'executions');
-    console.log('[JTBDExecutionTimeline] Filtered executions:', filtered);
-
     return { filteredExecutions: filtered, groupedByDate: grouped };
   }, [executions, activeTab, typeFilter]);
 
-  // Calculate counts
+  // Calculate counts - now considers typeFilter
   const counts = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // First, filter by type if a type filter is active
+    let typeFilteredExecutions = [...executions];
+    if (typeFilter !== 'all') {
+      switch (typeFilter) {
+        case 'meetings':
+          typeFilteredExecutions = typeFilteredExecutions.filter(ex =>
+            ex.execution_type === JTBD_TYPE.CLIENT_MEETING ||
+            ex.execution_type === JTBD_TYPE.PORTFOLIO_REVIEW ||
+            ex.execution_type === JTBD_TYPE.GOAL_REVIEW
+          );
+          break;
+        case 'sip_plans':
+          typeFilteredExecutions = typeFilteredExecutions.filter(ex =>
+            ex.execution_type === JTBD_TYPE.GOAL_SIP_PLAN
+          );
+          break;
+        case 'alerts':
+          typeFilteredExecutions = typeFilteredExecutions.filter(ex =>
+            ex.execution_type === JTBD_TYPE.TIME_BASED ||
+            ex.execution_type === JTBD_TYPE.PROFILE_TRIGGER ||
+            ex.execution_type === JTBD_TYPE.PORTFOLIO_ALERT
+          );
+          break;
+      }
+    }
+
     return {
-      upcoming: executions.filter(ex => {
+      upcoming: typeFilteredExecutions.filter(ex => {
         const isPlannedOrDue = ex.execution_status === EXECUTION_STATUS.PLANNED ||
                                 ex.execution_status === EXECUTION_STATUS.DUE;
         const scheduledDate = new Date(ex.scheduled_date);
         scheduledDate.setHours(0, 0, 0, 0);
         return isPlannedOrDue && scheduledDate >= today;
       }).length,
-      due: executions.filter(ex => {
+      due: typeFilteredExecutions.filter(ex => {
         const scheduledDate = new Date(ex.scheduled_date);
         scheduledDate.setHours(0, 0, 0, 0);
         return ex.execution_status === EXECUTION_STATUS.DUE ||
                (scheduledDate.getTime() === today.getTime() &&
                 ex.execution_status === EXECUTION_STATUS.PLANNED);
       }).length,
-      overdue: executions.filter(ex => {
+      overdue: typeFilteredExecutions.filter(ex => {
         const scheduledDate = new Date(ex.scheduled_date);
         scheduledDate.setHours(0, 0, 0, 0);
         return (ex.execution_status === EXECUTION_STATUS.PLANNED ||
                 ex.execution_status === EXECUTION_STATUS.DUE) &&
                scheduledDate < today;
       }).length,
-      completed: executions.filter(ex =>
+      completed: typeFilteredExecutions.filter(ex =>
         ex.execution_status === EXECUTION_STATUS.COMPLETED ||
         ex.execution_status === EXECUTION_STATUS.CANCELLED ||
         ex.execution_status === EXECUTION_STATUS.NOT_EXECUTED
       ).length,
     };
-  }, [executions]);
+  }, [executions, typeFilter]);
 
   // Format date header
   const formatDateHeader = (dateString: string): string => {
