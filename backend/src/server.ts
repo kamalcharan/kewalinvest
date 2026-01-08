@@ -40,6 +40,7 @@ import networthRoutes from './routes/networth.routes'; // Release 1.1 - Cycle 2:
 import dashboardRoutes from './routes/dashboard.routes'; // Main Dashboard API
 import aliasRoutes from './routes/alias.routes'; // Customer Alias feature
 import systemRoutes from './routes/system.routes'; // System admin routes (migrations, DB status)
+import courseCorrectionRoutes from './routes/courseCorrection.routes'; // Data Operations: Course Correction
 
 // Import database connection
 import { testConnection } from './config/database';
@@ -249,6 +250,7 @@ app.use('/api/networth', networthRoutes); // Release 1.1 - Cycle 2: NetworthView
 app.use('/api/dashboard', dashboardRoutes); // Main Dashboard API
 app.use('/api/aliases', aliasRoutes); // Customer Alias feature
 app.use('/api/system', systemRoutes); // System admin routes (migrations, tenant status, health checks)
+app.use('/api/course-correction', courseCorrectionRoutes); // Data Operations: Course Correction
 
 // System logs routes
 app.get('/api/logs', logsController.getLogs);
