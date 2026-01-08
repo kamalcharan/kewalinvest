@@ -148,6 +148,7 @@ export class TransactionService {
         FROM t_transaction_table tt
         LEFT JOIN t_customers cust ON tt.customer_id = cust.id
         LEFT JOIN t_contacts c ON cust.contact_id = c.id
+        LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE ${whereClause}
       `;
 
