@@ -282,10 +282,18 @@ export const Dashboard: React.FC = () => {
     }
   }, []);
 
-  // Fetch data on component mount
+  // Fetch data on component mount and set up auto-refresh
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
+
+    // Auto-refresh every 5 minutes to keep critical alerts updated
+    const refreshInterval = setInterval(() => {
+      fetchDashboardData();
+      refetchCustomerStats();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [fetchDashboardData, refetchCustomerStats]);
 
   const refreshData = () => {
     fetchDashboardData();
