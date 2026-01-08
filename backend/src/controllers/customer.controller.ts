@@ -256,9 +256,10 @@ export class CustomerController {
       // Handle channels if provided
       if (channels && Array.isArray(channels) && channels.length > 0) {
         // First, deactivate all existing channels for this contact
+        // Note: t_contact_channels table doesn't have updated_at column
         await client.query(
           `UPDATE t_contact_channels
-           SET is_active = false, updated_at = CURRENT_TIMESTAMP
+           SET is_active = false
            WHERE contact_id = $1 AND tenant_id = $2 AND is_live = $3`,
           [contactId, user!.tenant_id, isLive]
         );
@@ -268,10 +269,11 @@ export class CustomerController {
           try {
             if (channel.id) {
               // Update existing channel
+              // Note: t_contact_channels table doesn't have updated_at column
               await client.query(
                 `UPDATE t_contact_channels
                  SET channel_type = $1, channel_value = $2, channel_subtype = $3,
-                     is_primary = $4, is_active = true, updated_at = CURRENT_TIMESTAMP
+                     is_primary = $4, is_active = true
                  WHERE id = $5 AND contact_id = $6 AND tenant_id = $7 AND is_live = $8`,
                 [
                   channel.channel_type,
