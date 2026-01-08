@@ -912,7 +912,7 @@ CREATE TABLE t_scheme_bookmarks (
     alias_name VARCHAR(255),
     is_live BOOLEAN DEFAULT true,
     is_active BOOLEAN DEFAULT true,
-    daily_download_enabled BOOLEAN DEFAULT false,
+    daily_download_enabled BOOLEAN DEFAULT true,
     download_time VARCHAR(5) DEFAULT '22:00',
     historical_download_completed BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
