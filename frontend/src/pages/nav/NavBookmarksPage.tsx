@@ -1136,6 +1136,38 @@ const NavBookmarksPage: React.FC = () => {
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
+                  onClick={handleBulkEnableDaily}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: colors.semantic.success,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}
+                >
+                  ✓ Enable Daily
+                </button>
+
+                <button
+                  onClick={handleBulkDisableDaily}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: colors.utility.secondaryText,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}
+                >
+                  ✗ Disable Daily
+                </button>
+
+                <button
                   onClick={handleBulkHistoricalDownload}
                   style={{
                     padding: '6px 12px',
