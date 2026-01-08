@@ -68,6 +68,9 @@ import ImportDashboard from './pages/data-import/ImportDashboard';
 import SystemLogsPage from './pages/admin/SystemLogsPage';
 import SystemStatusPage from './pages/admin/SystemStatusPage';
 
+// Data Operations pages
+import CourseCorrectionPage from './pages/dataops/CourseCorrectionPage';
+
 const queryClient = new QueryClient();
 
 function App() {
@@ -133,6 +136,9 @@ function App() {
                 {/* Admin Routes */}
                 <Route path="admin/logs" element={<SystemLogsPage />} />
                 <Route path="admin/status" element={<SystemStatusPage />} />
+
+                {/* Data Operations Routes */}
+                <Route path="data-ops/course-correction" element={<CourseCorrectionPage />} />
 
                 {/* Transaction Routes */}
                 <Route path="transactions" element={<TransactionListPage />} />

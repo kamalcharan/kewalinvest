@@ -15,7 +15,8 @@ import {
   Target,
   Bell,
   Link2,
-  Activity
+  Activity,
+  GitBranch
 } from 'lucide-react';
 
 // ============================================================================
@@ -120,6 +121,12 @@ export const NAVIGATION_MENU: NavigationSection[] = [
         name: 'Cruise Control',
         path: '/cruise-control',
         icon: Settings
+      },
+      {
+        id: 'course_correction',
+        name: 'Course Correction',
+        path: '/data-ops/course-correction',
+        icon: GitBranch
       },
     ]
   },
