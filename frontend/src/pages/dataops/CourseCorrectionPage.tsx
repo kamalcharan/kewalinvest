@@ -83,7 +83,7 @@ const CourseCorrectionPage: React.FC = () => {
 
   // Filter out already migrated customers
   const availableCustomers = useMemo(() => {
-    return impactAnalysis?.customers.filter(c => !c.already_migrated) || [];
+    return impactAnalysis?.customers.filter((c: ImpactedCustomer) => !c.already_migrated) || [];
   }, [impactAnalysis]);
 
   // Handlers
@@ -111,21 +111,21 @@ const CourseCorrectionPage: React.FC = () => {
   };
 
   const handleExecute = async (id: number) => {
-    if (confirm('Execute this migration? Transactions will be updated.')) {
+    if (window.confirm('Execute this migration? Transactions will be updated.')) {
       await executeMutation.mutateAsync(id);
       refetch();
     }
   };
 
   const handleRollback = async (id: number) => {
-    if (confirm('Rollback this migration? Transactions will be restored to original scheme code.')) {
+    if (window.confirm('Rollback this migration? Transactions will be restored to original scheme code.')) {
       await rollbackMutation.mutateAsync(id);
       refetch();
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Delete this pending correction?')) {
+    if (window.confirm('Delete this pending correction?')) {
       await deleteMutation.mutateAsync(id);
       refetch();
     }
@@ -178,9 +178,9 @@ const CourseCorrectionPage: React.FC = () => {
 
   // Card style helper
   const cardStyle: React.CSSProperties = {
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.utility.secondaryBackground,
     borderRadius: '12px',
-    border: `1px solid ${colors.border.primary}`,
+    border: `1px solid ${colors.utility.primaryText}20`,
     padding: '20px'
   };
 
@@ -208,8 +208,8 @@ const CourseCorrectionPage: React.FC = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '10px 16px',
-              backgroundColor: colors.background.secondary,
-              border: `1px solid ${colors.border.primary}`,
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '8px',
               cursor: 'pointer',
               fontSize: '14px',
@@ -248,8 +248,8 @@ const CourseCorrectionPage: React.FC = () => {
           style={{
             padding: '8px 12px',
             borderRadius: '6px',
-            border: `1px solid ${colors.border.primary}`,
-            backgroundColor: colors.background.primary,
+            border: `1px solid ${colors.utility.primaryText}20`,
+            backgroundColor: colors.utility.primaryBackground,
             color: colors.utility.primaryText,
             fontSize: '14px'
           }}
@@ -274,7 +274,7 @@ const CourseCorrectionPage: React.FC = () => {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
-              <tr style={{ backgroundColor: colors.background.tertiary }}>
+              <tr style={{ backgroundColor: colors.utility.secondaryBackground }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: colors.utility.secondaryText }}>Date</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: colors.utility.secondaryText }}>Customer</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: colors.utility.secondaryText }}>From → To</th>
@@ -286,14 +286,14 @@ const CourseCorrectionPage: React.FC = () => {
             </thead>
             <tbody>
               {corrections.map((c: CourseCorrection) => (
-                <tr key={c.id} style={{ borderTop: `1px solid ${colors.border.primary}` }}>
+                <tr key={c.id} style={{ borderTop: `1px solid ${colors.utility.primaryText}20` }}>
                   <td style={{ padding: '12px 16px', color: colors.utility.primaryText }}>{formatDate(c.created_at)}</td>
                   <td style={{ padding: '12px 16px', color: colors.utility.primaryText, fontWeight: 500 }}>{c.customer_name}</td>
                   <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                      <span style={{ color: colors.status.negative }}>{c.source_scheme_code}</span>
+                      <span style={{ color: colors.semantic.error }}>{c.source_scheme_code}</span>
                       <ArrowRight size={14} color={colors.utility.secondaryText} />
-                      <span style={{ color: colors.status.positive }}>{c.target_scheme_code}</span>
+                      <span style={{ color: colors.semantic.success }}>{c.target_scheme_code}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '2px' }}>
                       {c.source_scheme_name?.substring(0, 30)}...
@@ -319,7 +319,7 @@ const CourseCorrectionPage: React.FC = () => {
                         Mark Done
                       </button>
                     ) : c.snapshot_regenerated ? (
-                      <Check size={16} color={colors.status.positive} />
+                      <Check size={16} color={colors.semantic.success} />
                     ) : (
                       <span style={{ color: colors.utility.secondaryText }}>-</span>
                     )}
@@ -333,7 +333,7 @@ const CourseCorrectionPage: React.FC = () => {
                             disabled={executeMutation.isPending}
                             style={{
                               padding: '6px 12px',
-                              backgroundColor: colors.status.positive,
+                              backgroundColor: colors.semantic.success,
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -352,10 +352,10 @@ const CourseCorrectionPage: React.FC = () => {
                             style={{
                               padding: '6px',
                               backgroundColor: 'transparent',
-                              border: `1px solid ${colors.border.primary}`,
+                              border: `1px solid ${colors.utility.primaryText}20`,
                               borderRadius: '4px',
                               cursor: 'pointer',
-                              color: colors.status.negative
+                              color: colors.semantic.error
                             }}
                           >
                             <Trash2 size={14} />
@@ -369,7 +369,7 @@ const CourseCorrectionPage: React.FC = () => {
                           style={{
                             padding: '6px 12px',
                             backgroundColor: 'transparent',
-                            border: `1px solid ${colors.border.primary}`,
+                            border: `1px solid ${colors.utility.primaryText}20`,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             color: colors.utility.primaryText,
@@ -402,8 +402,8 @@ const CourseCorrectionPage: React.FC = () => {
             disabled={page === 1}
             style={{
               padding: '8px 12px',
-              backgroundColor: colors.background.secondary,
-              border: `1px solid ${colors.border.primary}`,
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               cursor: page === 1 ? 'not-allowed' : 'pointer',
               opacity: page === 1 ? 0.5 : 1
@@ -419,8 +419,8 @@ const CourseCorrectionPage: React.FC = () => {
             disabled={page === pagination.total_pages}
             style={{
               padding: '8px 12px',
-              backgroundColor: colors.background.secondary,
-              border: `1px solid ${colors.border.primary}`,
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '6px',
               cursor: page === pagination.total_pages ? 'not-allowed' : 'pointer',
               opacity: page === pagination.total_pages ? 0.5 : 1
@@ -461,13 +461,13 @@ const CourseCorrectionPage: React.FC = () => {
                 style={{
                   padding: '16px',
                   borderRadius: '8px',
-                  border: `1px solid ${colors.border.primary}`,
+                  border: `1px solid ${colors.utility.primaryText}20`,
                   cursor: 'pointer',
-                  backgroundColor: colors.background.primary,
+                  backgroundColor: colors.utility.primaryBackground,
                   transition: 'all 0.2s'
                 }}
                 onMouseOver={(e) => e.currentTarget.style.borderColor = colors.brand.primary}
-                onMouseOut={(e) => e.currentTarget.style.borderColor = colors.border.primary}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`}
               >
                 <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{b.scheme_name}</div>
                 <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
@@ -496,7 +496,7 @@ const CourseCorrectionPage: React.FC = () => {
       </div>
 
       {/* Selected source */}
-      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.background.tertiary }}>
+      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.utility.secondaryBackground }}>
         <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '4px' }}>Source Scheme</div>
         <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedSourceScheme?.scheme_name}</div>
         <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Code: {selectedSourceScheme?.scheme_code}</div>
@@ -543,15 +543,15 @@ const CourseCorrectionPage: React.FC = () => {
                     style={{
                       padding: '16px',
                       borderRadius: '8px',
-                      border: `1px solid ${colors.border.primary}`,
+                      border: `1px solid ${colors.utility.primaryText}20`,
                       cursor: 'pointer',
-                      backgroundColor: colors.background.primary,
+                      backgroundColor: colors.utility.primaryBackground,
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center'
                     }}
                     onMouseOver={(e) => e.currentTarget.style.borderColor = colors.brand.primary}
-                    onMouseOut={(e) => e.currentTarget.style.borderColor = colors.border.primary}
+                    onMouseOut={(e) => e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`}
                   >
                     <div>
                       <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{c.customer_name}</div>
@@ -585,7 +585,7 @@ const CourseCorrectionPage: React.FC = () => {
       </div>
 
       {/* Summary */}
-      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.background.tertiary }}>
+      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.utility.secondaryBackground }}>
         <div style={{ display: 'flex', gap: '24px' }}>
           <div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Customer</div>
@@ -593,7 +593,7 @@ const CourseCorrectionPage: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Source Scheme</div>
-            <div style={{ fontWeight: 600, color: colors.status.negative }}>{selectedSourceScheme?.scheme_code}</div>
+            <div style={{ fontWeight: 600, color: colors.semantic.error }}>{selectedSourceScheme?.scheme_code}</div>
           </div>
           <div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Transactions</div>
@@ -615,8 +615,8 @@ const CourseCorrectionPage: React.FC = () => {
               width: '100%',
               padding: '12px 12px 12px 40px',
               borderRadius: '8px',
-              border: `1px solid ${colors.border.primary}`,
-              backgroundColor: colors.background.primary,
+              border: `1px solid ${colors.utility.primaryText}20`,
+              backgroundColor: colors.utility.primaryBackground,
               color: colors.utility.primaryText,
               fontSize: '14px',
               boxSizing: 'border-box'
@@ -635,13 +635,13 @@ const CourseCorrectionPage: React.FC = () => {
             {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => (
               <div
                 key={s.scheme_code}
-                onClick={() => { setSelectedTargetScheme(s); setWizardStep('confirm'); }}
+                onClick={() => { if (s.scheme_code !== selectedSourceScheme?.scheme_code) { setSelectedTargetScheme(s); setWizardStep('confirm'); } }}
                 style={{
                   padding: '16px',
                   borderRadius: '8px',
-                  border: `1px solid ${s.scheme_code === selectedSourceScheme?.scheme_code ? colors.status.negative : colors.border.primary}`,
+                  border: `1px solid ${s.scheme_code === selectedSourceScheme?.scheme_code ? colors.semantic.error : `${colors.utility.primaryText}20`}`,
                   cursor: s.scheme_code === selectedSourceScheme?.scheme_code ? 'not-allowed' : 'pointer',
-                  backgroundColor: s.scheme_code === selectedSourceScheme?.scheme_code ? colors.background.tertiary : colors.background.primary,
+                  backgroundColor: s.scheme_code === selectedSourceScheme?.scheme_code ? colors.utility.secondaryBackground : colors.utility.primaryBackground,
                   opacity: s.scheme_code === selectedSourceScheme?.scheme_code ? 0.5 : 1
                 }}
                 onMouseOver={(e) => {
@@ -651,14 +651,14 @@ const CourseCorrectionPage: React.FC = () => {
                 }}
                 onMouseOut={(e) => {
                   if (s.scheme_code !== selectedSourceScheme?.scheme_code) {
-                    e.currentTarget.style.borderColor = colors.border.primary;
+                    e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
                   }
                 }}
               >
                 <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{s.scheme_name}</div>
                 <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
                   {s.amc_name} • Code: {s.scheme_code}
-                  {s.scheme_code === selectedSourceScheme?.scheme_code && <span style={{ color: colors.status.negative }}> (Current - cannot select)</span>}
+                  {s.scheme_code === selectedSourceScheme?.scheme_code && <span style={{ color: colors.semantic.error }}> (Current - cannot select)</span>}
                 </div>
               </div>
             ))}
@@ -717,14 +717,14 @@ const CourseCorrectionPage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>From (Wrong):</span>
             <div>
-              <span style={{ color: colors.status.negative, fontWeight: 600 }}>{selectedSourceScheme?.scheme_code}</span>
+              <span style={{ color: colors.semantic.error, fontWeight: 600 }}>{selectedSourceScheme?.scheme_code}</span>
               <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>{selectedSourceScheme?.scheme_name}</div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>To (Correct):</span>
             <div>
-              <span style={{ color: colors.status.positive, fontWeight: 600 }}>{selectedTargetScheme?.scheme_code}</span>
+              <span style={{ color: colors.semantic.success, fontWeight: 600 }}>{selectedTargetScheme?.scheme_code}</span>
               <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>{selectedTargetScheme?.scheme_name}</div>
             </div>
           </div>
@@ -743,8 +743,8 @@ const CourseCorrectionPage: React.FC = () => {
               width: '100%',
               padding: '12px',
               borderRadius: '8px',
-              border: `1px solid ${colors.border.primary}`,
-              backgroundColor: colors.background.primary,
+              border: `1px solid ${colors.utility.primaryText}20`,
+              backgroundColor: colors.utility.primaryBackground,
               color: colors.utility.primaryText,
               fontSize: '14px',
               minHeight: '80px',
@@ -761,7 +761,7 @@ const CourseCorrectionPage: React.FC = () => {
             style={{
               padding: '12px 24px',
               backgroundColor: 'transparent',
-              border: `1px solid ${colors.border.primary}`,
+              border: `1px solid ${colors.utility.primaryText}20`,
               borderRadius: '8px',
               cursor: 'pointer',
               fontSize: '14px',

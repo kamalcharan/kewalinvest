@@ -151,7 +151,7 @@ export function useExecuteCorrection() {
       }
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { updated_transactions: number; message: string } | undefined) => {
       queryClient.invalidateQueries({ queryKey: COURSE_CORRECTION_KEYS.corrections() });
       toastService.success(data?.message || 'Migration executed successfully');
     },
@@ -175,7 +175,7 @@ export function useRollbackCorrection() {
       }
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { restored_transactions: number; message: string } | undefined) => {
       queryClient.invalidateQueries({ queryKey: COURSE_CORRECTION_KEYS.corrections() });
       toastService.success(data?.message || 'Rollback completed successfully');
     },
