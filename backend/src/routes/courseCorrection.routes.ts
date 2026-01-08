@@ -3,7 +3,8 @@
 
 import { Router, Request, Response } from 'express';
 import { courseCorrectionService } from '../services/courseCorrection.service';
-import { authenticateToken } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth.middleware';
+import { environmentMiddleware } from '../middleware/environment.middleware';
 import {
   CreateCourseCorrectionRequest,
   GetCorrectionsParams,
@@ -12,8 +13,9 @@ import {
 
 const router = Router();
 
-// All routes require authentication
-router.use(authenticateToken);
+// All routes require authentication and environment context
+router.use(authMiddleware);
+router.use(environmentMiddleware);
 
 // ============================================================================
 // IMPACT ANALYSIS
@@ -35,13 +37,13 @@ router.get('/impact/:schemeCode', async (req: Request, res: Response) => {
 
     const analysis = await courseCorrectionService.getSchemeImpactAnalysis(tenantId, isLive, schemeCode);
 
-    res.json({
+    return res.json({
       success: true,
       data: analysis
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Impact analysis error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -72,7 +74,7 @@ router.get('/corrections', async (req: Request, res: Response) => {
 
     const { corrections, total } = await courseCorrectionService.getCorrections(tenantId, isLive, params);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         corrections,
@@ -84,7 +86,7 @@ router.get('/corrections', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[CourseCorrection] List corrections error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -108,13 +110,13 @@ router.get('/corrections/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Correction not found' });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: correction
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Get correction error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -150,14 +152,14 @@ router.post('/corrections', async (req: Request, res: Response) => {
 
     const correction = await courseCorrectionService.createCorrection(tenantId, isLive, userId, request);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: correction,
       message: 'Course correction created. Execute to apply changes.'
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Create correction error:', error);
-    res.status(400).json({ success: false, error: error.message });
+    return res.status(400).json({ success: false, error: error.message });
   }
 });
 
@@ -181,7 +183,7 @@ router.post('/corrections/:id/execute', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: result.error });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         updated_transactions: result.updated_transactions,
@@ -190,7 +192,7 @@ router.post('/corrections/:id/execute', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Execute correction error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -215,7 +217,7 @@ router.post('/corrections/:id/rollback', async (req: Request, res: Response) => 
       return res.status(400).json({ success: false, error: result.error });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         restored_transactions: result.restored_transactions,
@@ -224,7 +226,7 @@ router.post('/corrections/:id/rollback', async (req: Request, res: Response) => 
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Rollback correction error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -251,13 +253,13 @@ router.delete('/corrections/:id', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Course correction deleted'
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Delete correction error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -281,13 +283,13 @@ router.post('/corrections/:id/snapshot-done', async (req: Request, res: Response
       return res.status(404).json({ success: false, error: 'Correction not found' });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Snapshot marked as regenerated'
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Mark snapshot error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -311,7 +313,7 @@ router.get('/schemes/search', async (req: Request, res: Response) => {
 
     const { schemes, total } = await courseCorrectionService.searchSchemes(search, page, pageSize);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         schemes,
@@ -323,7 +325,7 @@ router.get('/schemes/search', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Search schemes error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -342,13 +344,13 @@ router.get('/bookmarks', async (req: Request, res: Response) => {
 
     const bookmarks = await courseCorrectionService.getBookmarkedSchemes(tenantId, isLive);
 
-    res.json({
+    return res.json({
       success: true,
       data: bookmarks
     });
   } catch (error: any) {
     console.error('[CourseCorrection] Get bookmarks error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
