@@ -52,6 +52,7 @@ export interface TransactionFilters {
   start_date?: string;
   end_date?: string;
   txn_type_id?: number;
+  txn_type?: 'Addition' | 'Deduction';  // Filter by transaction category
   import_session_id?: number;
   is_potential_duplicate?: boolean;
   portfolio_flag?: boolean;

@@ -731,8 +731,8 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 Transaction Type
               </label>
               <select
-                value={filters.txn_type_id || ''}
-                onChange={(e) => handleFilterChange('txn_type_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                value={filters.txn_type || ''}
+                onChange={(e) => handleFilterChange('txn_type', e.target.value || undefined)}
                 disabled={loading}
                 style={{
                   width: '100%',
@@ -746,8 +746,8 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 }}
               >
                 <option value="">All Types</option>
-                <option value="1">Purchase (Addition)</option>
-                <option value="2">Redemption (Deduction)</option>
+                <option value="Addition">Investments (SIP, Purchase, Switch In)</option>
+                <option value="Deduction">Withdrawals (Redemption, Switch Out)</option>
               </select>
             </div>
 

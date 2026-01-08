@@ -314,6 +314,13 @@ export class TransactionUtil {
       paramIndex++;
     }
 
+    // Filter by txn_type (Addition/Deduction) - requires JOIN with m_transaction_types
+    if (filters.txn_type) {
+      conditions.push(`mtt.txn_type = $${paramIndex}`);
+      params.push(filters.txn_type);
+      paramIndex++;
+    }
+
     if (filters.import_session_id) {
       conditions.push(`import_session_id = $${paramIndex}`);
       params.push(filters.import_session_id);

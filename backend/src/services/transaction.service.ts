@@ -105,6 +105,7 @@ export class TransactionService {
           start_date: filters.start_date,
           end_date: filters.end_date,
           txn_type_id: filters.txn_type_id,
+          txn_type: filters.txn_type,
           import_session_id: filters.import_session_id,
           is_potential_duplicate: filters.is_potential_duplicate,
           portfolio_flag: filters.portfolio_flag
@@ -563,6 +564,7 @@ export class TransactionService {
           start_date: filters?.start_date,
           end_date: filters?.end_date,
           txn_type_id: filters?.txn_type_id,
+          txn_type: filters?.txn_type,
           import_session_id: filters?.import_session_id,
           is_potential_duplicate: filters?.is_potential_duplicate,
           portfolio_flag: filters?.portfolio_flag
