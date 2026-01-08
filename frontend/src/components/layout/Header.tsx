@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Menu,
-  Search,
   ChevronDown,
   LogOut,
   Sun,
@@ -122,7 +121,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         padding: '0 24px',
         transition: 'all 0.2s ease'
       }}>
-        {/* Left side */}
+        {/* Left side - Menu toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           {onToggleSidebar && (
             <button
@@ -147,42 +146,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               <Menu size={20} />
             </button>
           )}
-          
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              placeholder="Search..."
-              style={{
-                padding: '8px 12px 8px 40px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                backgroundColor: `${colors.utility.primaryText}10`,
-                color: colors.utility.primaryText,
-                width: '300px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'all 0.2s ease'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = colors.brand.primary;
-                e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
-                e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-              }}
-            />
-            <Search 
-              size={16} 
-              style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: colors.utility.secondaryText
-              }}
-            />
-          </div>
         </div>
 
         {/* Right side */}

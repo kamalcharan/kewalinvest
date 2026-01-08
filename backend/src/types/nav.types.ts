@@ -36,6 +36,7 @@ export interface SchemeBookmark {
 export interface CreateSchemeBookmarkRequest {
   scheme_id: number;
   alias_name?: string; // ADDED: Optional custom name during creation
+  custom_alias?: string; // User's custom alias for transaction import matching (saved to t_scheme_aliases)
   daily_download_enabled?: boolean;
   download_time?: string;
 }
@@ -51,7 +52,7 @@ export interface SchemeBookmarkSearchParams {
   page?: number;
   page_size?: number;
   search?: string;
-  daily_download_only?: boolean;
+  daily_download_only?: 'true' | 'false' | 'all';
   amc_name?: string;
   has_historical_data?: 'true' | 'false' | 'all';  // Filter by NAV data availability
   has_calculations?: 'true' | 'false' | 'all';  // Filter by metrics calculation status

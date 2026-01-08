@@ -130,6 +130,16 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
     }
   }, [searchNotification]);
 
+  // Debounce scheme search - wait 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (schemeSearch !== (filters.scheme_code || '')) {
+        handleFilterChange('scheme_code', schemeSearch || undefined);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [schemeSearch]);
+
   // Handle filter changes
   const handleFilterChange = (key: keyof TransactionFiltersType, value: any) => {
     setFilters(prev => ({
@@ -689,12 +699,9 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 </div>
                 <input
                   type="text"
-                  placeholder="Search by code or name..."
+                  placeholder="Search by code or name (e.g. HDFC Midcap)..."
                   value={schemeSearch}
-                  onChange={(e) => {
-                    setSchemeSearch(e.target.value);
-                    handleFilterChange('scheme_code', e.target.value || undefined);
-                  }}
+                  onChange={(e) => setSchemeSearch(e.target.value)}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -724,8 +731,8 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 Transaction Type
               </label>
               <select
-                value={filters.txn_type_id || ''}
-                onChange={(e) => handleFilterChange('txn_type_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                value={filters.txn_type || ''}
+                onChange={(e) => handleFilterChange('txn_type', e.target.value || undefined)}
                 disabled={loading}
                 style={{
                   width: '100%',
@@ -739,8 +746,8 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 }}
               >
                 <option value="">All Types</option>
-                <option value="1">Purchase (Addition)</option>
-                <option value="2">Redemption (Deduction)</option>
+                <option value="Addition">Investments (SIP, Purchase, Switch In)</option>
+                <option value="Deduction">Withdrawals (Redemption, Switch Out)</option>
               </select>
             </div>
 

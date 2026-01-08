@@ -353,18 +353,18 @@ export interface CustomerBookmark {
 }
 
 /**
- * Request to create a new bookmark
+ * Request to create a new customer bookmark (JTBD reasons)
  */
-export interface CreateBookmarkRequest {
+export interface CreateCustomerBookmarkRequest {
   reason_id?: number;
   custom_reason?: string;
   notes?: string;
 }
 
 /**
- * Request to update an existing bookmark
+ * Request to update an existing customer bookmark (JTBD reasons)
  */
-export interface UpdateBookmarkRequest {
+export interface UpdateCustomerBookmarkRequest {
   reason_id?: number;
   custom_reason?: string;
   notes?: string;

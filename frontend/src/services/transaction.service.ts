@@ -12,6 +12,7 @@ export interface TransactionFilters {
   start_date?: string;
   end_date?: string;
   txn_type_id?: number;
+  txn_type?: 'Addition' | 'Deduction';  // Filter by transaction category
   import_session_id?: number;
   is_potential_duplicate?: boolean;
   portfolio_flag?: boolean;
@@ -150,6 +151,7 @@ export class TransactionService {
       if (filters.start_date) queryParams.append('start_date', filters.start_date);
       if (filters.end_date) queryParams.append('end_date', filters.end_date);
       if (filters.txn_type_id) queryParams.append('txn_type_id', filters.txn_type_id.toString());
+      if (filters.txn_type) queryParams.append('txn_type', filters.txn_type);
       if (filters.import_session_id) queryParams.append('import_session_id', filters.import_session_id.toString());
       if (filters.is_potential_duplicate !== undefined) {
         queryParams.append('is_potential_duplicate', filters.is_potential_duplicate.toString());

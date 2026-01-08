@@ -611,10 +611,7 @@ export class CustomerService {
           contactUpdateFields.push(`name = $${contactParamIndex}`);
           contactParams.push(data.name);
           contactParamIndex++;
-          // Also update normalized_name for search
-          contactUpdateFields.push(`normalized_name = normalize_customer_name($${contactParamIndex})`);
-          contactParams.push(data.name);
-          contactParamIndex++;
+          // Note: normalized_name is a GENERATED column - PostgreSQL auto-updates it when name changes
         }
 
         if (data.prefix !== undefined) {

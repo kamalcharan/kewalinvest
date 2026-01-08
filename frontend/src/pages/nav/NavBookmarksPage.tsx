@@ -68,7 +68,7 @@ const NavBookmarksPage: React.FC = () => {
     page_size: pageSize,
     search: searchQuery || undefined,
     amc_name: amcFilter || undefined,
-    daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+    daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
     has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
     has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
   });
@@ -120,7 +120,7 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
       has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
       has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
     });
@@ -148,7 +148,7 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
       has_historical_data: newFilter === 'all' ? undefined : newFilter === 'with_data' ? 'true' : 'false'
     });
   };
@@ -164,7 +164,7 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: newFilter === 'enabled' ? true : undefined,
+      daily_download_only: newFilter === 'all' ? undefined : newFilter === 'enabled' ? 'true' : 'false',
       has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
       has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
     });
@@ -181,7 +181,7 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
       has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
       has_calculations: newFilter === 'all' ? undefined : newFilter === 'with_calculations' ? 'true' : 'false'
     });
@@ -204,7 +204,7 @@ const NavBookmarksPage: React.FC = () => {
       page_size: pageSize,
       search: searchQuery || undefined,
       amc_name: amcFilter || undefined,
-      daily_download_only: dailyDownloadFilter === 'enabled' ? true : undefined,
+      daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
       has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
       has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
     });

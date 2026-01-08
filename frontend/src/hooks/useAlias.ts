@@ -247,6 +247,9 @@ export function useAddAliasMembers() {
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.detail(aliasId) });
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.members(aliasId) });
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.portfolio(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.goals(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.meetings(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.assetAllocation(aliasId) });
     }
   });
 }
@@ -268,6 +271,9 @@ export function useRemoveAliasMembers() {
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.detail(aliasId) });
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.members(aliasId) });
       queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.portfolio(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.goals(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.meetings(aliasId) });
+      queryClient.invalidateQueries({ queryKey: ALIAS_KEYS.assetAllocation(aliasId) });
     }
   });
 }

@@ -6,13 +6,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { usePortfolioData, usePortfolioMetrics } from '../../hooks/usePortfolioData';
-import { CustomerSearchParams, CustomerWithContact } from '../../types/customer.types';
-import { mockJTBDData } from '../../data/mock/mockJTBDData';
+import { useJTBDStats } from '../../hooks/useJTBD';
+import { CustomerSearchParams } from '../../types/customer.types';
 import CustomerCard from '../../components/customers/CustomerCard';
 import PortfolioSummaryWidget from '../../components/portfolio/PortfolioSummaryWidget';
-import JTBDActionCard from '../../components/jtbd/JTBDActionCard';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
-import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
 
 const CustomerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,8 +41,11 @@ const CustomerDashboardPage: React.FC = () => {
   // Fetch customers and portfolio metrics
   const { data: customerData, isLoading, error, refetch } = useCustomers(searchParams);
   const customers = customerData?.customers || [];
-  
+
   const { metrics: portfolioMetrics, isLoading: metricsLoading } = usePortfolioMetrics();
+
+  // Fetch real JTBD stats for critical alerts count
+  const { data: jtbdStats, isLoading: jtbdStatsLoading, refetch: refetchJTBDStats } = useJTBDStats();
   
   // Fetch selected customer portfolio
   const { portfolio: selectedPortfolio, isLoading: portfolioLoading } = usePortfolioData({
@@ -54,16 +55,10 @@ const CustomerDashboardPage: React.FC = () => {
 
   // Calculate dashboard metrics from real API
   const dashboardMetrics = useMemo(() => {
-    // Count critical actions from JTBD data
-    let criticalActionsCount = 0;
-    customers.forEach(customer => {
-      const jtbd = mockJTBDData[customer.id];
-      if (jtbd) {
-        criticalActionsCount += jtbd.actions.filter(a => 
-          a.priority === 'critical' || a.priority === 'high'
-        ).length;
-      }
-    });
+    // Get critical actions count from real JTBD stats API
+    const criticalActionsCount = jtbdStats
+      ? (jtbdStats.by_priority?.critical || 0) + (jtbdStats.by_priority?.high || 0)
+      : 0;
 
     return {
       totalAUM: portfolioMetrics.totalAUM,
@@ -74,21 +69,15 @@ const CustomerDashboardPage: React.FC = () => {
       criticalActionsCount,
       avgReturns: portfolioMetrics.avgReturns
     };
-  }, [customers, portfolioMetrics]);
+  }, [customers, portfolioMetrics, jtbdStats]);
 
   // Filter customers based on view
+  // Note: 'attention' filter would require loading JTBD data for each customer
+  // which is expensive, so we show all customers for now
   const filteredCustomers = useMemo(() => {
-    return customers.filter(customer => {
-      const jtbd = mockJTBDData[customer.id];
-      
-      if (filterView === 'attention') {
-        // Show customers with critical actions (since we don't have individual portfolio data loaded)
-        return jtbd?.actions.some(a => a.priority === 'critical' || a.priority === 'high');
-      } else if (filterView === 'positive') {
-        // For now, we can't filter by returns without loading each portfolio
-        // Could be enhanced later with a separate API endpoint
-        return true;
-      }
+    return customers.filter(() => {
+      // All filters currently show all customers
+      // Individual customer JTBD data is loaded on CustomerCard component
       return true;
     });
   }, [customers, filterView]);
@@ -98,8 +87,6 @@ const CustomerDashboardPage: React.FC = () => {
     if (!selectedCustomerId) return null;
     return customers.find(c => c.id === selectedCustomerId);
   }, [customers, selectedCustomerId]);
-
-  const selectedJTBD = selectedCustomerId ? mockJTBDData[selectedCustomerId] : null;
 
   // Format currency
   const formatCurrency = (value: number): string => {
@@ -495,7 +482,7 @@ const CustomerDashboardPage: React.FC = () => {
         </div>
 
         {/* Right Panel - Selected Customer Details */}
-        {selectedCustomer && selectedPortfolio && selectedJTBD && (
+        {selectedCustomer && selectedPortfolio && (
           <div style={{
             position: 'sticky',
             top: '24px',
@@ -586,16 +573,6 @@ const CustomerDashboardPage: React.FC = () => {
                 />
               </div>
             )}
-
-            {/* JTBD Actions */}
-            <JTBDActionCard
-              actions={selectedJTBD.actions}
-              primaryGoal={selectedJTBD.primaryGoal}
-              riskAssessment={selectedJTBD.riskAssessment}
-              compact={false}
-              maxActions={3}
-              onActionClick={(action) => console.log('Action clicked:', action)}
-            />
           </div>
         )}
       </div>

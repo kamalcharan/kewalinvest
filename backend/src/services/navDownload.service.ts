@@ -77,10 +77,10 @@ export class NavDownloadService {
       }
 
       const bookmarks = await this.navService.getUserBookmarks(
-        tenantId, 
-        isLive, 
-        userId, 
-        { page: 1, page_size: 1000, daily_download_only: true }
+        tenantId,
+        isLive,
+        userId,
+        { page: 1, page_size: 1000, daily_download_only: 'true' }
       );
 
       if (bookmarks.bookmarks.length === 0) {

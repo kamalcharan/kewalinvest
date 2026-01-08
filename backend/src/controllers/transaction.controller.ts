@@ -42,7 +42,8 @@ export class TransactionController {
         start_date: req.query.start_date as string,
         end_date: req.query.end_date as string,
         txn_type_id: req.query.txn_type_id ? parseInt(req.query.txn_type_id as string) : undefined,
-        is_potential_duplicate: req.query.is_potential_duplicate === 'true' ? true : 
+        txn_type: req.query.txn_type as 'Addition' | 'Deduction' | undefined,
+        is_potential_duplicate: req.query.is_potential_duplicate === 'true' ? true :
                                req.query.is_potential_duplicate === 'false' ? false : undefined,
         portfolio_flag: req.query.portfolio_flag === 'true' ? true :
                        req.query.portfolio_flag === 'false' ? false : undefined,

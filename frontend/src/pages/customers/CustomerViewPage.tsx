@@ -100,6 +100,8 @@ const CustomerViewPage: React.FC = () => {
     total: 0,
     total_pages: 1
   });
+  const [transactionsSortBy, setTransactionsSortBy] = useState<string>('txn_date');
+  const [transactionsSortOrder, setTransactionsSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const { data: customer, isLoading: customerLoading, error: customerError } = useCustomer(customerId || 0);
   const { portfolio, isLoading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = usePortfolioData({
@@ -121,19 +123,19 @@ const CustomerViewPage: React.FC = () => {
 
   const isLoading = customerLoading || portfolioLoading;
 
-  const fetchTransactions = async (page: number = 1) => {
+  const fetchTransactions = async (page: number = 1, sortBy?: string, sortOrder?: 'asc' | 'desc') => {
     if (!customerId) return;
-    
+
     try {
       setTransactionsLoading(true);
       setTransactionsError(null);
-      
+
       const response = await TransactionService.getTransactions({
         customer_id: customerId,
         page: page,
         page_size: 20,
-        sort_by: 'txn_date',
-        sort_order: 'desc'
+        sort_by: sortBy || transactionsSortBy,
+        sort_order: sortOrder || transactionsSortOrder
       });
       
       if (response.success && response.data) {
@@ -1312,7 +1314,9 @@ const CustomerViewPage: React.FC = () => {
                   pagination={transactionsPagination}
                   onPageChange={(newPage) => fetchTransactions(newPage)}
                   onSortChange={(sortBy, sortOrder) => {
-                    console.log('Sort by:', sortBy, sortOrder);
+                    setTransactionsSortBy(sortBy);
+                    setTransactionsSortOrder(sortOrder);
+                    fetchTransactions(1, sortBy, sortOrder);
                   }}
                 />
               </div>

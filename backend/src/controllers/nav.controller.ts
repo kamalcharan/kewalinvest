@@ -156,7 +156,7 @@ export class NavController {
         page: req.query.page ? Number(req.query.page) : 1,
         page_size: req.query.page_size ? Number(req.query.page_size) : 20,
         search: req.query.search as string,
-        daily_download_only: req.query.daily_download_only === 'true',
+        daily_download_only: req.query.daily_download_only as 'true' | 'false' | 'all' | undefined,
         amc_name: req.query.amc_name as string,
         has_historical_data: req.query.has_historical_data as 'true' | 'false' | 'all' | undefined,
         has_calculations: req.query.has_calculations as 'true' | 'false' | 'all' | undefined

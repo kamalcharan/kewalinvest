@@ -105,6 +105,7 @@ export class TransactionService {
           start_date: filters.start_date,
           end_date: filters.end_date,
           txn_type_id: filters.txn_type_id,
+          txn_type: filters.txn_type,
           import_session_id: filters.import_session_id,
           is_potential_duplicate: filters.is_potential_duplicate,
           portfolio_flag: filters.portfolio_flag
@@ -147,6 +148,7 @@ export class TransactionService {
         FROM t_transaction_table tt
         LEFT JOIN t_customers cust ON tt.customer_id = cust.id
         LEFT JOIN t_contacts c ON cust.contact_id = c.id
+        LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE ${whereClause}
       `;
 
@@ -563,6 +565,7 @@ export class TransactionService {
           start_date: filters?.start_date,
           end_date: filters?.end_date,
           txn_type_id: filters?.txn_type_id,
+          txn_type: filters?.txn_type,
           import_session_id: filters?.import_session_id,
           is_potential_duplicate: filters?.is_potential_duplicate,
           portfolio_flag: filters?.portfolio_flag

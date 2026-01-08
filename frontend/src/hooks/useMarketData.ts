@@ -131,6 +131,23 @@ export const useMarketIndices = (initialParams?: GetIndicesParams): UseMarketInd
     }
   }, []);
 
+  // Re-fetch when params change (for filter changes)
+  useEffect(() => {
+    if (hasInitializedRef.current && initialParams) {
+      // Compare current params with last params to detect changes
+      const paramsChanged =
+        initialParams.search !== lastParamsRef.current.search ||
+        initialParams.category !== lastParamsRef.current.category ||
+        initialParams.download_status !== lastParamsRef.current.download_status ||
+        initialParams.page !== lastParamsRef.current.page ||
+        initialParams.page_size !== lastParamsRef.current.page_size;
+
+      if (paramsChanged) {
+        fetchIndices(initialParams);
+      }
+    }
+  }, [initialParams?.search, initialParams?.category, initialParams?.download_status, initialParams?.page, initialParams?.page_size, fetchIndices]);
+
   return {
     indices,
     isLoading,

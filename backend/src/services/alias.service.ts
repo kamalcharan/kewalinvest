@@ -198,13 +198,15 @@ export class AliasService {
     try {
       await client.query('BEGIN');
 
-      // Check if any customer is already in an alias
+      // Check if any customer is already in an ACTIVE alias
       const existingCheck = await client.query(
         `SELECT c.id, ct.name
          FROM t_customer_alias_members am
+         JOIN t_customer_aliases a ON am.alias_id = a.id
          JOIN t_customers c ON am.customer_id = c.id
          JOIN t_contacts ct ON c.contact_id = ct.id
-         WHERE am.customer_id = ANY($1)`,
+         WHERE am.customer_id = ANY($1)
+           AND a.is_active = true`,
         [request.customer_ids]
       );
 
@@ -335,13 +337,15 @@ export class AliasService {
         throw new Error('Alias not found');
       }
 
-      // Check if any customer is already in an alias
+      // Check if any customer is already in an ACTIVE alias
       const existingCheck = await client.query(
         `SELECT c.id, ct.name
          FROM t_customer_alias_members am
+         JOIN t_customer_aliases a ON am.alias_id = a.id
          JOIN t_customers c ON am.customer_id = c.id
          JOIN t_contacts ct ON c.contact_id = ct.id
-         WHERE am.customer_id = ANY($1)`,
+         WHERE am.customer_id = ANY($1)
+           AND a.is_active = true`,
         [customerIds]
       );
 
@@ -775,6 +779,7 @@ export class AliasService {
 
   /**
    * Get alias-wide meeting summary
+   * NOTE: Meetings are stored in t_jtbd_executions with execution_type IN ('client_meeting', 'portfolio_review', 'goal_review')
    */
   async getAliasMeetingSummary(
     tenantId: number,
@@ -784,21 +789,23 @@ export class AliasService {
     const members = await this.getAliasMembers(tenantId, aliasId);
     const customerIds = members.map(m => m.customer_id);
 
+    // Query t_jtbd_executions for meeting types
     const meetingsQuery = `
       SELECT
-        cm.customer_id,
+        je.customer_id,
         ct.name,
         COUNT(*) as meeting_count,
-        MAX(cm.scheduled_date) FILTER (WHERE cm.status = 'completed') as last_meeting_date,
-        SUM(CASE WHEN cm.status = 'scheduled' THEN 1 ELSE 0 END) as upcoming_count,
-        SUM(CASE WHEN cm.status = 'completed' THEN 1 ELSE 0 END) as completed_count
-      FROM t_customer_meetings cm
-      JOIN t_customers c ON cm.customer_id = c.id
+        MAX(je.scheduled_date) FILTER (WHERE je.execution_status = 'completed') as last_meeting_date,
+        SUM(CASE WHEN je.execution_status IN ('planned', 'due') THEN 1 ELSE 0 END) as upcoming_count,
+        SUM(CASE WHEN je.execution_status = 'completed' THEN 1 ELSE 0 END) as completed_count
+      FROM t_jtbd_executions je
+      JOIN t_customers c ON je.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
-      WHERE cm.tenant_id = $1
-        AND cm.is_live = $2
-        AND cm.customer_id = ANY($3)
-      GROUP BY cm.customer_id, ct.name
+      WHERE je.tenant_id = $1
+        AND je.is_live = $2
+        AND je.customer_id = ANY($3)
+        AND je.execution_type IN ('client_meeting', 'portfolio_review', 'goal_review')
+      GROUP BY je.customer_id, ct.name
     `;
 
     const meetingsResult = await pool.query(meetingsQuery, [tenantId, isLive, customerIds]);
@@ -807,22 +814,23 @@ export class AliasService {
     const upcomingCount = meetingsResult.rows.reduce((sum, row) => sum + parseInt(row.upcoming_count), 0);
     const completedCount = meetingsResult.rows.reduce((sum, row) => sum + parseInt(row.completed_count), 0);
 
-    // Get next upcoming meeting
+    // Get next upcoming meeting from t_jtbd_executions
     const nextMeetingQuery = `
       SELECT
-        cm.customer_id,
+        je.customer_id,
         ct.name as customer_name,
-        cm.scheduled_date as meeting_date,
-        cm.meeting_type
-      FROM t_customer_meetings cm
-      JOIN t_customers c ON cm.customer_id = c.id
+        je.scheduled_date as meeting_date,
+        je.execution_type as meeting_type
+      FROM t_jtbd_executions je
+      JOIN t_customers c ON je.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
-      WHERE cm.tenant_id = $1
-        AND cm.is_live = $2
-        AND cm.customer_id = ANY($3)
-        AND cm.status = 'scheduled'
-        AND cm.scheduled_date >= CURRENT_DATE
-      ORDER BY cm.scheduled_date ASC
+      WHERE je.tenant_id = $1
+        AND je.is_live = $2
+        AND je.customer_id = ANY($3)
+        AND je.execution_type IN ('client_meeting', 'portfolio_review', 'goal_review')
+        AND je.execution_status IN ('planned', 'due')
+        AND je.scheduled_date >= CURRENT_DATE
+      ORDER BY je.scheduled_date ASC
       LIMIT 1
     `;
 
