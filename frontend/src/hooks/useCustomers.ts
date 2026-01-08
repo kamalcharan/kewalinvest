@@ -19,8 +19,8 @@ import {
   ConvertToCustomerRequest,
   BookmarkReason,
   BookmarkReasonsResponse,
-  CreateBookmarkRequest,
-  UpdateBookmarkRequest,
+  CreateCustomerBookmarkRequest,
+  UpdateCustomerBookmarkRequest,
   BookmarkResponse
 } from '../types/customer.types';
 
@@ -448,7 +448,7 @@ export function useBookmarkCustomer() {
   const queryClient = useQueryClient();
   const { user, tenantId, environment } = useAuth();
 
-  return useMutation<void, Error, { customerId: number; data: CreateBookmarkRequest }>({
+  return useMutation<void, Error, { customerId: number; data: CreateCustomerBookmarkRequest }>({
     mutationFn: async ({ customerId, data }): Promise<void> => {
       if (!user || !tenantId) {
         throw new Error('Authentication required');
@@ -522,7 +522,7 @@ export function useUpdateBookmark() {
   const queryClient = useQueryClient();
   const { user, tenantId, environment } = useAuth();
 
-  return useMutation<void, Error, { customerId: number; data: UpdateBookmarkRequest }>({
+  return useMutation<void, Error, { customerId: number; data: UpdateCustomerBookmarkRequest }>({
     mutationFn: async ({ customerId, data }): Promise<void> => {
       if (!user || !tenantId) {
         throw new Error('Authentication required');
