@@ -398,8 +398,17 @@ export class AliasService {
 
   /**
    * Delete (soft-delete) an alias
+   * First removes member records to allow customers to be added to new aliases
    */
   async deleteAlias(tenantId: number, aliasId: number): Promise<void> {
+    // First, hard delete the member records to release the UNIQUE constraint on customer_id
+    // This allows customers to be added to new aliases after deletion
+    await pool.query(
+      `DELETE FROM t_customer_alias_members WHERE alias_id = $1`,
+      [aliasId]
+    );
+
+    // Then soft-delete the alias itself
     const result = await pool.query(
       `UPDATE t_customer_aliases SET is_active = false
        WHERE id = $1 AND tenant_id = $2`,

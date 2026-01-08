@@ -313,9 +313,13 @@ export class CustomerController {
       if (addresses && Array.isArray(addresses) && addresses.length > 0) {
         for (const address of addresses) {
           try {
-            if (address.id) {
+            // Check if this is a real existing address ID or a temp ID from frontend
+            // Temp IDs are generated from timestamps and are very large numbers (> 1 billion)
+            const isRealAddressId = address.id && address.id < 1000000000;
+
+            if (isRealAddressId) {
               // Update existing address
-              await client.query(
+              const updateResult = await client.query(
                 `UPDATE t_customer_addresses
                  SET address_type = $1, address_line1 = $2, address_line2 = $3,
                      city = $4, state = $5, country = $6, pincode = $7,
@@ -336,7 +340,19 @@ export class CustomerController {
                   isLive
                 ]
               );
+
+              // If no rows updated, the address doesn't exist - create it instead
+              if (updateResult.rowCount === 0) {
+                console.warn(`Address ID ${address.id} not found, creating new address`);
+                await this.customerService.addAddress(
+                  user!.tenant_id,
+                  isLive,
+                  customerId,
+                  address
+                );
+              }
             } else {
+              // No ID or temp ID - create new address
               await this.customerService.addAddress(
                 user!.tenant_id,
                 isLive,

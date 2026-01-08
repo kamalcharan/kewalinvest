@@ -96,13 +96,38 @@ export class JTBDService {
 
       // Update customer JTBD count and status
       await client.query(
-        `UPDATE t_customers 
+        `UPDATE t_customers
          SET jtbd_count = jtbd_count + 1,
              has_jtbd_setup = true,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
         [data.customer_id, tenantId, isLive]
       );
+
+      // Create execution record so the alert appears in the Jobs timeline
+      const jtbdConfig = result.rows[0];
+      if (jtbdConfig.next_alert_date) {
+        await client.query(
+          `INSERT INTO t_jtbd_executions (
+            tenant_id, is_live, config_id, customer_id, execution_type,
+            title, description, priority, scheduled_date, execution_status,
+            execution_data, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'planned', $10, $11)`,
+          [
+            tenantId,
+            isLive,
+            jtbdConfig.id,
+            data.customer_id,
+            data.jtbd_type,
+            title,
+            data.description || null,
+            data.priority || 'medium',
+            jtbdConfig.next_alert_date,
+            JSON.stringify(data.config_data),
+            createdBy
+          ]
+        );
+      }
 
       await client.query('COMMIT');
 

@@ -702,6 +702,12 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                   placeholder="Search by code or name (e.g. HDFC Midcap)..."
                   value={schemeSearch}
                   onChange={(e) => setSchemeSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Immediately trigger search on Enter key
+                      handleFilterChange('scheme_code', schemeSearch || undefined);
+                    }
+                  }}
                   disabled={loading}
                   style={{
                     width: '100%',

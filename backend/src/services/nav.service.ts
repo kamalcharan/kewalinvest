@@ -98,10 +98,20 @@ export class NavService {
     }
 
     // Filter by daily download status (supports 'true', 'false', or undefined/all)
-    if (daily_download_only === 'true' && !showAll) {
-      baseQuery += ` AND sb.daily_download_enabled = true`;
-    } else if (daily_download_only === 'false' && !showAll) {
-      baseQuery += ` AND sb.daily_download_enabled = false`;
+    if (daily_download_only === 'true') {
+      if (!showAll) {
+        baseQuery += ` AND sb.daily_download_enabled = true`;
+      }
+      SimpleLogger.info('NavService', 'Filtering for daily_download_enabled = true', 'getUserBookmarks', {
+        daily_download_only, tenantId, page, showAll
+      });
+    } else if (daily_download_only === 'false') {
+      if (!showAll) {
+        baseQuery += ` AND sb.daily_download_enabled = false`;
+      }
+      SimpleLogger.info('NavService', 'Filtering for daily_download_enabled = false', 'getUserBookmarks', {
+        daily_download_only, tenantId, page, showAll
+      });
     }
 
     if (amc_name) {
