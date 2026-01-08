@@ -198,13 +198,15 @@ export class AliasService {
     try {
       await client.query('BEGIN');
 
-      // Check if any customer is already in an alias
+      // Check if any customer is already in an ACTIVE alias
       const existingCheck = await client.query(
         `SELECT c.id, ct.name
          FROM t_customer_alias_members am
+         JOIN t_customer_aliases a ON am.alias_id = a.id
          JOIN t_customers c ON am.customer_id = c.id
          JOIN t_contacts ct ON c.contact_id = ct.id
-         WHERE am.customer_id = ANY($1)`,
+         WHERE am.customer_id = ANY($1)
+           AND a.is_active = true`,
         [request.customer_ids]
       );
 
@@ -335,13 +337,15 @@ export class AliasService {
         throw new Error('Alias not found');
       }
 
-      // Check if any customer is already in an alias
+      // Check if any customer is already in an ACTIVE alias
       const existingCheck = await client.query(
         `SELECT c.id, ct.name
          FROM t_customer_alias_members am
+         JOIN t_customer_aliases a ON am.alias_id = a.id
          JOIN t_customers c ON am.customer_id = c.id
          JOIN t_contacts ct ON c.contact_id = ct.id
-         WHERE am.customer_id = ANY($1)`,
+         WHERE am.customer_id = ANY($1)
+           AND a.is_active = true`,
         [customerIds]
       );
 
