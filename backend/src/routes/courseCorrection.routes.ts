@@ -354,4 +354,34 @@ router.get('/bookmarks', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/course-correction/customer/:customerId/schemes
+ * Get schemes that a customer has transactions for
+ */
+router.get('/customer/:customerId/schemes', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const isLive = req.headers['x-environment'] === 'live';
+    const customerId = parseInt(req.params.customerId);
+
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: 'Tenant ID required' });
+    }
+
+    if (!customerId || isNaN(customerId)) {
+      return res.status(400).json({ success: false, error: 'Valid customer ID required' });
+    }
+
+    const schemes = await courseCorrectionService.getCustomerSchemes(tenantId, isLive, customerId);
+
+    return res.json({
+      success: true,
+      data: schemes
+    });
+  } catch (error: any) {
+    console.error('[CourseCorrection] Get customer schemes error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

@@ -1,13 +1,13 @@
 // frontend/src/pages/dataops/CourseCorrectionPage.tsx
 // Course Correction - Scheme Code Migration Tool
-// One customer at a time workflow
+// Simplified flow: Customer → Schemes → Target → Confirm
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useCustomers } from '../../hooks/useCustomers';
 import {
   useCorrections,
-  useBookmarkedSchemes,
-  useImpactAnalysis,
+  useCustomerSchemes,
   useSchemeSearch,
   useCreateCorrection,
   useExecuteCorrection,
@@ -19,7 +19,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -31,19 +30,22 @@ import {
   RotateCcw,
   Search,
   Trash2,
-  Users,
-  X,
+  User,
   XCircle
 } from 'lucide-react';
 import type {
   CourseCorrection,
   CourseCorrectionStatus,
-  ImpactedCustomer,
-  BookmarkedScheme,
+  CustomerScheme,
   SchemeSearchResult
 } from '../../types/courseCorrection.types';
 
-type WizardStep = 'list' | 'select-source' | 'select-customer' | 'select-target' | 'confirm';
+type WizardStep = 'list' | 'search-customer' | 'select-scheme' | 'select-target' | 'confirm';
+
+interface SelectedCustomer {
+  id: number;
+  name: string;
+}
 
 const CourseCorrectionPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
@@ -51,8 +53,9 @@ const CourseCorrectionPage: React.FC = () => {
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState<WizardStep>('list');
-  const [selectedSourceScheme, setSelectedSourceScheme] = useState<BookmarkedScheme | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<ImpactedCustomer | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
+  const [selectedScheme, setSelectedScheme] = useState<CustomerScheme | null>(null);
   const [selectedTargetScheme, setSelectedTargetScheme] = useState<SchemeSearchResult | null>(null);
   const [notes, setNotes] = useState('');
   const [targetSearch, setTargetSearch] = useState('');
@@ -67,8 +70,12 @@ const CourseCorrectionPage: React.FC = () => {
     page_size: 15,
     status: statusFilter || undefined
   });
-  const { data: bookmarks, isLoading: bookmarksLoading } = useBookmarkedSchemes();
-  const { data: impactAnalysis, isLoading: impactLoading } = useImpactAnalysis(selectedSourceScheme?.scheme_code || null);
+  const { data: customersData, isLoading: customersLoading } = useCustomers({
+    search: customerSearch,
+    page: 1,
+    page_size: 20
+  });
+  const { data: customerSchemes, isLoading: schemesLoading } = useCustomerSchemes(selectedCustomer?.id || null);
   const { data: schemeSearchResults, isLoading: searchLoading } = useSchemeSearch(targetSearch);
 
   // Mutations
@@ -80,28 +87,25 @@ const CourseCorrectionPage: React.FC = () => {
 
   const corrections = correctionsData?.corrections || [];
   const pagination = correctionsData;
-
-  // Filter out already migrated customers
-  const availableCustomers = useMemo(() => {
-    return impactAnalysis?.customers.filter((c: ImpactedCustomer) => !c.already_migrated) || [];
-  }, [impactAnalysis]);
+  const customers = customersData?.customers || [];
 
   // Handlers
   const resetWizard = () => {
     setWizardStep('list');
-    setSelectedSourceScheme(null);
+    setCustomerSearch('');
     setSelectedCustomer(null);
+    setSelectedScheme(null);
     setSelectedTargetScheme(null);
     setNotes('');
     setTargetSearch('');
   };
 
   const handleCreateCorrection = async () => {
-    if (!selectedCustomer || !selectedSourceScheme || !selectedTargetScheme) return;
+    if (!selectedCustomer || !selectedScheme || !selectedTargetScheme) return;
 
     await createMutation.mutateAsync({
-      customer_id: selectedCustomer.customer_id,
-      source_scheme_code: selectedSourceScheme.scheme_code,
+      customer_id: selectedCustomer.id,
+      source_scheme_code: selectedScheme.scheme_code,
       target_scheme_code: selectedTargetScheme.scheme_code,
       notes: notes || undefined
     });
@@ -219,7 +223,7 @@ const CourseCorrectionPage: React.FC = () => {
             <RefreshCw size={16} /> Refresh
           </button>
           <button
-            onClick={() => setWizardStep('select-source')}
+            onClick={() => setWizardStep('search-customer')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -295,9 +299,6 @@ const CourseCorrectionPage: React.FC = () => {
                       <ArrowRight size={14} color={colors.utility.secondaryText} />
                       <span style={{ color: colors.semantic.success }}>{c.target_scheme_code}</span>
                     </div>
-                    <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '2px' }}>
-                      {c.source_scheme_name?.substring(0, 30)}...
-                    </div>
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', color: colors.utility.primaryText }}>{c.transaction_count}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>{getStatusBadge(c.status)}</td>
@@ -314,7 +315,7 @@ const CourseCorrectionPage: React.FC = () => {
                           cursor: 'pointer',
                           color: '#92400e'
                         }}
-                        title="Mark as regenerated after you regenerate snapshots for this customer"
+                        title="Mark as regenerated after you regenerate snapshots"
                       >
                         Mark Done
                       </button>
@@ -434,44 +435,150 @@ const CourseCorrectionPage: React.FC = () => {
   );
 
   // ============================================================================
-  // RENDER: Step 1 - Select Source Scheme
+  // RENDER: Step 1 - Search Customer
   // ============================================================================
-  const renderSelectSource = () => (
+  const renderSearchCustomer = () => (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
         <button onClick={resetWizard} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}>
           <ChevronLeft size={24} />
         </button>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
-          Step 1: Select Source Scheme (Wrong Code)
+          Step 1: Search Customer
         </h2>
       </div>
 
       <div style={cardStyle}>
-        {bookmarksLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>Loading bookmarks...</div>
-        ) : !bookmarks || bookmarks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>No bookmarks found</div>
+        {/* Search input */}
+        <div style={{ position: 'relative', marginBottom: '16px' }}>
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: colors.utility.secondaryText }} />
+          <input
+            type="text"
+            placeholder="Search by customer name..."
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            autoFocus
+            style={{
+              width: '100%',
+              padding: '12px 12px 12px 40px',
+              borderRadius: '8px',
+              border: `1px solid ${colors.utility.primaryText}20`,
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText,
+              fontSize: '14px',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+
+        {/* Results */}
+        {customersLoading ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText }}>Searching...</div>
+        ) : customerSearch.length < 2 ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText }}>
+            Enter at least 2 characters to search
+          </div>
+        ) : customers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText }}>No customers found</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '500px', overflowY: 'auto' }}>
-            {bookmarks.map((b: BookmarkedScheme) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+            {customers.map((c: any) => (
               <div
-                key={b.scheme_code}
-                onClick={() => { setSelectedSourceScheme(b); setWizardStep('select-customer'); }}
+                key={c.id}
+                onClick={() => {
+                  setSelectedCustomer({ id: c.id, name: c.name });
+                  setWizardStep('select-scheme');
+                }}
                 style={{
                   padding: '16px',
                   borderRadius: '8px',
                   border: `1px solid ${colors.utility.primaryText}20`,
                   cursor: 'pointer',
                   backgroundColor: colors.utility.primaryBackground,
-                  transition: 'all 0.2s'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
                 }}
                 onMouseOver={(e) => e.currentTarget.style.borderColor = colors.brand.primary}
                 onMouseOut={(e) => e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`}
               >
-                <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{b.scheme_name}</div>
+                <User size={20} color={colors.utility.secondaryText} />
+                <div>
+                  <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{c.name}</div>
+                  {c.iwell_code && (
+                    <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
+                      Code: {c.iwell_code}
+                    </div>
+                  )}
+                </div>
+                <ChevronRight size={20} color={colors.utility.secondaryText} style={{ marginLeft: 'auto' }} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // RENDER: Step 2 - Select Scheme (from customer's transactions)
+  // ============================================================================
+  const renderSelectScheme = () => (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+        <button onClick={() => setWizardStep('search-customer')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}>
+          <ChevronLeft size={24} />
+        </button>
+        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
+          Step 2: Select Wrong Scheme
+        </h2>
+      </div>
+
+      {/* Selected customer */}
+      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.utility.secondaryBackground }}>
+        <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '4px' }}>Customer</div>
+        <div style={{ fontWeight: 600, color: colors.utility.primaryText, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <User size={18} />
+          {selectedCustomer?.name}
+        </div>
+      </div>
+
+      {/* Schemes list */}
+      <div style={cardStyle}>
+        <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: colors.utility.primaryText }}>
+          Schemes in Customer's Portfolio
+        </h3>
+
+        {schemesLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>Loading schemes...</div>
+        ) : !customerSchemes || customerSchemes.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>
+            No schemes found for this customer
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+            {customerSchemes.map((s: CustomerScheme) => (
+              <div
+                key={s.scheme_code}
+                onClick={() => { setSelectedScheme(s); setWizardStep('select-target'); }}
+                style={{
+                  padding: '16px',
+                  borderRadius: '8px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  cursor: 'pointer',
+                  backgroundColor: colors.utility.primaryBackground
+                }}
+                onMouseOver={(e) => e.currentTarget.style.borderColor = colors.brand.primary}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`}
+              >
+                <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>
+                  {s.scheme_name || s.scheme_code}
+                </div>
                 <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                  {b.amc_name} • Code: {b.scheme_code}
+                  {s.amc_name && `${s.amc_name} • `}Code: <strong>{s.scheme_code}</strong>
+                </div>
+                <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                  {s.transaction_count} transactions • {formatCurrency(s.total_invested)}
                 </div>
               </div>
             ))}
@@ -482,122 +589,33 @@ const CourseCorrectionPage: React.FC = () => {
   );
 
   // ============================================================================
-  // RENDER: Step 2 - Select Customer
-  // ============================================================================
-  const renderSelectCustomer = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button onClick={() => setWizardStep('select-source')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}>
-          <ChevronLeft size={24} />
-        </button>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
-          Step 2: Select Customer to Migrate
-        </h2>
-      </div>
-
-      {/* Selected source */}
-      <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.utility.secondaryBackground }}>
-        <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '4px' }}>Source Scheme</div>
-        <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedSourceScheme?.scheme_name}</div>
-        <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>Code: {selectedSourceScheme?.scheme_code}</div>
-      </div>
-
-      {/* Impact summary */}
-      {impactLoading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: colors.utility.secondaryText }}>Analyzing impact...</div>
-      ) : impactAnalysis && (
-        <>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ ...cardStyle, flex: 1, textAlign: 'center' }}>
-              <Users size={24} color={colors.brand.primary} style={{ marginBottom: '8px' }} />
-              <div style={{ fontSize: '24px', fontWeight: 700, color: colors.utility.primaryText }}>{impactAnalysis.total_customers}</div>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Total Customers</div>
-            </div>
-            <div style={{ ...cardStyle, flex: 1, textAlign: 'center' }}>
-              <Database size={24} color={colors.brand.primary} style={{ marginBottom: '8px' }} />
-              <div style={{ fontSize: '24px', fontWeight: 700, color: colors.utility.primaryText }}>{impactAnalysis.total_transactions}</div>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Total Transactions</div>
-            </div>
-            <div style={{ ...cardStyle, flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>₹</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: colors.utility.primaryText }}>{formatCurrency(impactAnalysis.total_invested)}</div>
-              <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Total Invested</div>
-            </div>
-          </div>
-
-          {/* Customer list */}
-          <div style={cardStyle}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: colors.utility.primaryText }}>
-              Select a Customer ({availableCustomers.length} available)
-            </h3>
-            {availableCustomers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText }}>
-                All customers have already been migrated for this scheme
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-                {availableCustomers.map((c: ImpactedCustomer) => (
-                  <div
-                    key={c.customer_id}
-                    onClick={() => { setSelectedCustomer(c); setWizardStep('select-target'); }}
-                    style={{
-                      padding: '16px',
-                      borderRadius: '8px',
-                      border: `1px solid ${colors.utility.primaryText}20`,
-                      cursor: 'pointer',
-                      backgroundColor: colors.utility.primaryBackground,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.borderColor = colors.brand.primary}
-                    onMouseOut={(e) => e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{c.customer_name}</div>
-                      <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                        {c.transaction_count} transactions • {formatCurrency(c.total_invested)}
-                      </div>
-                    </div>
-                    <ChevronRight size={20} color={colors.utility.secondaryText} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  // ============================================================================
   // RENDER: Step 3 - Select Target Scheme
   // ============================================================================
   const renderSelectTarget = () => (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button onClick={() => setWizardStep('select-customer')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}>
+        <button onClick={() => setWizardStep('select-scheme')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText }}>
           <ChevronLeft size={24} />
         </button>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
-          Step 3: Select Target Scheme (Correct Code)
+          Step 3: Select Correct Scheme
         </h2>
       </div>
 
       {/* Summary */}
       <div style={{ ...cardStyle, marginBottom: '16px', backgroundColor: colors.utility.secondaryBackground }}>
-        <div style={{ display: 'flex', gap: '24px' }}>
+        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Customer</div>
-            <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedCustomer?.customer_name}</div>
+            <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedCustomer?.name}</div>
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Source Scheme</div>
-            <div style={{ fontWeight: 600, color: colors.semantic.error }}>{selectedSourceScheme?.scheme_code}</div>
+            <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Wrong Scheme Code</div>
+            <div style={{ fontWeight: 600, color: colors.semantic.error }}>{selectedScheme?.scheme_code}</div>
           </div>
           <div>
             <div style={{ fontSize: '12px', color: colors.utility.secondaryText }}>Transactions</div>
-            <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedCustomer?.transaction_count}</div>
+            <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{selectedScheme?.transaction_count}</div>
           </div>
         </div>
       </div>
@@ -611,6 +629,7 @@ const CourseCorrectionPage: React.FC = () => {
             placeholder="Search for correct scheme (min 2 characters)..."
             value={targetSearch}
             onChange={(e) => setTargetSearch(e.target.value)}
+            autoFocus
             style={{
               width: '100%',
               padding: '12px 12px 12px 40px',
@@ -632,36 +651,40 @@ const CourseCorrectionPage: React.FC = () => {
           <div style={{ textAlign: 'center', padding: '20px', color: colors.utility.secondaryText }}>No schemes found</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-            {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => (
-              <div
-                key={s.scheme_code}
-                onClick={() => { if (s.scheme_code !== selectedSourceScheme?.scheme_code) { setSelectedTargetScheme(s); setWizardStep('confirm'); } }}
-                style={{
-                  padding: '16px',
-                  borderRadius: '8px',
-                  border: `1px solid ${s.scheme_code === selectedSourceScheme?.scheme_code ? colors.semantic.error : `${colors.utility.primaryText}20`}`,
-                  cursor: s.scheme_code === selectedSourceScheme?.scheme_code ? 'not-allowed' : 'pointer',
-                  backgroundColor: s.scheme_code === selectedSourceScheme?.scheme_code ? colors.utility.secondaryBackground : colors.utility.primaryBackground,
-                  opacity: s.scheme_code === selectedSourceScheme?.scheme_code ? 0.5 : 1
-                }}
-                onMouseOver={(e) => {
-                  if (s.scheme_code !== selectedSourceScheme?.scheme_code) {
-                    e.currentTarget.style.borderColor = colors.brand.primary;
-                  }
-                }}
-                onMouseOut={(e) => {
-                  if (s.scheme_code !== selectedSourceScheme?.scheme_code) {
-                    e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
-                  }
-                }}
-              >
-                <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{s.scheme_name}</div>
-                <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-                  {s.amc_name} • Code: {s.scheme_code}
-                  {s.scheme_code === selectedSourceScheme?.scheme_code && <span style={{ color: colors.semantic.error }}> (Current - cannot select)</span>}
+            {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => {
+              const isSameAsSource = s.scheme_code === selectedScheme?.scheme_code;
+              return (
+                <div
+                  key={s.scheme_code}
+                  onClick={() => {
+                    if (!isSameAsSource) {
+                      setSelectedTargetScheme(s);
+                      setWizardStep('confirm');
+                    }
+                  }}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '8px',
+                    border: `1px solid ${isSameAsSource ? colors.semantic.error : `${colors.utility.primaryText}20`}`,
+                    cursor: isSameAsSource ? 'not-allowed' : 'pointer',
+                    backgroundColor: isSameAsSource ? colors.utility.secondaryBackground : colors.utility.primaryBackground,
+                    opacity: isSameAsSource ? 0.5 : 1
+                  }}
+                  onMouseOver={(e) => {
+                    if (!isSameAsSource) e.currentTarget.style.borderColor = colors.brand.primary;
+                  }}
+                  onMouseOut={(e) => {
+                    if (!isSameAsSource) e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: colors.utility.primaryText }}>{s.scheme_name}</div>
+                  <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
+                    {s.amc_name} • Code: {s.scheme_code}
+                    {isSameAsSource && <span style={{ color: colors.semantic.error }}> (Same as source)</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -704,21 +727,21 @@ const CourseCorrectionPage: React.FC = () => {
         <div style={{ display: 'grid', gap: '16px', marginBottom: '24px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>Customer:</span>
-            <span style={{ color: colors.utility.primaryText }}>{selectedCustomer?.customer_name}</span>
+            <span style={{ color: colors.utility.primaryText }}>{selectedCustomer?.name}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>Transactions:</span>
-            <span style={{ color: colors.utility.primaryText }}>{selectedCustomer?.transaction_count}</span>
+            <span style={{ color: colors.utility.primaryText }}>{selectedScheme?.transaction_count}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>Total Invested:</span>
-            <span style={{ color: colors.utility.primaryText }}>{formatCurrency(selectedCustomer?.total_invested || 0)}</span>
+            <span style={{ color: colors.utility.primaryText }}>{formatCurrency(selectedScheme?.total_invested || 0)}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
             <span style={{ fontWeight: 600, color: colors.utility.secondaryText }}>From (Wrong):</span>
             <div>
-              <span style={{ color: colors.semantic.error, fontWeight: 600 }}>{selectedSourceScheme?.scheme_code}</span>
-              <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>{selectedSourceScheme?.scheme_name}</div>
+              <span style={{ color: colors.semantic.error, fontWeight: 600 }}>{selectedScheme?.scheme_code}</span>
+              <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>{selectedScheme?.scheme_name}</div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '8px', alignItems: 'start' }}>
@@ -800,8 +823,8 @@ const CourseCorrectionPage: React.FC = () => {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       {wizardStep === 'list' && renderHistoryList()}
-      {wizardStep === 'select-source' && renderSelectSource()}
-      {wizardStep === 'select-customer' && renderSelectCustomer()}
+      {wizardStep === 'search-customer' && renderSearchCustomer()}
+      {wizardStep === 'select-scheme' && renderSelectScheme()}
       {wizardStep === 'select-target' && renderSelectTarget()}
       {wizardStep === 'confirm' && renderConfirm()}
     </div>

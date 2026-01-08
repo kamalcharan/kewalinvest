@@ -369,6 +369,56 @@ export class CourseCorrectionService {
   }
 
   // ============================================================================
+  // CUSTOMER SCHEMES (from transactions)
+  // ============================================================================
+
+  /**
+   * Get schemes that a customer has transactions for
+   */
+  async getCustomerSchemes(
+    tenantId: number,
+    isLive: boolean,
+    customerId: number
+  ): Promise<Array<{
+    scheme_code: string;
+    scheme_name: string | null;
+    amc_name: string | null;
+    transaction_count: number;
+    total_invested: number;
+    first_transaction_date: string;
+    last_transaction_date: string;
+  }>> {
+    const query = `
+      SELECT
+        t.scheme_code,
+        COALESCE(sb.scheme_name, sd.scheme_name) as scheme_name,
+        COALESCE(sb.amc_name, sd.amc_name) as amc_name,
+        COUNT(*) as transaction_count,
+        COALESCE(SUM(t.amount), 0) as total_invested,
+        MIN(t.trade_date)::text as first_transaction_date,
+        MAX(t.trade_date)::text as last_transaction_date
+      FROM t_transaction_table t
+      LEFT JOIN t_scheme_bookmarks sb ON sb.scheme_code = t.scheme_code
+        AND sb.tenant_id = t.tenant_id AND sb.is_live = t.is_live AND sb.is_active = true
+      LEFT JOIN t_scheme_details sd ON sd.scheme_code = t.scheme_code AND sd.is_active = true
+      WHERE t.customer_id = $1 AND t.tenant_id = $2 AND t.is_live = $3
+      GROUP BY t.scheme_code, sb.scheme_name, sd.scheme_name, sb.amc_name, sd.amc_name
+      ORDER BY transaction_count DESC
+    `;
+    const result = await pool.query(query, [customerId, tenantId, isLive]);
+
+    return result.rows.map(row => ({
+      scheme_code: row.scheme_code,
+      scheme_name: row.scheme_name,
+      amc_name: row.amc_name,
+      transaction_count: parseInt(row.transaction_count),
+      total_invested: parseFloat(row.total_invested) || 0,
+      first_transaction_date: row.first_transaction_date,
+      last_transaction_date: row.last_transaction_date
+    }));
+  }
+
+  // ============================================================================
   // BOOKMARKS LIST (for source scheme selection)
   // ============================================================================
 

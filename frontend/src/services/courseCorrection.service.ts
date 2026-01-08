@@ -3,7 +3,6 @@
 
 import { buildHeaders } from './serviceURLs';
 import {
-  CourseCorrection,
   CourseCorrectionListResponse,
   CourseCorrectionDetailResponse,
   ImpactAnalysisResponse,
@@ -11,6 +10,7 @@ import {
   RollbackResponse,
   BookmarksResponse,
   SchemeSearchResponse,
+  CustomerSchemesResponse,
   CreateCourseCorrectionRequest,
   GetCorrectionsParams
 } from '../types/courseCorrection.types';
@@ -60,6 +60,16 @@ class CourseCorrectionService {
       headers: this.getHeaders()
     });
     return this.handleResponse<SchemeSearchResponse>(response);
+  }
+
+  /**
+   * Get schemes that a customer has transactions for
+   */
+  async getCustomerSchemes(customerId: number): Promise<CustomerSchemesResponse> {
+    const response = await fetch(`${BASE_URL}/customer/${customerId}/schemes`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<CustomerSchemesResponse>(response);
   }
 
   // ============================================================================

@@ -16,6 +16,7 @@ export const COURSE_CORRECTION_KEYS = {
   correctionsList: (params?: GetCorrectionsParams) => [...COURSE_CORRECTION_KEYS.corrections(), params] as const,
   correction: (id: number) => [...COURSE_CORRECTION_KEYS.corrections(), id] as const,
   bookmarks: () => [...COURSE_CORRECTION_KEYS.all, 'bookmarks'] as const,
+  customerSchemes: (customerId: number) => [...COURSE_CORRECTION_KEYS.all, 'customer-schemes', customerId] as const,
   impact: (schemeCode: string) => [...COURSE_CORRECTION_KEYS.all, 'impact', schemeCode] as const,
   schemeSearch: (search: string) => [...COURSE_CORRECTION_KEYS.all, 'scheme-search', search] as const,
 };
@@ -70,6 +71,24 @@ export function useBookmarkedSchemes() {
       }
       return response.data;
     }
+  });
+}
+
+/**
+ * Get schemes that a customer has transactions for
+ */
+export function useCustomerSchemes(customerId: number | null) {
+  return useQuery({
+    queryKey: COURSE_CORRECTION_KEYS.customerSchemes(customerId || 0),
+    queryFn: async () => {
+      if (!customerId) return [];
+      const response = await courseCorrectionService.getCustomerSchemes(customerId);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch customer schemes');
+      }
+      return response.data;
+    },
+    enabled: !!customerId
   });
 }
 
