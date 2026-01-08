@@ -97,8 +97,11 @@ export class NavService {
       paramIndex++;
     }
 
-    if (daily_download_only && !showAll) {
+    // Filter by daily download status (supports 'true', 'false', or undefined/all)
+    if (daily_download_only === 'true' && !showAll) {
       baseQuery += ` AND sb.daily_download_enabled = true`;
+    } else if (daily_download_only === 'false' && !showAll) {
+      baseQuery += ` AND sb.daily_download_enabled = false`;
     }
 
     if (amc_name) {

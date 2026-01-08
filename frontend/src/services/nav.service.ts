@@ -85,7 +85,7 @@ export interface BookmarkSearchParams {
   page?: number;
   page_size?: number;
   search?: string;
-  daily_download_only?: boolean;
+  daily_download_only?: 'true' | 'false';  // Server-side filter: 'true' = enabled, 'false' = disabled
   amc_name?: string;
   has_historical_data?: 'true' | 'false';  // Server-side filter for NAV data availability
   has_calculations?: string; // Filter for schemes with/without calculations
