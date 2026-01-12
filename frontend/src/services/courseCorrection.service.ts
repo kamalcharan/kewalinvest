@@ -14,7 +14,9 @@ import {
   GetCorrectionsParams
 } from '../types/courseCorrection.types';
 
-const BASE_URL = '/api/course-correction';
+// Use the same API base URL as other services
+const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
+const BASE_URL = `${API_BASE}/course-correction`;
 
 class CourseCorrectionService {
   private getHeaders(): Record<string, string> {
