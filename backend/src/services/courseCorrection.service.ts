@@ -222,15 +222,34 @@ export class CourseCorrectionService {
     const transactionCount = parseInt(statsResult.rows[0].txn_count);
     const totalInvested = parseFloat(statsResult.rows[0].total_invested);
 
-    // Check if already migrated
+    // Check for existing migrations
     const existingQuery = `
-      SELECT id FROM t_course_corrections
-      WHERE customer_id = $1 AND source_scheme_code = $2 AND status = 'completed'
+      SELECT id, status, target_scheme_code, executed_at
+      FROM t_course_corrections
+      WHERE customer_id = $1 AND source_scheme_code = $2
         AND tenant_id = $3 AND is_live = $4
+      ORDER BY created_at DESC
     `;
     const existingResult = await pool.query(existingQuery, [request.customer_id, request.source_scheme_code, tenantId, isLive]);
-    if (existingResult.rows.length > 0) {
-      throw new Error('This customer has already been migrated for this scheme code');
+
+    for (const existing of existingResult.rows) {
+      if (existing.status === 'completed') {
+        // Completed migrations should block - transactions already changed
+        const executedDate = existing.executed_at ? new Date(existing.executed_at).toLocaleDateString('en-IN') : 'unknown date';
+        throw new Error(
+          `Migration already completed on ${executedDate}. ` +
+          `Transactions were migrated to ${existing.target_scheme_code}. ` +
+          `Use 'Rollback' from history if you need to undo this migration.`
+        );
+      } else if (existing.status === 'pending' || existing.status === 'failed') {
+        // Clean up pending/failed records to allow retry
+        console.log(`[CourseCorrection] Cleaning up ${existing.status} record ID ${existing.id} before retry`);
+        await pool.query(
+          'DELETE FROM t_course_corrections WHERE id = $1 AND tenant_id = $2 AND is_live = $3',
+          [existing.id, tenantId, isLive]
+        );
+      }
+      // rolled_back status: allow new migration (previous was undone)
     }
 
     // Insert the correction record

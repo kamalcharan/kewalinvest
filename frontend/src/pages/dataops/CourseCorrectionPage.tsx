@@ -1523,6 +1523,26 @@ const CourseCorrectionPage: React.FC = () => {
                 </p>
               </div>
 
+              {/* Warning if snapshot failed */}
+              {migrationResult.steps.snapshot.status === 'failed' && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '12px',
+                  backgroundColor: '#fef3c7',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  border: '1px solid #f59e0b'
+                }}>
+                  <AlertTriangle size={18} color="#92400e" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '13px', color: '#92400e', lineHeight: '1.4' }}>
+                    <strong>Note:</strong> Snapshot regeneration had issues. Transactions were migrated successfully,
+                    but portfolio snapshots may need manual regeneration. You can use "Mark Done" in history once verified.
+                  </div>
+                </div>
+              )}
+
               {/* Before/After Summary */}
               {migrationResult.summary && (
                 <div style={{
@@ -1644,10 +1664,29 @@ const CourseCorrectionPage: React.FC = () => {
                 <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 600, color: colors.semantic.error }}>
                   Migration Failed
                 </h3>
-                <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
+                <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText, maxWidth: '400px', lineHeight: '1.5' }}>
                   {migrationError || 'An error occurred during migration'}
                 </p>
               </div>
+
+              {/* Info about completed migration if error mentions it */}
+              {migrationError?.includes('already completed') && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '12px',
+                  backgroundColor: colors.brand.primary + '10',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  border: `1px solid ${colors.brand.primary}30`
+                }}>
+                  <History size={18} color={colors.brand.primary} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '13px', color: colors.utility.primaryText, lineHeight: '1.4' }}>
+                    Check the <strong>History</strong> section to view or rollback the existing migration.
+                  </div>
+                </div>
+              )}
 
               {/* Step Status (if available) */}
               {migrationResult && (
@@ -1674,25 +1713,47 @@ const CourseCorrectionPage: React.FC = () => {
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => { setModalState('confirm'); setMigrationError(null); setMigrationResult(null); }}
-                  style={{
-                    padding: '10px 24px',
-                    backgroundColor: colors.brand.primary,
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <RefreshCw size={14} />
-                  Try Again
-                </button>
+                {migrationError?.includes('already completed') ? (
+                  <button
+                    onClick={() => { handleModalClose(); setShowHistory(true); }}
+                    style={{
+                      padding: '10px 24px',
+                      backgroundColor: colors.brand.primary,
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <History size={14} />
+                    View History
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setModalState('confirm'); setMigrationError(null); setMigrationResult(null); }}
+                    style={{
+                      padding: '10px 24px',
+                      backgroundColor: colors.brand.primary,
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <RefreshCw size={14} />
+                    Try Again
+                  </button>
+                )}
               </div>
             </>
           )}
