@@ -96,7 +96,14 @@ const CourseCorrectionPage: React.FC = () => {
   });
 
   // Scheme search for target selection (uses NAV Tracking API - search on button click)
-  const { schemes: schemeSearchResults, isLoading: searchLoading, searchSchemes, clearSearch } = useSchemeSearch();
+  const {
+    schemes: schemeSearchResults,
+    isLoading: searchLoading,
+    hasSearched,
+    lastSearchTerm,
+    searchSchemes,
+    clearSearch
+  } = useSchemeSearch();
 
   // Handle search button click
   const handleSearchClick = () => {
@@ -1095,16 +1102,28 @@ const CourseCorrectionPage: React.FC = () => {
             {/* Search Results */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {searchLoading ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
-                  Searching...
+                <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    margin: '0 auto 12px',
+                    border: `3px solid ${colors.utility.primaryText}20`,
+                    borderTop: `3px solid ${colors.brand.primary}`,
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <div style={{ color: colors.utility.secondaryText, fontSize: '12px' }}>
+                    Searching schemes...
+                  </div>
+                  <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                 </div>
-              ) : schemeSearchResults.length === 0 && targetSearch.length >= 2 ? (
+              ) : !hasSearched ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
-                  Click Search to find schemes
+                  Enter scheme name or code and click Search
                 </div>
               ) : schemeSearchResults.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
-                  Enter scheme name or code and click Search
+                  No schemes found for "{lastSearchTerm}"
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

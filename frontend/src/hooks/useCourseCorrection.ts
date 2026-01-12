@@ -101,6 +101,8 @@ export function useImpactAnalysis(schemeCode: string | null) {
 export function useSchemeSearch() {
   const [schemes, setSchemes] = useState<SchemeSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [lastSearchTerm, setLastSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<{
     total: number;
@@ -117,6 +119,7 @@ export function useSchemeSearch() {
 
     setIsLoading(true);
     setError(null);
+    setLastSearchTerm(search.trim());
 
     try {
       const params: SchemeSearchParams = {
@@ -143,6 +146,7 @@ export function useSchemeSearch() {
       setSchemes([]);
     } finally {
       setIsLoading(false);
+      setHasSearched(true);
     }
   }, []);
 
@@ -150,11 +154,15 @@ export function useSchemeSearch() {
     setSchemes([]);
     setError(null);
     setPagination(null);
+    setHasSearched(false);
+    setLastSearchTerm('');
   }, []);
 
   return {
     schemes,
     isLoading,
+    hasSearched,
+    lastSearchTerm,
     error,
     pagination,
     searchSchemes,
