@@ -214,7 +214,7 @@ export class CourseCorrectionService {
 
     // Get transaction count and total for this customer + source scheme
     const statsQuery = `
-      SELECT COUNT(*) as txn_count, COALESCE(SUM(amount), 0) as total_invested
+      SELECT COUNT(*) as txn_count, COALESCE(SUM(total_amount), 0) as total_invested
       FROM t_transaction_table
       WHERE customer_id = $1 AND scheme_code = $2 AND tenant_id = $3 AND is_live = $4
     `;
