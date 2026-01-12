@@ -10,7 +10,6 @@ import {
   RollbackResponse,
   BookmarksResponse,
   SchemeSearchResponse,
-  CustomerSchemesResponse,
   CreateCourseCorrectionRequest,
   GetCorrectionsParams
 } from '../types/courseCorrection.types';

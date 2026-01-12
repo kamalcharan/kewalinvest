@@ -774,10 +774,10 @@ const CourseCorrectionPage: React.FC = () => {
                   }}>
                     {holding.scheme_code}
                   </span>
-                  {holding.amc_name && (
+                  {holding.category && (
                     <>
                       <span>•</span>
-                      <span>{holding.amc_name}</span>
+                      <span>{holding.category}</span>
                     </>
                   )}
                 </div>
