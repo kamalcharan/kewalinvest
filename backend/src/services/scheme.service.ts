@@ -316,6 +316,8 @@ export class SchemeService {
 
   /**
    * Get all schemes with pagination
+   * NOTE: t_scheme_details is GLOBAL master data (scheme_code is UNIQUE across all tenants)
+   * Search does NOT filter by tenant_id - any tenant can search/bookmark any scheme
    */
   async getSchemes(
   tenantId: number,
@@ -337,16 +339,18 @@ export class SchemeService {
   try {
     const { page = 1, pageSize = 20, search, amcName, schemeType, schemeCategory } = params;
     const offset = (page - 1) * pageSize;
-    
+
+    // NOTE: No tenant_id filter - t_scheme_details is global master data
+    // scheme_code is UNIQUE, so schemes are shared across all tenants
     let baseQuery = `
       FROM t_scheme_details sd
       LEFT JOIN t_scheme_masters st ON sd.scheme_type_id = st.id
       LEFT JOIN t_scheme_masters sc ON sd.scheme_category_id = sc.id
-      WHERE sd.tenant_id = $1 AND sd.is_live = $2 AND sd.is_active = true
+      WHERE sd.is_active = true
     `;
-    
-    const queryParams: any[] = [tenantId, isLive];
-    let paramIndex = 3;
+
+    const queryParams: any[] = [];
+    let paramIndex = 1;
     
     // Add filters
     if (search) {
