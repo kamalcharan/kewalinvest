@@ -43,9 +43,9 @@ import {
 } from 'lucide-react';
 import type {
   CourseCorrection,
-  CourseCorrectionStatus,
-  SchemeSearchResult
+  CourseCorrectionStatus
 } from '../../types/courseCorrection.types';
+import type { SchemeSearchResult } from '../../services/nav.service';
 import type { PortfolioHolding } from '../../types/portfolio.types';
 
 type PageView = 'empty' | 'customer-view' | 'history';
@@ -1077,7 +1077,7 @@ const CourseCorrectionPage: React.FC = () => {
                   padding: '10px 16px',
                   borderRadius: '6px',
                   border: 'none',
-                  backgroundColor: targetSearch.trim().length >= 2 ? colors.brands.primary : colors.utility.primaryText + '20',
+                  backgroundColor: targetSearch.trim().length >= 2 ? colors.brand.primary : colors.utility.primaryText + '20',
                   color: targetSearch.trim().length >= 2 ? '#fff' : colors.utility.secondaryText,
                   fontSize: '13px',
                   fontWeight: 500,
@@ -1108,7 +1108,7 @@ const CourseCorrectionPage: React.FC = () => {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {schemeSearchResults.map((s: SchemeSearchResult) => {
+                  {schemeSearchResults.map((s) => {
                     const isSameAsSource = s.scheme_code === selectedScheme?.scheme_code;
                     const isSelected = selectedTargetScheme?.scheme_code === s.scheme_code;
                     return (
