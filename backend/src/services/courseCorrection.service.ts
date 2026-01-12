@@ -131,8 +131,8 @@ export class CourseCorrectionService {
     const query = `
       SELECT
         cc.*,
-        u.name as created_by_name,
-        rb.name as rolled_back_by_name
+        u.email as created_by_name,
+        rb.email as rolled_back_by_name
       FROM t_course_corrections cc
       LEFT JOIN t_users u ON u.id = cc.created_by
       LEFT JOIN t_users rb ON rb.id = cc.rolled_back_by
@@ -161,8 +161,8 @@ export class CourseCorrectionService {
     const query = `
       SELECT
         cc.*,
-        u.name as created_by_name,
-        rb.name as rolled_back_by_name
+        u.email as created_by_name,
+        rb.email as rolled_back_by_name
       FROM t_course_corrections cc
       LEFT JOIN t_users u ON u.id = cc.created_by
       LEFT JOIN t_users rb ON rb.id = cc.rolled_back_by
