@@ -169,3 +169,42 @@ export interface SchemeSearchResponse {
   };
   error?: string;
 }
+
+// ============================================================================
+// Migration Types (Combined Create + Execute + Snapshot)
+// ============================================================================
+
+export type MigrationStepStatus = 'pending' | 'completed' | 'failed' | 'skipped';
+
+export interface MigrationStep {
+  status: MigrationStepStatus;
+  message?: string;
+  count?: number;
+}
+
+export interface MigrationResult {
+  success: boolean;
+  correction_id?: number;
+  steps: {
+    backup: MigrationStep;
+    update: MigrationStep;
+    snapshot: MigrationStep;
+  };
+  summary?: {
+    customer_id: number;
+    customer_name: string;
+    source_scheme_code: string;
+    source_scheme_name: string | null;
+    target_scheme_code: string;
+    target_scheme_name: string | null;
+    transactions_updated: number;
+    total_invested: number;
+  };
+  error?: string;
+}
+
+export interface MigrateResponse {
+  success: boolean;
+  data: MigrationResult;
+  error?: string;
+}

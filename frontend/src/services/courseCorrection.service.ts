@@ -10,7 +10,8 @@ import {
   RollbackResponse,
   BookmarksResponse,
   CreateCourseCorrectionRequest,
-  GetCorrectionsParams
+  GetCorrectionsParams,
+  MigrateResponse
 } from '../types/courseCorrection.types';
 
 // Use the same API base URL as other services
@@ -96,6 +97,7 @@ class CourseCorrectionService {
 
   /**
    * Create a new course correction (pending status)
+   * NOTE: For complete migration in one step, use migrateCorrection() instead
    */
   async createCorrection(request: CreateCourseCorrectionRequest): Promise<CourseCorrectionDetailResponse> {
     const response = await fetch(`${BASE_URL}/corrections`, {
@@ -104,6 +106,19 @@ class CourseCorrectionService {
       body: JSON.stringify(request)
     });
     return this.handleResponse<CourseCorrectionDetailResponse>(response);
+  }
+
+  /**
+   * Complete migration in one step: Create → Execute → Regenerate Snapshots
+   * Returns detailed progress for each step
+   */
+  async migrateCorrection(request: CreateCourseCorrectionRequest): Promise<MigrateResponse> {
+    const response = await fetch(`${BASE_URL}/corrections/migrate`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(request)
+    });
+    return this.handleResponse<MigrateResponse>(response);
   }
 
   /**

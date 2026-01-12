@@ -11,7 +11,7 @@ import { usePortfolioData } from '../../hooks/usePortfolioData';
 import {
   useCorrections,
   useSchemeSearch,
-  useCreateCorrection,
+  useMigrateCorrection,
   useExecuteCorrection,
   useRollbackCorrection,
   useDeleteCorrection,
@@ -43,12 +43,14 @@ import {
 } from 'lucide-react';
 import type {
   CourseCorrection,
-  CourseCorrectionStatus
+  CourseCorrectionStatus,
+  MigrationResult
 } from '../../types/courseCorrection.types';
 import type { SchemeSearchResult } from '../../services/nav.service';
 import type { PortfolioHolding } from '../../types/portfolio.types';
 
 type PageView = 'empty' | 'customer-view' | 'history';
+type ModalState = 'confirm' | 'processing' | 'complete' | 'error';
 
 const CourseCorrectionPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
@@ -67,6 +69,9 @@ const CourseCorrectionPage: React.FC = () => {
   const [targetSearch, setTargetSearch] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [modalState, setModalState] = useState<ModalState>('confirm');
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
 
   // Transaction state
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
@@ -120,7 +125,7 @@ const CourseCorrectionPage: React.FC = () => {
   };
 
   // Mutations
-  const createMutation = useCreateCorrection();
+  const migrateMutation = useMigrateCorrection();
   const executeMutation = useExecuteCorrection();
   const rollbackMutation = useRollbackCorrection();
   const deleteMutation = useDeleteCorrection();
@@ -170,6 +175,9 @@ const CourseCorrectionPage: React.FC = () => {
     setNotes('');
     setTargetSearch('');
     setShowConfirmModal(false);
+    setModalState('confirm');
+    setMigrationResult(null);
+    setMigrationError(null);
     setTransactionPage(1);
   };
 
@@ -181,19 +189,45 @@ const CourseCorrectionPage: React.FC = () => {
     setTransactionPage(1);
   };
 
-  // Handle create correction
-  const handleCreateCorrection = async () => {
+  // Handle migration (create + execute + snapshot in one step)
+  const handleMigrate = async () => {
     if (!customerId || !selectedScheme || !selectedTargetScheme) return;
 
-    await createMutation.mutateAsync({
-      customer_id: customerId,
-      source_scheme_code: selectedScheme.scheme_code,
-      target_scheme_code: selectedTargetScheme.scheme_code,
-      notes: notes || undefined
-    });
+    setModalState('processing');
+    setMigrationError(null);
 
-    resetSelection();
-    refetch();
+    try {
+      const result = await migrateMutation.mutateAsync({
+        customer_id: customerId,
+        source_scheme_code: selectedScheme.scheme_code,
+        target_scheme_code: selectedTargetScheme.scheme_code,
+        notes: notes || undefined
+      });
+
+      setMigrationResult(result);
+      if (result.success) {
+        setModalState('complete');
+      } else {
+        setMigrationError(result.error || 'Migration failed');
+        setModalState('error');
+      }
+      refetch();
+    } catch (error: any) {
+      setMigrationError(error.message || 'Migration failed');
+      setModalState('error');
+    }
+  };
+
+  // Close modal and reset
+  const handleModalClose = () => {
+    if (modalState === 'complete') {
+      resetSelection();
+    } else if (modalState === 'confirm' || modalState === 'error') {
+      setShowConfirmModal(false);
+      setModalState('confirm');
+      setMigrationError(null);
+    }
+    // Don't allow closing during processing
   };
 
   // Handle execute
@@ -1236,10 +1270,58 @@ const CourseCorrectionPage: React.FC = () => {
   );
 
   // ============================================================================
-  // RENDER: Confirm Modal
+  // RENDER: Migration Modal (Confirm → Processing → Complete)
   // ============================================================================
-  const renderConfirmModal = () => {
+  const renderMigrationModal = () => {
     if (!showConfirmModal || !selectedScheme || !selectedTargetScheme) return null;
+
+    // Helper to render step status
+    const renderStep = (label: string, status: 'pending' | 'completed' | 'failed' | 'skipped' | 'processing', message?: string) => {
+      const getIcon = () => {
+        switch (status) {
+          case 'completed': return <Check size={16} color={colors.semantic.success} />;
+          case 'failed': return <XCircle size={16} color={colors.semantic.error} />;
+          case 'skipped': return <Clock size={16} color={colors.utility.secondaryText} />;
+          case 'processing': return (
+            <div style={{
+              width: '16px', height: '16px',
+              border: `2px solid ${colors.brand.primary}30`,
+              borderTop: `2px solid ${colors.brand.primary}`,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+          );
+          default: return <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${colors.utility.secondaryText}40` }} />;
+        }
+      };
+
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px',
+          backgroundColor: status === 'completed' ? colors.semantic.success + '08' :
+                          status === 'failed' ? colors.semantic.error + '08' :
+                          status === 'processing' ? colors.brand.primary + '08' : 'transparent',
+          borderRadius: '8px',
+          marginBottom: '8px'
+        }}>
+          {getIcon()}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{label}</div>
+            {message && <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>{message}</div>}
+          </div>
+        </div>
+      );
+    };
+
+    // Format currency for summary
+    const formatCurrency = (value: number) => {
+      if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+      if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+      return `₹${value.toLocaleString('en-IN')}`;
+    };
 
     return (
       <div style={{
@@ -1258,117 +1340,362 @@ const CourseCorrectionPage: React.FC = () => {
           backgroundColor: colors.utility.secondaryBackground,
           borderRadius: '12px',
           padding: '24px',
-          maxWidth: '500px',
+          maxWidth: '520px',
           width: '90%',
           maxHeight: '90vh',
           overflowY: 'auto'
         }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText }}>
-            Confirm Migration
-          </h3>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
 
-          {/* Warning */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px',
-            padding: '12px',
-            backgroundColor: '#fef3c7',
-            borderRadius: '8px',
-            marginBottom: '16px'
-          }}>
-            <AlertTriangle size={18} color="#92400e" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: '13px', color: '#92400e', lineHeight: '1.4' }}>
-              This creates a migration record in <strong>pending</strong> status. Execute from history to apply changes.
-            </div>
-          </div>
+          {/* ============ CONFIRM STATE ============ */}
+          {modalState === 'confirm' && (
+            <>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText }}>
+                Confirm Migration
+              </h3>
 
-          {/* Migration Summary */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{
-              padding: '12px',
-              borderRadius: '8px',
-              backgroundColor: colors.semantic.error + '08',
-              border: `1px solid ${colors.semantic.error}30`,
-              marginBottom: '8px'
-            }}>
-              <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600 }}>FROM</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedScheme.scheme_name}</div>
-              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedScheme.scheme_code}</div>
-            </div>
-            <div style={{ textAlign: 'center', color: colors.utility.secondaryText, margin: '4px 0' }}>
-              <ArrowRight size={20} style={{ transform: 'rotate(90deg)' }} />
-            </div>
-            <div style={{
-              padding: '12px',
-              borderRadius: '8px',
-              backgroundColor: colors.semantic.success + '08',
-              border: `1px solid ${colors.semantic.success}30`
-            }}>
-              <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600 }}>TO</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedTargetScheme.scheme_name}</div>
-              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedTargetScheme.scheme_code}</div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: 600, color: colors.utility.secondaryText }}>
-              Notes (optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any notes..."
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                backgroundColor: colors.utility.primaryBackground,
-                color: colors.utility.primaryText,
-                fontSize: '13px',
-                minHeight: '60px',
-                resize: 'vertical',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => setShowConfirmModal(false)}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: 'transparent',
-                border: `1px solid ${colors.utility.primaryText}20`,
+              {/* Info Banner */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                padding: '12px',
+                backgroundColor: colors.brand.primary + '10',
                 borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: colors.utility.primaryText
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreateCorrection}
-              disabled={createMutation.isPending}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: colors.brand.primary,
-                border: 'none',
-                borderRadius: '8px',
-                cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#fff',
-                opacity: createMutation.isPending ? 0.7 : 1
-              }}
-            >
-              {createMutation.isPending ? 'Creating...' : 'Create Migration'}
-            </button>
-          </div>
+                marginBottom: '16px',
+                border: `1px solid ${colors.brand.primary}30`
+              }}>
+                <GitBranch size={18} color={colors.brand.primary} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '13px', color: colors.utility.primaryText, lineHeight: '1.4' }}>
+                  This will backup transactions, update scheme codes, and regenerate snapshots automatically.
+                </div>
+              </div>
+
+              {/* Migration Summary */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: colors.semantic.error + '08',
+                  border: `1px solid ${colors.semantic.error}30`,
+                  marginBottom: '8px'
+                }}>
+                  <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600 }}>FROM (Wrong Code)</div>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedScheme.scheme_name}</div>
+                  <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedScheme.scheme_code}</div>
+                </div>
+                <div style={{ textAlign: 'center', color: colors.utility.secondaryText, margin: '4px 0' }}>
+                  <ArrowRight size={20} style={{ transform: 'rotate(90deg)' }} />
+                </div>
+                <div style={{
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: colors.semantic.success + '08',
+                  border: `1px solid ${colors.semantic.success}30`
+                }}>
+                  <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600 }}>TO (Correct Code)</div>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedTargetScheme.scheme_name}</div>
+                  <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedTargetScheme.scheme_code}</div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: 600, color: colors.utility.secondaryText }}>
+                  Notes (optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add any notes..."
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '13px',
+                    minHeight: '60px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={handleModalClose}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: colors.utility.primaryText
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMigrate}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: colors.brand.primary,
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Play size={14} />
+                  Migrate Now
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ============ PROCESSING STATE ============ */}
+          {modalState === 'processing' && (
+            <>
+              <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText, textAlign: 'center' }}>
+                Migration in Progress
+              </h3>
+
+              <div style={{ marginBottom: '20px' }}>
+                {renderStep(
+                  'Creating backup...',
+                  migrationResult?.steps.backup.status === 'completed' ? 'completed' :
+                  migrationResult?.steps.backup.status === 'failed' ? 'failed' : 'processing',
+                  migrationResult?.steps.backup.message
+                )}
+                {renderStep(
+                  'Updating transactions...',
+                  migrationResult?.steps.update.status === 'completed' ? 'completed' :
+                  migrationResult?.steps.update.status === 'failed' ? 'failed' :
+                  migrationResult?.steps.backup.status === 'completed' ? 'processing' : 'pending',
+                  migrationResult?.steps.update.message
+                )}
+                {renderStep(
+                  'Regenerating snapshots...',
+                  migrationResult?.steps.snapshot.status === 'completed' ? 'completed' :
+                  migrationResult?.steps.snapshot.status === 'failed' ? 'failed' :
+                  migrationResult?.steps.snapshot.status === 'skipped' ? 'skipped' :
+                  migrationResult?.steps.update.status === 'completed' ? 'processing' : 'pending',
+                  migrationResult?.steps.snapshot.message
+                )}
+              </div>
+
+              <div style={{ textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
+                Please wait, do not close this window...
+              </div>
+            </>
+          )}
+
+          {/* ============ COMPLETE STATE ============ */}
+          {modalState === 'complete' && migrationResult && (
+            <>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  backgroundColor: colors.semantic.success + '15',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px'
+                }}>
+                  <Check size={32} color={colors.semantic.success} />
+                </div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 600, color: colors.semantic.success }}>
+                  Migration Complete
+                </h3>
+                <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
+                  {migrationResult.summary?.transactions_updated} transactions updated successfully
+                </p>
+              </div>
+
+              {/* Before/After Summary */}
+              {migrationResult.summary && (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: colors.utility.primaryBackground,
+                  borderRadius: '8px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '12px', textTransform: 'uppercase' }}>
+                    Summary
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center' }}>
+                    {/* Before */}
+                    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: colors.semantic.error + '08', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600, marginBottom: '4px' }}>BEFORE</div>
+                      <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.primaryText, marginBottom: '2px' }}>
+                        {migrationResult.summary.source_scheme_code}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {migrationResult.summary.source_scheme_name || 'Unknown'}
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <ArrowRight size={20} color={colors.utility.secondaryText} />
+
+                    {/* After */}
+                    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: colors.semantic.success + '08', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600, marginBottom: '4px' }}>AFTER</div>
+                      <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.primaryText, marginBottom: '2px' }}>
+                        {migrationResult.summary.target_scheme_code}
+                      </div>
+                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {migrationResult.summary.target_scheme_name || 'Unknown'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px', paddingTop: '12px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: colors.brand.primary }}>
+                        {migrationResult.summary.transactions_updated}
+                      </div>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Transactions</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: colors.brand.primary }}>
+                        {formatCurrency(migrationResult.summary.total_invested)}
+                      </div>
+                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Total Invested</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step Status */}
+              <div style={{ marginBottom: '20px' }}>
+                {renderStep('Backup created', migrationResult.steps.backup.status, migrationResult.steps.backup.message)}
+                {renderStep('Transactions updated', migrationResult.steps.update.status, migrationResult.steps.update.message)}
+                {renderStep('Snapshots regenerated', migrationResult.steps.snapshot.status, migrationResult.steps.snapshot.message)}
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => { handleModalClose(); setShowHistory(true); }}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: colors.utility.primaryText,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <History size={14} />
+                  View History
+                </button>
+                <button
+                  onClick={handleModalClose}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: colors.brand.primary,
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#fff'
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ============ ERROR STATE ============ */}
+          {modalState === 'error' && (
+            <>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  backgroundColor: colors.semantic.error + '15',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px'
+                }}>
+                  <XCircle size={32} color={colors.semantic.error} />
+                </div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 600, color: colors.semantic.error }}>
+                  Migration Failed
+                </h3>
+                <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
+                  {migrationError || 'An error occurred during migration'}
+                </p>
+              </div>
+
+              {/* Step Status (if available) */}
+              {migrationResult && (
+                <div style={{ marginBottom: '20px' }}>
+                  {renderStep('Backup', migrationResult.steps.backup.status, migrationResult.steps.backup.message)}
+                  {renderStep('Transactions', migrationResult.steps.update.status, migrationResult.steps.update.message)}
+                  {renderStep('Snapshots', migrationResult.steps.snapshot.status, migrationResult.steps.snapshot.message)}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button
+                  onClick={handleModalClose}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: colors.utility.primaryText
+                  }}
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { setModalState('confirm'); setMigrationError(null); setMigrationResult(null); }}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: colors.brand.primary,
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <RefreshCw size={14} />
+                  Try Again
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1440,8 +1767,8 @@ const CourseCorrectionPage: React.FC = () => {
       {!customerId && pageView === 'history' && null /* History already rendered above */}
       {customerId && pageView === 'customer-view' && renderThreeColumnLayout()}
 
-      {/* Confirm Modal */}
-      {renderConfirmModal()}
+      {/* Migration Modal */}
+      {renderMigrationModal()}
     </div>
   );
 };

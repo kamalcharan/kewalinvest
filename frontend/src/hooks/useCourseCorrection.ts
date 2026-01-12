@@ -9,7 +9,8 @@ import { navService, SchemeSearchParams, SchemeSearchResult } from '../services/
 import { toastService } from '../services/toast.service';
 import {
   GetCorrectionsParams,
-  CreateCourseCorrectionRequest
+  CreateCourseCorrectionRequest,
+  MigrationResult
 } from '../types/courseCorrection.types';
 
 // Query Keys
@@ -175,7 +176,7 @@ export function useSchemeSearch() {
 // ============================================================================
 
 /**
- * Create a new course correction
+ * Create a new course correction (pending only - use useMigrateCorrection for complete flow)
  */
 export function useCreateCorrection() {
   const queryClient = useQueryClient();
@@ -191,6 +192,31 @@ export function useCreateCorrection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COURSE_CORRECTION_KEYS.corrections() });
       toastService.success('Course correction created');
+    },
+    onError: (error: Error) => {
+      toastService.error(error.message);
+    }
+  });
+}
+
+/**
+ * Complete migration in one step: Create → Execute → Regenerate Snapshots
+ * Returns detailed progress for each step
+ */
+export function useMigrateCorrection() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (request: CreateCourseCorrectionRequest): Promise<MigrationResult> => {
+      const response = await courseCorrectionService.migrateCorrection(request);
+      if (!response.success) {
+        throw new Error(response.error || 'Migration failed');
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: COURSE_CORRECTION_KEYS.corrections() });
+      // Don't show toast here - let the modal show the completion state
     },
     onError: (error: Error) => {
       toastService.error(error.message);

@@ -10,6 +10,29 @@ import {
   CreateCourseCorrectionRequest,
   GetCorrectionsParams
 } from '../types/courseCorrection.types';
+import { PortfolioSnapshotService } from './portfolioSnapshot.service';
+
+// Migration result with full details
+export interface MigrationResult {
+  success: boolean;
+  correction_id?: number;
+  steps: {
+    backup: { status: 'pending' | 'completed' | 'failed'; message?: string };
+    update: { status: 'pending' | 'completed' | 'failed'; count?: number; message?: string };
+    snapshot: { status: 'pending' | 'completed' | 'failed' | 'skipped'; message?: string };
+  };
+  summary?: {
+    customer_id: number;
+    customer_name: string;
+    source_scheme_code: string;
+    source_scheme_name: string | null;
+    target_scheme_code: string;
+    target_scheme_name: string | null;
+    transactions_updated: number;
+    total_invested: number;
+  };
+  error?: string;
+}
 
 export class CourseCorrectionService {
 
@@ -326,6 +349,114 @@ export class CourseCorrectionService {
     `;
     const result = await pool.query(query, [correctionId, tenantId, isLive]);
     return result.rows.length > 0;
+  }
+
+  // ============================================================================
+  // COMBINED MIGRATION (Create + Execute + Snapshot in one call)
+  // ============================================================================
+
+  /**
+   * Complete migration in one step: Create → Execute → Regenerate Snapshots
+   * Returns detailed progress for each step
+   */
+  async migrateAndComplete(
+    tenantId: number,
+    isLive: boolean,
+    userId: number,
+    request: CreateCourseCorrectionRequest
+  ): Promise<MigrationResult> {
+    const result: MigrationResult = {
+      success: false,
+      steps: {
+        backup: { status: 'pending' },
+        update: { status: 'pending' },
+        snapshot: { status: 'pending' }
+      }
+    };
+
+    try {
+      // Step 1: Create the correction record (this also serves as our audit trail)
+      console.log(`[CourseCorrection] Step 1: Creating correction record...`);
+      const correction = await this.createCorrection(tenantId, isLive, userId, request);
+      result.correction_id = correction.id;
+      result.steps.backup = { status: 'completed', message: 'Backup record created' };
+      console.log(`[CourseCorrection] Step 1 complete: Correction ID ${correction.id}`);
+
+      // Step 2: Execute the migration (backup transactions + update scheme codes)
+      console.log(`[CourseCorrection] Step 2: Executing migration...`);
+      const executeResult = await this.executeCorrection(tenantId, isLive, correction.id);
+
+      if (!executeResult.success) {
+        result.steps.update = { status: 'failed', message: executeResult.error };
+        result.error = executeResult.error;
+        return result;
+      }
+
+      result.steps.update = {
+        status: 'completed',
+        count: executeResult.updated_transactions,
+        message: `${executeResult.updated_transactions} transactions updated`
+      };
+      console.log(`[CourseCorrection] Step 2 complete: ${executeResult.updated_transactions} transactions migrated`);
+
+      // Step 3: Regenerate snapshots for this customer
+      console.log(`[CourseCorrection] Step 3: Regenerating snapshots...`);
+      try {
+        const snapshotService = new PortfolioSnapshotService();
+        const snapshotResult = await snapshotService.smartBackfill({
+          tenant_id: tenantId,
+          is_live: isLive,
+          customer_ids: [request.customer_id]
+        });
+
+        if (snapshotResult.success) {
+          result.steps.snapshot = {
+            status: 'completed',
+            message: `${snapshotResult.snapshots_created + snapshotResult.snapshots_updated} snapshots regenerated`
+          };
+
+          // Mark snapshot as regenerated in the correction record
+          await this.markSnapshotRegenerated(tenantId, isLive, correction.id);
+          console.log(`[CourseCorrection] Step 3 complete: Snapshots regenerated`);
+        } else {
+          result.steps.snapshot = {
+            status: 'failed',
+            message: 'Snapshot regeneration had errors'
+          };
+          console.warn(`[CourseCorrection] Step 3 warning: Snapshot regeneration had errors`);
+        }
+      } catch (snapshotError: any) {
+        // Snapshot failure is non-fatal - migration still succeeded
+        result.steps.snapshot = {
+          status: 'failed',
+          message: snapshotError.message
+        };
+        console.error(`[CourseCorrection] Step 3 error:`, snapshotError);
+      }
+
+      // Get updated correction for summary
+      const updatedCorrection = await this.getCorrectionById(tenantId, isLive, correction.id);
+
+      result.success = true;
+      result.summary = {
+        customer_id: request.customer_id,
+        customer_name: updatedCorrection?.customer_name || '',
+        source_scheme_code: request.source_scheme_code,
+        source_scheme_name: updatedCorrection?.source_scheme_name || null,
+        target_scheme_code: request.target_scheme_code,
+        target_scheme_name: updatedCorrection?.target_scheme_name || null,
+        transactions_updated: executeResult.updated_transactions || 0,
+        total_invested: updatedCorrection?.total_invested || 0
+      };
+
+      console.log(`[CourseCorrection] Migration complete for customer ${request.customer_id}`);
+      return result;
+
+    } catch (error: any) {
+      console.error(`[CourseCorrection] Migration failed:`, error);
+      result.error = error.message;
+      return result;
+    }
   }
 
   // ============================================================================

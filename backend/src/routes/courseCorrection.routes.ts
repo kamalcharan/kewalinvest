@@ -121,6 +121,59 @@ router.get('/corrections/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/course-correction/corrections/migrate
+ * Complete migration in one step: Create → Execute → Regenerate Snapshots
+ * Returns detailed progress for each step
+ */
+router.post('/corrections/migrate', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const isLive = req.headers['x-environment'] === 'live';
+    const userId = (req as any).user?.id;
+
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: 'Tenant ID required' });
+    }
+
+    const request: CreateCourseCorrectionRequest = req.body;
+
+    if (!request.customer_id || !request.source_scheme_code || !request.target_scheme_code) {
+      return res.status(400).json({
+        success: false,
+        error: 'customer_id, source_scheme_code, and target_scheme_code are required'
+      });
+    }
+
+    if (request.source_scheme_code === request.target_scheme_code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Source and target scheme codes must be different'
+      });
+    }
+
+    console.log(`[CourseCorrection] Starting migration for customer ${request.customer_id}: ${request.source_scheme_code} → ${request.target_scheme_code}`);
+
+    const result = await courseCorrectionService.migrateAndComplete(tenantId, isLive, userId, request);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error,
+        steps: result.steps
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (error: any) {
+    console.error('[CourseCorrection] Migration error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/course-correction/corrections
  * Create a new course correction (pending status)
  */
