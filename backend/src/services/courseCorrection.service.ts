@@ -330,13 +330,16 @@ export class CourseCorrectionService {
   }
 
   // ============================================================================
-  // SCHEME SEARCH (for target scheme selection)
+  // SCHEME SEARCH (for target scheme selection - searches within bookmarks)
   // ============================================================================
 
   /**
-   * Search schemes in master data for target selection
+   * Search schemes within bookmarks for target selection
+   * Bookmarked schemes have NAV data available for proper portfolio calculations
    */
   async searchSchemes(
+    tenantId: number,
+    isLive: boolean,
     search: string,
     page: number = 1,
     pageSize: number = 20
@@ -344,23 +347,26 @@ export class CourseCorrectionService {
     const offset = (page - 1) * pageSize;
     const searchPattern = `%${search}%`;
 
+    // Search within bookmarks (tracked schemes with NAV data)
     const countQuery = `
-      SELECT COUNT(*) FROM t_scheme_details
-      WHERE is_active = true
-        AND (scheme_name ILIKE $1 OR scheme_code ILIKE $1 OR amc_name ILIKE $1)
+      SELECT COUNT(*) FROM t_scheme_bookmarks sb
+      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
+      WHERE sb.tenant_id = $1 AND sb.is_live = $2 AND sb.is_active = true
+        AND (sb.scheme_name ILIKE $3 OR sb.scheme_code ILIKE $3 OR sb.amc_name ILIKE $3 OR sb.alias_name ILIKE $3)
     `;
-    const countResult = await pool.query(countQuery, [searchPattern]);
+    const countResult = await pool.query(countQuery, [tenantId, isLive, searchPattern]);
     const total = parseInt(countResult.rows[0].count);
 
     const query = `
-      SELECT id, scheme_code, scheme_name, scheme_nav_name, amc_name
-      FROM t_scheme_details
-      WHERE is_active = true
-        AND (scheme_name ILIKE $1 OR scheme_code ILIKE $1 OR amc_name ILIKE $1)
-      ORDER BY scheme_name
-      LIMIT $2 OFFSET $3
+      SELECT sd.id, sb.scheme_code, sb.scheme_name, sd.scheme_nav_name, sb.amc_name
+      FROM t_scheme_bookmarks sb
+      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
+      WHERE sb.tenant_id = $1 AND sb.is_live = $2 AND sb.is_active = true
+        AND (sb.scheme_name ILIKE $3 OR sb.scheme_code ILIKE $3 OR sb.amc_name ILIKE $3 OR sb.alias_name ILIKE $3)
+      ORDER BY sb.scheme_name
+      LIMIT $4 OFFSET $5
     `;
-    const result = await pool.query(query, [searchPattern, pageSize, offset]);
+    const result = await pool.query(query, [tenantId, isLive, searchPattern, pageSize, offset]);
 
     return {
       schemes: result.rows,

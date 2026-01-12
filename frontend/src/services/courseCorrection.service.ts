@@ -49,7 +49,8 @@ class CourseCorrectionService {
   }
 
   /**
-   * Search schemes in master data for target selection
+   * Search schemes within bookmarks for target selection
+   * Returns only bookmarked schemes (which have NAV data for portfolio calculations)
    */
   async searchSchemes(search: string, page: number = 1, pageSize: number = 20): Promise<SchemeSearchResponse> {
     const params = new URLSearchParams({
