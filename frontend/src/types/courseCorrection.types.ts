@@ -87,16 +87,6 @@ export interface SchemeSearchResult {
   amc_name: string;
 }
 
-export interface CustomerScheme {
-  scheme_code: string;
-  scheme_name: string | null;
-  amc_name: string | null;
-  transaction_count: number;
-  total_invested: number;
-  first_transaction_date: string;
-  last_transaction_date: string;
-}
-
 // ============================================================================
 // Request Types
 // ============================================================================
@@ -177,11 +167,5 @@ export interface SchemeSearchResponse {
     page_size: number;
     total_pages: number;
   };
-  error?: string;
-}
-
-export interface CustomerSchemesResponse {
-  success: boolean;
-  data: CustomerScheme[];
   error?: string;
 }
