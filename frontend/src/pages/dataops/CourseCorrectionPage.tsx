@@ -1,8 +1,9 @@
 // frontend/src/pages/dataops/CourseCorrectionPage.tsx
 // Course Correction - Scheme Code Migration Tool
 // Flow: Navigate from Customer List → Select scheme to correct → Select target → Confirm
+// Layout: 3 columns - 25% schemes | 50% transactions | 25% search/select
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomer } from '../../hooks/useCustomers';
@@ -16,6 +17,8 @@ import {
   useDeleteCorrection,
   useMarkSnapshotDone
 } from '../../hooks/useCourseCorrection';
+import { TransactionService, TransactionFilters } from '../../services/transaction.service';
+import { TransactionWithDetails } from '../../types/transaction.types';
 import {
   AlertTriangle,
   ArrowRight,
@@ -45,7 +48,7 @@ import type {
 } from '../../types/courseCorrection.types';
 import type { PortfolioHolding } from '../../types/portfolio.types';
 
-type PageView = 'empty' | 'customer-schemes' | 'select-target' | 'confirm' | 'history';
+type PageView = 'empty' | 'customer-view' | 'history';
 
 const CourseCorrectionPage: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
@@ -57,16 +60,23 @@ const CourseCorrectionPage: React.FC = () => {
   const customerId = searchParams.get('customerId') ? parseInt(searchParams.get('customerId')!) : null;
 
   // Page state
-  const [pageView, setPageView] = useState<PageView>(customerId ? 'customer-schemes' : 'empty');
+  const [pageView, setPageView] = useState<PageView>(customerId ? 'customer-view' : 'empty');
   const [selectedScheme, setSelectedScheme] = useState<PortfolioHolding | null>(null);
   const [selectedTargetScheme, setSelectedTargetScheme] = useState<SchemeSearchResult | null>(null);
   const [notes, setNotes] = useState('');
   const [targetSearch, setTargetSearch] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Transaction state
+  const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionTotal, setTransactionTotal] = useState(0);
 
   // History list state
   const [historyPage, setHistoryPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<CourseCorrectionStatus | ''>('');
+  const [statusFilter, setStatusFilter] = useState<CourseCorrectionStatus | ''>();
 
   // Fetch customer data
   const { data: customer, isLoading: customerLoading } = useCustomer(customerId || 0);
@@ -98,13 +108,56 @@ const CourseCorrectionPage: React.FC = () => {
   const corrections = correctionsData?.corrections || [];
   const holdings = portfolio?.holdings || [];
 
-  // Reset to scheme selection
-  const resetToSchemes = () => {
-    setPageView('customer-schemes');
+  // Fetch transactions when scheme is selected
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!customerId || !selectedScheme) {
+        setTransactions([]);
+        setTransactionTotal(0);
+        return;
+      }
+
+      setTransactionsLoading(true);
+      try {
+        const filters: TransactionFilters = {
+          customer_id: customerId,
+          scheme_code: selectedScheme.scheme_code,
+          page: transactionPage,
+          page_size: 20,
+          sort_by: 'txn_date',
+          sort_order: 'desc'
+        };
+        const response = await TransactionService.getTransactions(filters);
+        if (response.success) {
+          setTransactions(response.data.transactions);
+          setTransactionTotal(response.data.pagination.total);
+        }
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+      } finally {
+        setTransactionsLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [customerId, selectedScheme?.scheme_code, transactionPage]);
+
+  // Reset selection
+  const resetSelection = () => {
     setSelectedScheme(null);
     setSelectedTargetScheme(null);
     setNotes('');
     setTargetSearch('');
+    setShowConfirmModal(false);
+    setTransactionPage(1);
+  };
+
+  // Handle scheme selection
+  const handleSchemeSelect = (holding: PortfolioHolding) => {
+    setSelectedScheme(holding);
+    setSelectedTargetScheme(null);
+    setTargetSearch('');
+    setTransactionPage(1);
   };
 
   // Handle create correction
@@ -118,7 +171,7 @@ const CourseCorrectionPage: React.FC = () => {
       notes: notes || undefined
     });
 
-    resetToSchemes();
+    resetSelection();
     refetch();
   };
 
@@ -664,305 +717,88 @@ const CourseCorrectionPage: React.FC = () => {
   );
 
   // ============================================================================
-  // RENDER: Customer Schemes (MF Holdings)
+  // RENDER: 3-Column Layout (Schemes | Transactions | Search)
   // ============================================================================
-  const renderCustomerSchemes = () => (
-    <div style={cardStyle}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px'
-      }}>
-        <div>
-          <h3 style={{
-            margin: 0,
-            fontSize: '18px',
-            fontWeight: '600',
-            color: colors.utility.primaryText
-          }}>
-            Select Scheme to Correct
-          </h3>
-          <p style={{
-            margin: '4px 0 0',
-            fontSize: '14px',
-            color: colors.utility.secondaryText
-          }}>
-            Choose the scheme with incorrect code that needs to be migrated
-          </p>
-        </div>
-      </div>
-
-      {portfolioLoading ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: colors.utility.secondaryText }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: `3px solid ${colors.brand.primary}20`,
-            borderTop: `3px solid ${colors.brand.primary}`,
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          Loading schemes...
-        </div>
-      ) : holdings.length === 0 ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: colors.utility.secondaryText }}>
-          <Package size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-          <p style={{ margin: 0, fontSize: '16px' }}>No schemes found for this customer</p>
-          <p style={{ margin: '8px 0 0', fontSize: '14px' }}>Import transactions first to see holdings</p>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-          gap: '16px'
-        }}>
-          {holdings.map((holding: PortfolioHolding) => {
-            const returnPct = holding.return_percentage || 0;
-            const isPositive = returnPct >= 0;
-
-            return (
-              <div
-                key={holding.scheme_code}
-                onClick={() => {
-                  setSelectedScheme(holding);
-                  setPageView('select-target');
-                }}
-                style={{
-                  padding: '20px',
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.utility.primaryText}15`,
-                  backgroundColor: colors.utility.primaryBackground,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.brand.primary;
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = `${colors.utility.primaryText}15`;
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={{
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: colors.utility.primaryText,
-                  marginBottom: '8px',
-                  lineHeight: '1.4'
-                }}>
-                  {holding.scheme_name || holding.scheme_code}
-                </div>
-
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '12px',
-                  color: colors.utility.secondaryText,
-                  marginBottom: '12px'
-                }}>
-                  <span style={{
-                    fontFamily: 'monospace',
-                    backgroundColor: colors.utility.primaryText + '10',
-                    padding: '2px 6px',
-                    borderRadius: '4px'
-                  }}>
-                    {holding.scheme_code}
-                  </span>
-                  {holding.category && (
-                    <>
-                      <span>•</span>
-                      <span>{holding.category}</span>
-                    </>
-                  )}
-                </div>
-
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-end'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
-                      Current Value
-                    </div>
-                    <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-                      {formatCurrency(holding.current_value || 0)}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '2px' }}>
-                      Returns
-                    </div>
-                    <div style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: isPositive ? colors.semantic.success : colors.semantic.error,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                      {isPositive ? '+' : ''}{returnPct.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  );
-
-  // ============================================================================
-  // RENDER: Select Target Scheme
-  // ============================================================================
-  const renderSelectTarget = () => (
-    <div>
-      {/* Back button and header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button
-          onClick={resetToSchemes}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: colors.utility.secondaryText,
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
-          Select Correct Scheme
-        </h2>
-      </div>
-
-      {/* Selected scheme summary */}
+  const renderThreeColumnLayout = () => (
+    <div style={{ display: 'flex', gap: '16px', height: 'calc(100vh - 280px)', minHeight: '500px' }}>
+      {/* LEFT COLUMN - 25% - MF Schemes */}
       <div style={{
         ...cardStyle,
-        marginBottom: '20px',
-        backgroundColor: colors.semantic.error + '08',
-        borderColor: colors.semantic.error + '30'
+        width: '25%',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
       }}>
-        <div style={{ fontSize: '12px', color: colors.utility.secondaryText, marginBottom: '4px' }}>
-          Scheme to Replace (Wrong Code)
-        </div>
-        <div style={{ fontSize: '16px', fontWeight: '600', color: colors.utility.primaryText }}>
-          {selectedScheme?.scheme_name}
-        </div>
-        <div style={{
-          fontSize: '13px',
-          color: colors.semantic.error,
-          fontFamily: 'monospace',
-          marginTop: '4px'
+        <h3 style={{
+          margin: '0 0 12px 0',
+          fontSize: '14px',
+          fontWeight: '600',
+          color: colors.utility.secondaryText,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
         }}>
-          Code: {selectedScheme?.scheme_code}
-        </div>
-        <div style={{ fontSize: '13px', color: colors.utility.secondaryText, marginTop: '4px' }}>
-          Value: {formatCurrency(selectedScheme?.current_value || 0)}
-        </div>
-      </div>
+          Select Scheme to Correct
+        </h3>
 
-      {/* Search */}
-      <div style={cardStyle}>
-        <div style={{ position: 'relative', marginBottom: '16px' }}>
-          <Search
-            size={18}
-            style={{
-              position: 'absolute',
-              left: '14px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: colors.utility.secondaryText
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search for correct scheme by name or code..."
-            value={targetSearch}
-            onChange={(e) => setTargetSearch(e.target.value)}
-            autoFocus
-            style={{
-              width: '100%',
-              padding: '14px 14px 14px 44px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.utility.primaryText}20`,
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText,
-              fontSize: '15px',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
-
-        {searchLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
-            Searching...
+        {portfolioLoading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.utility.secondaryText }}>
+            <div>Loading...</div>
           </div>
-        ) : targetSearch.length < 2 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
-            Enter at least 2 characters to search
-          </div>
-        ) : schemeSearchResults?.schemes.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: colors.utility.secondaryText }}>
-            No schemes found
+        ) : holdings.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: colors.utility.secondaryText }}>
+            <Package size={32} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p style={{ margin: 0, fontSize: '13px', textAlign: 'center' }}>No schemes found</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
-            {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => {
-              const isSameAsSource = s.scheme_code === selectedScheme?.scheme_code;
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {holdings.map((holding: PortfolioHolding) => {
+              const isSelected = selectedScheme?.scheme_code === holding.scheme_code;
               return (
                 <div
-                  key={s.scheme_code}
-                  onClick={() => {
-                    if (!isSameAsSource) {
-                      setSelectedTargetScheme(s);
-                      setPageView('confirm');
-                    }
-                  }}
+                  key={holding.scheme_code}
+                  onClick={() => handleSchemeSelect(holding)}
                   style={{
-                    padding: '16px',
-                    borderRadius: '10px',
-                    border: `1px solid ${isSameAsSource ? colors.semantic.error + '50' : colors.utility.primaryText + '15'}`,
-                    cursor: isSameAsSource ? 'not-allowed' : 'pointer',
-                    backgroundColor: isSameAsSource ? colors.semantic.error + '05' : colors.utility.primaryBackground,
-                    opacity: isSameAsSource ? 0.6 : 1,
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSameAsSource) {
-                      e.currentTarget.style.borderColor = colors.brand.primary;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSameAsSource) {
-                      e.currentTarget.style.borderColor = `${colors.utility.primaryText}15`;
-                    }
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: isSelected
+                      ? `2px solid ${colors.brand.primary}`
+                      : `1px solid ${colors.utility.primaryText}15`,
+                    backgroundColor: isSelected
+                      ? colors.brand.primary + '10'
+                      : colors.utility.primaryBackground,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
                 >
-                  <div style={{ fontWeight: '600', color: colors.utility.primaryText, marginBottom: '4px' }}>
-                    {s.scheme_name}
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: colors.utility.primaryText,
+                    marginBottom: '4px',
+                    lineHeight: '1.3',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {holding.scheme_name || holding.scheme_code}
                   </div>
-                  <div style={{ fontSize: '13px', color: colors.utility.secondaryText }}>
-                    {s.amc_name} • Code: <span style={{ fontFamily: 'monospace' }}>{s.scheme_code}</span>
-                    {isSameAsSource && (
-                      <span style={{ color: colors.semantic.error, marginLeft: '8px' }}>(Same as source)</span>
-                    )}
+                  <div style={{
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    color: colors.utility.secondaryText,
+                    marginBottom: '6px'
+                  }}>
+                    {holding.scheme_code}
+                  </div>
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: colors.brand.primary
+                  }}>
+                    {formatCurrency(holding.current_value || 0)}
                   </div>
                 </div>
               );
@@ -970,170 +806,517 @@ const CourseCorrectionPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
-  );
 
-  // ============================================================================
-  // RENDER: Confirm
-  // ============================================================================
-  const renderConfirm = () => (
-    <div>
-      {/* Back button and header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button
-          onClick={() => setPageView('select-target')}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: colors.utility.secondaryText,
+      {/* MIDDLE COLUMN - 50% - Transactions */}
+      <div style={{
+        ...cardStyle,
+        width: '50%',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
+        {!selectedScheme ? (
+          <div style={{
+            flex: 1,
             display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: colors.utility.primaryText }}>
-          Confirm Migration
-        </h2>
-      </div>
-
-      <div style={cardStyle}>
-        {/* Warning */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '12px',
-          padding: '16px',
-          backgroundColor: '#fef3c7',
-          borderRadius: '10px',
-          marginBottom: '24px'
-        }}>
-          <AlertTriangle size={20} color="#92400e" style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ fontSize: '14px', color: '#92400e', lineHeight: '1.5' }}>
-            This will create a migration record in <strong>pending</strong> status. Click <strong>Execute</strong> to apply changes.
-            After execution, remember to <strong>regenerate snapshots</strong> for this customer.
-          </div>
-        </div>
-
-        {/* Migration Summary */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
-          gap: '20px',
-          alignItems: 'center',
-          marginBottom: '24px'
-        }}>
-          {/* From */}
-          <div style={{
-            padding: '20px',
-            borderRadius: '10px',
-            backgroundColor: colors.semantic.error + '08',
-            border: `1px solid ${colors.semantic.error}30`
-          }}>
-            <div style={{ fontSize: '11px', color: colors.semantic.error, fontWeight: '600', marginBottom: '8px' }}>
-              FROM (Wrong)
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '4px' }}>
-              {selectedScheme?.scheme_name}
-            </div>
-            <div style={{ fontSize: '13px', color: colors.utility.secondaryText, fontFamily: 'monospace' }}>
-              {selectedScheme?.scheme_code}
-            </div>
-          </div>
-
-          {/* Arrow */}
-          <ArrowRight size={28} color={colors.utility.secondaryText} />
-
-          {/* To */}
-          <div style={{
-            padding: '20px',
-            borderRadius: '10px',
-            backgroundColor: colors.semantic.success + '08',
-            border: `1px solid ${colors.semantic.success}30`
-          }}>
-            <div style={{ fontSize: '11px', color: colors.semantic.success, fontWeight: '600', marginBottom: '8px' }}>
-              TO (Correct)
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '4px' }}>
-              {selectedTargetScheme?.scheme_name}
-            </div>
-            <div style={{ fontSize: '13px', color: colors.utility.secondaryText, fontFamily: 'monospace' }}>
-              {selectedTargetScheme?.scheme_code}
-            </div>
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            marginBottom: '8px',
-            fontWeight: '600',
-            fontSize: '14px',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
             color: colors.utility.secondaryText
           }}>
-            Notes (optional)
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add any notes about this correction..."
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.utility.primaryText}20`,
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText,
-              fontSize: '14px',
-              minHeight: '80px',
-              resize: 'vertical',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={resetToSchemes}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: 'transparent',
-              border: `1px solid ${colors.utility.primaryText}20`,
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              color: colors.utility.primaryText
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleCreateCorrection}
-            disabled={createMutation.isPending}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: colors.brand.primary,
-              border: 'none',
-              borderRadius: '10px',
-              cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#fff',
+            <ArrowRight size={48} style={{ opacity: 0.2, marginBottom: '16px', transform: 'rotate(180deg)' }} />
+            <p style={{ margin: 0, fontSize: '15px', fontWeight: '500' }}>Select a scheme</p>
+            <p style={{ margin: '8px 0 0', fontSize: '13px' }}>to view its transactions</p>
+          </div>
+        ) : (
+          <>
+            <div style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '8px',
-              opacity: createMutation.isPending ? 0.7 : 1
-            }}
-          >
-            {createMutation.isPending ? 'Creating...' : <><Plus size={16} /> Create Migration</>}
-          </button>
-        </div>
+              marginBottom: '12px',
+              paddingBottom: '12px',
+              borderBottom: `1px solid ${colors.utility.primaryText}10`
+            }}>
+              <div>
+                <h3 style={{
+                  margin: '0 0 4px 0',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: colors.utility.primaryText
+                }}>
+                  {selectedScheme.scheme_name}
+                </h3>
+                <div style={{ fontSize: '12px', color: colors.utility.secondaryText, fontFamily: 'monospace' }}>
+                  {selectedScheme.scheme_code} • {transactionTotal} transactions
+                </div>
+              </div>
+              <button
+                onClick={resetSelection}
+                style={{
+                  padding: '4px 8px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  color: colors.utility.secondaryText
+                }}
+              >
+                Clear
+              </button>
+            </div>
+
+            {transactionsLoading ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ color: colors.utility.secondaryText }}>Loading transactions...</div>
+              </div>
+            ) : transactions.length === 0 ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: colors.utility.secondaryText }}>
+                <p style={{ margin: 0 }}>No transactions found</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: colors.utility.primaryBackground, position: 'sticky', top: 0 }}>
+                        <th style={{ padding: '8px', textAlign: 'left', fontWeight: 600, color: colors.utility.secondaryText }}>Date</th>
+                        <th style={{ padding: '8px', textAlign: 'left', fontWeight: 600, color: colors.utility.secondaryText }}>Type</th>
+                        <th style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: colors.utility.secondaryText }}>Amount</th>
+                        <th style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: colors.utility.secondaryText }}>Units</th>
+                        <th style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: colors.utility.secondaryText }}>NAV</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((txn) => (
+                        <tr key={txn.id} style={{ borderTop: `1px solid ${colors.utility.primaryText}08` }}>
+                          <td style={{ padding: '8px', color: colors.utility.primaryText }}>
+                            {formatDate(txn.txn_date)}
+                          </td>
+                          <td style={{ padding: '8px' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              backgroundColor: txn.txn_type === 'Addition' ? colors.semantic.success + '20' : colors.semantic.error + '20',
+                              color: txn.txn_type === 'Addition' ? colors.semantic.success : colors.semantic.error
+                            }}>
+                              {txn.txn_type_name || txn.txn_type || 'N/A'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 500, color: colors.utility.primaryText }}>
+                            {formatCurrency(txn.total_amount)}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: colors.utility.secondaryText }}>
+                            {parseFloat(String(txn.units || 0)).toFixed(3)}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: colors.utility.secondaryText }}>
+                            {parseFloat(String(txn.nav || 0)).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {transactionTotal > 20 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
+                    <button
+                      onClick={() => setTransactionPage(p => Math.max(1, p - 1))}
+                      disabled={transactionPage === 1}
+                      style={{
+                        padding: '4px 10px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        borderRadius: '4px',
+                        cursor: transactionPage === 1 ? 'not-allowed' : 'pointer',
+                        opacity: transactionPage === 1 ? 0.5 : 1,
+                        fontSize: '12px'
+                      }}
+                    >
+                      Prev
+                    </button>
+                    <span style={{ fontSize: '12px', color: colors.utility.secondaryText, padding: '4px 8px' }}>
+                      Page {transactionPage} of {Math.ceil(transactionTotal / 20)}
+                    </span>
+                    <button
+                      onClick={() => setTransactionPage(p => p + 1)}
+                      disabled={transactionPage >= Math.ceil(transactionTotal / 20)}
+                      style={{
+                        padding: '4px 10px',
+                        backgroundColor: colors.utility.secondaryBackground,
+                        border: `1px solid ${colors.utility.primaryText}20`,
+                        borderRadius: '4px',
+                        cursor: transactionPage >= Math.ceil(transactionTotal / 20) ? 'not-allowed' : 'pointer',
+                        opacity: transactionPage >= Math.ceil(transactionTotal / 20) ? 0.5 : 1,
+                        fontSize: '12px'
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* RIGHT COLUMN - 25% - Search & Select Target */}
+      <div style={{
+        ...cardStyle,
+        width: '25%',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
+        <h3 style={{
+          margin: '0 0 12px 0',
+          fontSize: '14px',
+          fontWeight: '600',
+          color: colors.utility.secondaryText,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          Select Target Scheme
+        </h3>
+
+        {!selectedScheme ? (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: colors.utility.secondaryText
+          }}>
+            <Search size={32} style={{ opacity: 0.2, marginBottom: '12px' }} />
+            <p style={{ margin: 0, fontSize: '13px', textAlign: 'center' }}>
+              Select a source scheme first
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Selected Source */}
+            <div style={{
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: colors.semantic.error + '10',
+              border: `1px solid ${colors.semantic.error}30`,
+              marginBottom: '12px'
+            }}>
+              <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600, marginBottom: '2px' }}>
+                FROM (Wrong Code)
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: colors.utility.primaryText,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {selectedScheme.scheme_name}
+              </div>
+              <div style={{ fontSize: '10px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>
+                {selectedScheme.scheme_code}
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <Search
+                size={14}
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: colors.utility.secondaryText
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search by name or code..."
+                value={targetSearch}
+                onChange={(e) => setTargetSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 10px 10px 32px',
+                  borderRadius: '6px',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  fontSize: '13px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Search Results */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {searchLoading ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
+                  Searching...
+                </div>
+              ) : targetSearch.length < 2 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
+                  Type at least 2 characters
+                </div>
+              ) : schemeSearchResults?.schemes.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
+                  No schemes found for "{targetSearch}"
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => {
+                    const isSameAsSource = s.scheme_code === selectedScheme?.scheme_code;
+                    const isSelected = selectedTargetScheme?.scheme_code === s.scheme_code;
+                    return (
+                      <div
+                        key={s.scheme_code}
+                        onClick={() => {
+                          if (!isSameAsSource) {
+                            setSelectedTargetScheme(s);
+                          }
+                        }}
+                        style={{
+                          padding: '10px',
+                          borderRadius: '6px',
+                          border: isSelected
+                            ? `2px solid ${colors.semantic.success}`
+                            : isSameAsSource
+                            ? `1px solid ${colors.semantic.error}30`
+                            : `1px solid ${colors.utility.primaryText}15`,
+                          cursor: isSameAsSource ? 'not-allowed' : 'pointer',
+                          backgroundColor: isSelected
+                            ? colors.semantic.success + '10'
+                            : isSameAsSource
+                            ? colors.semantic.error + '05'
+                            : colors.utility.primaryBackground,
+                          opacity: isSameAsSource ? 0.5 : 1
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          color: colors.utility.primaryText,
+                          marginBottom: '2px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical'
+                        }}>
+                          {s.scheme_name}
+                        </div>
+                        <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                          <span style={{ fontFamily: 'monospace' }}>{s.scheme_code}</span>
+                          {isSameAsSource && <span style={{ color: colors.semantic.error, marginLeft: '4px' }}>(same)</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Target & Action Button */}
+            {selectedTargetScheme && (
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
+                <div style={{
+                  padding: '10px',
+                  borderRadius: '6px',
+                  backgroundColor: colors.semantic.success + '10',
+                  border: `1px solid ${colors.semantic.success}30`,
+                  marginBottom: '10px'
+                }}>
+                  <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600, marginBottom: '2px' }}>
+                    TO (Correct Code)
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: colors.utility.primaryText,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {selectedTargetScheme.scheme_name}
+                  </div>
+                  <div style={{ fontSize: '10px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>
+                    {selectedTargetScheme.scheme_code}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowConfirmModal(true)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: colors.brand.primary,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Plus size={14} />
+                  Create Migration
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
+
+  // ============================================================================
+  // RENDER: Confirm Modal
+  // ============================================================================
+  const renderConfirmModal = () => {
+    if (!showConfirmModal || !selectedScheme || !selectedTargetScheme) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderRadius: '12px',
+          padding: '24px',
+          maxWidth: '500px',
+          width: '90%',
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText }}>
+            Confirm Migration
+          </h3>
+
+          {/* Warning */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            padding: '12px',
+            backgroundColor: '#fef3c7',
+            borderRadius: '8px',
+            marginBottom: '16px'
+          }}>
+            <AlertTriangle size={18} color="#92400e" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ fontSize: '13px', color: '#92400e', lineHeight: '1.4' }}>
+              This creates a migration record in <strong>pending</strong> status. Execute from history to apply changes.
+            </div>
+          </div>
+
+          {/* Migration Summary */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: colors.semantic.error + '08',
+              border: `1px solid ${colors.semantic.error}30`,
+              marginBottom: '8px'
+            }}>
+              <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600 }}>FROM</div>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedScheme.scheme_name}</div>
+              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedScheme.scheme_code}</div>
+            </div>
+            <div style={{ textAlign: 'center', color: colors.utility.secondaryText, margin: '4px 0' }}>
+              <ArrowRight size={20} style={{ transform: 'rotate(90deg)' }} />
+            </div>
+            <div style={{
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: colors.semantic.success + '08',
+              border: `1px solid ${colors.semantic.success}30`
+            }}>
+              <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600 }}>TO</div>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{selectedTargetScheme.scheme_name}</div>
+              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.secondaryText }}>{selectedTargetScheme.scheme_code}</div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: 600, color: colors.utility.secondaryText }}>
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add any notes..."
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                fontSize: '13px',
+                minHeight: '60px',
+                resize: 'vertical',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowConfirmModal(false)}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: 'transparent',
+                border: `1px solid ${colors.utility.primaryText}20`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: colors.utility.primaryText
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateCorrection}
+              disabled={createMutation.isPending}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: colors.brand.primary,
+                border: 'none',
+                borderRadius: '8px',
+                cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#fff',
+                opacity: createMutation.isPending ? 0.7 : 1
+              }}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Migration'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ============================================================================
   // MAIN RENDER
@@ -1174,7 +1357,7 @@ const CourseCorrectionPage: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
       {/* Page Header */}
       {customerId && (
         <div style={{ marginBottom: '24px' }}>
@@ -1199,9 +1382,10 @@ const CourseCorrectionPage: React.FC = () => {
       {/* Main Content based on page view */}
       {!customerId && pageView === 'empty' && renderEmptyState()}
       {!customerId && pageView === 'history' && null /* History already rendered above */}
-      {customerId && pageView === 'customer-schemes' && renderCustomerSchemes()}
-      {customerId && pageView === 'select-target' && renderSelectTarget()}
-      {customerId && pageView === 'confirm' && renderConfirm()}
+      {customerId && pageView === 'customer-view' && renderThreeColumnLayout()}
+
+      {/* Confirm Modal */}
+      {renderConfirmModal()}
     </div>
   );
 };
