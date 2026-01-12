@@ -294,47 +294,9 @@ router.post('/corrections/:id/snapshot-done', async (req: Request, res: Response
 });
 
 // ============================================================================
-// SCHEME SEARCH & BOOKMARKS
+// BOOKMARKS (for source scheme selection)
+// NOTE: For target scheme search, use NAV Tracking API: /api/nav/schemes/search
 // ============================================================================
-
-/**
- * GET /api/course-correction/schemes/search
- * Search schemes within bookmarks for target selection
- * Bookmarked schemes have NAV data for proper portfolio calculations
- */
-router.get('/schemes/search', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const isLive = req.headers['x-environment'] === 'live';
-    const search = req.query.search as string;
-    const page = parseInt(req.query.page as string) || 1;
-    const pageSize = parseInt(req.query.page_size as string) || 20;
-
-    if (!tenantId) {
-      return res.status(400).json({ success: false, error: 'Tenant ID required' });
-    }
-
-    if (!search || search.length < 2) {
-      return res.status(400).json({ success: false, error: 'Search term must be at least 2 characters' });
-    }
-
-    const { schemes, total } = await courseCorrectionService.searchSchemes(tenantId, isLive, search, page, pageSize);
-
-    return res.json({
-      success: true,
-      data: {
-        schemes,
-        total,
-        page,
-        page_size: pageSize,
-        total_pages: Math.ceil(total / pageSize)
-      }
-    });
-  } catch (error: any) {
-    console.error('[CourseCorrection] Search schemes error:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 /**
  * GET /api/course-correction/bookmarks

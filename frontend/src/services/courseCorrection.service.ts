@@ -9,7 +9,6 @@ import {
   ExecuteResponse,
   RollbackResponse,
   BookmarksResponse,
-  SchemeSearchResponse,
   CreateCourseCorrectionRequest,
   GetCorrectionsParams
 } from '../types/courseCorrection.types';
@@ -35,7 +34,8 @@ class CourseCorrectionService {
   }
 
   // ============================================================================
-  // BOOKMARKS & SCHEME SEARCH
+  // BOOKMARKS (for source scheme selection)
+  // NOTE: For target scheme search, use navService.searchSchemes()
   // ============================================================================
 
   /**
@@ -46,22 +46,6 @@ class CourseCorrectionService {
       headers: this.getHeaders()
     });
     return this.handleResponse<BookmarksResponse>(response);
-  }
-
-  /**
-   * Search schemes within bookmarks for target selection
-   * Returns only bookmarked schemes (which have NAV data for portfolio calculations)
-   */
-  async searchSchemes(search: string, page: number = 1, pageSize: number = 20): Promise<SchemeSearchResponse> {
-    const params = new URLSearchParams({
-      search,
-      page: page.toString(),
-      page_size: pageSize.toString()
-    });
-    const response = await fetch(`${BASE_URL}/schemes/search?${params}`, {
-      headers: this.getHeaders()
-    });
-    return this.handleResponse<SchemeSearchResponse>(response);
   }
 
   // ============================================================================

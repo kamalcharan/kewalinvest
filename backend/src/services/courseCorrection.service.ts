@@ -8,8 +8,7 @@ import {
   ImpactedCustomer,
   SchemeImpactAnalysis,
   CreateCourseCorrectionRequest,
-  GetCorrectionsParams,
-  SchemeSearchResult
+  GetCorrectionsParams
 } from '../types/courseCorrection.types';
 
 export class CourseCorrectionService {
@@ -330,52 +329,8 @@ export class CourseCorrectionService {
   }
 
   // ============================================================================
-  // SCHEME SEARCH (for target scheme selection - searches within bookmarks)
-  // ============================================================================
-
-  /**
-   * Search schemes within bookmarks for target selection
-   * Bookmarked schemes have NAV data available for proper portfolio calculations
-   */
-  async searchSchemes(
-    tenantId: number,
-    isLive: boolean,
-    search: string,
-    page: number = 1,
-    pageSize: number = 20
-  ): Promise<{ schemes: SchemeSearchResult[]; total: number }> {
-    const offset = (page - 1) * pageSize;
-    const searchPattern = `%${search}%`;
-
-    // Search within bookmarks (tracked schemes with NAV data)
-    const countQuery = `
-      SELECT COUNT(*) FROM t_scheme_bookmarks sb
-      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
-      WHERE sb.tenant_id = $1 AND sb.is_live = $2 AND sb.is_active = true
-        AND (sb.scheme_name ILIKE $3 OR sb.scheme_code ILIKE $3 OR sb.amc_name ILIKE $3 OR sb.alias_name ILIKE $3)
-    `;
-    const countResult = await pool.query(countQuery, [tenantId, isLive, searchPattern]);
-    const total = parseInt(countResult.rows[0].count);
-
-    const query = `
-      SELECT sd.id, sb.scheme_code, sb.scheme_name, sd.scheme_nav_name, sb.amc_name
-      FROM t_scheme_bookmarks sb
-      JOIN t_scheme_details sd ON sb.scheme_id = sd.id
-      WHERE sb.tenant_id = $1 AND sb.is_live = $2 AND sb.is_active = true
-        AND (sb.scheme_name ILIKE $3 OR sb.scheme_code ILIKE $3 OR sb.amc_name ILIKE $3 OR sb.alias_name ILIKE $3)
-      ORDER BY sb.scheme_name
-      LIMIT $4 OFFSET $5
-    `;
-    const result = await pool.query(query, [tenantId, isLive, searchPattern, pageSize, offset]);
-
-    return {
-      schemes: result.rows,
-      total
-    };
-  }
-
-  // ============================================================================
   // BOOKMARKS LIST (for source scheme selection)
+  // NOTE: For target scheme search, use NAV Tracking API: /api/nav/schemes/search
   // ============================================================================
 
   /**

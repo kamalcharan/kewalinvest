@@ -1,8 +1,11 @@
 // frontend/src/hooks/useCourseCorrection.ts
 // React Query hooks for Course Correction feature
+// NOTE: Scheme search uses NAV Tracking service (not duplicate API)
 
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { courseCorrectionService } from '../services/courseCorrection.service';
+import { navService, SchemeSearchParams, SchemeSearchResult } from '../services/nav.service';
 import { toastService } from '../services/toast.service';
 import {
   GetCorrectionsParams,
@@ -92,21 +95,71 @@ export function useImpactAnalysis(schemeCode: string | null) {
 }
 
 /**
- * Search schemes in master data
+ * Search schemes using NAV Tracking service (global scheme master)
+ * Returns a function to trigger search on button click (not on keystroke)
  */
-export function useSchemeSearch(search: string, page: number = 1) {
-  return useQuery({
-    queryKey: COURSE_CORRECTION_KEYS.schemeSearch(search),
-    queryFn: async () => {
-      if (!search || search.length < 2) return { schemes: [], total: 0, page: 1, page_size: 20, total_pages: 0 };
-      const response = await courseCorrectionService.searchSchemes(search, page);
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to search schemes');
+export function useSchemeSearch() {
+  const [schemes, setSchemes] = useState<SchemeSearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<{
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  } | null>(null);
+
+  const searchSchemes = useCallback(async (search: string, page: number = 1) => {
+    if (!search || search.trim().length < 2) {
+      setError('Search must be at least 2 characters');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const params: SchemeSearchParams = {
+        search: search.trim(),
+        page,
+        page_size: 20
+      };
+      const response = await navService.searchSchemes(params);
+
+      if (response.success && response.data) {
+        setSchemes(response.data.schemes || []);
+        setPagination({
+          total: response.data.total,
+          page: response.data.page,
+          page_size: response.data.page_size,
+          total_pages: response.data.total_pages
+        });
+      } else {
+        setError(response.error || 'Search failed');
+        setSchemes([]);
       }
-      return response.data;
-    },
-    enabled: search.length >= 2
-  });
+    } catch (err: any) {
+      setError(err.message || 'Search failed');
+      setSchemes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const clearSearch = useCallback(() => {
+    setSchemes([]);
+    setError(null);
+    setPagination(null);
+  }, []);
+
+  return {
+    schemes,
+    isLoading,
+    error,
+    pagination,
+    searchSchemes,
+    clearSearch
+  };
 }
 
 // ============================================================================

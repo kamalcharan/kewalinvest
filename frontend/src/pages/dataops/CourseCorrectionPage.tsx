@@ -95,8 +95,22 @@ const CourseCorrectionPage: React.FC = () => {
     customer_id: customerId || undefined
   });
 
-  // Scheme search for target selection
-  const { data: schemeSearchResults, isLoading: searchLoading } = useSchemeSearch(targetSearch);
+  // Scheme search for target selection (uses NAV Tracking API - search on button click)
+  const { schemes: schemeSearchResults, isLoading: searchLoading, searchSchemes, clearSearch } = useSchemeSearch();
+
+  // Handle search button click
+  const handleSearchClick = () => {
+    if (targetSearch.trim().length >= 2) {
+      searchSchemes(targetSearch);
+    }
+  };
+
+  // Handle Enter key in search input
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearchClick();
+    }
+  };
 
   // Mutations
   const createMutation = useCreateCorrection();
@@ -1025,34 +1039,57 @@ const CourseCorrectionPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Search Input */}
-            <div style={{ position: 'relative', marginBottom: '12px' }}>
-              <Search
-                size={14}
+            {/* Search Input with Button */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search
+                  size={14}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: colors.utility.secondaryText
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search by name or code..."
+                  value={targetSearch}
+                  onChange={(e) => setTargetSearch(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  style={{
+                    width: '100%',
+                    padding: '10px 10px 10px 32px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.utility.primaryText}20`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText,
+                    fontSize: '13px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleSearchClick}
+                disabled={targetSearch.trim().length < 2 || searchLoading}
                 style={{
-                  position: 'absolute',
-                  left: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: colors.utility.secondaryText
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search by name or code..."
-                value={targetSearch}
-                onChange={(e) => setTargetSearch(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 10px 10px 32px',
+                  padding: '10px 16px',
                   borderRadius: '6px',
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  backgroundColor: colors.utility.primaryBackground,
-                  color: colors.utility.primaryText,
+                  border: 'none',
+                  backgroundColor: targetSearch.trim().length >= 2 ? colors.brands.primary : colors.utility.primaryText + '20',
+                  color: targetSearch.trim().length >= 2 ? '#fff' : colors.utility.secondaryText,
                   fontSize: '13px',
-                  boxSizing: 'border-box'
+                  fontWeight: 500,
+                  cursor: targetSearch.trim().length >= 2 ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
-              />
+              >
+                <Search size={14} />
+                Search
+              </button>
             </div>
 
             {/* Search Results */}
@@ -1061,17 +1098,17 @@ const CourseCorrectionPage: React.FC = () => {
                 <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
                   Searching...
                 </div>
-              ) : targetSearch.length < 2 ? (
+              ) : schemeSearchResults.length === 0 && targetSearch.length >= 2 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
-                  Type at least 2 characters
+                  Click Search to find schemes
                 </div>
-              ) : schemeSearchResults?.schemes.length === 0 ? (
+              ) : schemeSearchResults.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
-                  No schemes found for "{targetSearch}"
+                  Enter scheme name or code and click Search
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {schemeSearchResults?.schemes.map((s: SchemeSearchResult) => {
+                  {schemeSearchResults.map((s: SchemeSearchResult) => {
                     const isSameAsSource = s.scheme_code === selectedScheme?.scheme_code;
                     const isSelected = selectedTargetScheme?.scheme_code === s.scheme_code;
                     return (
