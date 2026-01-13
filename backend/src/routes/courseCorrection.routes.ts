@@ -175,78 +175,24 @@ router.post('/corrections/migrate', async (req: Request, res: Response) => {
 
 /**
  * POST /api/course-correction/corrections
- * Create a new course correction (pending status)
+ * DEPRECATED: Use POST /corrections/migrate instead
  */
 router.post('/corrections', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const isLive = req.headers['x-environment'] === 'live';
-    const userId = (req as any).user?.id;
-
-    if (!tenantId) {
-      return res.status(400).json({ success: false, error: 'Tenant ID required' });
-    }
-
-    const request: CreateCourseCorrectionRequest = req.body;
-
-    if (!request.customer_id || !request.source_scheme_code || !request.target_scheme_code) {
-      return res.status(400).json({
-        success: false,
-        error: 'customer_id, source_scheme_code, and target_scheme_code are required'
-      });
-    }
-
-    if (request.source_scheme_code === request.target_scheme_code) {
-      return res.status(400).json({
-        success: false,
-        error: 'Source and target scheme codes must be different'
-      });
-    }
-
-    const correction = await courseCorrectionService.createCorrection(tenantId, isLive, userId, request);
-
-    return res.status(201).json({
-      success: true,
-      data: correction,
-      message: 'Course correction created. Execute to apply changes.'
-    });
-  } catch (error: any) {
-    console.error('[CourseCorrection] Create correction error:', error);
-    return res.status(400).json({ success: false, error: error.message });
-  }
+  return res.status(400).json({
+    success: false,
+    error: 'This endpoint is deprecated. Use POST /corrections/migrate for one-step migration.'
+  });
 });
 
 /**
  * POST /api/course-correction/corrections/:id/execute
- * Execute a pending course correction
+ * DEPRECATED: Use POST /corrections/migrate instead
  */
 router.post('/corrections/:id/execute', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const isLive = req.headers['x-environment'] === 'live';
-    const correctionId = parseInt(req.params.id);
-
-    if (!tenantId) {
-      return res.status(400).json({ success: false, error: 'Tenant ID required' });
-    }
-
-    const result = await courseCorrectionService.executeCorrection(tenantId, isLive, correctionId);
-
-    if (!result.success) {
-      return res.status(400).json({ success: false, error: result.error });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        updated_transactions: result.updated_transactions,
-        message: `Successfully migrated ${result.updated_transactions} transactions`
-      }
-    });
-  } catch (error: any) {
-    console.error('[CourseCorrection] Execute correction error:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(400).json({
+    success: false,
+    error: 'This endpoint is deprecated. Use POST /corrections/migrate for one-step migration.'
+  });
 });
 
 /**
