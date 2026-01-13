@@ -285,7 +285,9 @@ router.post('/corrections/:id/rollback', async (req: Request, res: Response) => 
 
 /**
  * DELETE /api/course-correction/corrections/:id
- * Delete a pending course correction
+ * Delete a course correction record
+ * - If step 7 (update) passed and not rolled back, must rollback first
+ * - Otherwise, allows deletion
  */
 router.delete('/corrections/:id', async (req: Request, res: Response) => {
   try {
@@ -297,12 +299,12 @@ router.delete('/corrections/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Tenant ID required' });
     }
 
-    const deleted = await courseCorrectionService.deleteCorrection(tenantId, isLive, correctionId);
+    const result = await courseCorrectionService.deleteCorrection(tenantId, isLive, correctionId);
 
-    if (!deleted) {
-      return res.status(404).json({
+    if (!result.success) {
+      return res.status(400).json({
         success: false,
-        error: 'Correction not found or not in pending status'
+        error: result.error || 'Failed to delete correction'
       });
     }
 

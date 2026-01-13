@@ -1,11 +1,13 @@
 // frontend/src/types/courseCorrection.types.ts
 // Types for Course Correction (Scheme Code Migration) feature
+// Updated with step-by-step tracking
 
 // ============================================================================
 // Status Types
 // ============================================================================
 
 export type CourseCorrectionStatus = 'pending' | 'completed' | 'rolled_back' | 'failed';
+export type StepStatus = 'pending' | 'pass' | 'fail';
 
 // ============================================================================
 // Core Types
@@ -25,6 +27,7 @@ export interface CourseCorrection {
   total_invested: number;
   status: CourseCorrectionStatus;
   rollback_data: RollbackData | null;
+  backup_data: RollbackData | null;
   notes: string | null;
   error_message: string | null;
   created_by: number;
@@ -36,6 +39,15 @@ export interface CourseCorrection {
   rolled_back_by_name?: string;
   snapshot_regenerated: boolean;
   snapshot_regenerated_at: string | null;
+  // Step tracking
+  step_1_check_existing?: StepStatus;
+  step_2_get_customer?: StepStatus;
+  step_3_get_source_scheme?: StepStatus;
+  step_4_get_target_scheme?: StepStatus;
+  step_5_count_txns?: StepStatus;
+  step_6_backup?: StepStatus;
+  step_7_update_txns?: StepStatus;
+  step_8_snapshots?: StepStatus;
 }
 
 export interface RollbackData {
@@ -44,6 +56,7 @@ export interface RollbackData {
     original_scheme_code: string;
     original_scheme_name?: string;
   }>;
+  backup_timestamp?: string;
 }
 
 // ============================================================================
@@ -152,6 +165,11 @@ export interface RollbackResponse {
   error?: string;
 }
 
+export interface DeleteResponse {
+  success: boolean;
+  error?: string;
+}
+
 export interface BookmarksResponse {
   success: boolean;
   data: BookmarkedScheme[];
@@ -171,13 +189,11 @@ export interface SchemeSearchResponse {
 }
 
 // ============================================================================
-// Migration Types (Combined Create + Execute + Snapshot)
+// Migration Types (Step-by-step tracking)
 // ============================================================================
 
-export type MigrationStepStatus = 'pending' | 'completed' | 'failed' | 'skipped';
-
 export interface MigrationStep {
-  status: MigrationStepStatus;
+  status: StepStatus;
   message?: string;
   count?: number;
 }
@@ -186,9 +202,14 @@ export interface MigrationResult {
   success: boolean;
   correction_id?: number;
   steps: {
-    backup: MigrationStep;
-    update: MigrationStep;
-    snapshot: MigrationStep;
+    step_1_check_existing: MigrationStep;
+    step_2_get_customer: MigrationStep;
+    step_3_get_source_scheme: MigrationStep;
+    step_4_get_target_scheme: MigrationStep;
+    step_5_count_txns: MigrationStep;
+    step_6_backup: MigrationStep;
+    step_7_update_txns: MigrationStep;
+    step_8_snapshots: MigrationStep;
   };
   summary?: {
     customer_id: number;
@@ -201,6 +222,7 @@ export interface MigrationResult {
     total_invested: number;
   };
   error?: string;
+  failed_step?: number;
 }
 
 export interface MigrateResponse {
@@ -208,3 +230,18 @@ export interface MigrateResponse {
   data: MigrationResult;
   error?: string;
 }
+
+// ============================================================================
+// Step Labels for Display
+// ============================================================================
+
+export const STEP_LABELS: Record<string, string> = {
+  step_1_check_existing: 'Check Existing Migrations',
+  step_2_get_customer: 'Get Customer Name',
+  step_3_get_source_scheme: 'Get Source Scheme',
+  step_4_get_target_scheme: 'Get Target Scheme',
+  step_5_count_txns: 'Count Transactions',
+  step_6_backup: 'Backup Transactions',
+  step_7_update_txns: 'Update Transactions',
+  step_8_snapshots: 'Regenerate Snapshots'
+};

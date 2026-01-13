@@ -44,8 +44,10 @@ import {
 import type {
   CourseCorrection,
   CourseCorrectionStatus,
-  MigrationResult
+  MigrationResult,
+  StepStatus
 } from '../../types/courseCorrection.types';
+import { STEP_LABELS } from '../../types/courseCorrection.types';
 import type { SchemeSearchResult } from '../../services/nav.service';
 import type { PortfolioHolding } from '../../types/portfolio.types';
 
@@ -700,8 +702,73 @@ const CourseCorrectionPage: React.FC = () => {
                           </button>
                         </>
                       )}
-                      {(c.status === 'rolled_back' || c.status === 'failed') && (
-                        <span style={{ color: colors.utility.secondaryText, fontSize: '11px' }}>-</span>
+                      {c.status === 'rolled_back' && (
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          disabled={deleteMutation.isPending}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${colors.utility.primaryText}20`,
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            color: colors.semantic.error,
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Delete this record"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      )}
+                      {c.status === 'failed' && (
+                        <>
+                          {/* Show rollback only if step 7 passed (transactions were modified) */}
+                          {c.step_7_update_txns === 'pass' && (
+                            <button
+                              onClick={() => handleRollback(c.id)}
+                              disabled={rollbackMutation.isPending}
+                              style={{
+                                padding: '4px 10px',
+                                backgroundColor: 'transparent',
+                                border: `1px solid ${colors.utility.primaryText}20`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: colors.utility.primaryText,
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <RotateCcw size={10} /> Rollback
+                            </button>
+                          )}
+                          {/* Show delete if step 7 not passed OR if rolled back */}
+                          {c.step_7_update_txns !== 'pass' && (
+                            <button
+                              onClick={() => handleDelete(c.id)}
+                              disabled={deleteMutation.isPending}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: 'transparent',
+                                border: `1px solid ${colors.utility.primaryText}20`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: colors.semantic.error,
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Delete this record"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
@@ -1275,13 +1342,12 @@ const CourseCorrectionPage: React.FC = () => {
   const renderMigrationModal = () => {
     if (!showConfirmModal || !selectedScheme || !selectedTargetScheme) return null;
 
-    // Helper to render step status
-    const renderStep = (label: string, status: 'pending' | 'completed' | 'failed' | 'skipped' | 'processing', message?: string) => {
+    // Helper to render step status (updated for 8 steps)
+    const renderStep = (stepNum: number, label: string, status: StepStatus | 'processing', message?: string) => {
       const getIcon = () => {
         switch (status) {
-          case 'completed': return <Check size={16} color={colors.semantic.success} />;
-          case 'failed': return <XCircle size={16} color={colors.semantic.error} />;
-          case 'skipped': return <Clock size={16} color={colors.utility.secondaryText} />;
+          case 'pass': return <Check size={16} color={colors.semantic.success} />;
+          case 'fail': return <XCircle size={16} color={colors.semantic.error} />;
           case 'processing': return (
             <div style={{
               width: '16px', height: '16px',
@@ -1295,22 +1361,29 @@ const CourseCorrectionPage: React.FC = () => {
         }
       };
 
+      // Determine if this is a data-changing step (6+)
+      const isDataStep = stepNum >= 6;
+
       return (
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
-          padding: '12px',
-          backgroundColor: status === 'completed' ? colors.semantic.success + '08' :
-                          status === 'failed' ? colors.semantic.error + '08' :
+          gap: '10px',
+          padding: '8px 12px',
+          backgroundColor: status === 'pass' ? colors.semantic.success + '08' :
+                          status === 'fail' ? colors.semantic.error + '08' :
                           status === 'processing' ? colors.brand.primary + '08' : 'transparent',
-          borderRadius: '8px',
-          marginBottom: '8px'
+          borderRadius: '6px',
+          marginBottom: '4px',
+          borderLeft: isDataStep ? `3px solid ${status === 'pass' ? colors.semantic.success : status === 'fail' ? colors.semantic.error : colors.utility.secondaryText}40` : 'none'
         }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, width: '20px' }}>
+            {stepNum}
+          </span>
           {getIcon()}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: colors.utility.primaryText }}>{label}</div>
-            {message && <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>{message}</div>}
+            <div style={{ fontSize: '12px', fontWeight: 500, color: colors.utility.primaryText }}>{label}</div>
+            {message && <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>{message}</div>}
           </div>
         </div>
       );
@@ -1465,32 +1538,30 @@ const CourseCorrectionPage: React.FC = () => {
           {/* ============ PROCESSING STATE ============ */}
           {modalState === 'processing' && (
             <>
-              <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText, textAlign: 'center' }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText, textAlign: 'center' }}>
                 Migration in Progress
               </h3>
 
-              <div style={{ marginBottom: '20px' }}>
-                {renderStep(
-                  'Creating backup...',
-                  migrationResult?.steps.backup.status === 'completed' ? 'completed' :
-                  migrationResult?.steps.backup.status === 'failed' ? 'failed' : 'processing',
-                  migrationResult?.steps.backup.message
-                )}
-                {renderStep(
-                  'Updating transactions...',
-                  migrationResult?.steps.update.status === 'completed' ? 'completed' :
-                  migrationResult?.steps.update.status === 'failed' ? 'failed' :
-                  migrationResult?.steps.backup.status === 'completed' ? 'processing' : 'pending',
-                  migrationResult?.steps.update.message
-                )}
-                {renderStep(
-                  'Regenerating snapshots...',
-                  migrationResult?.steps.snapshot.status === 'completed' ? 'completed' :
-                  migrationResult?.steps.snapshot.status === 'failed' ? 'failed' :
-                  migrationResult?.steps.snapshot.status === 'skipped' ? 'skipped' :
-                  migrationResult?.steps.update.status === 'completed' ? 'processing' : 'pending',
-                  migrationResult?.steps.snapshot.message
-                )}
+              {/* Pre-migration steps (1-5) */}
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                  Validation
+                </div>
+                {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult?.steps.step_1_check_existing?.status || 'processing', migrationResult?.steps.step_1_check_existing?.message)}
+                {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult?.steps.step_2_get_customer?.status || 'pending', migrationResult?.steps.step_2_get_customer?.message)}
+                {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult?.steps.step_3_get_source_scheme?.status || 'pending', migrationResult?.steps.step_3_get_source_scheme?.message)}
+                {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult?.steps.step_4_get_target_scheme?.status || 'pending', migrationResult?.steps.step_4_get_target_scheme?.message)}
+                {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult?.steps.step_5_count_txns?.status || 'pending', migrationResult?.steps.step_5_count_txns?.message)}
+              </div>
+
+              {/* Data-changing steps (6-8) */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                  Migration
+                </div>
+                {renderStep(6, STEP_LABELS.step_6_backup, migrationResult?.steps.step_6_backup?.status || 'pending', migrationResult?.steps.step_6_backup?.message)}
+                {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult?.steps.step_7_update_txns?.status || 'pending', migrationResult?.steps.step_7_update_txns?.message)}
+                {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult?.steps.step_8_snapshots?.status || 'pending', migrationResult?.steps.step_8_snapshots?.message)}
               </div>
 
               <div style={{ textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
@@ -1599,11 +1670,19 @@ const CourseCorrectionPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Step Status */}
+              {/* Step Status - All 8 Steps */}
               <div style={{ marginBottom: '20px' }}>
-                {renderStep('Backup created', migrationResult.steps.backup.status, migrationResult.steps.backup.message)}
-                {renderStep('Transactions updated', migrationResult.steps.update.status, migrationResult.steps.update.message)}
-                {renderStep('Snapshots regenerated', migrationResult.steps.snapshot.status, migrationResult.steps.snapshot.message)}
+                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                  Steps Completed
+                </div>
+                {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending', migrationResult.steps.step_1_check_existing?.message)}
+                {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending', migrationResult.steps.step_2_get_customer?.message)}
+                {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending', migrationResult.steps.step_3_get_source_scheme?.message)}
+                {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending', migrationResult.steps.step_4_get_target_scheme?.message)}
+                {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending', migrationResult.steps.step_5_count_txns?.message)}
+                {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending', migrationResult.steps.step_6_backup?.message)}
+                {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending', migrationResult.steps.step_7_update_txns?.message)}
+                {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending', migrationResult.steps.step_8_snapshots?.message)}
               </div>
 
               {/* Actions */}
@@ -1688,12 +1767,20 @@ const CourseCorrectionPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Step Status (if available) */}
+              {/* Step Status (if available) - All 8 Steps */}
               {migrationResult && (
                 <div style={{ marginBottom: '20px' }}>
-                  {renderStep('Backup', migrationResult.steps.backup.status, migrationResult.steps.backup.message)}
-                  {renderStep('Transactions', migrationResult.steps.update.status, migrationResult.steps.update.message)}
-                  {renderStep('Snapshots', migrationResult.steps.snapshot.status, migrationResult.steps.snapshot.message)}
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                    Steps Status {migrationResult.failed_step && `(Failed at step ${migrationResult.failed_step})`}
+                  </div>
+                  {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending', migrationResult.steps.step_1_check_existing?.message)}
+                  {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending', migrationResult.steps.step_2_get_customer?.message)}
+                  {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending', migrationResult.steps.step_3_get_source_scheme?.message)}
+                  {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending', migrationResult.steps.step_4_get_target_scheme?.message)}
+                  {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending', migrationResult.steps.step_5_count_txns?.message)}
+                  {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending', migrationResult.steps.step_6_backup?.message)}
+                  {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending', migrationResult.steps.step_7_update_txns?.message)}
+                  {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending', migrationResult.steps.step_8_snapshots?.message)}
                 </div>
               )}
 
