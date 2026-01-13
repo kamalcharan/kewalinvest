@@ -204,6 +204,15 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
     </svg>
   );
 
+  const GitBranchIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+
   const TrendUpIcon = () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="23,6 13.5,15.5 8.5,10.5 1,18" />
@@ -575,6 +584,30 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
             >
               <EditIcon />
               Edit
+            </button>
+
+            {/* Course Correction Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/data-ops/course-correction?customerId=${customer.id}`);
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                color: colors.semantic.warning || '#f59e0b',
+                border: `1px solid ${colors.semantic.warning || '#f59e0b'}40`,
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Course Correction - Fix scheme code mappings"
+            >
+              <GitBranchIcon />
+              Fix
             </button>
 
             {/* Conditional Activate/Delete Button */}

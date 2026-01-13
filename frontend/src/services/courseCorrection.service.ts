@@ -9,13 +9,14 @@ import {
   ExecuteResponse,
   RollbackResponse,
   BookmarksResponse,
-  SchemeSearchResponse,
-  CustomerSchemesResponse,
   CreateCourseCorrectionRequest,
-  GetCorrectionsParams
+  GetCorrectionsParams,
+  MigrateResponse
 } from '../types/courseCorrection.types';
 
-const BASE_URL = '/api/course-correction';
+// Use the same API base URL as other services
+const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:8080') + '/api';
+const BASE_URL = `${API_BASE}/course-correction`;
 
 class CourseCorrectionService {
   private getHeaders(): Record<string, string> {
@@ -34,7 +35,8 @@ class CourseCorrectionService {
   }
 
   // ============================================================================
-  // BOOKMARKS & SCHEME SEARCH
+  // BOOKMARKS (for source scheme selection)
+  // NOTE: For target scheme search, use navService.searchSchemes()
   // ============================================================================
 
   /**
@@ -45,31 +47,6 @@ class CourseCorrectionService {
       headers: this.getHeaders()
     });
     return this.handleResponse<BookmarksResponse>(response);
-  }
-
-  /**
-   * Search schemes in master data for target selection
-   */
-  async searchSchemes(search: string, page: number = 1, pageSize: number = 20): Promise<SchemeSearchResponse> {
-    const params = new URLSearchParams({
-      search,
-      page: page.toString(),
-      page_size: pageSize.toString()
-    });
-    const response = await fetch(`${BASE_URL}/schemes/search?${params}`, {
-      headers: this.getHeaders()
-    });
-    return this.handleResponse<SchemeSearchResponse>(response);
-  }
-
-  /**
-   * Get schemes that a customer has transactions for
-   */
-  async getCustomerSchemes(customerId: number): Promise<CustomerSchemesResponse> {
-    const response = await fetch(`${BASE_URL}/customer/${customerId}/schemes`, {
-      headers: this.getHeaders()
-    });
-    return this.handleResponse<CustomerSchemesResponse>(response);
   }
 
   // ============================================================================
@@ -120,6 +97,7 @@ class CourseCorrectionService {
 
   /**
    * Create a new course correction (pending status)
+   * NOTE: For complete migration in one step, use migrateCorrection() instead
    */
   async createCorrection(request: CreateCourseCorrectionRequest): Promise<CourseCorrectionDetailResponse> {
     const response = await fetch(`${BASE_URL}/corrections`, {
@@ -128,6 +106,19 @@ class CourseCorrectionService {
       body: JSON.stringify(request)
     });
     return this.handleResponse<CourseCorrectionDetailResponse>(response);
+  }
+
+  /**
+   * Complete migration in one step: Create → Execute → Regenerate Snapshots
+   * Returns detailed progress for each step
+   */
+  async migrateCorrection(request: CreateCourseCorrectionRequest): Promise<MigrateResponse> {
+    const response = await fetch(`${BASE_URL}/corrections/migrate`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(request)
+    });
+    return this.handleResponse<MigrateResponse>(response);
   }
 
   /**

@@ -1,11 +1,13 @@
 // frontend/src/types/courseCorrection.types.ts
 // Types for Course Correction (Scheme Code Migration) feature
+// Updated with step-by-step tracking
 
 // ============================================================================
 // Status Types
 // ============================================================================
 
 export type CourseCorrectionStatus = 'pending' | 'completed' | 'rolled_back' | 'failed';
+export type StepStatus = 'pending' | 'pass' | 'fail';
 
 // ============================================================================
 // Core Types
@@ -25,6 +27,7 @@ export interface CourseCorrection {
   total_invested: number;
   status: CourseCorrectionStatus;
   rollback_data: RollbackData | null;
+  backup_data: RollbackData | null;
   notes: string | null;
   error_message: string | null;
   created_by: number;
@@ -36,6 +39,15 @@ export interface CourseCorrection {
   rolled_back_by_name?: string;
   snapshot_regenerated: boolean;
   snapshot_regenerated_at: string | null;
+  // Step tracking
+  step_1_check_existing?: StepStatus;
+  step_2_get_customer?: StepStatus;
+  step_3_get_source_scheme?: StepStatus;
+  step_4_get_target_scheme?: StepStatus;
+  step_5_count_txns?: StepStatus;
+  step_6_backup?: StepStatus;
+  step_7_update_txns?: StepStatus;
+  step_8_snapshots?: StepStatus;
 }
 
 export interface RollbackData {
@@ -44,6 +56,7 @@ export interface RollbackData {
     original_scheme_code: string;
     original_scheme_name?: string;
   }>;
+  backup_timestamp?: string;
 }
 
 // ============================================================================
@@ -85,16 +98,6 @@ export interface SchemeSearchResult {
   scheme_name: string;
   scheme_nav_name: string | null;
   amc_name: string;
-}
-
-export interface CustomerScheme {
-  scheme_code: string;
-  scheme_name: string | null;
-  amc_name: string | null;
-  transaction_count: number;
-  total_invested: number;
-  first_transaction_date: string;
-  last_transaction_date: string;
 }
 
 // ============================================================================
@@ -162,6 +165,11 @@ export interface RollbackResponse {
   error?: string;
 }
 
+export interface DeleteResponse {
+  success: boolean;
+  error?: string;
+}
+
 export interface BookmarksResponse {
   success: boolean;
   data: BookmarkedScheme[];
@@ -180,8 +188,60 @@ export interface SchemeSearchResponse {
   error?: string;
 }
 
-export interface CustomerSchemesResponse {
+// ============================================================================
+// Migration Types (Step-by-step tracking)
+// ============================================================================
+
+export interface MigrationStep {
+  status: StepStatus;
+  message?: string;
+  count?: number;
+}
+
+export interface MigrationResult {
   success: boolean;
-  data: CustomerScheme[];
+  correction_id?: number;
+  steps: {
+    step_1_check_existing: MigrationStep;
+    step_2_get_customer: MigrationStep;
+    step_3_get_source_scheme: MigrationStep;
+    step_4_get_target_scheme: MigrationStep;
+    step_5_count_txns: MigrationStep;
+    step_6_backup: MigrationStep;
+    step_7_update_txns: MigrationStep;
+    step_8_snapshots: MigrationStep;
+  };
+  summary?: {
+    customer_id: number;
+    customer_name: string;
+    source_scheme_code: string;
+    source_scheme_name: string | null;
+    target_scheme_code: string;
+    target_scheme_name: string | null;
+    transactions_updated: number;
+    total_invested: number;
+  };
+  error?: string;
+  failed_step?: number;
+}
+
+export interface MigrateResponse {
+  success: boolean;
+  data: MigrationResult;
   error?: string;
 }
+
+// ============================================================================
+// Step Labels for Display
+// ============================================================================
+
+export const STEP_LABELS: Record<string, string> = {
+  step_1_check_existing: 'Check Existing Migrations',
+  step_2_get_customer: 'Get Customer Name',
+  step_3_get_source_scheme: 'Get Source Scheme',
+  step_4_get_target_scheme: 'Get Target Scheme',
+  step_5_count_txns: 'Count Transactions',
+  step_6_backup: 'Backup Transactions',
+  step_7_update_txns: 'Update Transactions',
+  step_8_snapshots: 'Regenerate Snapshots'
+};
