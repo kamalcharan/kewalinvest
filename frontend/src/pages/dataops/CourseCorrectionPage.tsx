@@ -1595,7 +1595,7 @@ const CourseCorrectionPage: React.FC = () => {
               </div>
 
               {/* Warning if snapshot failed */}
-              {migrationResult.steps.snapshot.status === 'failed' && (
+              {migrationResult.steps.step_8_snapshots?.status === 'fail' && (
                 <div style={{
                   display: 'flex',
                   alignItems: 'flex-start',
