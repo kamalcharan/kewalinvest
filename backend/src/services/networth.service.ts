@@ -91,7 +91,8 @@ export class NetworthService {
 
       if (asOfDate) {
         // Non-scheme asset types (manual investments like GOLD, FD, etc.)
-        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
+        // NOTE: 'Growth' is a legacy scheme category fallback, NOT a non-scheme asset
+        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
 
         const schemeQuery = `
           SELECT
@@ -425,7 +426,8 @@ export class NetworthService {
         } else {
           // Update the last point with real-time scheme-based values (in case data was imported)
           const lastPoint = history[history.length - 1];
-          const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
+          // NOTE: 'Growth' is a legacy scheme category fallback, NOT a non-scheme asset
+          const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
 
           // Get all scheme categories from current summary (not in non-scheme list)
           const schemeCategories = currentSummary.by_asset_type
@@ -517,7 +519,8 @@ export class NetworthService {
 
         // Get earliest start date for this asset type
         const earliestStartDate = assetStartDates.get(code);
-        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
+        // NOTE: 'Growth' is a legacy scheme category fallback, NOT a non-scheme asset
+        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
 
         // Find the first index where date >= start date
         let firstValidIndex = 0;
