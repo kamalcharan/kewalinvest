@@ -1051,7 +1051,8 @@ DECLARE
     v_txn_id INTEGER;
     v_session_info RECORD;
     -- Variables for auto-assignment
-    v_mf_asset_type_id INTEGER;
+    v_asset_type_id INTEGER;
+    v_asset_type_code VARCHAR;
     v_existing_assignment_id INTEGER;
     v_customer_name VARCHAR;
     v_new_assignment_id INTEGER;
@@ -1068,11 +1069,8 @@ BEGIN
         RAISE EXCEPTION 'Session % not found', p_session_id;
     END IF;
 
-    -- Get MF asset type ID
-    SELECT id INTO v_mf_asset_type_id
-    FROM m_asset_types
-    WHERE asset_type_code = 'MF' AND is_active = true
-    LIMIT 1;
+    -- Note: Asset type ID is now looked up per-scheme based on scheme_type
+    -- (Open Ended, Close Ended, Interval Fund) instead of hardcoded 'MF'
 
     -- Get session creator for alert creation
     v_session_creator_id := COALESCE(v_session_info.created_by, 1);
@@ -1108,6 +1106,8 @@ BEGIN
             v_existing_assignment_id := NULL;
             v_new_assignment_id := NULL;
             v_txn_amount := NULL;
+            v_asset_type_id := NULL;
+            v_asset_type_code := NULL;
 
             -- CUSTOMER LOOKUP WITH PAN FALLBACK
             IF p_customer_lookup_method = 'iwell_code' THEN
@@ -1316,6 +1316,24 @@ BEGIN
                         FROM t_scheme_details
                         WHERE id = v_scheme_id;
                     END IF;
+
+                    -- LOOKUP ASSET TYPE CODE from scheme's scheme_type
+                    -- scheme_type_id -> t_scheme_masters.name -> m_asset_types.asset_type_code
+                    SELECT sm.name, mat.id
+                    INTO v_asset_type_code, v_asset_type_id
+                    FROM t_scheme_details sd
+                    JOIN t_scheme_masters sm ON sd.scheme_type_id = sm.id
+                    JOIN m_asset_types mat ON mat.asset_type_code = sm.name AND mat.is_active = true
+                    WHERE sd.id = v_scheme_id;
+
+                    -- Default to 'Open Ended' if scheme_type not found
+                    IF v_asset_type_code IS NULL THEN
+                        SELECT asset_type_code, id
+                        INTO v_asset_type_code, v_asset_type_id
+                        FROM m_asset_types
+                        WHERE asset_type_code = 'Open Ended' AND is_active = true
+                        LIMIT 1;
+                    END IF;
                 END IF;
             END IF;
 
@@ -1403,6 +1421,7 @@ BEGIN
                 txn_source,
                 staging_record_id,
                 import_session_id,
+                asset_type_code,
                 created_at,
                 updated_at
             ) VALUES (
@@ -1426,6 +1445,7 @@ BEGIN
                 'import',
                 v_staging_record.id,
                 p_session_id,
+                v_asset_type_code,
                 NOW(),
                 NOW()
             ) RETURNING id INTO v_txn_id;
@@ -1443,16 +1463,17 @@ BEGIN
             );
 
             -- ============================================================================
-            -- AUTO-CREATE INVESTMENT PLAN (MF) AND ALERTS
+            -- AUTO-CREATE INVESTMENT PLAN AND ALERTS
+            -- (for Open Ended, Close Ended, Interval Fund scheme types)
             -- ============================================================================
-            IF v_mf_asset_type_id IS NOT NULL THEN
+            IF v_asset_type_id IS NOT NULL THEN
                 -- Check if customer already has this scheme assigned
                 SELECT id INTO v_existing_assignment_id
                 FROM t_customer_asset_assignments
                 WHERE tenant_id = v_staging_record.tenant_id
                   AND is_live = v_staging_record.is_live
                   AND customer_id = v_customer_id
-                  AND asset_type_id = v_mf_asset_type_id
+                  AND asset_type_id = v_asset_type_id
                   AND scheme_code = v_scheme_code
                   AND is_active = true
                 LIMIT 1;
@@ -1480,7 +1501,7 @@ BEGIN
                         v_staging_record.tenant_id,
                         v_staging_record.is_live,
                         v_customer_id,
-                        v_mf_asset_type_id,
+                        v_asset_type_id,
                         v_scheme_code,
                         v_txn_amount,           -- principal_amount = SIP amount
                         'sip',                   -- investment_type
@@ -1648,7 +1669,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking, and auto MF assignment with alerts';
+COMMENT ON FUNCTION process_transaction_import_session IS 'Process transaction imports with customer lookup, PAN fallback, orphan tracking, auto-tags asset_type_code from scheme type (Open Ended/Close Ended/Interval Fund), and creates investment plan alerts';
 
 -- ============================================================================
 -- SECTION 5: CLEANUP FUNCTIONS

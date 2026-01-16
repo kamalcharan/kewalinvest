@@ -685,6 +685,43 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- SECTION 6: SEED SCHEME MASTERS (Scheme Types for Import Mapping)
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seeding Scheme Masters (Types & Categories)';
+    RAISE NOTICE '========================================';
+END $$;
+
+-- Insert scheme types that match the Scheme Type column in import data
+-- These are used to populate scheme_type_id during scheme data import
+-- Note: tenant_id=1, is_live=true for global master data
+INSERT INTO t_scheme_masters (tenant_id, is_live, is_active, master_type, code, name, display_order)
+VALUES
+    (1, true, true, 'scheme_type', 'OPEN_ENDED', 'Open Ended', 1),
+    (1, true, true, 'scheme_type', 'CLOSE_ENDED', 'Close Ended', 2),
+    (1, true, true, 'scheme_type', 'INTERVAL_FUND', 'Interval Fund', 3)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    display_order = EXCLUDED.display_order,
+    is_active = EXCLUDED.is_active,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Verify scheme masters seeded
+DO $$
+DECLARE
+    v_scheme_type_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO v_scheme_type_count
+    FROM t_scheme_masters
+    WHERE master_type = 'scheme_type' AND is_active = true;
+
+    RAISE NOTICE '✓ Scheme Types seeded: % types', v_scheme_type_count;
+    RAISE NOTICE '    - Open Ended, Close Ended, Interval Fund';
+END $$;
+
+-- ============================================================================
 -- SECTION 6A: SEED ASSET TYPES (Release 1.1 - Phase 1)
 -- ============================================================================
 DO $$
