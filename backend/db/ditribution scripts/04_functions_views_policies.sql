@@ -707,6 +707,7 @@ DECLARE
     v_error_messages TEXT[];
     v_scheme_type_id INTEGER;
     v_scheme_category_id INTEGER;
+    v_asset_type_id INTEGER;
     v_launch_date DATE;
     v_closure_date DATE;
     v_minimum_amount DECIMAL(15,2);
@@ -725,45 +726,9 @@ BEGIN
     
     v_mapped_data := v_staging.mapped_data;
     v_error_messages := ARRAY[]::TEXT[];
-    
+
     BEGIN
-        SELECT COUNT(*) > 0 INTO v_is_duplicate
-        FROM t_scheme_details
-        WHERE scheme_code = v_mapped_data->>'scheme_code'
-          AND tenant_id = v_staging.tenant_id
-          AND is_live = v_staging.is_live;
-        
-        IF v_is_duplicate THEN
-            UPDATE t_scheme_details
-            SET 
-                amc_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'amc_name'), ''), amc_name),
-                scheme_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_name'), ''), scheme_name),
-                scheme_nav_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''), scheme_nav_name),
-                scheme_minimum_amount = CASE 
-                    WHEN v_mapped_data->>'scheme_minimum_amount' IS NOT NULL 
-                    THEN (v_mapped_data->>'scheme_minimum_amount')::DECIMAL(15,2)
-                    ELSE scheme_minimum_amount 
-                END,
-                isin_div_payout = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_payout'), ''), isin_div_payout),
-                isin_growth = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_growth'), ''), isin_growth),
-                isin_div_reinvestment = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_reinvestment'), ''), isin_div_reinvestment),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE scheme_code = v_mapped_data->>'scheme_code'
-              AND tenant_id = v_staging.tenant_id
-              AND is_live = v_staging.is_live
-            RETURNING id INTO v_scheme_id;
-            
-            UPDATE t_import_staging_data
-            SET processing_status = 'duplicate',
-                warnings = array_append(warnings, 'Scheme already exists - updated'),
-                created_record_id = v_scheme_id,
-                created_record_type = 'scheme',
-                processed_at = CURRENT_TIMESTAMP
-            WHERE id = p_staging_id;
-            
-            RETURN;
-        END IF;
-        
+        -- Look up scheme_type_id from t_scheme_masters (tenant-specific)
         v_scheme_type_id := NULL;
         IF v_mapped_data->>'scheme_type' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_type') != '' THEN
             SELECT id INTO v_scheme_type_id
@@ -775,17 +740,63 @@ BEGIN
               AND is_active = true
             LIMIT 1;
         END IF;
-        
-        v_scheme_category_id := NULL;
+
+        -- Look up asset_type_id directly from m_asset_types (GLOBAL, not tenant-specific)
+        -- The scheme_category from import file matches m_asset_types.asset_type_code
+        v_asset_type_id := NULL;
         IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
-            SELECT id INTO v_scheme_category_id
-            FROM t_scheme_masters
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
-              AND master_type = 'scheme_category'
-              AND tenant_id = v_staging.tenant_id
-              AND is_live = v_staging.is_live
+            SELECT id INTO v_asset_type_id
+            FROM m_asset_types
+            WHERE LOWER(TRIM(asset_type_code)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
               AND is_active = true
             LIMIT 1;
+        END IF;
+
+        -- Fallback to 'Growth' if scheme_category not found in m_asset_types
+        IF v_asset_type_id IS NULL THEN
+            SELECT id INTO v_asset_type_id
+            FROM m_asset_types
+            WHERE asset_type_code = 'Growth' AND is_active = true
+            LIMIT 1;
+        END IF;
+
+        -- Check for duplicate scheme
+        SELECT COUNT(*) > 0 INTO v_is_duplicate
+        FROM t_scheme_details
+        WHERE scheme_code = v_mapped_data->>'scheme_code'
+          AND tenant_id = v_staging.tenant_id
+          AND is_live = v_staging.is_live;
+
+        IF v_is_duplicate THEN
+            UPDATE t_scheme_details
+            SET
+                amc_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'amc_name'), ''), amc_name),
+                scheme_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_name'), ''), scheme_name),
+                scheme_nav_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''), scheme_nav_name),
+                scheme_minimum_amount = CASE
+                    WHEN v_mapped_data->>'scheme_minimum_amount' IS NOT NULL
+                    THEN (v_mapped_data->>'scheme_minimum_amount')::DECIMAL(15,2)
+                    ELSE scheme_minimum_amount
+                END,
+                isin_div_payout = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_payout'), ''), isin_div_payout),
+                isin_growth = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_growth'), ''), isin_growth),
+                isin_div_reinvestment = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_reinvestment'), ''), isin_div_reinvestment),
+                asset_type_id = COALESCE(v_asset_type_id, asset_type_id),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE scheme_code = v_mapped_data->>'scheme_code'
+              AND tenant_id = v_staging.tenant_id
+              AND is_live = v_staging.is_live
+            RETURNING id INTO v_scheme_id;
+
+            UPDATE t_import_staging_data
+            SET processing_status = 'duplicate',
+                warnings = array_append(warnings, 'Scheme already exists - updated'),
+                created_record_id = v_scheme_id,
+                created_record_type = 'scheme',
+                processed_at = CURRENT_TIMESTAMP
+            WHERE id = p_staging_id;
+
+            RETURN;
         END IF;
         
         v_launch_date := NULL;
@@ -838,7 +849,7 @@ BEGIN
             scheme_code,
             scheme_name,
             scheme_type_id,
-            scheme_category_id,
+            asset_type_id,
             scheme_nav_name,
             scheme_minimum_amount,
             launch_date,
@@ -854,7 +865,7 @@ BEGIN
             v_mapped_data->>'scheme_code',
             v_mapped_data->>'scheme_name',
             v_scheme_type_id,
-            v_scheme_category_id,
+            v_asset_type_id,
             NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''),
             v_minimum_amount,
             v_launch_date,
@@ -1317,16 +1328,14 @@ BEGIN
                         WHERE id = v_scheme_id;
                     END IF;
 
-                    -- LOOKUP ASSET TYPE CODE from scheme's scheme_category
-                    -- scheme_category_id -> t_scheme_masters.name -> m_asset_types.asset_type_code
-                    SELECT sm.name, mat.id
+                    -- LOOKUP ASSET TYPE directly from t_scheme_details.asset_type_id (references m_asset_types)
+                    SELECT mat.asset_type_code, mat.id
                     INTO v_asset_type_code, v_asset_type_id
                     FROM t_scheme_details sd
-                    JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id
-                    JOIN m_asset_types mat ON mat.asset_type_code = sm.name AND mat.is_active = true
+                    JOIN m_asset_types mat ON sd.asset_type_id = mat.id AND mat.is_active = true
                     WHERE sd.id = v_scheme_id;
 
-                    -- Default to 'Growth' if scheme_category not found (common legacy category)
+                    -- Default to 'Growth' if asset_type_id not set on scheme
                     IF v_asset_type_code IS NULL THEN
                         SELECT asset_type_code, id
                         INTO v_asset_type_code, v_asset_type_id

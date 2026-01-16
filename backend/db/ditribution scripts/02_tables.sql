@@ -518,6 +518,7 @@ CREATE TABLE t_scheme_details (
     scheme_name VARCHAR(500) NOT NULL,
     scheme_type_id INTEGER REFERENCES t_scheme_masters(id),
     scheme_category_id INTEGER REFERENCES t_scheme_masters(id),
+    asset_type_id INTEGER REFERENCES m_asset_types(id),
     scheme_nav_name VARCHAR(500),
     scheme_minimum_amount NUMERIC(15,2),
     launch_date DATE,
