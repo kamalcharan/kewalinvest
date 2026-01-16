@@ -99,6 +99,9 @@ const NavBookmarksPage: React.FC = () => {
           page_size: pageSize,
           search: searchQuery || undefined,
           amc_name: amcFilter || undefined,
+          daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
+          has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+          has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
         });
         // Refresh statistics to update "Without Calculations" count
         refetchStatistics();
@@ -289,6 +292,9 @@ const NavBookmarksPage: React.FC = () => {
           page_size: pageSize,
           search: searchQuery || undefined,
           amc_name: amcFilter || undefined,
+          daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
+          has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+          has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
         });
       }, 1000);
       toastService.success('Download complete! Cards updated. You can now calculate metrics.');
@@ -297,7 +303,7 @@ const NavBookmarksPage: React.FC = () => {
       toastService.error('Failed to track download progress: ' + error.message);
       setShowProgressModal(false);
     });
-  }, [startPolling, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter]);
+  }, [startPolling, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter]);
 
   const handleCloseHistoricalModal = () => {
     setShowHistoricalModal(false);
@@ -360,11 +366,14 @@ const NavBookmarksPage: React.FC = () => {
         page_size: pageSize,
         search: searchQuery || undefined,
         amc_name: amcFilter || undefined,
+        daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
+        has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+        has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
       });
       // Refresh statistics to update "Without Calculations" count
       refetchStatistics();
     }, 500);
-  }, [currentPage, searchQuery, amcFilter, fetchBookmarks, refetchStatistics]);
+  }, [currentPage, searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter, fetchBookmarks, refetchStatistics]);
 
   const handleCloseMetricsCalculationModal = useCallback(() => {
     setShowMetricsCalculationModal(false);
@@ -496,6 +505,9 @@ const NavBookmarksPage: React.FC = () => {
           page_size: pageSize,
           search: searchQuery || undefined,
           amc_name: amcFilter || undefined,
+          daily_download_only: dailyDownloadFilter === 'all' ? undefined : dailyDownloadFilter === 'enabled' ? 'true' : 'false',
+          has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
+          has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
         });
       }, 1000);
 
@@ -513,7 +525,7 @@ const NavBookmarksPage: React.FC = () => {
         error.stack
       );
     }
-  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter]);
+  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter]);
 
   // NEW: Bulk metrics calculation
   const handleBulkCalculateMetrics = useCallback(() => {
