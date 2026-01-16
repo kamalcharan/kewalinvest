@@ -141,7 +141,7 @@ export class PortfolioService {
       // ========================================
       // 7. GET PERFORMANCE HISTORY (FROM SNAPSHOTS)
       // IMPORTANT: Fetch ALL snapshots for full timeline, not just last 365 days
-      // NOTE: Filter by asset_type_code = 'MF' for backward compatibility
+      // NOTE: Filter by scheme-based asset types (Open Ended, Close Ended, Interval Fund)
       //       NetworthViewer will use separate aggregated API in Cycle 2
       // ========================================
       let performance: PortfolioPerformanceMetric[] = [];
@@ -149,15 +149,20 @@ export class PortfolioService {
         const performanceQuery = `
           SELECT
             snapshot_month_end as date,
-            total_invested as invested,
-            current_value,
-            total_returns as returns,
-            return_percentage
+            SUM(total_invested) as invested,
+            SUM(current_value) as current_value,
+            SUM(total_returns) as returns,
+            CASE
+              WHEN SUM(total_invested) > 0
+              THEN ((SUM(current_value) - SUM(total_invested)) / SUM(total_invested) * 100)
+              ELSE 0
+            END as return_percentage
           FROM t_monthly_portfolio_snapshots
           WHERE customer_id = $1
             AND tenant_id = $2
             AND is_live = $3
-            AND asset_type_code = 'MF'
+            AND asset_type_code IN ('Open Ended', 'Close Ended', 'Interval Fund')
+          GROUP BY snapshot_month_end
           ORDER BY snapshot_month_end ASC
         `;
 
@@ -233,17 +238,25 @@ export class PortfolioService {
     customerId: number
   ): Promise<{ day_change: number; day_change_percentage: number }> {
     try {
-      // NOTE: Filter by asset_type_code = 'MF' for backward compatibility
+      // NOTE: Aggregate across scheme-based asset types (Open Ended, Close Ended, Interval Fund)
       const query = `
-        WITH latest_months AS (
+        WITH monthly_totals AS (
+          SELECT
+            snapshot_month_end,
+            SUM(current_value) as current_value
+          FROM t_monthly_portfolio_snapshots
+          WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
+            AND asset_type_code IN ('Open Ended', 'Close Ended', 'Interval Fund')
+          GROUP BY snapshot_month_end
+          ORDER BY snapshot_month_end DESC
+          LIMIT 2
+        ),
+        latest_months AS (
           SELECT
             snapshot_month_end,
             current_value,
             ROW_NUMBER() OVER (ORDER BY snapshot_month_end DESC) as rn
-          FROM t_monthly_portfolio_snapshots
-          WHERE customer_id = $1 AND tenant_id = $2 AND is_live = $3
-            AND asset_type_code = 'MF'
-          LIMIT 2
+          FROM monthly_totals
         ),
         current_month AS (
           SELECT current_value FROM latest_months WHERE rn = 1

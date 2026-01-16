@@ -1,8 +1,12 @@
 // backend/src/services/portfolioSnapshot.service.ts
 // Service for Portfolio Snapshot generation, backfill, and operations
 // FIXED: Correct table/column names and proper fund manager calculations
+// UPDATED: Now supports scheme-based asset types (Open Ended, Close Ended, Interval Fund)
 
 import { Pool } from 'pg';
+
+// Scheme-based asset types (replaces single 'MF' type)
+const SCHEME_ASSET_TYPES = ['Open Ended', 'Close Ended', 'Interval Fund'];
 import { pool } from '../config/database';
 import {
   SnapshotGenerationRequest,
@@ -69,37 +73,45 @@ export class PortfolioSnapshotService {
       // Process each customer
       for (const customer of customers) {
         try {
-          // ==================== MF SNAPSHOT (NAV-based) ====================
-          // Calculate MF snapshot data
-          const snapshotData = await this.calculateSnapshotData(
-            customer.customer_id,
-            snapshotMonthEnd,
-            request.tenant_id,
-            request.is_live
-          );
+          // ==================== SCHEME-BASED SNAPSHOTS (NAV-based) ====================
+          // Generate separate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
+          for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+            const snapshotData = await this.calculateSnapshotData(
+              customer.customer_id,
+              snapshotMonthEnd,
+              request.tenant_id,
+              request.is_live,
+              assetTypeCode
+            );
 
-          // Check if MF snapshot already exists
-          const existing = await this.getExistingSnapshot(
-            customer.customer_id,
-            snapshotMonthEnd,
-            request.tenant_id,
-            request.is_live,
-            'MF',  // asset_type_code
-            null   // investment_plan_id (null for aggregated MF)
-          );
+            // Skip if no data for this asset type
+            if (snapshotData.total_invested === 0 && snapshotData.current_value === 0) {
+              continue;
+            }
 
-          if (existing) {
-            // Update existing MF snapshot
-            await this.updateSnapshot(existing.id, snapshotData);
-            snapshotsUpdated++;
-          } else {
-            // Create new MF snapshot
-            await this.createSnapshot(snapshotData);
-            snapshotsCreated++;
+            // Check if snapshot already exists for this asset type
+            const existing = await this.getExistingSnapshot(
+              customer.customer_id,
+              snapshotMonthEnd,
+              request.tenant_id,
+              request.is_live,
+              assetTypeCode,
+              null   // investment_plan_id (null for scheme-based aggregated)
+            );
+
+            if (existing) {
+              // Update existing snapshot
+              await this.updateSnapshot(existing.id, snapshotData);
+              snapshotsUpdated++;
+            } else {
+              // Create new snapshot
+              await this.createSnapshot(snapshotData);
+              snapshotsCreated++;
+            }
           }
 
-          // ==================== NON-MF SNAPSHOTS (Assumption-based) ====================
-          // Generate snapshots for all non-MF investment plans
+          // ==================== NON-SCHEME SNAPSHOTS (Assumption-based) ====================
+          // Generate snapshots for all non-scheme investment plans (GOLD, FD, etc.)
           console.log(`[SnapshotService] 📍 About to call generateAssetSnapshots for customer ${customer.customer_id}`);
           const assetResult = await this.generateAssetSnapshots(
             customer.customer_id,
@@ -219,49 +231,57 @@ export class PortfolioSnapshotService {
 
           monthsProcessed += months.length;
 
-          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
-          const nonMfPlans = await this.getCustomerInvestmentPlans(
+          // OPTIMIZATION: Fetch non-scheme plans ONCE per customer (not per month)
+          const nonSchemePlans = await this.getCustomerInvestmentPlans(
             customer.customer_id,
             params.tenant_id,
             params.is_live
           );
-          const hasNonMfAssets = nonMfPlans.length > 0;
+          const hasNonSchemeAssets = nonSchemePlans.length > 0;
 
           // Generate/update snapshot for each month
           for (const monthEnd of months) {
             try {
-              // ==================== MF SNAPSHOT ====================
-              // Calculate MF snapshot data
-              const snapshotData = await this.calculateSnapshotData(
-                customer.customer_id,
-                monthEnd,
-                params.tenant_id,
-                params.is_live
-              );
+              // ==================== SCHEME-BASED SNAPSHOTS ====================
+              // Calculate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
+              for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+                const snapshotData = await this.calculateSnapshotData(
+                  customer.customer_id,
+                  monthEnd,
+                  params.tenant_id,
+                  params.is_live,
+                  assetTypeCode
+                );
 
-              // Check if MF snapshot already exists
-              const existing = await this.getExistingSnapshot(
-                customer.customer_id,
-                monthEnd,
-                params.tenant_id,
-                params.is_live,
-                'MF',  // asset_type_code
-                null   // investment_plan_id
-              );
+                // Skip if no data for this asset type
+                if (snapshotData.total_invested === 0 && snapshotData.current_value === 0) {
+                  continue;
+                }
 
-              if (existing) {
-                // Update existing MF snapshot
-                await this.updateSnapshot(existing.id, snapshotData);
-                snapshotsUpdated++;
-              } else {
-                // Create new MF snapshot
-                await this.createSnapshot(snapshotData);
-                snapshotsCreated++;
+                // Check if snapshot already exists for this asset type
+                const existing = await this.getExistingSnapshot(
+                  customer.customer_id,
+                  monthEnd,
+                  params.tenant_id,
+                  params.is_live,
+                  assetTypeCode,
+                  null   // investment_plan_id
+                );
+
+                if (existing) {
+                  // Update existing snapshot
+                  await this.updateSnapshot(existing.id, snapshotData);
+                  snapshotsUpdated++;
+                } else {
+                  // Create new snapshot
+                  await this.createSnapshot(snapshotData);
+                  snapshotsCreated++;
+                }
               }
 
-              // ==================== NON-MF ASSET SNAPSHOTS ====================
-              // Only process if customer has non-MF assets (skip expensive query for most customers)
-              if (hasNonMfAssets) {
+              // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
+              // Only process if customer has non-scheme assets (skip expensive query for most customers)
+              if (hasNonSchemeAssets) {
                 const assetResult = await this.generateAssetSnapshotsWithPlans(
                   customer.customer_id,
                   monthEnd,
@@ -367,52 +387,60 @@ export class PortfolioSnapshotService {
       // Process each customer
       for (const customer of customers) {
         try {
-          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
-          const nonMfPlans = await this.getCustomerInvestmentPlans(
+          // OPTIMIZATION: Fetch non-scheme plans ONCE per customer (not per month)
+          const nonSchemePlans = await this.getCustomerInvestmentPlans(
             customer.customer_id,
             request.tenant_id,
             request.is_live
           );
-          const hasNonMfAssets = nonMfPlans.length > 0;
+          const hasNonSchemeAssets = nonSchemePlans.length > 0;
 
           for (const monthEnd of months) {
             try {
-              // ==================== MF SNAPSHOT ====================
-              // Calculate MF snapshot data
-              const snapshotData = await this.calculateSnapshotData(
-                customer.customer_id,
-                monthEnd,
-                request.tenant_id,
-                request.is_live
-              );
+              // ==================== SCHEME-BASED SNAPSHOTS ====================
+              // Calculate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
+              for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+                const snapshotData = await this.calculateSnapshotData(
+                  customer.customer_id,
+                  monthEnd,
+                  request.tenant_id,
+                  request.is_live,
+                  assetTypeCode
+                );
 
-              // Check if MF snapshot already exists
-              const existing = await this.getExistingSnapshot(
-                customer.customer_id,
-                monthEnd,
-                request.tenant_id,
-                request.is_live,
-                'MF',  // asset_type_code
-                null   // investment_plan_id
-              );
+                // Skip if no data for this asset type
+                if (snapshotData.total_invested === 0 && snapshotData.current_value === 0) {
+                  continue;
+                }
 
-              if (existing) {
-                await this.updateSnapshot(existing.id, snapshotData);
-                snapshotsUpdated++;
-              } else {
-                await this.createSnapshot(snapshotData);
-                snapshotsCreated++;
+                // Check if snapshot already exists for this asset type
+                const existing = await this.getExistingSnapshot(
+                  customer.customer_id,
+                  monthEnd,
+                  request.tenant_id,
+                  request.is_live,
+                  assetTypeCode,
+                  null   // investment_plan_id
+                );
+
+                if (existing) {
+                  await this.updateSnapshot(existing.id, snapshotData);
+                  snapshotsUpdated++;
+                } else {
+                  await this.createSnapshot(snapshotData);
+                  snapshotsCreated++;
+                }
               }
 
-              // ==================== NON-MF ASSET SNAPSHOTS ====================
-              // Only process if customer has non-MF assets (skip expensive query for most customers)
-              if (hasNonMfAssets) {
+              // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
+              // Only process if customer has non-scheme assets (skip expensive query for most customers)
+              if (hasNonSchemeAssets) {
                 const assetResult = await this.generateAssetSnapshotsWithPlans(
                   customer.customer_id,
                   monthEnd,
                   request.tenant_id,
                   request.is_live,
-                  nonMfPlans
+                  nonSchemePlans
                 );
 
                 snapshotsCreated += assetResult.created;
@@ -592,55 +620,61 @@ export class PortfolioSnapshotService {
 
           monthsProcessed += months.length;
 
-          // OPTIMIZATION: Fetch non-MF plans ONCE per customer (not per month)
-          const nonMfPlans = await this.getCustomerInvestmentPlans(
+          // OPTIMIZATION: Fetch non-scheme plans ONCE per customer (not per month)
+          const nonSchemePlans = await this.getCustomerInvestmentPlans(
             customer.customer_id,
             params.tenant_id,
             params.is_live
           );
-          const hasNonMfAssets = nonMfPlans.length > 0;
-          if (hasNonMfAssets) {
-            console.log(`[SnapshotService]   - Non-MF assets: ${nonMfPlans.length} plans`);
+          const hasNonSchemeAssets = nonSchemePlans.length > 0;
+          if (hasNonSchemeAssets) {
+            console.log(`[SnapshotService]   - Non-scheme assets: ${nonSchemePlans.length} plans`);
           }
 
           for (const monthEnd of months) {
-            // ==================== MF SNAPSHOT ====================
-            // Check if MF snapshot already exists
-            const existing = await this.getExistingSnapshot(
-              customer.customer_id, monthEnd, params.tenant_id, params.is_live,
-              'MF', null  // asset_type_code='MF', investment_plan_id=null
-            );
-
-            if (existing) {
-              console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: MF SKIPPED (exists)`);
-              snapshotsSkipped++;
-            } else {
-              console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: MF CREATING...`);
-
-              // CREATE new MF snapshot
-              const snapshotData = await this.calculateSnapshotData(
-                customer.customer_id,
-                monthEnd,
-                params.tenant_id,
-                params.is_live
+            // ==================== SCHEME-BASED SNAPSHOTS ====================
+            // Generate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
+            for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+              const existing = await this.getExistingSnapshot(
+                customer.customer_id, monthEnd, params.tenant_id, params.is_live,
+                assetTypeCode, null
               );
 
-              console.log(`[SnapshotService]     → MF Invested: ${snapshotData.total_invested}, Value: ${snapshotData.current_value}, Schemes: ${snapshotData.total_schemes}`);
+              if (existing) {
+                console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: ${assetTypeCode} SKIPPED (exists)`);
+                snapshotsSkipped++;
+              } else {
+                const snapshotData = await this.calculateSnapshotData(
+                  customer.customer_id,
+                  monthEnd,
+                  params.tenant_id,
+                  params.is_live,
+                  assetTypeCode
+                );
 
-              await this.createSnapshot(snapshotData);
-              snapshotsCreated++;
-              console.log(`[SnapshotService]     ✓ MF Created`);
+                // Skip if no data for this asset type
+                if (snapshotData.total_invested === 0 && snapshotData.current_value === 0) {
+                  continue;
+                }
+
+                console.log(`[SnapshotService]   - ${monthEnd.toISOString().split('T')[0]}: ${assetTypeCode} CREATING...`);
+                console.log(`[SnapshotService]     → ${assetTypeCode} Invested: ${snapshotData.total_invested}, Value: ${snapshotData.current_value}, Schemes: ${snapshotData.total_schemes}`);
+
+                await this.createSnapshot(snapshotData);
+                snapshotsCreated++;
+                console.log(`[SnapshotService]     ✓ ${assetTypeCode} Created`);
+              }
             }
 
-            // ==================== NON-MF ASSET SNAPSHOTS ====================
-            // Only process if customer has non-MF assets (skip expensive query for most customers)
-            if (hasNonMfAssets) {
+            // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
+            // Only process if customer has non-scheme assets (skip expensive query for most customers)
+            if (hasNonSchemeAssets) {
               const assetResult = await this.generateAssetSnapshotsWithPlans(
                 customer.customer_id,
                 monthEnd,
                 params.tenant_id,
                 params.is_live,
-                nonMfPlans
+                nonSchemePlans
               );
 
               snapshotsCreated += assetResult.created;
@@ -789,31 +823,32 @@ export class PortfolioSnapshotService {
     customerId: number,
     asOfDate: Date,
     tenantId: number,
-    isLive: boolean
+    isLive: boolean,
+    assetTypeCode: string = 'Open Ended'  // Filter by specific asset type
   ): Promise<PortfolioSnapshotData> {
-    // Query to calculate portfolio totals as of the snapshot date
+    // Query to calculate portfolio totals as of the snapshot date, filtered by asset_type_code
     const query = `
       WITH customer_transactions AS (
-        SELECT 
+        SELECT
           t.scheme_code,
           -- Calculate units by transaction type
-          SUM(CASE 
-            WHEN tt.txn_type = 'Addition' THEN t.units 
-            ELSE 0 
+          SUM(CASE
+            WHEN tt.txn_type = 'Addition' THEN t.units
+            ELSE 0
           END) as total_units_purchased,
-          SUM(CASE 
-            WHEN tt.txn_type = 'Deduction' THEN t.units 
-            ELSE 0 
+          SUM(CASE
+            WHEN tt.txn_type = 'Deduction' THEN t.units
+            ELSE 0
           END) as total_units_redeemed,
           -- Calculate invested amount (purchases)
-          SUM(CASE 
-            WHEN tt.txn_type = 'Addition' THEN t.total_amount 
-            ELSE 0 
+          SUM(CASE
+            WHEN tt.txn_type = 'Addition' THEN t.total_amount
+            ELSE 0
           END) as total_invested,
           -- Calculate redemption proceeds (sales)
-          SUM(CASE 
-            WHEN tt.txn_type = 'Deduction' THEN t.total_amount 
-            ELSE 0 
+          SUM(CASE
+            WHEN tt.txn_type = 'Deduction' THEN t.total_amount
+            ELSE 0
           END) as total_redemption_proceeds
         FROM t_transaction_table t
         INNER JOIN m_transaction_types tt ON t.txn_type_id = tt.id
@@ -822,8 +857,9 @@ export class PortfolioSnapshotService {
           AND t.is_live = $3
           AND t.txn_date <= $4
           AND t.portfolio_flag = true
+          AND t.asset_type_code = $5
         GROUP BY t.scheme_code
-        HAVING (SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units ELSE 0 END) - 
+        HAVING (SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units ELSE 0 END) -
                 SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.units ELSE 0 END)) > 0.001
       ),
       scheme_navs AS (
@@ -845,14 +881,29 @@ export class PortfolioSnapshotService {
       LEFT JOIN scheme_navs sn ON sn.scheme_code = ct.scheme_code
     `;
 
-    const result = await this.db.query(query, [customerId, tenantId, isLive, asOfDate]);
-    
-    if (result.rows.length === 0) {
-      throw new Error(`No data found for customer ${customerId}`);
-    }
+    const result = await this.db.query(query, [customerId, tenantId, isLive, asOfDate, assetTypeCode]);
 
     const row = result.rows[0];
-    
+
+    // Handle no data case (customer has no transactions for this asset type)
+    if (!row || (parseFloat(row.total_invested) === 0 && parseFloat(row.current_value) === 0)) {
+      return {
+        customer_id: customerId,
+        snapshot_month_end: asOfDate,
+        total_invested: 0,
+        current_value: 0,
+        total_returns: 0,
+        return_percentage: 0,
+        total_units: 0,
+        total_schemes: 0,
+        asset_type_code: assetTypeCode,
+        investment_plan_id: null,
+        calculation_method: 'NAV' as const,
+        growth_rate_applied: null,
+        actual_amount: null
+      };
+    }
+
     // CORRECTED FUND MANAGER CALCULATION
     const totalInvested = parseFloat(row.total_invested) || 0;
     const totalRedemptionProceeds = parseFloat(row.total_redemption_proceeds) || 0;
@@ -871,7 +922,7 @@ export class PortfolioSnapshotService {
       total_units: parseFloat(row.total_units) || 0,
       total_schemes: parseInt(row.total_schemes) || 0,
       // Multi-asset support fields
-      asset_type_code: 'MF',
+      asset_type_code: assetTypeCode,
       investment_plan_id: null,
       calculation_method: 'NAV' as const,
       growth_rate_applied: null,
@@ -918,7 +969,7 @@ export class PortfolioSnapshotService {
       data.return_percentage,
       data.total_units,
       data.total_schemes,
-      data.asset_type_code || 'MF',
+      data.asset_type_code || 'Open Ended',  // Default to Open Ended for scheme-based assets
       data.investment_plan_id || null,
       data.calculation_method || 'NAV',
       data.growth_rate_applied || null,
@@ -966,7 +1017,7 @@ export class PortfolioSnapshotService {
     monthEnd: Date,
     tenantId: number,
     isLive: boolean,
-    assetTypeCode: string = 'MF',
+    assetTypeCode: string = 'Open Ended',
     investmentPlanId: number | null = null
   ): Promise<any | null> {
     const query = `
@@ -1035,8 +1086,8 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Get date range from customer's first and last transactions AND non-MF asset start dates
-   * FIXED: Now considers both MF transactions and non-MF asset start_date from t_customer_asset_assignments
+   * Get date range from customer's first and last transactions AND non-scheme asset start dates
+   * FIXED: Now considers both MF transactions and non-scheme asset start_date from t_customer_asset_assignments
    * This ensures snapshots are generated from the earliest date across all asset types
    */
   private async getCustomerDateRange(
@@ -1044,7 +1095,7 @@ export class PortfolioSnapshotService {
     tenantId: number,
     isLive: boolean
   ): Promise<CustomerDateRange> {
-    // Query both MF transactions and non-MF asset start dates
+    // Query both MF transactions and non-scheme asset start dates
     const query = `
       WITH mf_dates AS (
         SELECT
@@ -1067,7 +1118,7 @@ export class PortfolioSnapshotService {
           AND caa.is_live = $3
           AND caa.is_active = true
           AND caa.has_started = true
-          AND at.asset_type_code != 'MF'
+          AND at.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
       )
       SELECT
         LEAST(mf.first_date, ad.first_date) as first_transaction_date,
@@ -1083,9 +1134,9 @@ export class PortfolioSnapshotService {
 
     const row = result.rows[0];
 
-    // If both dates are null, no MF transactions and no non-MF assets
+    // If both dates are null, no MF transactions and no non-scheme assets
     if (!row.first_transaction_date && !row.last_transaction_date) {
-      console.log(`[SnapshotService] No MF transactions or non-MF assets for customer ${customerId}`);
+      console.log(`[SnapshotService] No MF transactions or non-scheme assets for customer ${customerId}`);
       return { firstTransactionDate: null, lastTransactionDate: null };
     }
 
@@ -1135,7 +1186,7 @@ export class PortfolioSnapshotService {
   // ==================== MULTI-ASSET SNAPSHOT METHODS ====================
 
   /**
-   * Get customer's investment plans (non-MF assets)
+   * Get customer's investment plans (non-scheme assets)
    * Returns plans from t_customer_asset_assignments for assumption-based calculation
    */
   private async getCustomerInvestmentPlans(
@@ -1166,7 +1217,7 @@ export class PortfolioSnapshotService {
         AND caa.tenant_id = $2
         AND caa.is_live = $3
         AND caa.is_active = true
-        AND at.asset_type_code != 'MF'  -- Exclude MF (handled separately via NAV)
+        AND at.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')  -- Exclude scheme-based assets (handled separately via NAV)
       ORDER BY at.display_order, caa.id
     `;
 
@@ -1207,7 +1258,7 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Calculate snapshot data for a non-MF asset (assumption-based)
+   * Calculate snapshot data for a non-scheme asset (assumption-based)
    * Uses growth rate to calculate current value based on elapsed time
    */
   private calculateAssetSnapshotData(
@@ -1301,7 +1352,7 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Generate snapshots for all non-MF assets for a customer
+   * Generate snapshots for all non-scheme assets for a customer
    * Called after MF snapshot generation in generateSnapshots()
    */
   async generateAssetSnapshots(
@@ -1317,15 +1368,15 @@ export class PortfolioSnapshotService {
     console.log(`[SnapshotService]    - tenantId: ${tenantId}, isLive: ${isLive}`);
 
     try {
-      // Get customer's non-MF investment plans
+      // Get customer's non-scheme investment plans
       const plans = await this.getCustomerInvestmentPlans(customerId, tenantId, isLive);
 
       if (plans.length === 0) {
-        console.log(`[SnapshotService] ⚠️ No non-MF investment plans for customer ${customerId}`);
+        console.log(`[SnapshotService] ⚠️ No non-scheme investment plans for customer ${customerId}`);
         return result;
       }
 
-      console.log(`[SnapshotService] ✅ Processing ${plans.length} non-MF plans for customer ${customerId}`);
+      console.log(`[SnapshotService] ✅ Processing ${plans.length} non-scheme plans for customer ${customerId}`);
 
       for (const plan of plans) {
         try {
@@ -1374,7 +1425,7 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * OPTIMIZED: Generate snapshots for non-MF assets using pre-fetched plans
+   * OPTIMIZED: Generate snapshots for non-scheme assets using pre-fetched plans
    * Avoids repeated database queries when processing multiple months
    */
   async generateAssetSnapshotsWithPlans(

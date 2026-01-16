@@ -542,82 +542,104 @@ export class AliasService {
     const byMemberMap = new Map<number, AliasMemberAllocation>();
     let totalValue = 0;
 
-    // GET MF DATA from t_customer_portfolio_totals
-    const mfQuery = `
-      SELECT
-        'MF' as category,
-        SUM(cpt.current_value) as value,
-        COUNT(DISTINCT cpt.scheme_code) as scheme_count
-      FROM t_customer_portfolio_totals cpt
-      WHERE cpt.tenant_id = $1
-        AND cpt.is_live = $2
-        AND cpt.customer_id = ANY($3)
-        AND cpt.current_value > 0
-    `;
-    const mfResult = await pool.query(mfQuery, [tenantId, isLive, customerIds]);
+    // GET SCHEME-BASED DATA (aggregated as "Mutual Funds") from t_monthly_portfolio_snapshots
+    // Scheme types: Open Ended, Close Ended, Interval Fund
+    const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
 
-    if (mfResult.rows.length > 0 && mfResult.rows[0].value) {
-      const mfValue = parseFloat(mfResult.rows[0].value) || 0;
-      if (mfValue > 0) {
-        allocations.push({
-          category: 'Mutual Funds',
-          value: mfValue,
-          percentage: 0,
-          scheme_count: parseInt(mfResult.rows[0].scheme_count) || 0
-        });
-        totalValue += mfValue;
+    // Get latest snapshot date for scheme-based assets
+    const schemeLatestDateQuery = `
+      SELECT MAX(snapshot_month_end) as latest_date
+      FROM t_monthly_portfolio_snapshots
+      WHERE tenant_id = $1 AND is_live = $2 AND customer_id = ANY($3)
+        AND asset_type_code = ANY($4)
+    `;
+    const schemeLatestDateResult = await pool.query(schemeLatestDateQuery, [tenantId, isLive, customerIds, schemeTypes]);
+    const schemeLatestDate = schemeLatestDateResult.rows[0]?.latest_date;
+
+    if (schemeLatestDate) {
+      const schemeQuery = `
+        SELECT
+          'Mutual Funds' as category,
+          SUM(mps.current_value) as value,
+          SUM(mps.total_schemes) as scheme_count
+        FROM t_monthly_portfolio_snapshots mps
+        WHERE mps.tenant_id = $1
+          AND mps.is_live = $2
+          AND mps.customer_id = ANY($3)
+          AND mps.snapshot_month_end = $4
+          AND mps.asset_type_code = ANY($5)
+          AND mps.current_value > 0
+      `;
+      const schemeResult = await pool.query(schemeQuery, [tenantId, isLive, customerIds, schemeLatestDate, schemeTypes]);
+
+      if (schemeResult.rows.length > 0 && schemeResult.rows[0].value) {
+        const schemeValue = parseFloat(schemeResult.rows[0].value) || 0;
+        if (schemeValue > 0) {
+          allocations.push({
+            category: 'Mutual Funds',
+            value: schemeValue,
+            percentage: 0,
+            scheme_count: parseInt(schemeResult.rows[0].scheme_count) || 0
+          });
+          totalValue += schemeValue;
+        }
       }
     }
 
-    // Get MF allocation by member
-    const mfMemberQuery = `
+    // Get scheme-based allocation by member (aggregated as "Mutual Funds")
+    const schemeMemberQuery = `
       SELECT
-        cpt.customer_id,
+        mps.customer_id,
         ct.name,
         c.iwell_code,
         'Mutual Funds' as category,
-        SUM(cpt.current_value) as value
-      FROM t_customer_portfolio_totals cpt
-      JOIN t_customers c ON cpt.customer_id = c.id
+        SUM(mps.current_value) as value
+      FROM t_monthly_portfolio_snapshots mps
+      JOIN t_customers c ON mps.customer_id = c.id
       JOIN t_contacts ct ON c.contact_id = ct.id
-      WHERE cpt.tenant_id = $1
-        AND cpt.is_live = $2
-        AND cpt.customer_id = ANY($3)
-        AND cpt.current_value > 0
-      GROUP BY cpt.customer_id, ct.name, c.iwell_code
+      WHERE mps.tenant_id = $1
+        AND mps.is_live = $2
+        AND mps.customer_id = ANY($3)
+        AND mps.snapshot_month_end = $4
+        AND mps.asset_type_code = ANY($5)
+        AND mps.current_value > 0
+      GROUP BY mps.customer_id, ct.name, c.iwell_code
       ORDER BY ct.name
     `;
-    const mfMemberResult = await pool.query(mfMemberQuery, [tenantId, isLive, customerIds]);
 
-    mfMemberResult.rows.forEach(row => {
-      if (!byMemberMap.has(row.customer_id)) {
-        byMemberMap.set(row.customer_id, {
-          customer_id: row.customer_id,
-          name: row.name,
-          iwell_code: row.iwell_code,
-          allocations: []
+    if (schemeLatestDate) {
+      const schemeMemberResult = await pool.query(schemeMemberQuery, [tenantId, isLive, customerIds, schemeLatestDate, schemeTypes]);
+
+      schemeMemberResult.rows.forEach(row => {
+        if (!byMemberMap.has(row.customer_id)) {
+          byMemberMap.set(row.customer_id, {
+            customer_id: row.customer_id,
+            name: row.name,
+            iwell_code: row.iwell_code,
+            allocations: []
+          });
+        }
+        const member = byMemberMap.get(row.customer_id)!;
+        member.allocations.push({
+          category: row.category,
+          value: parseFloat(row.value) || 0,
+          percentage: 0
         });
-      }
-      const member = byMemberMap.get(row.customer_id)!;
-      member.allocations.push({
-        category: row.category,
-        value: parseFloat(row.value) || 0,
-        percentage: 0
       });
-    });
+    }
 
-    // GET NON-MF DATA from t_monthly_portfolio_snapshots
+    // GET NON-SCHEME DATA from t_monthly_portfolio_snapshots (GOLD, FD, etc.)
     const latestDateQuery = `
       SELECT MAX(snapshot_month_end) as latest_date
       FROM t_monthly_portfolio_snapshots
       WHERE tenant_id = $1 AND is_live = $2 AND customer_id = ANY($3)
-        AND asset_type_code != 'MF'
+        AND asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
     `;
     const latestDateResult = await pool.query(latestDateQuery, [tenantId, isLive, customerIds]);
     const latestDate = latestDateResult.rows[0]?.latest_date;
 
     if (latestDate) {
-      const nonMfQuery = `
+      const nonSchemeQuery = `
         SELECT
           COALESCE(mps.asset_type_code, 'Other') as category,
           SUM(mps.current_value) as value,
@@ -627,14 +649,14 @@ export class AliasService {
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
           AND mps.snapshot_month_end = $4
-          AND mps.asset_type_code != 'MF'
+          AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
           AND mps.current_value > 0
         GROUP BY COALESCE(mps.asset_type_code, 'Other')
         ORDER BY value DESC
       `;
-      const nonMfResult = await pool.query(nonMfQuery, [tenantId, isLive, customerIds, latestDate]);
+      const nonSchemeResult = await pool.query(nonSchemeQuery, [tenantId, isLive, customerIds, latestDate]);
 
-      nonMfResult.rows.forEach(row => {
+      nonSchemeResult.rows.forEach(row => {
         const value = parseFloat(row.value) || 0;
         if (value > 0) {
           allocations.push({
@@ -647,8 +669,8 @@ export class AliasService {
         }
       });
 
-      // Get non-MF allocation by member
-      const nonMfMemberQuery = `
+      // Get non-scheme allocation by member (GOLD, FD, etc.)
+      const nonSchemeMemberQuery = `
         SELECT
           mps.customer_id,
           ct.name,
@@ -662,14 +684,14 @@ export class AliasService {
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
           AND mps.snapshot_month_end = $4
-          AND mps.asset_type_code != 'MF'
+          AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
           AND mps.current_value > 0
         GROUP BY mps.customer_id, ct.name, c.iwell_code, COALESCE(mps.asset_type_code, 'Other')
         ORDER BY ct.name, value DESC
       `;
-      const nonMfMemberResult = await pool.query(nonMfMemberQuery, [tenantId, isLive, customerIds, latestDate]);
+      const nonSchemeMemberResult = await pool.query(nonSchemeMemberQuery, [tenantId, isLive, customerIds, latestDate]);
 
-      nonMfMemberResult.rows.forEach(row => {
+      nonSchemeMemberResult.rows.forEach(row => {
         if (!byMemberMap.has(row.customer_id)) {
           byMemberMap.set(row.customer_id, {
             customer_id: row.customer_id,

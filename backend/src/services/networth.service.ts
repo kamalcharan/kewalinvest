@@ -80,53 +80,8 @@ export class NetworthService {
       let totalPlans = 0;
 
       // ================================================================
-      // 1. GET REAL-TIME MF DATA (from t_customer_portfolio_totals)
-      // This ensures MF values are always current (based on latest NAV)
-      // ================================================================
-      const mfQuery = `
-        SELECT
-          SUM(cpt.total_invested) as total_invested,
-          SUM(cpt.current_value) as current_value,
-          SUM(cpt.total_returns) as total_returns,
-          COUNT(DISTINCT cpt.scheme_code) as scheme_count
-        FROM t_customer_portfolio_totals cpt
-        WHERE cpt.tenant_id = $1
-          AND cpt.is_live = $2
-          AND cpt.customer_id = ANY($3)
-      `;
-
-      const mfResult = await this.db.query(mfQuery, [tenantId, isLive, customerIds]);
-
-      if (mfResult.rows.length > 0 && mfResult.rows[0].current_value) {
-        const mfInvested = parseFloat(mfResult.rows[0].total_invested) || 0;
-        const mfValue = parseFloat(mfResult.rows[0].current_value) || 0;
-        const mfReturns = parseFloat(mfResult.rows[0].total_returns) || 0;
-        const mfSchemes = parseInt(mfResult.rows[0].scheme_count) || 0;
-
-        if (mfValue > 0) {
-          const mfAssetType = assetTypes.find(at => at.asset_type_code === 'MF');
-          byAssetType.push({
-            asset_type_code: 'MF',
-            asset_type_name: mfAssetType?.asset_type_name || 'Mutual Funds',
-            total_invested: mfInvested,
-            current_value: mfValue,
-            total_returns: mfReturns,
-            return_percentage: mfInvested > 0 ? (mfReturns / mfInvested) * 100 : 0,
-            allocation_percentage: 0, // Will calculate after we have total
-            plan_count: mfSchemes,
-            calculation_method: 'NAV' as const
-          });
-
-          totalNetworth += mfValue;
-          totalInvested += mfInvested;
-          totalReturns += mfReturns;
-          totalPlans += mfSchemes;
-        }
-      }
-
-      // ================================================================
-      // 2. GET NON-MF DATA (from t_monthly_portfolio_snapshots)
-      // These are assumption-based values from investment plans
+      // 1. GET SCHEME-BASED DATA (Open Ended, Close Ended, Interval Fund)
+      // From t_monthly_portfolio_snapshots - NAV-based calculations
       // ================================================================
       const asOfDate = request.as_of_date || await this.getLatestSnapshotDate(
         tenantId,
@@ -135,7 +90,67 @@ export class NetworthService {
       );
 
       if (asOfDate) {
-        const nonMfQuery = `
+        // Scheme-based asset types (replaces single 'MF' type)
+        const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+
+        const schemeQuery = `
+          SELECT
+            mps.asset_type_code,
+            SUM(mps.total_invested) as total_invested,
+            SUM(mps.current_value) as current_value,
+            SUM(mps.total_returns) as total_returns,
+            SUM(mps.total_schemes) as scheme_count,
+            'NAV' as calculation_method
+          FROM t_monthly_portfolio_snapshots mps
+          WHERE mps.tenant_id = $1
+            AND mps.is_live = $2
+            AND mps.customer_id = ANY($3)
+            AND mps.snapshot_month_end = $4
+            AND mps.asset_type_code = ANY($5)
+          GROUP BY mps.asset_type_code
+          ORDER BY SUM(mps.current_value) DESC
+        `;
+
+        const schemeResult = await this.db.query(schemeQuery, [
+          tenantId,
+          isLive,
+          customerIds,
+          asOfDate,
+          schemeTypes
+        ]);
+
+        for (const row of schemeResult.rows) {
+          const invested = parseFloat(row.total_invested) || 0;
+          const value = parseFloat(row.current_value) || 0;
+          const returns = parseFloat(row.total_returns) || 0;
+          const schemeCount = parseInt(row.scheme_count) || 0;
+
+          if (value > 0) {
+            const assetType = assetTypes.find(at => at.asset_type_code === row.asset_type_code);
+            byAssetType.push({
+              asset_type_code: row.asset_type_code,
+              asset_type_name: assetType?.asset_type_name || row.asset_type_code,
+              total_invested: invested,
+              current_value: value,
+              total_returns: returns,
+              return_percentage: invested > 0 ? (returns / invested) * 100 : 0,
+              allocation_percentage: 0, // Will calculate after we have total
+              plan_count: schemeCount,
+              calculation_method: 'NAV' as const
+            });
+
+            totalNetworth += value;
+            totalInvested += invested;
+            totalReturns += returns;
+            totalPlans += schemeCount;
+          }
+        }
+
+        // ================================================================
+        // 2. GET NON-SCHEME DATA (from t_monthly_portfolio_snapshots)
+        // These are assumption-based values from investment plans (GOLD, FD, etc.)
+        // ================================================================
+        const nonSchemeQuery = `
           SELECT
             mps.asset_type_code,
             SUM(mps.total_invested) as total_invested,
@@ -148,19 +163,19 @@ export class NetworthService {
             AND mps.is_live = $2
             AND mps.customer_id = ANY($3)
             AND mps.snapshot_month_end = $4
-            AND mps.asset_type_code != 'MF'
+            AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
           GROUP BY mps.asset_type_code
           ORDER BY SUM(mps.current_value) DESC
         `;
 
-        const nonMfResult = await this.db.query(nonMfQuery, [
+        const nonSchemeResult = await this.db.query(nonSchemeQuery, [
           tenantId,
           isLive,
           customerIds,
           asOfDate
         ]);
 
-        for (const row of nonMfResult.rows) {
+        for (const row of nonSchemeResult.rows) {
           const invested = parseFloat(row.total_invested) || 0;
           const value = parseFloat(row.current_value) || 0;
           const returns = parseFloat(row.total_returns) || 0;
@@ -407,39 +422,42 @@ export class NetworthService {
           });
           breakdownMap.set(currentDateKey, currentBreakdownMap);
         } else {
-          // Update the last point with real-time MF values (in case MF was imported)
+          // Update the last point with real-time scheme-based values (in case data was imported)
           const lastPoint = history[history.length - 1];
+          const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
 
-          // Replace MF value in last point with real-time value
-          const mfSummary = currentSummary.by_asset_type.find(at => at.asset_type_code === 'MF');
-          if (mfSummary) {
-            // Find and update MF in by_asset_type
-            const mfIndex = lastPoint.by_asset_type.findIndex(at => at.asset_type_code === 'MF');
-            const oldMfValue = mfIndex >= 0 ? lastPoint.by_asset_type[mfIndex].current_value : 0;
+          // Update each scheme type in the last point with current values
+          for (const schemeType of schemeTypes) {
+            const schemeSummary = currentSummary.by_asset_type.find(at => at.asset_type_code === schemeType);
+            if (schemeSummary) {
+              // Find and update scheme type in by_asset_type
+              const schemeIndex = lastPoint.by_asset_type.findIndex(at => at.asset_type_code === schemeType);
+              const oldValue = schemeIndex >= 0 ? lastPoint.by_asset_type[schemeIndex].current_value : 0;
 
-            if (mfIndex >= 0) {
-              lastPoint.by_asset_type[mfIndex].current_value = mfSummary.current_value;
-            } else {
-              lastPoint.by_asset_type.push({
-                asset_type_code: 'MF',
-                current_value: mfSummary.current_value
-              });
+              if (schemeIndex >= 0) {
+                lastPoint.by_asset_type[schemeIndex].current_value = schemeSummary.current_value;
+              } else {
+                lastPoint.by_asset_type.push({
+                  asset_type_code: schemeType,
+                  current_value: schemeSummary.current_value
+                });
+              }
+
+              // Update totals
+              lastPoint.total_networth = lastPoint.total_networth - oldValue + schemeSummary.current_value;
+              lastPoint.total_invested = lastPoint.total_invested - (oldValue > 0 ? oldValue : 0) + schemeSummary.total_invested;
+              lastPoint.total_returns = lastPoint.total_networth - lastPoint.total_invested;
+              lastPoint.return_percentage = lastPoint.total_invested > 0
+                ? (lastPoint.total_returns / lastPoint.total_invested) * 100
+                : 0;
+
+              // Update breakdown map
+              const lastDateKey = lastPoint.date;
+              if (breakdownMap.has(lastDateKey)) {
+                breakdownMap.get(lastDateKey)!.set(schemeType, schemeSummary.current_value);
+              }
+              allAssetTypes.add(schemeType);
             }
-
-            // Update totals
-            lastPoint.total_networth = lastPoint.total_networth - oldMfValue + mfSummary.current_value;
-            lastPoint.total_invested = lastPoint.total_invested - (oldMfValue > 0 ? oldMfValue : 0) + mfSummary.total_invested;
-            lastPoint.total_returns = lastPoint.total_networth - lastPoint.total_invested;
-            lastPoint.return_percentage = lastPoint.total_invested > 0
-              ? (lastPoint.total_returns / lastPoint.total_invested) * 100
-              : 0;
-
-            // Update breakdown map
-            const lastDateKey = lastPoint.date;
-            if (breakdownMap.has(lastDateKey)) {
-              breakdownMap.get(lastDateKey)!.set('MF', mfSummary.current_value);
-            }
-            allAssetTypes.add('MF');
           }
         }
       }
@@ -493,18 +511,19 @@ export class NetworthService {
 
         // Get earliest start date for this asset type
         const earliestStartDate = assetStartDates.get(code);
+        const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
 
         // Find the first index where date >= start date
         let firstValidIndex = 0;
-        if (earliestStartDate && code !== 'MF') {
-          // For non-MF assets, use the investment plan start date
+        if (schemeTypes.includes(code)) {
+          // For scheme-based assets, use first non-zero value (has actual transactions)
+          firstValidIndex = allValues.findIndex(v => v >= 100);
+          if (firstValidIndex === -1) firstValidIndex = dates.length;
+        } else if (earliestStartDate) {
+          // For non-scheme assets, use the investment plan start date
           const startMonth = new Date(earliestStartDate.getFullYear(), earliestStartDate.getMonth(), 1);
           firstValidIndex = dates.findIndex(d => new Date(d) >= startMonth);
           if (firstValidIndex === -1) firstValidIndex = dates.length; // No valid dates
-        } else if (code === 'MF') {
-          // For MF, use first non-zero value (has actual transactions)
-          firstValidIndex = allValues.findIndex(v => v >= 100);
-          if (firstValidIndex === -1) firstValidIndex = dates.length;
         }
 
         // If no valid data, return empty
