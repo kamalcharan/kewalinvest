@@ -80,7 +80,7 @@ export class NetworthService {
       let totalPlans = 0;
 
       // ================================================================
-      // 1. GET SCHEME-BASED DATA (Open Ended, Close Ended, Interval Fund)
+      // 1. GET SCHEME-BASED DATA (all scheme categories)
       // From t_monthly_portfolio_snapshots - NAV-based calculations
       // ================================================================
       const asOfDate = request.as_of_date || await this.getLatestSnapshotDate(
@@ -90,8 +90,8 @@ export class NetworthService {
       );
 
       if (asOfDate) {
-        // Scheme-based asset types (replaces single 'MF' type)
-        const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+        // Non-scheme asset types (manual investments like GOLD, FD, etc.)
+        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
 
         const schemeQuery = `
           SELECT
@@ -106,7 +106,7 @@ export class NetworthService {
             AND mps.is_live = $2
             AND mps.customer_id = ANY($3)
             AND mps.snapshot_month_end = $4
-            AND mps.asset_type_code = ANY($5)
+            AND mps.asset_type_code NOT IN (SELECT UNNEST($5::text[]))
           GROUP BY mps.asset_type_code
           ORDER BY SUM(mps.current_value) DESC
         `;
@@ -116,7 +116,7 @@ export class NetworthService {
           isLive,
           customerIds,
           asOfDate,
-          schemeTypes
+          nonSchemeAssetTypes
         ]);
 
         for (const row of schemeResult.rows) {
@@ -163,7 +163,7 @@ export class NetworthService {
             AND mps.is_live = $2
             AND mps.customer_id = ANY($3)
             AND mps.snapshot_month_end = $4
-            AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
+            AND mps.asset_type_code IN (SELECT UNNEST($5::text[]))
           GROUP BY mps.asset_type_code
           ORDER BY SUM(mps.current_value) DESC
         `;
@@ -172,7 +172,8 @@ export class NetworthService {
           tenantId,
           isLive,
           customerIds,
-          asOfDate
+          asOfDate,
+          nonSchemeAssetTypes
         ]);
 
         for (const row of nonSchemeResult.rows) {
@@ -424,21 +425,26 @@ export class NetworthService {
         } else {
           // Update the last point with real-time scheme-based values (in case data was imported)
           const lastPoint = history[history.length - 1];
-          const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+          const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
 
-          // Update each scheme type in the last point with current values
-          for (const schemeType of schemeTypes) {
-            const schemeSummary = currentSummary.by_asset_type.find(at => at.asset_type_code === schemeType);
+          // Get all scheme categories from current summary (not in non-scheme list)
+          const schemeCategories = currentSummary.by_asset_type
+            .filter(at => !nonSchemeAssetTypes.includes(at.asset_type_code))
+            .map(at => at.asset_type_code);
+
+          // Update each scheme category in the last point with current values
+          for (const schemeCategory of schemeCategories) {
+            const schemeSummary = currentSummary.by_asset_type.find(at => at.asset_type_code === schemeCategory);
             if (schemeSummary) {
-              // Find and update scheme type in by_asset_type
-              const schemeIndex = lastPoint.by_asset_type.findIndex(at => at.asset_type_code === schemeType);
+              // Find and update scheme category in by_asset_type
+              const schemeIndex = lastPoint.by_asset_type.findIndex(at => at.asset_type_code === schemeCategory);
               const oldValue = schemeIndex >= 0 ? lastPoint.by_asset_type[schemeIndex].current_value : 0;
 
               if (schemeIndex >= 0) {
                 lastPoint.by_asset_type[schemeIndex].current_value = schemeSummary.current_value;
               } else {
                 lastPoint.by_asset_type.push({
-                  asset_type_code: schemeType,
+                  asset_type_code: schemeCategory,
                   current_value: schemeSummary.current_value
                 });
               }
@@ -454,9 +460,9 @@ export class NetworthService {
               // Update breakdown map
               const lastDateKey = lastPoint.date;
               if (breakdownMap.has(lastDateKey)) {
-                breakdownMap.get(lastDateKey)!.set(schemeType, schemeSummary.current_value);
+                breakdownMap.get(lastDateKey)!.set(schemeCategory, schemeSummary.current_value);
               }
-              allAssetTypes.add(schemeType);
+              allAssetTypes.add(schemeCategory);
             }
           }
         }
@@ -511,12 +517,13 @@ export class NetworthService {
 
         // Get earliest start date for this asset type
         const earliestStartDate = assetStartDates.get(code);
-        const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+        const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
 
         // Find the first index where date >= start date
         let firstValidIndex = 0;
-        if (schemeTypes.includes(code)) {
-          // For scheme-based assets, use first non-zero value (has actual transactions)
+        const isSchemeCategory = !nonSchemeAssetTypes.includes(code);
+        if (isSchemeCategory) {
+          // For scheme-based assets (all scheme categories), use first non-zero value (has actual transactions)
           firstValidIndex = allValues.findIndex(v => v >= 100);
           if (firstValidIndex === -1) firstValidIndex = dates.length;
         } else if (earliestStartDate) {

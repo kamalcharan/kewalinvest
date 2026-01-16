@@ -1143,7 +1143,7 @@ export class PortfolioSnapshotService {
           AND caa.is_live = $3
           AND caa.is_active = true
           AND caa.has_started = true
-          AND at.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
+          AND at.asset_type_code IN ('GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER')
       )
       SELECT
         LEAST(mf.first_date, ad.first_date) as first_transaction_date,
