@@ -1,24 +1,27 @@
-# Scheme-Based Asset Types Release
+# Scheme Category-Based Asset Types Release
 
-**Version:** 1.0
+**Version:** 2.0
 **Date:** 2026-01-16
 **Status:** Ready for Deployment
 
 ## Overview
 
-This release replaces the single `MF` (Mutual Fund) asset type with three scheme-based types derived from the Scheme Data import file (Column E - Scheme Type):
+This release replaces the single `MF` (Mutual Fund) asset type with 42 scheme categories derived from the Scheme Data import file (Column E - Scheme Category):
 
-| Old | New |
-|-----|-----|
-| MF | Open Ended |
-|    | Close Ended |
-|    | Interval Fund |
+| Category | Count | Examples |
+|----------|-------|----------|
+| Debt Scheme | 16 | Liquid Fund, Gilt Fund, Corporate Bond, etc. |
+| Equity Scheme | 12 | Large Cap, Mid Cap, Small Cap, ELSS, etc. |
+| Hybrid Scheme | 7 | Aggressive, Balanced, Arbitrage, etc. |
+| Other Scheme | 5 | Index Funds, Gold ETF, FoF, etc. |
+| Solution Oriented | 2 | Children's Fund, Retirement Fund |
 
 ## Why This Change?
 
-1. **Better categorization**: Different scheme types have different characteristics (liquidity, lock-in, etc.)
-2. **Accurate reporting**: Portfolio views now show actual scheme type breakdown
-3. **Future-proof**: Enables scheme-type-specific features and analytics
+1. **Granular categorization**: Each scheme category has different risk/return profiles
+2. **Accurate reporting**: Portfolio views now show actual scheme category breakdown
+3. **Better analytics**: Enables category-specific performance tracking
+4. **Future-proof**: Supports scheme-category-specific features
 
 ## Changes Summary
 
@@ -26,31 +29,31 @@ This release replaces the single `MF` (Mutual Fund) asset type with three scheme
 
 | Table | Change |
 |-------|--------|
-| `t_transaction_table` | Added `asset_type_code` column (VARCHAR 50) |
+| `t_transaction_table` | Added `asset_type_code` column (VARCHAR 100) |
 | `t_monthly_portfolio_snapshots` | Changed default from 'MF' to NOT NULL |
-| `t_scheme_masters` | Added 3 scheme_type records |
-| `m_asset_types` | Added 3 scheme-based types, deactivated 'MF' |
+| `t_scheme_masters` | Added 42 scheme_category records |
+| `m_asset_types` | Added 42 scheme category types, deactivated 'MF' |
 
 ### Backend Changes
 
 | File | Change |
 |------|--------|
-| `04_functions_views_policies.sql` | Auto-tag asset_type_code during import |
-| `portfolio.service.ts` | Aggregate across scheme types |
-| `portfolioSnapshot.service.ts` | Generate per-scheme-type snapshots |
-| `networth.service.ts` | Updated queries for scheme types |
+| `04_functions_views_policies.sql` | Auto-tag asset_type_code using scheme_category_id |
+| `portfolio.service.ts` | Aggregate across scheme categories |
+| `portfolioSnapshot.service.ts` | Dynamic customer scheme categories lookup |
+| `networth.service.ts` | Updated queries for scheme categories |
 | `alias.service.ts` | Family view aggregates as "Mutual Funds" |
 
 ### Frontend Changes
 
 | File | Change |
 |------|--------|
-| `assetTypes.ts` | Colors, icons, names for 3 types |
-| `assetType.types.ts` | Updated enum values |
-| `PortfolioSnapshotsTable.tsx` | Sorting logic for scheme types |
+| `assetTypes.ts` | Colors, icons, names for 42 categories with fallbacks |
+| `assetType.types.ts` | Updated type definitions |
+| `PortfolioSnapshotsTable.tsx` | Sorting logic using isSchemeAssetType() |
 | `CustomerViewPage.tsx` | Updated fallback chart |
-| `InvestmentPlanForm.tsx` | Scheme type checks |
-| `GoalInvestmentAllocator.tsx` | Type-specific icons |
+| `InvestmentPlanForm.tsx` | Scheme category checks |
+| `dataTransformers.ts` | MoM calculation fix (Modified Dietz) |
 
 ## Migration
 
@@ -82,61 +85,125 @@ psql -d kewalinvest -f "backend/db/ditribution scripts/04_functions_views_polici
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SCHEME DATA IMPORT                           │
-│  Excel Column E: "Open Ended" / "Close Ended" / "Interval Fund" │
+│  Excel Column E: "Equity Scheme - Large Cap Fund", etc.         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   t_scheme_details                              │
-│  scheme_type_id → t_scheme_masters (scheme_type)               │
+│  scheme_category_id → t_scheme_masters (scheme_category)        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              TRANSACTION IMPORT                                 │
-│  process_transaction_import_session()                          │
-│  Lookup: scheme_type_id → name → asset_type_code               │
+│  process_transaction_import_session()                           │
+│  Lookup: scheme_category_id → name → asset_type_code            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                t_transaction_table                              │
-│  asset_type_code: 'Open Ended' / 'Close Ended' / 'Interval Fund'│
+│  asset_type_code: 'Equity Scheme - Large Cap Fund', etc.        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │            t_monthly_portfolio_snapshots                        │
-│  Separate snapshots per scheme type per customer               │
+│  Separate snapshots per scheme category per customer            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FRONTEND                                     │
-│  Portfolio views show all 3 scheme types with unique colors    │
+│  Portfolio views show all scheme categories with unique colors  │
+│  - Equity: Shades of green                                      │
+│  - Debt: Shades of blue                                         │
+│  - Hybrid: Shades of purple                                     │
+│  - Other: Shades of amber/orange                                │
+│  - Solution: Shades of pink                                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Scheme Categories Reference
+
+### Debt Scheme (16 categories)
+- Banking and PSU Fund
+- Corporate Bond Fund
+- Credit Risk Fund
+- Dynamic Bond
+- Floater Fund
+- Gilt Fund
+- Gilt Fund with 10 year constant duration
+- Liquid Fund
+- Long Duration Fund
+- Low Duration Fund
+- Medium Duration Fund
+- Medium to Long Duration Fund
+- Money Market Fund
+- Overnight Fund
+- Short Duration Fund
+- Ultra Short Duration Fund
+
+### Equity Scheme (12 categories)
+- Contra Fund
+- Dividend Yield Fund
+- ELSS
+- Flexi Cap Fund
+- Focused Fund
+- Large & Mid Cap Fund
+- Large Cap Fund
+- Mid Cap Fund
+- Multi Cap Fund
+- Sectoral/Thematic
+- Small Cap Fund
+- Value Fund
+
+### Hybrid Scheme (7 categories)
+- Aggressive Hybrid Fund
+- Arbitrage Fund
+- Balanced Hybrid Fund
+- Conservative Hybrid Fund
+- Dynamic Asset Allocation or Balanced Advantage
+- Equity Savings
+- Multi Asset Allocation
+
+### Other Scheme (5 categories)
+- FoF Domestic
+- FoF Overseas
+- Gold ETF
+- Index Funds
+- Other ETFs
+
+### Solution Oriented Scheme (2 categories)
+- Children's Fund
+- Retirement Fund
 
 ## Verification Queries
 
 After migration, run these to verify:
 
 ```sql
--- Check scheme types exist
-SELECT * FROM t_scheme_masters WHERE master_type = 'scheme_type';
+-- Check scheme categories exist
+SELECT * FROM t_scheme_masters WHERE master_type = 'scheme_category';
 
 -- Check asset types
-SELECT * FROM m_asset_types WHERE asset_type_code IN ('Open Ended', 'Close Ended', 'Interval Fund', 'MF');
+SELECT asset_type_code, category, is_active
+FROM m_asset_types
+WHERE asset_type_code LIKE '%Scheme%'
+ORDER BY display_order;
 
 -- Check transaction distribution
 SELECT asset_type_code, COUNT(*)
 FROM t_transaction_table
-GROUP BY asset_type_code;
+GROUP BY asset_type_code
+ORDER BY COUNT(*) DESC;
 
 -- Check snapshot distribution
 SELECT asset_type_code, COUNT(*)
 FROM t_monthly_portfolio_snapshots
-GROUP BY asset_type_code;
+GROUP BY asset_type_code
+ORDER BY COUNT(*) DESC;
 
 -- Verify no MF references remain
 SELECT COUNT(*) FROM t_transaction_table WHERE asset_type_code = 'MF';
@@ -156,14 +223,18 @@ If issues occur, see the rollback section at the bottom of:
 | `b83a6e4` | 2 | Auto-tag asset_type_code during import |
 | `529368d` | 3 | Backend services updates |
 | `10c68d7` | 4 | Frontend updates |
+| `7810aed` | Fix | Variable name mismatch fix |
+| `1d3cfd6` | Major | Change from Scheme Type to Scheme Category (42 categories) |
+| `bc0acca` | Fix | MoM returns calculation (Modified Dietz method) |
 
 ## Testing Checklist
 
 - [ ] Run migration on test database
 - [ ] Import new scheme data file
 - [ ] Import transactions for a customer
-- [ ] Verify asset_type_code is auto-tagged
+- [ ] Verify asset_type_code is auto-tagged with scheme category
 - [ ] Check portfolio snapshots generation
-- [ ] Verify frontend shows 3 scheme types
-- [ ] Check networth history charts
+- [ ] Verify frontend shows all scheme categories
+- [ ] Check networth history charts show category breakdown
 - [ ] Verify family view aggregation
+- [ ] Test MoM returns calculation accuracy
