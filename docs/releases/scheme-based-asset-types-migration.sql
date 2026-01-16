@@ -1,35 +1,55 @@
 -- ============================================================================
 -- MIGRATION: Scheme Category-Based Asset Types
--- Version: 2.0
+-- Version: 3.0
 -- Date: 2026-01-16
--- Description: Replace single 'MF' asset type with 50 scheme categories
+-- Description: Add 42 scheme categories for MF asset type classification
 --              derived from Scheme Category column in import file
 -- ============================================================================
 --
 -- PREREQUISITES:
 -- 1. Backup your database before running this migration
--- 2. Run during maintenance window (affects transactions and snapshots)
--- 3. Application should be stopped during migration
+-- 2. Run during maintenance window
 --
--- ROLLBACK: See bottom of file for rollback script
+-- WHAT THIS MIGRATION DOES:
+-- 1. Expands VARCHAR columns to accommodate long scheme category names
+-- 2. Adds asset_type_code column to transactions table
+-- 3. Seeds 42 scheme categories in t_scheme_masters
+-- 4. Seeds 42 scheme category asset types in m_asset_types
+--
+-- AFTER MIGRATION:
+-- - For NEW TENANTS: Run seed-scheme-categories-for-tenant.sql
+-- - Upload scheme master data (with Scheme Category column)
+-- - Upload customer transactions
 -- ============================================================================
 
 BEGIN;
 
 -- ============================================================================
--- STEP 1: Expand asset_type_code column in m_asset_types
+-- STEP 1: Expand asset_type_code columns to VARCHAR(100)
 -- ============================================================================
--- Some scheme category names exceed 50 chars (e.g., "Hybrid Scheme - Dynamic
--- Asset Allocation or Balanced Advantage" = 62 chars)
+-- Some scheme category names are long, e.g.:
+-- "Hybrid Scheme - Dynamic Asset Allocation or Balanced Advantage" = 62 chars
+
 DO $$
 BEGIN
-    -- Expand m_asset_types.asset_type_code to VARCHAR(100)
+    -- Expand m_asset_types.asset_type_code
     ALTER TABLE m_asset_types
     ALTER COLUMN asset_type_code TYPE VARCHAR(100);
     RAISE NOTICE '✓ Expanded m_asset_types.asset_type_code to VARCHAR(100)';
 EXCEPTION
     WHEN others THEN
-        RAISE NOTICE '→ m_asset_types.asset_type_code already expanded or error: %', SQLERRM;
+        RAISE NOTICE '→ m_asset_types.asset_type_code: %', SQLERRM;
+END $$;
+
+-- Expand t_monthly_portfolio_snapshots.asset_type_code
+DO $$
+BEGIN
+    ALTER TABLE t_monthly_portfolio_snapshots
+    ALTER COLUMN asset_type_code TYPE VARCHAR(100);
+    RAISE NOTICE '✓ Expanded t_monthly_portfolio_snapshots.asset_type_code to VARCHAR(100)';
+EXCEPTION
+    WHEN others THEN
+        RAISE NOTICE '→ t_monthly_portfolio_snapshots.asset_type_code: %', SQLERRM;
 END $$;
 
 -- ============================================================================
@@ -46,30 +66,35 @@ BEGIN
         ADD COLUMN asset_type_code VARCHAR(100);
 
         COMMENT ON COLUMN t_transaction_table.asset_type_code IS
-            'Asset type derived from scheme category during import (e.g., Equity Scheme - Large Cap Fund)';
+            'Asset type derived from scheme category (e.g., Equity Scheme - Large Cap Fund)';
 
         RAISE NOTICE '✓ Added asset_type_code column to t_transaction_table';
     ELSE
-        RAISE NOTICE '→ asset_type_code column already exists in t_transaction_table';
+        -- Ensure column is wide enough
+        ALTER TABLE t_transaction_table
+        ALTER COLUMN asset_type_code TYPE VARCHAR(100);
+        RAISE NOTICE '→ asset_type_code column already exists, expanded to VARCHAR(100)';
     END IF;
 END $$;
 
--- Also expand t_monthly_portfolio_snapshots.asset_type_code if needed
-DO $$
-BEGIN
-    ALTER TABLE t_monthly_portfolio_snapshots
-    ALTER COLUMN asset_type_code TYPE VARCHAR(100);
-    RAISE NOTICE '✓ Expanded t_monthly_portfolio_snapshots.asset_type_code to VARCHAR(100)';
-EXCEPTION
-    WHEN others THEN
-        RAISE NOTICE '→ t_monthly_portfolio_snapshots.asset_type_code already expanded or error: %', SQLERRM;
-END $$;
+-- ============================================================================
+-- STEP 3: Insert 42 scheme categories into t_scheme_masters
+-- ============================================================================
+-- These are seeded for tenant_id=1. For other tenants, run:
+-- seed-scheme-categories-for-tenant.sql
 
--- ============================================================================
--- STEP 3: Insert all 42 scheme categories into t_scheme_masters
--- ============================================================================
 INSERT INTO t_scheme_masters (tenant_id, is_live, is_active, master_type, code, name, display_order)
 VALUES
+    -- Legacy categories (8) - for backward compatibility
+    (1, true, true, 'scheme_category', 'ASSURED_RETURN', 'Assured Return', 1),
+    (1, true, true, 'scheme_category', 'BALANCED', 'Balanced', 2),
+    (1, true, true, 'scheme_category', 'ELSS', 'ELSS', 3),
+    (1, true, true, 'scheme_category', 'GILT', 'Gilt', 4),
+    (1, true, true, 'scheme_category', 'GROWTH', 'Growth', 5),
+    (1, true, true, 'scheme_category', 'INCOME', 'Income', 6),
+    (1, true, true, 'scheme_category', 'LIQUID', 'Liquid', 7),
+    (1, true, true, 'scheme_category', 'MONEY_MARKET', 'Money Market', 8),
+
     -- Debt Scheme categories (16)
     (1, true, true, 'scheme_category', 'DEBT_BANKING_PSU', 'Debt Scheme - Banking and PSU Fund', 10),
     (1, true, true, 'scheme_category', 'DEBT_CORPORATE_BOND', 'Debt Scheme - Corporate Bond Fund', 11),
@@ -133,21 +158,31 @@ BEGIN
     SELECT COUNT(*) INTO v_count
     FROM t_scheme_masters
     WHERE master_type = 'scheme_category' AND is_active = true;
-    RAISE NOTICE '✓ Scheme categories in t_scheme_masters: %', v_count;
+    RAISE NOTICE '✓ Scheme categories seeded: % (for tenant_id=1)', v_count;
 END $$;
 
 -- ============================================================================
--- STEP 4: Add all 42 scheme category asset types to m_asset_types
+-- STEP 4: Add 42 scheme category asset types to m_asset_types
 -- ============================================================================
 INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
 VALUES
-    -- Debt Scheme categories (16) - rates: 4.5% - 8%
+    -- Legacy categories (8)
+    ('Assured Return', 'Assured Return', 'debt', 7.00, 1, true, 'Legacy: Assured return schemes'),
+    ('Balanced', 'Balanced', 'hybrid', 10.00, 2, true, 'Legacy: Balanced funds'),
+    ('ELSS', 'ELSS', 'equity', 12.00, 3, true, 'Legacy: Equity Linked Savings Scheme'),
+    ('Gilt', 'Gilt', 'debt', 7.00, 4, true, 'Legacy: Government securities funds'),
+    ('Growth', 'Growth', 'equity', 12.00, 5, true, 'Legacy: Growth-oriented funds'),
+    ('Income', 'Income', 'debt', 7.50, 6, true, 'Legacy: Income funds'),
+    ('Liquid', 'Liquid', 'debt', 5.00, 7, true, 'Legacy: Liquid funds'),
+    ('Money Market', 'Money Market', 'debt', 5.50, 8, true, 'Legacy: Money market funds'),
+
+    -- Debt Scheme categories (16)
     ('Debt Scheme - Banking and PSU Fund', 'Banking & PSU Fund', 'debt', 7.00, 10, true,
      'Debt funds investing in banking and PSU securities'),
     ('Debt Scheme - Corporate Bond Fund', 'Corporate Bond Fund', 'debt', 7.50, 11, true,
      'Debt funds investing in high-rated corporate bonds'),
     ('Debt Scheme - Credit Risk Fund', 'Credit Risk Fund', 'debt', 8.00, 12, true,
-     'Debt funds investing in lower-rated corporate bonds for higher yield'),
+     'Debt funds investing in lower-rated corporate bonds'),
     ('Debt Scheme - Dynamic Bond', 'Dynamic Bond', 'debt', 7.00, 13, true,
      'Debt funds with flexible duration management'),
     ('Debt Scheme - Floater Fund', 'Floater Fund', 'debt', 6.50, 14, true,
@@ -157,7 +192,7 @@ VALUES
     ('Debt Scheme - Gilt Fund with 10 year constant duration', 'Gilt 10Y Duration', 'debt', 7.00, 16, true,
      'Gilt funds maintaining 10-year duration'),
     ('Debt Scheme - Liquid Fund', 'Liquid Fund', 'debt', 5.00, 17, true,
-     'Highly liquid debt funds with short maturity'),
+     'Highly liquid debt funds'),
     ('Debt Scheme - Long Duration Fund', 'Long Duration Fund', 'debt', 7.50, 18, true,
      'Debt funds with long average maturity'),
     ('Debt Scheme - Low Duration Fund', 'Low Duration Fund', 'debt', 6.00, 19, true,
@@ -175,65 +210,65 @@ VALUES
     ('Debt Scheme - Ultra Short Duration Fund', 'Ultra Short Duration', 'debt', 5.50, 25, true,
      'Debt funds with 3-6 month duration'),
 
-    -- Equity Scheme categories (12) - rates: 11% - 15%
+    -- Equity Scheme categories (12)
     ('Equity Scheme - Contra Fund', 'Contra Fund', 'equity', 12.00, 30, true,
-     'Equity funds following contrarian investment strategy'),
+     'Equity funds following contrarian strategy'),
     ('Equity Scheme - Dividend Yield Fund', 'Dividend Yield Fund', 'equity', 11.00, 31, true,
-     'Equity funds focusing on high dividend yield stocks'),
+     'Equity funds focusing on dividend yield'),
     ('Equity Scheme - ELSS', 'ELSS Tax Saver', 'equity', 12.00, 32, true,
      'Equity Linked Savings Scheme with 3-year lock-in'),
     ('Equity Scheme - Flexi Cap Fund', 'Flexi Cap Fund', 'equity', 12.00, 33, true,
-     'Equity funds with flexible market cap allocation'),
+     'Equity funds with flexible market cap'),
     ('Equity Scheme - Focused Fund', 'Focused Fund', 'equity', 13.00, 34, true,
      'Concentrated equity funds with max 30 stocks'),
     ('Equity Scheme - Large & Mid Cap Fund', 'Large & Mid Cap Fund', 'equity', 12.00, 35, true,
-     'Equity funds investing in large and mid cap stocks'),
+     'Equity funds investing in large and mid caps'),
     ('Equity Scheme - Large Cap Fund', 'Large Cap Fund', 'equity', 11.00, 36, true,
      'Equity funds investing in top 100 companies'),
     ('Equity Scheme - Mid Cap Fund', 'Mid Cap Fund', 'equity', 13.00, 37, true,
      'Equity funds investing in mid-sized companies'),
     ('Equity Scheme - Multi Cap Fund', 'Multi Cap Fund', 'equity', 12.00, 38, true,
-     'Equity funds with mandatory allocation across market caps'),
+     'Equity funds with mandatory cross-cap allocation'),
     ('Equity Scheme - Sectoral/ Thematic', 'Sectoral/Thematic', 'equity', 14.00, 39, true,
-     'Equity funds focused on specific sectors or themes'),
+     'Equity funds focused on sectors/themes'),
     ('Equity Scheme - Small Cap Fund', 'Small Cap Fund', 'equity', 15.00, 40, true,
      'Equity funds investing in small companies'),
     ('Equity Scheme - Value Fund', 'Value Fund', 'equity', 12.00, 41, true,
-     'Equity funds following value investing strategy'),
+     'Equity funds following value investing'),
 
-    -- Hybrid Scheme categories (7) - rates: 6% - 11%
+    -- Hybrid Scheme categories (7)
     ('Hybrid Scheme - Aggressive Hybrid Fund', 'Aggressive Hybrid', 'hybrid', 11.00, 50, true,
-     'Hybrid funds with 65-80% equity allocation'),
+     'Hybrid funds with 65-80% equity'),
     ('Hybrid Scheme - Arbitrage Fund', 'Arbitrage Fund', 'hybrid', 6.00, 51, true,
-     'Funds exploiting price differences across markets'),
+     'Funds exploiting price differences'),
     ('Hybrid Scheme - Balanced Hybrid Fund', 'Balanced Hybrid', 'hybrid', 10.00, 52, true,
-     'Hybrid funds with 40-60% equity allocation'),
+     'Hybrid funds with 40-60% equity'),
     ('Hybrid Scheme - Conservative Hybrid Fund', 'Conservative Hybrid', 'hybrid', 8.00, 53, true,
-     'Hybrid funds with 10-25% equity allocation'),
+     'Hybrid funds with 10-25% equity'),
     ('Hybrid Scheme - Dynamic Asset Allocation or Balanced Advantage', 'Dynamic BAF', 'hybrid', 10.00, 54, true,
-     'Funds dynamically managing equity-debt allocation'),
+     'Funds dynamically managing equity-debt'),
     ('Hybrid Scheme - Equity Savings', 'Equity Savings', 'hybrid', 9.00, 55, true,
-     'Funds with equity, arbitrage, and debt components'),
+     'Funds with equity, arbitrage, debt'),
     ('Hybrid Scheme - Multi Asset Allocation', 'Multi Asset', 'hybrid', 10.00, 56, true,
-     'Funds investing in at least 3 asset classes'),
+     'Funds investing in 3+ asset classes'),
 
-    -- Other Scheme categories (5) - rates: 8% - 11%
+    -- Other Scheme categories (5)
     ('Other Scheme - FoF Domestic', 'FoF Domestic', 'fof', 10.00, 60, true,
-     'Fund of Funds investing in domestic mutual funds'),
+     'Fund of Funds - domestic'),
     ('Other Scheme - FoF Overseas', 'FoF Overseas', 'fof', 10.00, 61, true,
-     'Fund of Funds investing in international funds'),
+     'Fund of Funds - international'),
     ('Other Scheme - Gold ETF', 'Gold ETF', 'commodity', 8.00, 62, true,
-     'Exchange Traded Funds tracking gold prices'),
+     'ETFs tracking gold prices'),
     ('Other Scheme - Index Funds', 'Index Fund', 'equity', 11.00, 63, true,
-     'Passively managed funds tracking market indices'),
+     'Passively managed index funds'),
     ('Other Scheme - Other  ETFs', 'Other ETFs', 'equity', 11.00, 64, true,
      'Other Exchange Traded Funds'),
 
-    -- Solution Oriented Scheme categories (2) - rate: 10%
+    -- Solution Oriented Scheme categories (2)
     ('Solution Oriented Scheme - Children s Fund', 'Children Fund', 'solution', 10.00, 70, true,
-     'Long-term funds for children education/marriage'),
+     'Funds for children education'),
     ('Solution Oriented Scheme - Retirement Fund', 'Retirement Fund', 'solution', 10.00, 71, true,
-     'Long-term funds for retirement planning')
+     'Funds for retirement planning')
 ON CONFLICT (asset_type_code) DO UPDATE SET
     asset_type_name = EXCLUDED.asset_type_name,
     category = EXCLUDED.category,
@@ -246,287 +281,44 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO v_count
     FROM m_asset_types
-    WHERE asset_type_code LIKE 'Equity Scheme%'
-       OR asset_type_code LIKE 'Debt Scheme%'
-       OR asset_type_code LIKE 'Hybrid Scheme%'
-       OR asset_type_code LIKE 'Other Scheme%'
-       OR asset_type_code LIKE 'Solution Oriented%';
-    RAISE NOTICE '✓ Scheme category asset types added: %', v_count;
-END $$;
-
--- ============================================================================
--- STEP 5: Backfill asset_type_code for existing transactions
--- ============================================================================
--- This updates all transactions that have a scheme_code linked to a scheme
--- with a known scheme_category. Uses the scheme's scheme_category_id to
--- determine the asset_type_code.
-
-DO $$
-DECLARE
-    v_updated_count INTEGER;
-    v_total_null INTEGER;
-BEGIN
-    -- Count transactions needing update
-    SELECT COUNT(*) INTO v_total_null
-    FROM t_transaction_table
-    WHERE asset_type_code IS NULL;
-
-    RAISE NOTICE '→ Transactions needing asset_type_code update: %', v_total_null;
-
-    -- Update transactions with scheme_category lookup
-    UPDATE t_transaction_table t
-    SET asset_type_code = sm.name
-    FROM t_scheme_details sd
-    JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id
-    WHERE t.scheme_code = sd.scheme_code
-      AND t.asset_type_code IS NULL
-      AND sm.master_type = 'scheme_category';
-
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-    RAISE NOTICE '✓ Updated % transactions with scheme_category lookup', v_updated_count;
-
-    -- Default remaining NULL values to 'Growth' (common legacy category)
-    UPDATE t_transaction_table
-    SET asset_type_code = 'Growth'
-    WHERE asset_type_code IS NULL;
-
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-    IF v_updated_count > 0 THEN
-        RAISE NOTICE '✓ Defaulted % transactions to Growth (scheme_category not found)', v_updated_count;
-    END IF;
-END $$;
-
--- ============================================================================
--- STEP 6: Update existing portfolio snapshots from 'MF' to a default category
--- ============================================================================
--- Since we can't determine original scheme category from aggregated snapshots,
--- we default all 'MF' snapshots to 'Growth' (common legacy category)
-
-DO $$
-DECLARE
-    v_mf_count INTEGER;
-    v_updated INTEGER;
-BEGIN
-    -- Count existing MF snapshots
-    SELECT COUNT(*) INTO v_mf_count
-    FROM t_monthly_portfolio_snapshots
-    WHERE asset_type_code = 'MF';
-
-    IF v_mf_count > 0 THEN
-        RAISE NOTICE '→ Found % snapshots with asset_type_code = MF', v_mf_count;
-
-        -- Update MF to Growth
-        UPDATE t_monthly_portfolio_snapshots
-        SET asset_type_code = 'Growth'
-        WHERE asset_type_code = 'MF';
-
-        GET DIAGNOSTICS v_updated = ROW_COUNT;
-        RAISE NOTICE '✓ Updated % snapshots from MF to Growth', v_updated;
-    ELSE
-        RAISE NOTICE '→ No snapshots with MF found (already migrated or clean DB)';
-    END IF;
-END $$;
-
--- ============================================================================
--- STEP 7: Deactivate old 'MF' asset type (if exists)
--- ============================================================================
-UPDATE m_asset_types
-SET is_active = false,
-    description = COALESCE(description, '') || ' [DEPRECATED: Replaced by 50 scheme categories]'
-WHERE asset_type_code = 'MF';
-
-DO $$
-DECLARE
-    v_deactivated INTEGER;
-BEGIN
-    GET DIAGNOSTICS v_deactivated = ROW_COUNT;
-    IF v_deactivated > 0 THEN
-        RAISE NOTICE '✓ Deactivated MF asset type (kept for historical reference)';
-    ELSE
-        RAISE NOTICE '→ MF asset type not found (already removed or clean DB)';
-    END IF;
-END $$;
-
--- ============================================================================
--- STEP 8: Backfill scheme_category_id in t_scheme_details
--- ============================================================================
--- Existing schemes may have NULL scheme_category_id. Match by scheme category
--- name pattern from the scheme_name field.
-
-DO $$
-DECLARE
-    v_updated_count INTEGER := 0;
-    v_category RECORD;
-BEGIN
-    RAISE NOTICE '→ Backfilling scheme_category_id in t_scheme_details...';
-
-    -- Update schemes where scheme_category_id is NULL
-    -- Match scheme category by looking at scheme name patterns
-    FOR v_category IN
-        SELECT id, name FROM t_scheme_masters
-        WHERE master_type = 'scheme_category' AND is_active = true
-    LOOP
-        UPDATE t_scheme_details sd
-        SET scheme_category_id = v_category.id
-        WHERE sd.scheme_category_id IS NULL
-          AND (
-              -- Try matching by scheme_nav_name containing category keywords
-              LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(REPLACE(v_category.name, 'Equity Scheme - ', ''), 'Debt Scheme - ', '')) || '%'
-              OR LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(REPLACE(v_category.name, 'Hybrid Scheme - ', ''), 'Other Scheme - ', '')) || '%'
-              OR LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(v_category.name, 'Solution Oriented Scheme - ', '')) || '%'
-          );
-
-        GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-        IF v_updated_count > 0 THEN
-            RAISE NOTICE '  ✓ Matched % schemes to category: %', v_updated_count, v_category.name;
-        END IF;
-    END LOOP;
-
-    -- Count remaining NULL scheme_category_id
-    SELECT COUNT(*) INTO v_updated_count
-    FROM t_scheme_details
-    WHERE scheme_category_id IS NULL;
-
-    IF v_updated_count > 0 THEN
-        RAISE NOTICE '  ⚠ % schemes still have NULL scheme_category_id (will use Growth default)', v_updated_count;
-    ELSE
-        RAISE NOTICE '  ✓ All schemes have scheme_category_id set';
-    END IF;
-END $$;
-
--- ============================================================================
--- STEP 9: Update functions (MUST RUN)
--- ============================================================================
--- The scheme import and transaction import functions need to be updated.
--- Key fixes:
--- 1. Remove tenant_id filter from scheme_category lookup (categories are global)
--- 2. Auto-tag asset_type_code during transaction import
--- 3. Auto-create investment plans for MF schemes
---
--- IMPORTANT: Run the distribution script to apply function updates:
--- \i 'backend/db/ditribution scripts/04_functions_views_policies.sql'
-
-DO $$
-BEGIN
-    RAISE NOTICE '';
-    RAISE NOTICE '⚠️  IMPORTANT: You MUST run the functions script to complete migration!';
-    RAISE NOTICE '    Run: \i ''backend/db/ditribution scripts/04_functions_views_policies.sql''';
-    RAISE NOTICE '';
-    RAISE NOTICE '    This fixes:';
-    RAISE NOTICE '    - scheme_category lookup for all tenants (not just tenant_id=1)';
-    RAISE NOTICE '    - auto-creation of investment plans when transactions imported';
-    RAISE NOTICE '';
-END $$;
-
--- ============================================================================
--- STEP 10: Verification
--- ============================================================================
-DO $$
-DECLARE
-    v_txn_null_count INTEGER;
-    v_snapshot_mf_count INTEGER;
-    v_scheme_categories_count INTEGER;
-    v_asset_types_count INTEGER;
-BEGIN
-    RAISE NOTICE '';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE 'MIGRATION VERIFICATION';
-    RAISE NOTICE '========================================';
-
-    -- Check transactions
-    SELECT COUNT(*) INTO v_txn_null_count
-    FROM t_transaction_table
-    WHERE asset_type_code IS NULL;
-
-    IF v_txn_null_count = 0 THEN
-        RAISE NOTICE '✓ All transactions have asset_type_code';
-    ELSE
-        RAISE WARNING '⚠ % transactions still have NULL asset_type_code', v_txn_null_count;
-    END IF;
-
-    -- Check snapshots
-    SELECT COUNT(*) INTO v_snapshot_mf_count
-    FROM t_monthly_portfolio_snapshots
-    WHERE asset_type_code = 'MF';
-
-    IF v_snapshot_mf_count = 0 THEN
-        RAISE NOTICE '✓ No snapshots with MF asset_type_code';
-    ELSE
-        RAISE WARNING '⚠ % snapshots still have MF asset_type_code', v_snapshot_mf_count;
-    END IF;
-
-    -- Check scheme categories
-    SELECT COUNT(*) INTO v_scheme_categories_count
-    FROM t_scheme_masters
-    WHERE master_type = 'scheme_category' AND is_active = true;
-    RAISE NOTICE '✓ Active scheme categories: %', v_scheme_categories_count;
-
-    -- Check asset types
-    SELECT COUNT(*) INTO v_asset_types_count
-    FROM m_asset_types
     WHERE (asset_type_code LIKE 'Equity Scheme%'
         OR asset_type_code LIKE 'Debt Scheme%'
         OR asset_type_code LIKE 'Hybrid Scheme%'
         OR asset_type_code LIKE 'Other Scheme%'
-        OR asset_type_code LIKE 'Solution Oriented%')
+        OR asset_type_code LIKE 'Solution Oriented%'
+        OR asset_type_code IN ('Assured Return', 'Balanced', 'ELSS', 'Gilt', 'Growth', 'Income', 'Liquid', 'Money Market'))
     AND is_active = true;
-    RAISE NOTICE '✓ Scheme category asset types active: %', v_asset_types_count;
+    RAISE NOTICE '✓ Scheme category asset types seeded: %', v_count;
+END $$;
 
+-- ============================================================================
+-- VERIFICATION
+-- ============================================================================
+DO $$
+DECLARE
+    v_scheme_categories INTEGER;
+    v_asset_types INTEGER;
+BEGIN
+    RAISE NOTICE '';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Migration completed successfully!';
+    RAISE NOTICE 'MIGRATION COMPLETE';
+    RAISE NOTICE '========================================';
+
+    SELECT COUNT(*) INTO v_scheme_categories
+    FROM t_scheme_masters
+    WHERE master_type = 'scheme_category' AND is_active = true;
+    RAISE NOTICE '✓ Scheme categories in t_scheme_masters: %', v_scheme_categories;
+
+    SELECT COUNT(*) INTO v_asset_types
+    FROM m_asset_types WHERE is_active = true;
+    RAISE NOTICE '✓ Asset types in m_asset_types: %', v_asset_types;
+
+    RAISE NOTICE '';
+    RAISE NOTICE 'NEXT STEPS:';
+    RAISE NOTICE '1. For NEW TENANTS: Run seed-scheme-categories-for-tenant.sql';
+    RAISE NOTICE '2. Upload scheme master data (CSV with Scheme Category column)';
+    RAISE NOTICE '3. Upload customer transactions';
     RAISE NOTICE '========================================';
 END $$;
 
--- Show distribution summary
-SELECT
-    asset_type_code,
-    COUNT(*) as transaction_count
-FROM t_transaction_table
-GROUP BY asset_type_code
-ORDER BY transaction_count DESC;
-
 COMMIT;
-
--- ============================================================================
--- ROLLBACK SCRIPT (Run if migration fails)
--- ============================================================================
-/*
-BEGIN;
-
--- Revert snapshots back to MF
-UPDATE t_monthly_portfolio_snapshots
-SET asset_type_code = 'MF'
-WHERE asset_type_code LIKE 'Equity Scheme%'
-   OR asset_type_code LIKE 'Debt Scheme%'
-   OR asset_type_code LIKE 'Hybrid Scheme%'
-   OR asset_type_code LIKE 'Other Scheme%'
-   OR asset_type_code LIKE 'Solution Oriented%'
-   OR asset_type_code = 'Growth';
-
--- Reactivate MF asset type
-UPDATE m_asset_types
-SET is_active = true,
-    description = REPLACE(description, ' [DEPRECATED: Replaced by 50 scheme categories]', '')
-WHERE asset_type_code = 'MF';
-
--- Deactivate new scheme category asset types
-UPDATE m_asset_types
-SET is_active = false
-WHERE asset_type_code LIKE 'Equity Scheme%'
-   OR asset_type_code LIKE 'Debt Scheme%'
-   OR asset_type_code LIKE 'Hybrid Scheme%'
-   OR asset_type_code LIKE 'Other Scheme%'
-   OR asset_type_code LIKE 'Solution Oriented%';
-
--- Deactivate scheme categories in t_scheme_masters
-UPDATE t_scheme_masters
-SET is_active = false
-WHERE master_type = 'scheme_category';
-
--- Note: Column t_transaction_table.asset_type_code is kept (nullable, harmless)
--- To remove: ALTER TABLE t_transaction_table DROP COLUMN asset_type_code;
-
-COMMIT;
-
--- RAISE NOTICE 'Rollback completed. MF asset type restored.';
-*/
