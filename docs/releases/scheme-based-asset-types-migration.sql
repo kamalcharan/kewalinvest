@@ -348,29 +348,78 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 8: Update function process_transaction_import_session
+-- STEP 8: Backfill scheme_category_id in t_scheme_details
 -- ============================================================================
--- This requires recreating the function with the new logic
--- The function should already be updated in 04_functions_views_policies.sql
+-- Existing schemes may have NULL scheme_category_id. Match by scheme category
+-- name pattern from the scheme_name field.
+
+DO $$
+DECLARE
+    v_updated_count INTEGER := 0;
+    v_category RECORD;
+BEGIN
+    RAISE NOTICE '→ Backfilling scheme_category_id in t_scheme_details...';
+
+    -- Update schemes where scheme_category_id is NULL
+    -- Match scheme category by looking at scheme name patterns
+    FOR v_category IN
+        SELECT id, name FROM t_scheme_masters
+        WHERE master_type = 'scheme_category' AND is_active = true
+    LOOP
+        UPDATE t_scheme_details sd
+        SET scheme_category_id = v_category.id
+        WHERE sd.scheme_category_id IS NULL
+          AND (
+              -- Try matching by scheme_nav_name containing category keywords
+              LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(REPLACE(v_category.name, 'Equity Scheme - ', ''), 'Debt Scheme - ', '')) || '%'
+              OR LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(REPLACE(v_category.name, 'Hybrid Scheme - ', ''), 'Other Scheme - ', '')) || '%'
+              OR LOWER(sd.scheme_nav_name) LIKE '%' || LOWER(REPLACE(v_category.name, 'Solution Oriented Scheme - ', '')) || '%'
+          );
+
+        GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+        IF v_updated_count > 0 THEN
+            RAISE NOTICE '  ✓ Matched % schemes to category: %', v_updated_count, v_category.name;
+        END IF;
+    END LOOP;
+
+    -- Count remaining NULL scheme_category_id
+    SELECT COUNT(*) INTO v_updated_count
+    FROM t_scheme_details
+    WHERE scheme_category_id IS NULL;
+
+    IF v_updated_count > 0 THEN
+        RAISE NOTICE '  ⚠ % schemes still have NULL scheme_category_id (will use Growth default)', v_updated_count;
+    ELSE
+        RAISE NOTICE '  ✓ All schemes have scheme_category_id set';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- STEP 9: Update functions (MUST RUN)
+-- ============================================================================
+-- The scheme import and transaction import functions need to be updated.
+-- Key fixes:
+-- 1. Remove tenant_id filter from scheme_category lookup (categories are global)
+-- 2. Auto-tag asset_type_code during transaction import
+-- 3. Auto-create investment plans for MF schemes
 --
--- Key changes to the function:
--- 1. Added variables: v_asset_type_id, v_asset_type_code
--- 2. Added lookup: scheme_category_id -> t_scheme_masters.name -> m_asset_types
--- 3. Added asset_type_code to INSERT statement
---
--- If function not updated, run the distribution script:
+-- IMPORTANT: Run the distribution script to apply function updates:
 -- \i 'backend/db/ditribution scripts/04_functions_views_policies.sql'
 
 DO $$
 BEGIN
     RAISE NOTICE '';
-    RAISE NOTICE '⚠️  IMPORTANT: Ensure process_transaction_import_session function is updated!';
+    RAISE NOTICE '⚠️  IMPORTANT: You MUST run the functions script to complete migration!';
     RAISE NOTICE '    Run: \i ''backend/db/ditribution scripts/04_functions_views_policies.sql''';
+    RAISE NOTICE '';
+    RAISE NOTICE '    This fixes:';
+    RAISE NOTICE '    - scheme_category lookup for all tenants (not just tenant_id=1)';
+    RAISE NOTICE '    - auto-creation of investment plans when transactions imported';
     RAISE NOTICE '';
 END $$;
 
 -- ============================================================================
--- STEP 9: Verification
+-- STEP 10: Verification
 -- ============================================================================
 DO $$
 DECLARE
