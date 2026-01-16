@@ -207,16 +207,17 @@ export class CourseCorrectionService {
 
   /**
    * Rollback a completed course correction
+   * After rollback, regenerates portfolio snapshots for the customer
    */
   async rollbackCorrection(
     tenantId: number,
     isLive: boolean,
     correctionId: number,
     userId: number
-  ): Promise<{ success: boolean; restored_transactions?: number; error?: string }> {
-    // Verify the correction belongs to this tenant and has backup
+  ): Promise<{ success: boolean; restored_transactions?: number; snapshots_regenerated?: number; error?: string }> {
+    // Verify the correction belongs to this tenant and has backup, get customer_id for snapshot regen
     const verifyQuery = `
-      SELECT id, step_6_backup, step_7_update_txns FROM t_course_corrections
+      SELECT id, customer_id, step_6_backup, step_7_update_txns FROM t_course_corrections
       WHERE id = $1 AND tenant_id = $2 AND is_live = $3
     `;
     const verifyResult = await pool.query(verifyQuery, [correctionId, tenantId, isLive]);
@@ -237,10 +238,37 @@ export class CourseCorrectionService {
     const result = await pool.query(query, [correctionId, userId]);
     const response = result.rows[0].result;
 
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.error
+      };
+    }
+
+    // Regenerate snapshots for the customer after rollback
+    let snapshotsRegenerated = 0;
+    try {
+      console.log(`[CourseCorrection] Rollback complete, regenerating snapshots for customer ${correction.customer_id}...`);
+      const snapshotService = new PortfolioSnapshotService();
+      const snapshotResult = await snapshotService.smartBackfill({
+        tenant_id: tenantId,
+        is_live: isLive,
+        customer_ids: [correction.customer_id]
+      });
+
+      if (snapshotResult.success) {
+        snapshotsRegenerated = snapshotResult.snapshots_created + snapshotResult.snapshots_updated;
+        console.log(`[CourseCorrection] Snapshots regenerated: ${snapshotsRegenerated}`);
+      }
+    } catch (snapshotError: any) {
+      console.error(`[CourseCorrection] Snapshot regeneration failed after rollback:`, snapshotError.message);
+      // Don't fail the rollback, just log the error
+    }
+
     return {
-      success: response.success,
+      success: true,
       restored_transactions: response.restored_transactions,
-      error: response.error
+      snapshots_regenerated: snapshotsRegenerated
     };
   }
 
