@@ -19,9 +19,12 @@ interface GoalInvestmentAllocatorProps {
 }
 
 // Asset type icon mapping
+// Note: MF replaced with scheme-based types (Open Ended, Close Ended, Interval Fund)
 const getAssetIcon = (code: string): string => {
   const icons: { [key: string]: string } = {
-    'MF': '📊',
+    'Open Ended': '📊',
+    'Close Ended': '📅',
+    'Interval Fund': '⏰',
     'GOLD': '🪙',
     'EQUITY': '📈',
     'FD': '🏦',

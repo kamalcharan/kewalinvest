@@ -30,8 +30,11 @@ export interface CustomerAssetAssignment {
 }
 
 // Asset type codes matching m_asset_types table in database
+// Note: MF replaced with scheme-based types (Open Ended, Close Ended, Interval Fund)
 export enum AssetTypeCode {
-  MF = 'MF',
+  OPEN_ENDED = 'Open Ended',
+  CLOSE_ENDED = 'Close Ended',
+  INTERVAL_FUND = 'Interval Fund',
   GOLD = 'GOLD',
   SILVER = 'SILVER',
   EQUITY = 'EQUITY',

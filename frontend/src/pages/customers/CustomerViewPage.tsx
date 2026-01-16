@@ -843,12 +843,12 @@ const CustomerViewPage: React.FC = () => {
                       );
                     }).filter(Boolean)
                   ) : (
-                    // Fallback to MF-only chart if no networth history
+                    // Fallback to combined schemes chart if no networth history
                     portfolioWithMoM && portfolioWithMoM.length > 0 && (
                       <AssetTypePerformanceChart
                         customerId={customerId!}
-                        assetTypeCode="MF"
-                        assetTypeName="Mutual Funds"
+                        assetTypeCode="Open Ended"
+                        assetTypeName="Mutual Fund Schemes"
                         performanceData={portfolioWithMoM.map(p => ({
                           date: p.date,
                           value: p.current_value ?? 0,

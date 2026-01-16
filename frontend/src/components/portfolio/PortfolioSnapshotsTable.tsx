@@ -215,15 +215,20 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   }, [schemes, monthHeaders]);
 
   // Calculate Asset Allocation data from networth summary
-  // Shows all asset types (MF, Gold, FD, etc.) with current values
+  // Shows all asset types (Open Ended, Close Ended, Interval Fund, Gold, FD, etc.) with current values
+  // Scheme-based types replace single 'MF' type
+  const schemeAssetTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+
   const assetAllocationData = useMemo(() => {
     if (!assetTypes || assetTypes.length === 0) return [];
 
-    // Sort: non-MF assets first (by value), then MF
+    // Sort: non-scheme assets first (by value), then scheme-based assets
     const sorted = [...assetTypes].sort((a: any, b: any) => {
-      // MF goes last
-      if (a.asset_type_code === 'MF' && b.asset_type_code !== 'MF') return 1;
-      if (a.asset_type_code !== 'MF' && b.asset_type_code === 'MF') return -1;
+      const aIsScheme = schemeAssetTypes.includes(a.asset_type_code);
+      const bIsScheme = schemeAssetTypes.includes(b.asset_type_code);
+      // Scheme-based assets go last
+      if (aIsScheme && !bIsScheme) return 1;
+      if (!aIsScheme && bIsScheme) return -1;
       // Sort by current value descending
       return b.current_value - a.current_value;
     });
@@ -245,10 +250,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       // Reverse to get newest first (like portfolio snapshots)
       const reversedDates = [...dates].reverse();
 
-      // Sort: non-MF assets first, then MF
+      // Sort: non-scheme assets first, then scheme-based assets
       const sortedAssetTypes = [...chartData.by_asset_type].sort((a: any, b: any) => {
-        if (a.asset_type_code === 'MF' && b.asset_type_code !== 'MF') return 1;
-        if (a.asset_type_code !== 'MF' && b.asset_type_code === 'MF') return -1;
+        const aIsScheme = schemeAssetTypes.includes(a.asset_type_code);
+        const bIsScheme = schemeAssetTypes.includes(b.asset_type_code);
+        // Scheme-based assets go last
+        if (aIsScheme && !bIsScheme) return 1;
+        if (!aIsScheme && bIsScheme) return -1;
         // Sort by latest value descending
         const aLatest = a.values[a.values.length - 1] || 0;
         const bLatest = b.values[b.values.length - 1] || 0;

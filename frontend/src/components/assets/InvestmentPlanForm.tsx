@@ -23,9 +23,12 @@ interface InvestmentPlanFormProps {
 }
 
 // Asset type icon mapping
+// Note: MF replaced with scheme-based types (Open Ended, Close Ended, Interval Fund)
 const getAssetIcon = (code: string): string => {
   const icons: { [key: string]: string } = {
-    'MF': '📊',
+    'Open Ended': '📊',
+    'Close Ended': '📅',
+    'Interval Fund': '⏰',
     'GOLD': '🪙',
     'EQUITY': '📈',
     'FD': '🏦',
@@ -93,7 +96,9 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const selectedAssetType = assetTypes.find(at => at.id === formData.asset_type_id);
-  const isMFAsset = selectedAssetType?.asset_type_code === 'MF';
+  // Scheme-based asset types (replaces single 'MF' check)
+  const schemeAssetTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+  const isSchemeAsset = selectedAssetType ? schemeAssetTypes.includes(selectedAssetType.asset_type_code) : false;
   const needsRecurringFields = formData.investment_type === 'sip' || formData.investment_type === 'recurring';
 
   // Filter schemes based on search
@@ -149,7 +154,7 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
       toastService.error('Please select a start date');
       return;
     }
-    if (isMFAsset && !formData.scheme_code) {
+    if (isSchemeAsset && !formData.scheme_code) {
       setError('Please select a mutual fund scheme');
       toastService.error('Please select a mutual fund scheme');
       return;
@@ -401,7 +406,7 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
               </div>
 
               {/* MF Scheme Selection */}
-              {isMFAsset && (
+              {isSchemeAsset && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: colors.utility.primaryText, marginBottom: '6px' }}>
                     Mutual Fund Scheme *
