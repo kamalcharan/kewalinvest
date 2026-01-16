@@ -75,13 +75,14 @@ const calculateMoM = (data: PerformanceDataPoint[]): (PerformanceDataPoint & {
     const investment_change = currInvested - prevInvested;
     const is_significant_investment = prevValue > 0 && investment_change > prevValue * 0.1;
 
-    // Returns-based MoM (excludes new investments)
-    const prevReturns = prev.returns ?? (prevValue - prevInvested);
-    const currReturns = point.returns ?? (currValue - currInvested);
-    const returnsDiff = currReturns - prevReturns;
-    const returns_mom_percentage = prevValue > 0
-      ? (returnsDiff / prevValue) * 100
-      : 0;
+    // TRUE RETURNS MoM (Modified Dietz Method)
+    // Formula: Returns = Current Value / (Previous Value + Cash Flow) - 1
+    // This correctly accounts for additional investments or redemptions
+    // Reference: Calculation.xlsx formula: =C/(A+B)-1
+    const adjustedBase = prevValue + investment_change;
+    const returns_mom_percentage = adjustedBase > 0
+      ? ((currValue / adjustedBase) - 1) * 100
+      : (currValue > 0 ? 100 : 0);
 
     return {
       ...point,

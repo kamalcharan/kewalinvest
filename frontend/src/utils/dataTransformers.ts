@@ -472,12 +472,19 @@ export function calculatePortfolioMoM<T extends {
     const momChangeAbsolute = currentValue - previousValue;
     const momChangePercentage = (momChangeAbsolute / previousValue) * 100;
 
-    // Calculate RETURNS-based MoM (true market growth)
-    // This measures how much the RETURNS changed relative to previous portfolio value
-    // Returns MoM = (current_returns - previous_returns) / previous_value * 100
-    // This excludes the impact of new money added
-    const returnsChange = currentReturns - previousReturns;
-    const returnsMomPercentage = (returnsChange / previousValue) * 100;
+    // Calculate TRUE RETURNS MoM (Modified Dietz Method)
+    // Formula: Returns = Current Value / (Previous Value + Cash Flow) - 1
+    // This correctly accounts for additional investments or redemptions
+    // Reference: Calculation.xlsx formula: =C/(A+B)-1
+    const adjustedBase = previousValue + investmentChange;
+    let returnsMomPercentage: number;
+
+    if (adjustedBase > 0) {
+      returnsMomPercentage = ((currentValue / adjustedBase) - 1) * 100;
+    } else {
+      // Edge case: adjusted base is zero or negative (full redemption scenario)
+      returnsMomPercentage = currentValue > 0 ? 100 : 0;
+    }
 
     return {
       ...point,
