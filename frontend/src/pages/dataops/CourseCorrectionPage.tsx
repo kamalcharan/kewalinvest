@@ -1401,49 +1401,43 @@ const CourseCorrectionPage: React.FC = () => {
   const renderMigrationModal = () => {
     if (!showConfirmModal || !selectedScheme || !selectedTargetScheme) return null;
 
-    // Helper to render step status (updated for 8 steps)
+    // Helper to render step status - compact version
     const renderStep = (stepNum: number, label: string, status: StepStatus | 'processing', message?: string) => {
       const getIcon = () => {
         switch (status) {
-          case 'pass': return <Check size={16} color={colors.semantic.success} />;
-          case 'fail': return <XCircle size={16} color={colors.semantic.error} />;
+          case 'pass': return <Check size={14} color={colors.semantic.success} />;
+          case 'fail': return <XCircle size={14} color={colors.semantic.error} />;
           case 'processing': return (
             <div style={{
-              width: '16px', height: '16px',
+              width: '14px', height: '14px',
               border: `2px solid ${colors.brand.primary}30`,
               borderTop: `2px solid ${colors.brand.primary}`,
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
           );
-          default: return <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${colors.utility.secondaryText}40` }} />;
+          default: return <div style={{ width: '14px', height: '14px', borderRadius: '50%', border: `2px solid ${colors.utility.secondaryText}40` }} />;
         }
       };
-
-      // Determine if this is a data-changing step (6+)
-      const isDataStep = stepNum >= 6;
 
       return (
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '8px 12px',
-          backgroundColor: status === 'pass' ? colors.semantic.success + '08' :
-                          status === 'fail' ? colors.semantic.error + '08' :
-                          status === 'processing' ? colors.brand.primary + '08' : 'transparent',
-          borderRadius: '6px',
-          marginBottom: '4px',
-          borderLeft: isDataStep ? `3px solid ${status === 'pass' ? colors.semantic.success : status === 'fail' ? colors.semantic.error : colors.utility.secondaryText}40` : 'none'
+          gap: '6px',
+          padding: '4px 8px',
+          backgroundColor: status === 'pass' ? colors.semantic.success + '10' :
+                          status === 'fail' ? colors.semantic.error + '10' :
+                          status === 'processing' ? colors.brand.primary + '10' : 'transparent',
+          borderRadius: '4px'
         }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, width: '20px' }}>
+          <span style={{ fontSize: '10px', fontWeight: 600, color: colors.utility.secondaryText, minWidth: '14px' }}>
             {stepNum}
           </span>
           {getIcon()}
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: colors.utility.primaryText }}>{label}</div>
-            {message && <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>{message}</div>}
-          </div>
+          <span style={{ fontSize: '11px', fontWeight: 500, color: colors.utility.primaryText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {label}
+          </span>
         </div>
       );
     };
@@ -1597,7 +1591,7 @@ const CourseCorrectionPage: React.FC = () => {
           {/* ============ PROCESSING STATE ============ */}
           {modalState === 'processing' && (
             <>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: colors.utility.primaryText, textAlign: 'center' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 600, color: colors.utility.primaryText, textAlign: 'center' }}>
                 Migration in Progress
               </h3>
 
@@ -1610,33 +1604,32 @@ const CourseCorrectionPage: React.FC = () => {
                 };
 
                 return (
-                  <>
-                    {/* Pre-migration steps (1-5) */}
-                    <div style={{ marginBottom: '8px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' }}>
+                    {/* Left column - Validation (1-4) */}
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase' }}>
                         Validation
                       </div>
                       {renderStep(1, STEP_LABELS.step_1_check_existing, getStepStatus(1))}
                       {renderStep(2, STEP_LABELS.step_2_get_customer, getStepStatus(2))}
                       {renderStep(3, STEP_LABELS.step_3_get_source_scheme, getStepStatus(3))}
                       {renderStep(4, STEP_LABELS.step_4_get_target_scheme, getStepStatus(4))}
-                      {renderStep(5, STEP_LABELS.step_5_count_txns, getStepStatus(5))}
                     </div>
-
-                    {/* Data-changing steps (6-8) */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
-                        Migration
+                    {/* Right column - Execution (5-8) */}
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                        Execution
                       </div>
+                      {renderStep(5, STEP_LABELS.step_5_count_txns, getStepStatus(5))}
                       {renderStep(6, STEP_LABELS.step_6_backup, getStepStatus(6))}
                       {renderStep(7, STEP_LABELS.step_7_update_txns, getStepStatus(7))}
                       {renderStep(8, STEP_LABELS.step_8_snapshots, getStepStatus(8))}
                     </div>
-                  </>
+                  </div>
                 );
               })()}
 
-              <div style={{ textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
+              <div style={{ textAlign: 'center', color: colors.utility.secondaryText, fontSize: '12px' }}>
                 Please wait, do not close this window...
               </div>
             </>
@@ -1645,23 +1638,23 @@ const CourseCorrectionPage: React.FC = () => {
           {/* ============ COMPLETE STATE ============ */}
           {modalState === 'complete' && migrationResult && (
             <>
-              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '12px' }}>
                 <div style={{
-                  width: '64px',
-                  height: '64px',
+                  width: '48px',
+                  height: '48px',
                   borderRadius: '50%',
                   backgroundColor: colors.semantic.success + '15',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto 16px'
+                  margin: '0 auto 10px'
                 }}>
-                  <Check size={32} color={colors.semantic.success} />
+                  <Check size={24} color={colors.semantic.success} />
                 </div>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 600, color: colors.semantic.success }}>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: colors.semantic.success }}>
                   Migration Complete
                 </h3>
-                <p style={{ margin: 0, fontSize: '14px', color: colors.utility.secondaryText }}>
+                <p style={{ margin: 0, fontSize: '12px', color: colors.utility.secondaryText }}>
                   {migrationResult.summary?.transactions_updated} transactions updated successfully
                 </p>
               </div>
@@ -1686,75 +1679,60 @@ const CourseCorrectionPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Before/After Summary */}
+              {/* Before/After Summary - Compact */}
               {migrationResult.summary && (
                 <div style={{
-                  padding: '16px',
+                  padding: '10px',
                   backgroundColor: colors.utility.primaryBackground,
-                  borderRadius: '8px',
-                  marginBottom: '20px'
+                  borderRadius: '6px',
+                  marginBottom: '12px'
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '12px', textTransform: 'uppercase' }}>
-                    Summary
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                     {/* Before */}
-                    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: colors.semantic.error + '08', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '10px', color: colors.semantic.error, fontWeight: 600, marginBottom: '4px' }}>BEFORE</div>
-                      <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.primaryText, marginBottom: '2px' }}>
+                    <div style={{ textAlign: 'center', padding: '6px', backgroundColor: colors.semantic.error + '08', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '9px', color: colors.semantic.error, fontWeight: 600 }}>BEFORE</div>
+                      <div style={{ fontSize: '10px', fontFamily: 'monospace', color: colors.utility.primaryText }}>
                         {migrationResult.summary.source_scheme_code}
                       </div>
-                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {migrationResult.summary.source_scheme_name || 'Unknown'}
-                      </div>
                     </div>
-
-                    {/* Arrow */}
-                    <ArrowRight size={20} color={colors.utility.secondaryText} />
-
+                    <ArrowRight size={16} color={colors.utility.secondaryText} />
                     {/* After */}
-                    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: colors.semantic.success + '08', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '10px', color: colors.semantic.success, fontWeight: 600, marginBottom: '4px' }}>AFTER</div>
-                      <div style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.utility.primaryText, marginBottom: '2px' }}>
+                    <div style={{ textAlign: 'center', padding: '6px', backgroundColor: colors.semantic.success + '08', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '9px', color: colors.semantic.success, fontWeight: 600 }}>AFTER</div>
+                      <div style={{ fontSize: '10px', fontFamily: 'monospace', color: colors.utility.primaryText }}>
                         {migrationResult.summary.target_scheme_code}
-                      </div>
-                      <div style={{ fontSize: '10px', color: colors.utility.secondaryText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {migrationResult.summary.target_scheme_name || 'Unknown'}
                       </div>
                     </div>
                   </div>
-
-                  {/* Stats */}
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px', paddingTop: '12px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
+                  {/* Stats - inline */}
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', paddingTop: '6px', borderTop: `1px solid ${colors.utility.primaryText}10` }}>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '18px', fontWeight: 600, color: colors.brand.primary }}>
-                        {migrationResult.summary.transactions_updated}
-                      </div>
-                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Transactions</div>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: colors.brand.primary }}>{migrationResult.summary.transactions_updated}</span>
+                      <span style={{ fontSize: '10px', color: colors.utility.secondaryText, marginLeft: '4px' }}>txns</span>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '18px', fontWeight: 600, color: colors.brand.primary }}>
-                        {formatCurrency(migrationResult.summary.total_invested)}
-                      </div>
-                      <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>Total Invested</div>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: colors.brand.primary }}>{formatCurrency(migrationResult.summary.total_invested)}</span>
+                      <span style={{ fontSize: '10px', color: colors.utility.secondaryText, marginLeft: '4px' }}>invested</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Step Status - All 8 Steps */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+              {/* Step Status - 2 Column Grid */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '9px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
                   Steps Completed
                 </div>
-                {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending', migrationResult.steps.step_1_check_existing?.message)}
-                {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending', migrationResult.steps.step_2_get_customer?.message)}
-                {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending', migrationResult.steps.step_3_get_source_scheme?.message)}
-                {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending', migrationResult.steps.step_4_get_target_scheme?.message)}
-                {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending', migrationResult.steps.step_5_count_txns?.message)}
-                {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending', migrationResult.steps.step_6_backup?.message)}
-                {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending', migrationResult.steps.step_7_update_txns?.message)}
-                {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending', migrationResult.steps.step_8_snapshots?.message)}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                  {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending')}
+                  {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending')}
+                  {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending')}
+                  {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending')}
+                  {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending')}
+                  {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending')}
+                  {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending')}
+                  {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending')}
+                </div>
               </div>
 
               {/* Actions */}
@@ -1839,20 +1817,22 @@ const CourseCorrectionPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Step Status (if available) - All 8 Steps */}
+              {/* Step Status (if available) - 2 Column Grid */}
               {migrationResult && (
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
                     Steps Status {migrationResult.failed_step && `(Failed at step ${migrationResult.failed_step})`}
                   </div>
-                  {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending', migrationResult.steps.step_1_check_existing?.message)}
-                  {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending', migrationResult.steps.step_2_get_customer?.message)}
-                  {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending', migrationResult.steps.step_3_get_source_scheme?.message)}
-                  {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending', migrationResult.steps.step_4_get_target_scheme?.message)}
-                  {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending', migrationResult.steps.step_5_count_txns?.message)}
-                  {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending', migrationResult.steps.step_6_backup?.message)}
-                  {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending', migrationResult.steps.step_7_update_txns?.message)}
-                  {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending', migrationResult.steps.step_8_snapshots?.message)}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                    {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult.steps.step_1_check_existing?.status || 'pending')}
+                    {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult.steps.step_5_count_txns?.status || 'pending')}
+                    {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult.steps.step_2_get_customer?.status || 'pending')}
+                    {renderStep(6, STEP_LABELS.step_6_backup, migrationResult.steps.step_6_backup?.status || 'pending')}
+                    {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult.steps.step_3_get_source_scheme?.status || 'pending')}
+                    {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult.steps.step_7_update_txns?.status || 'pending')}
+                    {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult.steps.step_4_get_target_scheme?.status || 'pending')}
+                    {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult.steps.step_8_snapshots?.status || 'pending')}
+                  </div>
                 </div>
               )}
 
