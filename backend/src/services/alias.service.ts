@@ -545,7 +545,8 @@ export class AliasService {
     // GET SCHEME-BASED DATA (aggregated as "Mutual Funds") from t_monthly_portfolio_snapshots
     // Scheme categories: Equity Scheme - %, Debt Scheme - %, Hybrid Scheme - %, Other Scheme - %, Solution Oriented Scheme - %
     // Non-scheme assets: GOLD, SILVER, EQUITY, FD, PPF, EPF, NPS, REAL_ESTATE, INSURANCE, NSC, BONDS, OTHER
-    const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
+    // NOTE: 'Growth' is a legacy scheme category fallback, NOT a non-scheme asset
+    const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
 
     // Get latest snapshot date for scheme-based assets (all categories except non-scheme)
     const schemeLatestDateQuery = `
