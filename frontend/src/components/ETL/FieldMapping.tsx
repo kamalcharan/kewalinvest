@@ -264,7 +264,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       // Scheme patterns
       { patterns: ['amc', 'amc_name', 'fund_house'], field: 'amc_name' },
       { patterns: ['scheme_type', 'fund_type', 'type'], field: 'scheme_type' },
-      { patterns: ['category', 'scheme_category', 'fund_category'], field: 'category' },
+      { patterns: ['scheme category', 'scheme_category', 'fund_category'], field: 'scheme_category' },
       { patterns: ['nav', 'nav_name', 'scheme_nav'], field: 'scheme_nav_name' },
       { patterns: ['minimum', 'min_amount', 'minimum_amount'], field: 'scheme_minimum_amount' },
       { patterns: ['launch', 'launch_date', 'inception'], field: 'launch_date' },
@@ -283,6 +283,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
       { patterns: ['nav', 'net_asset_value'], field: 'nav' },
       { patterns: ['folio', 'folio_no', 'folio no', 'foliono'], field: 'folio_no' },
       { patterns: ['fund name', 'fund_name', 'fundname', 'amc'], field: 'fund_name' },
+      { patterns: ['category'], field: 'category' },  // Transaction category (not scheme_category)
       { patterns: ['sub-category', 'sub_category', 'subcategory'], field: 'sub_category' },
       { patterns: ['stamp duty', 'stamp_duty', 'stampduty'], field: 'stamp_duty' },
       { patterns: ['stt'], field: 'stt' },
