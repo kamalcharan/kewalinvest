@@ -175,6 +175,43 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- STEP 5: Backfill asset_type_id for existing schemes (set to 'Growth' default)
+-- ============================================================================
+-- If schemes were imported before function update, asset_type_id would be NULL
+-- This sets them to 'Growth' as default so investment plans can be created
+
+DO $$
+DECLARE
+    v_growth_id INTEGER;
+    v_updated INTEGER;
+BEGIN
+    -- Get Growth asset type ID
+    SELECT id INTO v_growth_id
+    FROM m_asset_types
+    WHERE asset_type_code = 'Growth' AND is_active = true
+    LIMIT 1;
+
+    IF v_growth_id IS NULL THEN
+        RAISE WARNING '⚠ Growth asset type not found! Creating it...';
+        INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
+        VALUES ('Growth', 'Growth', 'equity', 12.00, 5, true, 'Legacy/Default: Growth-oriented funds')
+        RETURNING id INTO v_growth_id;
+    END IF;
+
+    -- Update schemes with NULL asset_type_id
+    UPDATE t_scheme_details
+    SET asset_type_id = v_growth_id
+    WHERE asset_type_id IS NULL;
+
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    IF v_updated > 0 THEN
+        RAISE NOTICE '✓ Updated % schemes with default asset_type_id (Growth)', v_updated;
+    ELSE
+        RAISE NOTICE '→ All schemes already have asset_type_id set';
+    END IF;
+END $$;
+
+-- ============================================================================
 -- VERIFICATION
 -- ============================================================================
 DO $$
