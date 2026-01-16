@@ -37,7 +37,7 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
     customerId
   });
 
-  const { data: networthData } = useNetworthSummary(
+  const { data: networthData, isLoading: isNetworthLoading } = useNetworthSummary(
     isFamilyMode
       ? { familyHeadIwellcode }
       : { customerId },
@@ -45,7 +45,9 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
   );
 
   // Use networth data if available, otherwise fall back to portfolio
+  // IMPORTANT: Wait for networth to load to avoid value fluctuation
   const hasNetworth = networthData?.data && networthData.data.total_networth > 0;
+  const isWaitingForNetworth = showNetworth && (isFamilyMode || !!customerId) && isNetworthLoading;
   const totalNetworth = hasNetworth ? networthData.data!.total_networth : portfolio.summary.current_value ?? 0;
   const totalInvested = hasNetworth ? networthData.data!.total_invested : portfolio.summary.total_invested ?? 0;
   const assetTypeCount = hasNetworth ? networthData.data!.asset_type_count : 1;
@@ -120,7 +122,11 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
             fontWeight: '700',
             marginBottom: '4px'
           }}>
-            {formatCurrency(totalNetworth)}
+            {isWaitingForNetworth ? (
+              <span style={{ opacity: 0.6 }}>Loading...</span>
+            ) : (
+              formatCurrency(totalNetworth)
+            )}
           </div>
           <div style={{
             fontSize: '13px',
@@ -165,9 +171,13 @@ export const CustomerMetricsBar: React.FC<CustomerMetricsBarProps> = ({
             fontSize: '28px',
             fontWeight: '700',
             marginBottom: '4px',
-            color: getValueColor(profitLoss)
+            color: isWaitingForNetworth ? colors.utility.secondaryText : getValueColor(profitLoss)
           }}>
-            {profitLoss >= 0 ? '+' : '-'}{formatCurrency(Math.abs(profitLoss))}
+            {isWaitingForNetworth ? (
+              <span style={{ opacity: 0.6 }}>Loading...</span>
+            ) : (
+              <>{profitLoss >= 0 ? '+' : '-'}{formatCurrency(Math.abs(profitLoss))}</>
+            )}
           </div>
           <div style={{
             fontSize: '13px',
