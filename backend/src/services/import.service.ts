@@ -1595,7 +1595,38 @@ async processSchemeImport(
       duplicateCount,
       sessionId
     ]);
-    
+
+    // Post-import: Update scheme_category_id directly from staging mapped_data
+    // This ensures category IDs are set even if lookup failed during row processing
+    await client.query(`
+      UPDATE t_scheme_details sd
+      SET scheme_category_id = sm.id
+      FROM t_scheme_staging_data ssd
+      JOIN t_scheme_masters sm ON LOWER(TRIM(sm.name)) = LOWER(TRIM(ssd.mapped_data->>'scheme_category'))
+        AND sm.master_type = 'scheme_category'
+        AND sm.is_active = true
+      WHERE ssd.session_id = $1
+        AND sd.tenant_id = $2
+        AND sd.is_live = $3
+        AND sd.scheme_code = ssd.mapped_data->>'scheme_code'
+        AND ssd.mapped_data->>'scheme_category' IS NOT NULL
+    `, [sessionId, tenantId, isLive]);
+
+    // Post-import: Update scheme_type_id directly from staging mapped_data
+    await client.query(`
+      UPDATE t_scheme_details sd
+      SET scheme_type_id = sm.id
+      FROM t_scheme_staging_data ssd
+      JOIN t_scheme_masters sm ON LOWER(TRIM(sm.name)) = LOWER(TRIM(ssd.mapped_data->>'scheme_type'))
+        AND sm.master_type = 'scheme_type'
+        AND sm.is_active = true
+      WHERE ssd.session_id = $1
+        AND sd.tenant_id = $2
+        AND sd.is_live = $3
+        AND sd.scheme_code = ssd.mapped_data->>'scheme_code'
+        AND ssd.mapped_data->>'scheme_type' IS NOT NULL
+    `, [sessionId, tenantId, isLive]);
+
     await client.query('COMMIT');
     
     return {
