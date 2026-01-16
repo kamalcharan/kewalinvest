@@ -755,11 +755,11 @@ CREATE TABLE t_transaction_table (
     txn_source VARCHAR(100),
     stt NUMERIC(15,2) DEFAULT 0,
     tds NUMERIC(15,2) DEFAULT 0,
-    asset_type_code VARCHAR(50)  -- 'Open Ended', 'Close Ended', 'Interval Fund' - auto-tagged from scheme_type during import
+    asset_type_code VARCHAR(100)  -- Scheme category (e.g., 'Equity Scheme - Large Cap Fund') - auto-tagged from scheme_category during import
 );
 
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
-COMMENT ON COLUMN t_transaction_table.asset_type_code IS 'Asset type derived from scheme type during import (Open Ended, Close Ended, Interval Fund)';
+COMMENT ON COLUMN t_transaction_table.asset_type_code IS 'Asset type derived from scheme category during import (e.g., Equity Scheme - Large Cap Fund)';
 
 -- TABLE: t_monthly_portfolio_snapshots
 -- Extended for multi-asset support (NetworthViewer feature)
@@ -781,7 +781,7 @@ CREATE TABLE t_monthly_portfolio_snapshots (
     total_schemes INTEGER,                -- Count of schemes for scheme-based assets
 
     -- Multi-asset support columns
-    asset_type_code VARCHAR(50) NOT NULL,  -- 'Open Ended', 'Close Ended', 'Interval Fund', 'GOLD', 'FD', etc.
+    asset_type_code VARCHAR(100) NOT NULL,  -- Scheme category (e.g., 'Equity Scheme - Large Cap Fund') or manual asset ('GOLD', 'FD', etc.)
     investment_plan_id INTEGER,                 -- FK to t_customer_asset_assignments (NULL for MF aggregated)
     calculation_method VARCHAR(20) DEFAULT 'NAV',  -- NAV or ASSUMPTION
     growth_rate_applied NUMERIC(5,2),           -- Rate used for assumption-based calculation
@@ -1162,9 +1162,9 @@ END $$;
 -- Note: This is NOT tenant-isolated (master data shared across all tenants)
 CREATE TABLE IF NOT EXISTS m_asset_types (
     id SERIAL PRIMARY KEY,
-    asset_type_code VARCHAR(50) NOT NULL UNIQUE,
+    asset_type_code VARCHAR(100) NOT NULL UNIQUE,
     asset_type_name VARCHAR(100) NOT NULL,
-    category VARCHAR(50), -- equity, debt, commodity, real_estate, fixed_income
+    category VARCHAR(50), -- equity, debt, hybrid, fof, commodity, solution, fixed_income, real_estate
     default_assumption_rate DECIMAL(5,2), -- Default expected growth rate (e.g., 8.00 for 8% per year)
     is_active BOOLEAN DEFAULT true,
     display_order INTEGER DEFAULT 0,
@@ -1174,7 +1174,7 @@ CREATE TABLE IF NOT EXISTS m_asset_types (
 );
 
 COMMENT ON TABLE m_asset_types IS 'Master data table for all supported asset types - global across all tenants';
-COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., MF, GOLD, EQUITY, FD)';
+COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., Equity Scheme - Large Cap Fund, GOLD, FD)';
 COMMENT ON COLUMN m_asset_types.asset_type_name IS 'Display name for the asset type';
 COMMENT ON COLUMN m_asset_types.category IS 'Asset category: equity, debt, commodity, real_estate, fixed_income';
 COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected annual growth rate percentage (e.g., 8.00 for 8%)';

@@ -17,7 +17,23 @@
 BEGIN;
 
 -- ============================================================================
--- STEP 1: Add asset_type_code column to t_transaction_table
+-- STEP 1: Expand asset_type_code column in m_asset_types
+-- ============================================================================
+-- Some scheme category names exceed 50 chars (e.g., "Hybrid Scheme - Dynamic
+-- Asset Allocation or Balanced Advantage" = 62 chars)
+DO $$
+BEGIN
+    -- Expand m_asset_types.asset_type_code to VARCHAR(100)
+    ALTER TABLE m_asset_types
+    ALTER COLUMN asset_type_code TYPE VARCHAR(100);
+    RAISE NOTICE '✓ Expanded m_asset_types.asset_type_code to VARCHAR(100)';
+EXCEPTION
+    WHEN others THEN
+        RAISE NOTICE '→ m_asset_types.asset_type_code already expanded or error: %', SQLERRM;
+END $$;
+
+-- ============================================================================
+-- STEP 2: Add asset_type_code column to t_transaction_table
 -- ============================================================================
 DO $$
 BEGIN
@@ -38,8 +54,19 @@ BEGIN
     END IF;
 END $$;
 
+-- Also expand t_monthly_portfolio_snapshots.asset_type_code if needed
+DO $$
+BEGIN
+    ALTER TABLE t_monthly_portfolio_snapshots
+    ALTER COLUMN asset_type_code TYPE VARCHAR(100);
+    RAISE NOTICE '✓ Expanded t_monthly_portfolio_snapshots.asset_type_code to VARCHAR(100)';
+EXCEPTION
+    WHEN others THEN
+        RAISE NOTICE '→ t_monthly_portfolio_snapshots.asset_type_code already expanded or error: %', SQLERRM;
+END $$;
+
 -- ============================================================================
--- STEP 2: Insert all 50 scheme categories into t_scheme_masters
+-- STEP 3: Insert all 42 scheme categories into t_scheme_masters
 -- ============================================================================
 INSERT INTO t_scheme_masters (tenant_id, is_live, is_active, master_type, code, name, display_order)
 VALUES
@@ -110,7 +137,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 3: Add all 50 scheme category asset types to m_asset_types
+-- STEP 4: Add all 42 scheme category asset types to m_asset_types
 -- ============================================================================
 INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
 VALUES
@@ -228,7 +255,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 4: Backfill asset_type_code for existing transactions
+-- STEP 5: Backfill asset_type_code for existing transactions
 -- ============================================================================
 -- This updates all transactions that have a scheme_code linked to a scheme
 -- with a known scheme_category. Uses the scheme's scheme_category_id to
@@ -270,7 +297,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 5: Update existing portfolio snapshots from 'MF' to a default category
+-- STEP 6: Update existing portfolio snapshots from 'MF' to a default category
 -- ============================================================================
 -- Since we can't determine original scheme category from aggregated snapshots,
 -- we default all 'MF' snapshots to 'Growth' (common legacy category)
@@ -301,7 +328,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 6: Deactivate old 'MF' asset type (if exists)
+-- STEP 7: Deactivate old 'MF' asset type (if exists)
 -- ============================================================================
 UPDATE m_asset_types
 SET is_active = false,
@@ -321,7 +348,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 7: Update function process_transaction_import_session
+-- STEP 8: Update function process_transaction_import_session
 -- ============================================================================
 -- This requires recreating the function with the new logic
 -- The function should already be updated in 04_functions_views_policies.sql
@@ -343,7 +370,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 8: Verification
+-- STEP 9: Verification
 -- ============================================================================
 DO $$
 DECLARE
