@@ -1298,7 +1298,7 @@ export class PortfolioSnapshotService {
         AND tt.tenant_id = $2
         AND tt.is_live = $3
         AND tt.asset_type_code IS NOT NULL
-        AND tt.include_in_portfolio = true
+        AND tt.portfolio_flag = true
       ORDER BY tt.asset_type_code
     `;
 
