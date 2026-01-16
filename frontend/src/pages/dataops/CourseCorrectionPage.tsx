@@ -75,6 +75,18 @@ const CourseCorrectionPage: React.FC = () => {
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   const [migrationError, setMigrationError] = useState<string | null>(null);
 
+  // Animated step progress state
+  const [animatedStep, setAnimatedStep] = useState<number>(0);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    type: 'rollback' | 'delete';
+    correctionId: number | null;
+  }>({ show: false, title: '', message: '', type: 'rollback', correctionId: null });
+
   // Transaction state
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -191,20 +203,40 @@ const CourseCorrectionPage: React.FC = () => {
     setTransactionPage(1);
   };
 
-  // Handle migration (create + execute + snapshot in one step)
+  // Helper function to delay execution
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Handle migration (create + execute + snapshot in one step) with animated steps
   const handleMigrate = async () => {
     if (!customerId || !selectedScheme || !selectedTargetScheme) return;
 
     setModalState('processing');
     setMigrationError(null);
+    setAnimatedStep(0);
 
     try {
-      const result = await migrateMutation.mutateAsync({
+      // Start the actual migration in background
+      const migrationPromise = migrateMutation.mutateAsync({
         customer_id: customerId,
         source_scheme_code: selectedScheme.scheme_code,
         target_scheme_code: selectedTargetScheme.scheme_code,
         notes: notes || undefined
       });
+
+      // Animate through steps 1-5 (validation) with delays
+      for (let step = 1; step <= 5; step++) {
+        setAnimatedStep(step);
+        await delay(400); // 400ms per validation step
+      }
+
+      // Animate through steps 6-8 (migration) with longer delays
+      for (let step = 6; step <= 8; step++) {
+        setAnimatedStep(step);
+        await delay(800); // 800ms per migration step
+      }
+
+      // Wait for actual migration to complete
+      const result = await migrationPromise;
 
       setMigrationResult(result);
       if (result.success) {
@@ -240,20 +272,47 @@ const CourseCorrectionPage: React.FC = () => {
     }
   };
 
-  // Handle rollback
-  const handleRollback = async (id: number) => {
-    if (window.confirm('Rollback this migration? Transactions will be restored to original scheme code.')) {
-      await rollbackMutation.mutateAsync(id);
+  // Show rollback confirmation dialog
+  const handleRollbackClick = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Confirm Rollback',
+      message: 'Are you sure you want to rollback this migration? Transactions will be restored to their original scheme code, units, and NAV values.',
+      type: 'rollback',
+      correctionId: id
+    });
+  };
+
+  // Show delete confirmation dialog
+  const handleDeleteClick = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this correction record? This action cannot be undone.',
+      type: 'delete',
+      correctionId: id
+    });
+  };
+
+  // Execute confirmed action (rollback or delete)
+  const handleConfirmAction = async () => {
+    if (!confirmDialog.correctionId) return;
+
+    try {
+      if (confirmDialog.type === 'rollback') {
+        await rollbackMutation.mutateAsync(confirmDialog.correctionId);
+      } else {
+        await deleteMutation.mutateAsync(confirmDialog.correctionId);
+      }
       refetch();
+    } finally {
+      setConfirmDialog({ show: false, title: '', message: '', type: 'rollback', correctionId: null });
     }
   };
 
-  // Handle delete
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Delete this pending correction?')) {
-      await deleteMutation.mutateAsync(id);
-      refetch();
-    }
+  // Cancel confirmation dialog
+  const handleCancelConfirm = () => {
+    setConfirmDialog({ show: false, title: '', message: '', type: 'rollback', correctionId: null });
   };
 
   // Handle snapshot done
@@ -648,7 +707,7 @@ const CourseCorrectionPage: React.FC = () => {
                             <Play size={10} /> Execute
                           </button>
                           <button
-                            onClick={() => handleDelete(c.id)}
+                            onClick={() => handleDeleteClick(c.id)}
                             disabled={deleteMutation.isPending}
                             style={{
                               padding: '4px 8px',
@@ -683,7 +742,7 @@ const CourseCorrectionPage: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => handleRollback(c.id)}
+                            onClick={() => handleRollbackClick(c.id)}
                             disabled={rollbackMutation.isPending}
                             style={{
                               padding: '4px 10px',
@@ -704,7 +763,7 @@ const CourseCorrectionPage: React.FC = () => {
                       )}
                       {c.status === 'rolled_back' && (
                         <button
-                          onClick={() => handleDelete(c.id)}
+                          onClick={() => handleDeleteClick(c.id)}
                           disabled={deleteMutation.isPending}
                           style={{
                             padding: '4px 8px',
@@ -728,7 +787,7 @@ const CourseCorrectionPage: React.FC = () => {
                           {/* Show rollback only if step 7 passed (transactions were modified) */}
                           {c.step_7_update_txns === 'pass' && (
                             <button
-                              onClick={() => handleRollback(c.id)}
+                              onClick={() => handleRollbackClick(c.id)}
                               disabled={rollbackMutation.isPending}
                               style={{
                                 padding: '4px 10px',
@@ -749,7 +808,7 @@ const CourseCorrectionPage: React.FC = () => {
                           {/* Show delete if step 7 not passed OR if rolled back */}
                           {c.step_7_update_txns !== 'pass' && (
                             <button
-                              onClick={() => handleDelete(c.id)}
+                              onClick={() => handleDeleteClick(c.id)}
                               disabled={deleteMutation.isPending}
                               style={{
                                 padding: '4px 8px',
@@ -1542,27 +1601,40 @@ const CourseCorrectionPage: React.FC = () => {
                 Migration in Progress
               </h3>
 
-              {/* Pre-migration steps (1-5) */}
-              <div style={{ marginBottom: '8px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
-                  Validation
-                </div>
-                {renderStep(1, STEP_LABELS.step_1_check_existing, migrationResult?.steps.step_1_check_existing?.status || 'processing', migrationResult?.steps.step_1_check_existing?.message)}
-                {renderStep(2, STEP_LABELS.step_2_get_customer, migrationResult?.steps.step_2_get_customer?.status || 'pending', migrationResult?.steps.step_2_get_customer?.message)}
-                {renderStep(3, STEP_LABELS.step_3_get_source_scheme, migrationResult?.steps.step_3_get_source_scheme?.status || 'pending', migrationResult?.steps.step_3_get_source_scheme?.message)}
-                {renderStep(4, STEP_LABELS.step_4_get_target_scheme, migrationResult?.steps.step_4_get_target_scheme?.status || 'pending', migrationResult?.steps.step_4_get_target_scheme?.message)}
-                {renderStep(5, STEP_LABELS.step_5_count_txns, migrationResult?.steps.step_5_count_txns?.status || 'pending', migrationResult?.steps.step_5_count_txns?.message)}
-              </div>
+              {/* Helper to determine step status based on animatedStep */}
+              {(() => {
+                const getStepStatus = (stepNum: number): StepStatus | 'processing' => {
+                  if (animatedStep > stepNum) return 'pass';
+                  if (animatedStep === stepNum) return 'processing';
+                  return 'pending';
+                };
 
-              {/* Data-changing steps (6-8) */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
-                  Migration
-                </div>
-                {renderStep(6, STEP_LABELS.step_6_backup, migrationResult?.steps.step_6_backup?.status || 'pending', migrationResult?.steps.step_6_backup?.message)}
-                {renderStep(7, STEP_LABELS.step_7_update_txns, migrationResult?.steps.step_7_update_txns?.status || 'pending', migrationResult?.steps.step_7_update_txns?.message)}
-                {renderStep(8, STEP_LABELS.step_8_snapshots, migrationResult?.steps.step_8_snapshots?.status || 'pending', migrationResult?.steps.step_8_snapshots?.message)}
-              </div>
+                return (
+                  <>
+                    {/* Pre-migration steps (1-5) */}
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                        Validation
+                      </div>
+                      {renderStep(1, STEP_LABELS.step_1_check_existing, getStepStatus(1))}
+                      {renderStep(2, STEP_LABELS.step_2_get_customer, getStepStatus(2))}
+                      {renderStep(3, STEP_LABELS.step_3_get_source_scheme, getStepStatus(3))}
+                      {renderStep(4, STEP_LABELS.step_4_get_target_scheme, getStepStatus(4))}
+                      {renderStep(5, STEP_LABELS.step_5_count_txns, getStepStatus(5))}
+                    </div>
+
+                    {/* Data-changing steps (6-8) */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: colors.utility.secondaryText, marginBottom: '6px', textTransform: 'uppercase' }}>
+                        Migration
+                      </div>
+                      {renderStep(6, STEP_LABELS.step_6_backup, getStepStatus(6))}
+                      {renderStep(7, STEP_LABELS.step_7_update_txns, getStepStatus(7))}
+                      {renderStep(8, STEP_LABELS.step_8_snapshots, getStepStatus(8))}
+                    </div>
+                  </>
+                );
+              })()}
 
               <div style={{ textAlign: 'center', color: colors.utility.secondaryText, fontSize: '13px' }}>
                 Please wait, do not close this window...
@@ -1917,6 +1989,129 @@ const CourseCorrectionPage: React.FC = () => {
 
       {/* Migration Modal */}
       {renderMigrationModal()}
+
+      {/* Confirmation Dialog for Rollback/Delete */}
+      {confirmDialog.show && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: colors.utility.primaryBackground,
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '420px',
+            width: '90%',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)'
+          }}>
+            {/* Icon */}
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: confirmDialog.type === 'rollback' ? '#fef3c7' : '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto'
+              }}>
+                {confirmDialog.type === 'rollback' ? (
+                  <RotateCcw size={28} color="#f59e0b" />
+                ) : (
+                  <Trash2 size={28} color="#ef4444" />
+                )}
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              margin: '0 0 12px 0',
+              fontSize: '18px',
+              fontWeight: 600,
+              color: colors.utility.primaryText,
+              textAlign: 'center'
+            }}>
+              {confirmDialog.title}
+            </h3>
+
+            {/* Message */}
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: colors.utility.secondaryText,
+              textAlign: 'center',
+              lineHeight: '1.5'
+            }}>
+              {confirmDialog.message}
+            </p>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCancelConfirm}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: colors.utility.primaryText
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmAction}
+                disabled={rollbackMutation.isPending || deleteMutation.isPending}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: confirmDialog.type === 'rollback' ? '#f59e0b' : '#ef4444',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: rollbackMutation.isPending || deleteMutation.isPending ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  opacity: rollbackMutation.isPending || deleteMutation.isPending ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {(rollbackMutation.isPending || deleteMutation.isPending) ? (
+                  <>
+                    <div style={{
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderTop: '2px solid #fff',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {confirmDialog.type === 'rollback' ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                    {confirmDialog.type === 'rollback' ? 'Rollback' : 'Delete'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
