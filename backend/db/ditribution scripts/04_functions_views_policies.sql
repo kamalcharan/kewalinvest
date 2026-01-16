@@ -1317,21 +1317,21 @@ BEGIN
                         WHERE id = v_scheme_id;
                     END IF;
 
-                    -- LOOKUP ASSET TYPE CODE from scheme's scheme_type
-                    -- scheme_type_id -> t_scheme_masters.name -> m_asset_types.asset_type_code
+                    -- LOOKUP ASSET TYPE CODE from scheme's scheme_category
+                    -- scheme_category_id -> t_scheme_masters.name -> m_asset_types.asset_type_code
                     SELECT sm.name, mat.id
                     INTO v_asset_type_code, v_asset_type_id
                     FROM t_scheme_details sd
-                    JOIN t_scheme_masters sm ON sd.scheme_type_id = sm.id
+                    JOIN t_scheme_masters sm ON sd.scheme_category_id = sm.id
                     JOIN m_asset_types mat ON mat.asset_type_code = sm.name AND mat.is_active = true
                     WHERE sd.id = v_scheme_id;
 
-                    -- Default to 'Open Ended' if scheme_type not found
+                    -- Default to 'Growth' if scheme_category not found (common legacy category)
                     IF v_asset_type_code IS NULL THEN
                         SELECT asset_type_code, id
                         INTO v_asset_type_code, v_asset_type_id
                         FROM m_asset_types
-                        WHERE asset_type_code = 'Open Ended' AND is_active = true
+                        WHERE asset_type_code = 'Growth' AND is_active = true
                         LIMIT 1;
                     END IF;
                 END IF;

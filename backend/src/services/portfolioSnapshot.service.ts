@@ -1,12 +1,9 @@
 // backend/src/services/portfolioSnapshot.service.ts
 // Service for Portfolio Snapshot generation, backfill, and operations
 // FIXED: Correct table/column names and proper fund manager calculations
-// UPDATED: Now supports scheme-based asset types (Open Ended, Close Ended, Interval Fund)
+// UPDATED: Now supports scheme-category-based asset types (50 categories from Scheme Category)
 
 import { Pool } from 'pg';
-
-// Scheme-based asset types (replaces single 'MF' type)
-const SCHEME_ASSET_TYPES = ['Open Ended', 'Close Ended', 'Interval Fund'];
 import { pool } from '../config/database';
 import {
   SnapshotGenerationRequest,
@@ -73,9 +70,16 @@ export class PortfolioSnapshotService {
       // Process each customer
       for (const customer of customers) {
         try {
-          // ==================== SCHEME-BASED SNAPSHOTS (NAV-based) ====================
-          // Generate separate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
-          for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+          // Get customer's distinct scheme categories
+          const customerSchemeCategories = await this.getCustomerSchemeCategories(
+            customer.customer_id,
+            request.tenant_id,
+            request.is_live
+          );
+
+          // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS (NAV-based) ====================
+          // Generate separate snapshots for each scheme category this customer has
+          for (const assetTypeCode of customerSchemeCategories) {
             const snapshotData = await this.calculateSnapshotData(
               customer.customer_id,
               snapshotMonthEnd,
@@ -239,12 +243,19 @@ export class PortfolioSnapshotService {
           );
           const hasNonSchemeAssets = nonSchemePlans.length > 0;
 
+          // OPTIMIZATION: Fetch customer's distinct scheme categories ONCE
+          const customerSchemeCategories = await this.getCustomerSchemeCategories(
+            customer.customer_id,
+            params.tenant_id,
+            params.is_live
+          );
+
           // Generate/update snapshot for each month
           for (const monthEnd of months) {
             try {
-              // ==================== SCHEME-BASED SNAPSHOTS ====================
-              // Calculate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
-              for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+              // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
+              // Calculate snapshots for each scheme category this customer has
+              for (const assetTypeCode of customerSchemeCategories) {
                 const snapshotData = await this.calculateSnapshotData(
                   customer.customer_id,
                   monthEnd,
@@ -395,11 +406,18 @@ export class PortfolioSnapshotService {
           );
           const hasNonSchemeAssets = nonSchemePlans.length > 0;
 
+          // OPTIMIZATION: Fetch customer's distinct scheme categories ONCE
+          const customerSchemeCategories = await this.getCustomerSchemeCategories(
+            customer.customer_id,
+            request.tenant_id,
+            request.is_live
+          );
+
           for (const monthEnd of months) {
             try {
-              // ==================== SCHEME-BASED SNAPSHOTS ====================
-              // Calculate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
-              for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+              // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
+              // Calculate snapshots for each scheme category this customer has
+              for (const assetTypeCode of customerSchemeCategories) {
                 const snapshotData = await this.calculateSnapshotData(
                   customer.customer_id,
                   monthEnd,
@@ -631,10 +649,17 @@ export class PortfolioSnapshotService {
             console.log(`[SnapshotService]   - Non-scheme assets: ${nonSchemePlans.length} plans`);
           }
 
+          // OPTIMIZATION: Fetch customer's distinct scheme categories ONCE
+          const customerSchemeCategories = await this.getCustomerSchemeCategories(
+            customer.customer_id,
+            params.tenant_id,
+            params.is_live
+          );
+
           for (const monthEnd of months) {
-            // ==================== SCHEME-BASED SNAPSHOTS ====================
-            // Generate snapshots for each scheme type: Open Ended, Close Ended, Interval Fund
-            for (const assetTypeCode of SCHEME_ASSET_TYPES) {
+            // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
+            // Generate snapshots for each scheme category this customer has
+            for (const assetTypeCode of customerSchemeCategories) {
               const existing = await this.getExistingSnapshot(
                 customer.customer_id, monthEnd, params.tenant_id, params.is_live,
                 assetTypeCode, null
@@ -1217,7 +1242,7 @@ export class PortfolioSnapshotService {
         AND caa.tenant_id = $2
         AND caa.is_live = $3
         AND caa.is_active = true
-        AND at.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')  -- Exclude scheme-based assets (handled separately via NAV)
+        AND at.category NOT IN ('equity', 'debt', 'hybrid', 'fof', 'solution')  -- Exclude scheme-category assets (handled via NAV)
       ORDER BY at.display_order, caa.id
     `;
 
@@ -1255,6 +1280,34 @@ export class PortfolioSnapshotService {
     }
 
     return result.rows;
+  }
+
+  /**
+   * Get customer's distinct scheme categories from transactions
+   * Returns unique asset_type_code values from t_transaction_table for this customer
+   */
+  private async getCustomerSchemeCategories(
+    customerId: number,
+    tenantId: number,
+    isLive: boolean
+  ): Promise<string[]> {
+    const query = `
+      SELECT DISTINCT tt.asset_type_code
+      FROM t_transaction_table tt
+      WHERE tt.customer_id = $1
+        AND tt.tenant_id = $2
+        AND tt.is_live = $3
+        AND tt.asset_type_code IS NOT NULL
+        AND tt.include_in_portfolio = true
+      ORDER BY tt.asset_type_code
+    `;
+
+    const result = await this.db.query(query, [customerId, tenantId, isLive]);
+    const categories = result.rows.map(row => row.asset_type_code);
+
+    console.log(`[SnapshotService] Customer ${customerId} has ${categories.length} scheme categories: ${categories.join(', ')}`);
+
+    return categories;
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   InvestmentType,
   InvestmentFrequency
 } from '../../types/investmentPlan.types';
+import { isSchemeAssetType, getAssetTypeIcon } from '../../constants/assetTypes';
 
 interface InvestmentPlanFormProps {
   customerId: number;
@@ -96,9 +97,8 @@ export const InvestmentPlanForm: React.FC<InvestmentPlanFormProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const selectedAssetType = assetTypes.find(at => at.id === formData.asset_type_id);
-  // Scheme-based asset types (replaces single 'MF' check)
-  const schemeAssetTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
-  const isSchemeAsset = selectedAssetType ? schemeAssetTypes.includes(selectedAssetType.asset_type_code) : false;
+  // Check if selected asset type is a scheme category (uses category-based detection)
+  const isSchemeAsset = selectedAssetType ? isSchemeAssetType(selectedAssetType.asset_type_code) : false;
   const needsRecurringFields = formData.investment_type === 'sip' || formData.investment_type === 'recurring';
 
   // Filter schemes based on search

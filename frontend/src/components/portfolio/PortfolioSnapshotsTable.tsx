@@ -8,7 +8,7 @@ import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, Pi
 import { usePortfolioSnapshots, useNetworthSummary, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
-import { getAssetTypeColor, getAssetTypeIcon } from '../../constants/assetTypes';
+import { getAssetTypeColor, getAssetTypeIcon, isSchemeAssetType } from '../../constants/assetTypes';
 
 interface PortfolioSnapshotsTableProps {
   customerId: number;
@@ -215,17 +215,15 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   }, [schemes, monthHeaders]);
 
   // Calculate Asset Allocation data from networth summary
-  // Shows all asset types (Open Ended, Close Ended, Interval Fund, Gold, FD, etc.) with current values
-  // Scheme-based types replace single 'MF' type
-  const schemeAssetTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
-
+  // Shows all asset types (scheme categories + manual assets) with current values
+  // Scheme categories derived from Scheme Category column (50+ types)
   const assetAllocationData = useMemo(() => {
     if (!assetTypes || assetTypes.length === 0) return [];
 
     // Sort: non-scheme assets first (by value), then scheme-based assets
     const sorted = [...assetTypes].sort((a: any, b: any) => {
-      const aIsScheme = schemeAssetTypes.includes(a.asset_type_code);
-      const bIsScheme = schemeAssetTypes.includes(b.asset_type_code);
+      const aIsScheme = isSchemeAssetType(a.asset_type_code);
+      const bIsScheme = isSchemeAssetType(b.asset_type_code);
       // Scheme-based assets go last
       if (aIsScheme && !bIsScheme) return 1;
       if (!aIsScheme && bIsScheme) return -1;
@@ -252,8 +250,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
       // Sort: non-scheme assets first, then scheme-based assets
       const sortedAssetTypes = [...chartData.by_asset_type].sort((a: any, b: any) => {
-        const aIsScheme = schemeAssetTypes.includes(a.asset_type_code);
-        const bIsScheme = schemeAssetTypes.includes(b.asset_type_code);
+        const aIsScheme = isSchemeAssetType(a.asset_type_code);
+        const bIsScheme = isSchemeAssetType(b.asset_type_code);
         // Scheme-based assets go last
         if (aIsScheme && !bIsScheme) return 1;
         if (!aIsScheme && bIsScheme) return -1;
