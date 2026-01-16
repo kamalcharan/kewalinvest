@@ -1458,7 +1458,31 @@ async processSchemeImport(
         );
         
         if (isDuplicate) {
-          // Update existing scheme
+          // Get master IDs for type and category (also needed for duplicates)
+          let schemeTypeId = null;
+          let schemeCategoryId = null;
+
+          if (mappedData.scheme_type) {
+            const schemeType = await schemeService.getMasterByName(
+              tenantId,
+              isLive,
+              'scheme_type',
+              mappedData.scheme_type
+            );
+            schemeTypeId = schemeType?.id || null;
+          }
+
+          if (mappedData.scheme_category) {
+            const schemeCategory = await schemeService.getMasterByName(
+              tenantId,
+              isLive,
+              'scheme_category',
+              mappedData.scheme_category
+            );
+            schemeCategoryId = schemeCategory?.id || null;
+          }
+
+          // Update existing scheme (including scheme_type_id and scheme_category_id)
           await schemeService.updateScheme(
             tenantId,
             isLive,
@@ -1466,6 +1490,8 @@ async processSchemeImport(
             {
               amc_name: mappedData.amc_name,
               scheme_name: mappedData.scheme_name,
+              scheme_type_id: schemeTypeId,
+              scheme_category_id: schemeCategoryId,
               scheme_nav_name: mappedData.scheme_nav_name,
               scheme_minimum_amount: mappedData.scheme_minimum_amount,
               launch_date: mappedData.launch_date,
@@ -1475,9 +1501,9 @@ async processSchemeImport(
               isin_div_reinvestment: mappedData.isin_div_reinvestment
             }
           );
-          
+
           duplicateCount++;
-          
+
           // Update staging record
           await client.query(`
             UPDATE t_scheme_staging_data
