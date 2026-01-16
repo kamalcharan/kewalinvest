@@ -90,25 +90,25 @@ export class SchemeService {
 
   /**
    * Get master data by name for matching during import
+   * Note: scheme_category and scheme_type are global data, not tenant-specific
    */
   async getMasterByName(
-    tenantId: number, 
-    isLive: boolean, 
-    masterType: string, 
+    tenantId: number,
+    isLive: boolean,
+    masterType: string,
     name: string
   ): Promise<SchemeMaster | null> {
     try {
+      // scheme_category and scheme_type are global AMFI data, not tenant-specific
       const query = `
         SELECT * FROM t_scheme_masters
-        WHERE tenant_id = $1 
-          AND is_live = $2 
-          AND master_type = $3
-          AND LOWER(TRIM(name)) = LOWER(TRIM($4))
+        WHERE master_type = $1
+          AND LOWER(TRIM(name)) = LOWER(TRIM($2))
           AND is_active = true
         LIMIT 1
       `;
-      
-      const result = await this.db.query(query, [tenantId, isLive, masterType, name]);
+
+      const result = await this.db.query(query, [masterType, name]);
       return result.rows[0] || null;
     } catch (error) {
       console.error('Error fetching master by name:', error);
