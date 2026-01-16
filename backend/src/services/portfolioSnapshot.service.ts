@@ -287,7 +287,7 @@ export class PortfolioSnapshotService {
                   monthEnd,
                   params.tenant_id,
                   params.is_live,
-                  nonMfPlans
+                  nonSchemePlans
                 );
 
                 snapshotsCreated += assetResult.created;
