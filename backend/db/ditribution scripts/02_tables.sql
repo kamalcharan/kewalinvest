@@ -754,10 +754,12 @@ CREATE TABLE t_transaction_table (
     txn_description TEXT,
     txn_source VARCHAR(100),
     stt NUMERIC(15,2) DEFAULT 0,
-    tds NUMERIC(15,2) DEFAULT 0
+    tds NUMERIC(15,2) DEFAULT 0,
+    asset_type_code VARCHAR(50)  -- 'Open Ended', 'Close Ended', 'Interval Fund' - auto-tagged from scheme_type during import
 );
 
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
+COMMENT ON COLUMN t_transaction_table.asset_type_code IS 'Asset type derived from scheme type during import (Open Ended, Close Ended, Interval Fund)';
 
 -- TABLE: t_monthly_portfolio_snapshots
 -- Extended for multi-asset support (NetworthViewer feature)
@@ -774,12 +776,12 @@ CREATE TABLE t_monthly_portfolio_snapshots (
     total_returns NUMERIC(18,2),
     return_percentage NUMERIC(10,2),
 
-    -- MF-specific columns (nullable for non-MF assets)
-    total_units NUMERIC(18,4),           -- Only for MF: sum of units
-    total_schemes INTEGER,                -- Only for MF: count of schemes
+    -- Scheme-specific columns (for Open Ended, Close Ended, Interval Fund assets)
+    total_units NUMERIC(18,4),           -- Sum of units for scheme-based assets
+    total_schemes INTEGER,                -- Count of schemes for scheme-based assets
 
     -- Multi-asset support columns
-    asset_type_code VARCHAR(50) DEFAULT 'MF',  -- MF, RE, GOLD, FD, etc.
+    asset_type_code VARCHAR(50) NOT NULL,  -- 'Open Ended', 'Close Ended', 'Interval Fund', 'GOLD', 'FD', etc.
     investment_plan_id INTEGER,                 -- FK to t_customer_asset_assignments (NULL for MF aggregated)
     calculation_method VARCHAR(20) DEFAULT 'NAV',  -- NAV or ASSUMPTION
     growth_rate_applied NUMERIC(5,2),           -- Rate used for assumption-based calculation
@@ -794,8 +796,8 @@ CREATE TABLE t_monthly_portfolio_snapshots (
 );
 
 COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio/networth snapshots for tracking performance across all asset types';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.asset_type_code IS 'Asset type code (MF, RE, GOLD, FD, etc.). Default MF for backward compatibility.';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.investment_plan_id IS 'Reference to t_customer_asset_assignments. NULL for MF aggregated snapshots.';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.asset_type_code IS 'Asset type code (Open Ended, Close Ended, Interval Fund for MF schemes; GOLD, FD, etc. for other assets)';
+COMMENT ON COLUMN t_monthly_portfolio_snapshots.investment_plan_id IS 'Reference to t_customer_asset_assignments. NULL for scheme-based (Open Ended/Close Ended/Interval Fund) snapshots.';
 COMMENT ON COLUMN t_monthly_portfolio_snapshots.calculation_method IS 'How current_value was calculated: NAV (units × nav_value) or ASSUMPTION (principal × growth_rate).';
 COMMENT ON COLUMN t_monthly_portfolio_snapshots.growth_rate_applied IS 'Annual growth rate used for assumption-based calculations (e.g., 8.00 for 8%).';
 COMMENT ON COLUMN t_monthly_portfolio_snapshots.actual_amount IS 'User-entered actual market value. When set, overrides calculated current_value for display.';

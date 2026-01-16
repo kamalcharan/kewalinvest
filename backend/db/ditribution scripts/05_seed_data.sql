@@ -694,37 +694,44 @@ BEGIN
     RAISE NOTICE '========================================';
 END $$;
 
--- Insert 10 asset types with default growth rate assumptions
+-- Insert 12 asset types with default growth rate assumptions
+-- Note: MF replaced with 3 scheme types (Open Ended, Close Ended, Interval Fund)
 INSERT INTO m_asset_types (asset_type_code, asset_type_name, category, default_assumption_rate, display_order, is_active, description)
 VALUES
-    ('MF', 'Mutual Fund', 'equity', 12.00, 1, true,
-     'Equity and debt mutual fund schemes with professionally managed portfolios'),
+    ('Open Ended', 'Open Ended', 'equity', 12.00, 1, true,
+     'Open-ended mutual fund schemes with daily NAV and flexible redemption'),
 
-    ('GOLD', 'Gold', 'commodity', 8.00, 2, true,
+    ('Close Ended', 'Close Ended', 'equity', 12.00, 2, true,
+     'Close-ended mutual fund schemes with fixed maturity (FMPs, interval schemes)'),
+
+    ('Interval Fund', 'Interval Fund', 'equity', 12.00, 3, true,
+     'Interval mutual fund schemes with periodic redemption windows'),
+
+    ('GOLD', 'Gold', 'commodity', 8.00, 4, true,
      'Physical gold, gold ETFs, sovereign gold bonds, and gold mutual funds'),
 
-    ('SILVER', 'Silver', 'commodity', 7.00, 3, true,
+    ('SILVER', 'Silver', 'commodity', 7.00, 5, true,
      'Physical silver, silver ETFs, and silver-backed investment products'),
 
-    ('EQUITY', 'Equity', 'equity', 15.00, 4, true,
+    ('EQUITY', 'Equity', 'equity', 15.00, 6, true,
      'Direct equity investments in stocks and shares'),
 
-    ('FD', 'Fixed Deposit', 'fixed_income', 6.50, 5, true,
+    ('FD', 'Fixed Deposit', 'fixed_income', 6.50, 7, true,
      'Bank and corporate fixed deposits with guaranteed returns'),
 
-    ('PPF', 'Public Provident Fund', 'fixed_income', 7.10, 6, true,
+    ('PPF', 'Public Provident Fund', 'fixed_income', 7.10, 8, true,
      'Government-backed long-term savings scheme with tax benefits'),
 
-    ('EPF', 'Employee Provident Fund', 'fixed_income', 8.25, 7, true,
+    ('EPF', 'Employee Provident Fund', 'fixed_income', 8.25, 9, true,
      'Mandatory retirement savings scheme for salaried employees'),
 
-    ('NPS', 'National Pension System', 'equity', 10.00, 8, true,
+    ('NPS', 'National Pension System', 'equity', 10.00, 10, true,
      'Government-sponsored pension scheme with equity and debt options'),
 
-    ('REAL_ESTATE', 'Real Estate', 'real_estate', 8.00, 9, true,
+    ('REAL_ESTATE', 'Real Estate', 'real_estate', 8.00, 11, true,
      'Property investments including residential and commercial real estate'),
 
-    ('INSURANCE', 'Insurance', 'insurance', 5.00, 10, true,
+    ('INSURANCE', 'Insurance', 'insurance', 5.00, 12, true,
      'Life insurance, term insurance, and insurance-linked investment products')
 ON CONFLICT (asset_type_code) DO NOTHING;
 
@@ -738,7 +745,7 @@ BEGIN
 
     -- Show seeded categories
     RAISE NOTICE '  Categories:';
-    RAISE NOTICE '    - Equity: %',
+    RAISE NOTICE '    - Equity (includes Open Ended, Close Ended, Interval Fund, EQUITY, NPS): %',
         (SELECT COUNT(*) FROM m_asset_types WHERE category = 'equity');
     RAISE NOTICE '    - Fixed Income: %',
         (SELECT COUNT(*) FROM m_asset_types WHERE category = 'fixed_income');
@@ -748,6 +755,8 @@ BEGIN
         (SELECT COUNT(*) FROM m_asset_types WHERE category = 'real_estate');
     RAISE NOTICE '    - Insurance: %',
         (SELECT COUNT(*) FROM m_asset_types WHERE category = 'insurance');
+    RAISE NOTICE '  Scheme Types (for MF transactions):';
+    RAISE NOTICE '    - Open Ended, Close Ended, Interval Fund';
 END $$;
 
 -- ============================================================================
@@ -802,7 +811,7 @@ BEGIN
     RAISE NOTICE 'Bookmark Reasons (Admin Only): % total (% unique × % tenants × 2 envs)',
         v_bookmark_count, v_unique_reasons, v_tenant_count;
     RAISE NOTICE 'Market Indices: % total (% active)', v_market_indices_count, v_active_indices;
-    RAISE NOTICE 'Asset Types (Phase 1): % active', v_asset_types_count;
+    RAISE NOTICE 'Asset Types: % active (includes Open Ended, Close Ended, Interval Fund)', v_asset_types_count;
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Seed data loaded successfully!';
     RAISE NOTICE 'Client tenants (ID 4+) will auto-seed via /register';

@@ -332,7 +332,7 @@ CREATE INDEX idx_txn_types_type ON m_transaction_types USING btree (txn_type);
 CREATE INDEX idx_monthly_snapshots ON t_monthly_portfolio_snapshots USING btree (tenant_id, is_live, customer_id, snapshot_month_end);
 
 -- Unique index to enforce one snapshot per customer/month/asset_type/plan combination
--- Uses COALESCE to handle NULL investment_plan_id (for MF aggregated snapshots)
+-- Uses COALESCE to handle NULL investment_plan_id (for scheme-based snapshots: Open Ended, Close Ended, Interval Fund)
 CREATE UNIQUE INDEX idx_monthly_portfolio_snapshots_unique
 ON t_monthly_portfolio_snapshots (
     tenant_id,
