@@ -778,12 +778,11 @@ BEGIN
         
         v_scheme_category_id := NULL;
         IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
+            -- Scheme categories are global (seeded for tenant_id=1), not tenant-specific
             SELECT id INTO v_scheme_category_id
             FROM t_scheme_masters
             WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
               AND master_type = 'scheme_category'
-              AND tenant_id = v_staging.tenant_id
-              AND is_live = v_staging.is_live
               AND is_active = true
             LIMIT 1;
         END IF;
