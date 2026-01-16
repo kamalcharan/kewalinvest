@@ -543,17 +543,18 @@ export class AliasService {
     let totalValue = 0;
 
     // GET SCHEME-BASED DATA (aggregated as "Mutual Funds") from t_monthly_portfolio_snapshots
-    // Scheme types: Open Ended, Close Ended, Interval Fund
-    const schemeTypes = ['Open Ended', 'Close Ended', 'Interval Fund'];
+    // Scheme categories: Equity Scheme - %, Debt Scheme - %, Hybrid Scheme - %, Other Scheme - %, Solution Oriented Scheme - %
+    // Non-scheme assets: GOLD, SILVER, EQUITY, FD, PPF, EPF, NPS, REAL_ESTATE, INSURANCE, NSC, BONDS, OTHER
+    const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER', 'Growth'];
 
-    // Get latest snapshot date for scheme-based assets
+    // Get latest snapshot date for scheme-based assets (all categories except non-scheme)
     const schemeLatestDateQuery = `
       SELECT MAX(snapshot_month_end) as latest_date
       FROM t_monthly_portfolio_snapshots
       WHERE tenant_id = $1 AND is_live = $2 AND customer_id = ANY($3)
-        AND asset_type_code = ANY($4)
+        AND asset_type_code NOT IN (SELECT UNNEST($4::text[]))
     `;
-    const schemeLatestDateResult = await pool.query(schemeLatestDateQuery, [tenantId, isLive, customerIds, schemeTypes]);
+    const schemeLatestDateResult = await pool.query(schemeLatestDateQuery, [tenantId, isLive, customerIds, nonSchemeAssetTypes]);
     const schemeLatestDate = schemeLatestDateResult.rows[0]?.latest_date;
 
     if (schemeLatestDate) {
@@ -567,10 +568,10 @@ export class AliasService {
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
           AND mps.snapshot_month_end = $4
-          AND mps.asset_type_code = ANY($5)
+          AND mps.asset_type_code NOT IN (SELECT UNNEST($5::text[]))
           AND mps.current_value > 0
       `;
-      const schemeResult = await pool.query(schemeQuery, [tenantId, isLive, customerIds, schemeLatestDate, schemeTypes]);
+      const schemeResult = await pool.query(schemeQuery, [tenantId, isLive, customerIds, schemeLatestDate, nonSchemeAssetTypes]);
 
       if (schemeResult.rows.length > 0 && schemeResult.rows[0].value) {
         const schemeValue = parseFloat(schemeResult.rows[0].value) || 0;
@@ -601,14 +602,14 @@ export class AliasService {
         AND mps.is_live = $2
         AND mps.customer_id = ANY($3)
         AND mps.snapshot_month_end = $4
-        AND mps.asset_type_code = ANY($5)
+        AND mps.asset_type_code NOT IN (SELECT UNNEST($5::text[]))
         AND mps.current_value > 0
       GROUP BY mps.customer_id, ct.name, c.iwell_code
       ORDER BY ct.name
     `;
 
     if (schemeLatestDate) {
-      const schemeMemberResult = await pool.query(schemeMemberQuery, [tenantId, isLive, customerIds, schemeLatestDate, schemeTypes]);
+      const schemeMemberResult = await pool.query(schemeMemberQuery, [tenantId, isLive, customerIds, schemeLatestDate, nonSchemeAssetTypes]);
 
       schemeMemberResult.rows.forEach(row => {
         if (!byMemberMap.has(row.customer_id)) {
@@ -633,9 +634,9 @@ export class AliasService {
       SELECT MAX(snapshot_month_end) as latest_date
       FROM t_monthly_portfolio_snapshots
       WHERE tenant_id = $1 AND is_live = $2 AND customer_id = ANY($3)
-        AND asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
+        AND asset_type_code IN (SELECT UNNEST($4::text[]))
     `;
-    const latestDateResult = await pool.query(latestDateQuery, [tenantId, isLive, customerIds]);
+    const latestDateResult = await pool.query(latestDateQuery, [tenantId, isLive, customerIds, nonSchemeAssetTypes]);
     const latestDate = latestDateResult.rows[0]?.latest_date;
 
     if (latestDate) {
@@ -649,12 +650,12 @@ export class AliasService {
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
           AND mps.snapshot_month_end = $4
-          AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
+          AND mps.asset_type_code IN (SELECT UNNEST($5::text[]))
           AND mps.current_value > 0
         GROUP BY COALESCE(mps.asset_type_code, 'Other')
         ORDER BY value DESC
       `;
-      const nonSchemeResult = await pool.query(nonSchemeQuery, [tenantId, isLive, customerIds, latestDate]);
+      const nonSchemeResult = await pool.query(nonSchemeQuery, [tenantId, isLive, customerIds, latestDate, nonSchemeAssetTypes]);
 
       nonSchemeResult.rows.forEach(row => {
         const value = parseFloat(row.value) || 0;
@@ -684,12 +685,12 @@ export class AliasService {
           AND mps.is_live = $2
           AND mps.customer_id = ANY($3)
           AND mps.snapshot_month_end = $4
-          AND mps.asset_type_code NOT IN ('Open Ended', 'Close Ended', 'Interval Fund')
+          AND mps.asset_type_code IN (SELECT UNNEST($5::text[]))
           AND mps.current_value > 0
         GROUP BY mps.customer_id, ct.name, c.iwell_code, COALESCE(mps.asset_type_code, 'Other')
         ORDER BY ct.name, value DESC
       `;
-      const nonSchemeMemberResult = await pool.query(nonSchemeMemberQuery, [tenantId, isLive, customerIds, latestDate]);
+      const nonSchemeMemberResult = await pool.query(nonSchemeMemberQuery, [tenantId, isLive, customerIds, latestDate, nonSchemeAssetTypes]);
 
       nonSchemeMemberResult.rows.forEach(row => {
         if (!byMemberMap.has(row.customer_id)) {
