@@ -292,10 +292,40 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 6: Fix Transaction Import - Use scheme_category_id (v1.3 fix)
--- Key change: sd.asset_type_id → sd.scheme_category_id
--- The RPC function now uses scheme_category_id to lookup asset_type_code
+-- STEP 6: Fix asset_type_id in t_scheme_details (ROOT CAUSE FIX)
+-- Populate asset_type_id from scheme_category_id so imports work correctly
 -- ============================================================================
+UPDATE t_scheme_details
+SET asset_type_id = scheme_category_id
+WHERE scheme_category_id IS NOT NULL
+  AND (asset_type_id IS NULL OR asset_type_id != scheme_category_id);
+
+-- Verify the fix
+DO $$
+DECLARE
+  v_null_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_null_count
+  FROM t_scheme_details
+  WHERE scheme_category_id IS NOT NULL AND asset_type_id IS NULL;
+
+  IF v_null_count > 0 THEN
+    RAISE WARNING 'Still have % records with NULL asset_type_id', v_null_count;
+  ELSE
+    RAISE NOTICE 'SUCCESS: All scheme_details have asset_type_id populated';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- ============================================================================
+-- OLD STEP 6 - RPC function change (NO LONGER NEEDED)
+-- The root cause fix above ensures asset_type_id is populated correctly
+-- so the existing RPC function works without modification
+-- ============================================================================
+
+/*
+-- This RPC change is NOT needed since we fixed the root cause above
 CREATE OR REPLACE FUNCTION process_transaction_import_session(
     p_session_id INTEGER,
     p_customer_lookup_method VARCHAR DEFAULT 'iwell_code'
@@ -627,8 +657,7 @@ $$;
 
 COMMENT ON FUNCTION process_transaction_import_session IS
 'v1.3: Uses scheme_category_id for asset_type lookup instead of asset_type_id';
-
-COMMIT;
+*/
 
 -- ============================================================================
 -- POST-MIGRATION VERIFICATION QUERIES (run manually)
