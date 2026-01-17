@@ -515,6 +515,8 @@ const NavBookmarksPage: React.FC = () => {
           has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
           has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
         });
+        // Refresh statistics so cards update automatically
+        refetchStatistics();
         // Reset to page 1 in state as well
         if (historicalDataFilter === 'without_data') {
           setCurrentPage(1);
@@ -535,7 +537,7 @@ const NavBookmarksPage: React.FC = () => {
         error.stack
       );
     }
-  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, currentPage, pageSize, searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter]);
+  }, [filteredBookmarks, selectedBookmarkIds, bulkDownload, fetchBookmarks, refetchStatistics, currentPage, pageSize, searchQuery, amcFilter, dailyDownloadFilter, historicalDataFilter, calculationsFilter]);
 
   // NEW: Bulk metrics calculation
   const handleBulkCalculateMetrics = useCallback(() => {
