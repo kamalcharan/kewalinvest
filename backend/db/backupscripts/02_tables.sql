@@ -5,7 +5,7 @@
 -- Execution: Run SECOND after 01_init.sql
 -- Author: System
 -- Date: 2025-01-08
--- Updated: 2025-11-08 (Integrated all migrations: 006, JTBD Consolidation, 007)
+-- Updated: 2026-01-17 (Integrated all migrations through v1.3)
 -- ============================================================================
 
 -- ============================================================================
@@ -102,7 +102,7 @@ BEGIN
     RAISE NOTICE 'Creating Contact and Customer Tables...';
 END $$;
 
--- TABLE: t_contacts (UPDATED: Added normalized_name from Migration 006)
+-- TABLE: t_contacts
 CREATE TABLE t_contacts (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER DEFAULT 1 REFERENCES t_tenants(id),
@@ -112,7 +112,6 @@ CREATE TABLE t_contacts (
     prefix VARCHAR(10) NOT NULL CHECK (prefix IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sri')),
     name VARCHAR(255) NOT NULL,
     normalized_name TEXT GENERATED ALWAYS AS (
-        -- Normalize: Remove salutations, uppercase, remove special chars, normalize whitespace
         UPPER(
             REGEXP_REPLACE(
                 REGEXP_REPLACE(
@@ -160,6 +159,7 @@ COMMENT ON COLUMN t_contact_channels.channel_type IS 'Type: email, mobile, whats
 COMMENT ON COLUMN t_contact_channels.is_primary IS 'Primary channel for this type';
 
 -- TABLE: t_customers
+-- NOTE: No unique PAN constraint - minors share guardian's PAN
 CREATE TABLE t_customers (
     id SERIAL PRIMARY KEY,
     contact_id INTEGER REFERENCES t_contacts(id) ON DELETE CASCADE,
@@ -185,7 +185,6 @@ CREATE TABLE t_customers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id),
-    CONSTRAINT unique_customer_pan UNIQUE (tenant_id, pan, is_live),
     CONSTRAINT death_date_logic CHECK (
         (survival_status = 'alive' AND date_of_death IS NULL) OR
         (survival_status = 'deceased' AND date_of_death IS NOT NULL)
@@ -193,8 +192,8 @@ CREATE TABLE t_customers (
 );
 
 COMMENT ON TABLE t_customers IS 'Customer records with financial and personal data';
-COMMENT ON COLUMN t_customers.pan IS 'PAN card number - stored as PLAIN TEXT';
-COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - stored as PLAIN TEXT';
+COMMENT ON COLUMN t_customers.pan IS 'PAN card number - NOT unique, minors share guardian PAN';
+COMMENT ON COLUMN t_customers.iwell_code IS 'IWELL code - primary duplicate detection key';
 COMMENT ON COLUMN t_customers.survival_status IS 'Alive or deceased status for tracking';
 COMMENT ON COLUMN t_customers.jtbd_count IS 'Count of active JTBD configurations for this customer';
 COMMENT ON COLUMN t_customers.has_jtbd_setup IS 'Flag indicating if customer has any JTBD configurations';
@@ -229,49 +228,26 @@ CREATE TABLE t_customer_meetings (
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
-
-    -- Meeting details
     meeting_type VARCHAR(50) NOT NULL CHECK (meeting_type IN ('review', 'planning', 'onboarding', 'grievance', 'other')),
     meeting_mode VARCHAR(20) NOT NULL CHECK (meeting_mode IN ('in_person', 'video_call', 'phone_call')),
-
-    -- Scheduling
     scheduled_date DATE NOT NULL,
     scheduled_time TIME NOT NULL,
     duration_minutes INTEGER DEFAULT 60,
-
-    -- Status tracking
     status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')),
-
-    -- Location/Link (based on meeting_mode)
     meeting_location TEXT,
     meeting_link TEXT,
-
-    -- Meeting content
     agenda TEXT,
     notes TEXT,
     outcome TEXT,
-
-    -- Completion/Cancellation tracking
     completed_at TIMESTAMP,
     cancelled_at TIMESTAMP,
     cancellation_reason TEXT,
-
-    -- Audit fields
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE t_customer_meetings IS 'Customer meeting scheduling, tracking, and follow-up management';
-COMMENT ON COLUMN t_customer_meetings.meeting_type IS 'Type: review, planning, onboarding, grievance, other';
-COMMENT ON COLUMN t_customer_meetings.meeting_mode IS 'Mode: in_person, video_call, phone_call';
-COMMENT ON COLUMN t_customer_meetings.scheduled_date IS 'Date when meeting is scheduled (ISO format)';
-COMMENT ON COLUMN t_customer_meetings.scheduled_time IS 'Time when meeting is scheduled (HH:MM format)';
-COMMENT ON COLUMN t_customer_meetings.duration_minutes IS 'Meeting duration in minutes (default: 60)';
-COMMENT ON COLUMN t_customer_meetings.status IS 'Status: scheduled, completed, cancelled, rescheduled';
-COMMENT ON COLUMN t_customer_meetings.meeting_location IS 'Physical location for in-person meetings';
-COMMENT ON COLUMN t_customer_meetings.meeting_link IS 'Video call URL for video_call meetings';
-COMMENT ON COLUMN t_customer_meetings.outcome IS 'Meeting outcome/summary after completion';
 
 -- ============================================================================
 -- SECTION 4: FILE UPLOAD & IMPORT TABLES
@@ -314,7 +290,7 @@ COMMENT ON TABLE t_file_uploads IS 'Track all uploaded files for import and docu
 COMMENT ON COLUMN t_file_uploads.file_type IS 'Type: customer_import, transaction_import, customer_document, scheme_import';
 COMMENT ON COLUMN t_file_uploads.file_hash IS 'SHA256 hash of file content for duplicate detection';
 
--- TABLE: t_import_sessions (UPDATED: Restart capability from Migration 006)
+-- TABLE: t_import_sessions
 CREATE TABLE t_import_sessions (
     id SERIAL PRIMARY KEY,
     session_name VARCHAR(255) NOT NULL,
@@ -346,15 +322,12 @@ CREATE TABLE t_import_sessions (
     current_batch INTEGER DEFAULT 0,
     total_batches INTEGER DEFAULT 0,
     last_processed_row INTEGER DEFAULT 0,
-    
-    -- Restart capability (Migration 006)
     restart_count INTEGER DEFAULT 0,
     last_restart_at TIMESTAMP WITH TIME ZONE,
     can_restart BOOLEAN DEFAULT true,
     last_processed_staging_id INTEGER,
     processing_checkpoint JSONB DEFAULT '{}',
     customer_lookup_method VARCHAR(50) DEFAULT 'iwell_code' CHECK (customer_lookup_method IN ('iwell_code', 'customer_name', 'both')),
-    
     processing_metadata JSONB,
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
@@ -367,16 +340,13 @@ CREATE TABLE t_import_sessions (
 );
 
 COMMENT ON TABLE t_import_sessions IS 'Track import processing sessions with batch progress and restart capability';
-COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData, or custom types';
-COMMENT ON COLUMN t_import_sessions.status IS 'Status: pending, staged, pending_processing, processing, completed, completed_with_errors, failed, cancelled';
-COMMENT ON COLUMN t_import_sessions.restart_count IS 'Number of times this session has been restarted after timeout or failure';
-COMMENT ON COLUMN t_import_sessions.last_restart_at IS 'Timestamp of the last restart attempt';
-COMMENT ON COLUMN t_import_sessions.can_restart IS 'Whether this session can be restarted (false for cancelled/completed sessions)';
-COMMENT ON COLUMN t_import_sessions.last_processed_staging_id IS 'ID of last successfully processed staging record, used as checkpoint for restart';
-COMMENT ON COLUMN t_import_sessions.processing_checkpoint IS 'JSON object storing checkpoint data: {batch_number, records_in_batch, last_row_number, phase}';
-COMMENT ON COLUMN t_import_sessions.customer_lookup_method IS 'Method used for customer lookup in transaction imports: iwell_code (default), customer_name, or both';
+COMMENT ON COLUMN t_import_sessions.import_type IS 'Type: CustomerData, TransactionData, SchemeData';
+COMMENT ON COLUMN t_import_sessions.restart_count IS 'Number of times this session has been restarted';
+COMMENT ON COLUMN t_import_sessions.last_processed_staging_id IS 'ID of last successfully processed staging record';
+COMMENT ON COLUMN t_import_sessions.processing_checkpoint IS 'JSON checkpoint data for restart';
+COMMENT ON COLUMN t_import_sessions.customer_lookup_method IS 'Method for customer lookup: iwell_code, customer_name, or both';
 
--- TABLE: t_import_staging_data (UPDATED: Match tracking from Migration 006)
+-- TABLE: t_import_staging_data
 CREATE TABLE t_import_staging_data (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
@@ -397,8 +367,6 @@ CREATE TABLE t_import_staging_data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processing_metadata JSONB DEFAULT '{}'::jsonb,
-    
-    -- Match tracking (Migration 006)
     match_type VARCHAR(50),
     match_confidence VARCHAR(20),
     ambiguous_matches JSONB,
@@ -408,19 +376,17 @@ CREATE TABLE t_import_staging_data (
     edited_by INTEGER REFERENCES t_users(id) ON DELETE SET NULL,
     reprocess_count INTEGER DEFAULT 0,
     last_reprocess_at TIMESTAMP WITH TIME ZONE,
-    
     CONSTRAINT idx_unique_session_row UNIQUE(session_id, row_number)
 );
 
 COMMENT ON TABLE t_import_staging_data IS 'Staging table for ETL import processing with match tracking';
 COMMENT ON COLUMN t_import_staging_data.raw_data IS 'Original row data as received from uploaded file';
 COMMENT ON COLUMN t_import_staging_data.mapped_data IS 'Transformed data after applying field mappings';
-COMMENT ON COLUMN t_import_staging_data.match_type IS 'Type of match found: exact_iwell, exact_name, name_with_pan, scheme_alias, etc';
+COMMENT ON COLUMN t_import_staging_data.match_type IS 'Type of match found: exact_iwell, exact_name, name_with_pan, scheme_alias';
 COMMENT ON COLUMN t_import_staging_data.match_confidence IS 'Confidence level: high, medium, low, ambiguous, not_found';
 COMMENT ON COLUMN t_import_staging_data.ambiguous_matches IS 'JSON array of potential matches when multiple customers/schemes match';
 COMMENT ON COLUMN t_import_staging_data.requires_review IS 'Flag indicating this record needs manual review';
-COMMENT ON COLUMN t_import_staging_data.edit_history IS 'JSON array tracking all edits: [{edited_at, edited_by, field, old_value, new_value}, ...]';
-COMMENT ON COLUMN t_import_staging_data.reprocess_count IS 'Number of times this record has been reprocessed after edits';
+COMMENT ON COLUMN t_import_staging_data.edit_history IS 'JSON array tracking all edits';
 
 -- TABLE: t_import_field_mappings
 CREATE TABLE t_import_field_mappings (
@@ -441,7 +407,6 @@ CREATE TABLE t_import_field_mappings (
 );
 
 COMMENT ON TABLE t_import_field_mappings IS 'Field mapping templates for different import types';
-COMMENT ON COLUMN t_import_field_mappings.field_mappings IS 'JSON structure defining source to target field mappings';
 
 -- TABLE: t_import_record_results
 CREATE TABLE t_import_record_results (
@@ -489,6 +454,25 @@ BEGIN
     RAISE NOTICE 'Creating Scheme and NAV Tables...';
 END $$;
 
+-- TABLE: m_asset_types (Must be created before t_scheme_details)
+CREATE TABLE m_asset_types (
+    id SERIAL PRIMARY KEY,
+    asset_type_code VARCHAR(100) NOT NULL UNIQUE,
+    asset_type_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    default_assumption_rate DECIMAL(5,2),
+    is_active BOOLEAN DEFAULT true,
+    display_order INTEGER DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE m_asset_types IS 'Master data for all supported asset types - global across all tenants';
+COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., Equity Scheme - Large Cap Fund, GOLD, FD)';
+COMMENT ON COLUMN m_asset_types.category IS 'Asset category: equity, debt, hybrid, fof, commodity, real_estate, fixed_income, solution';
+COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected annual growth rate percentage';
+
 -- TABLE: t_scheme_masters
 CREATE TABLE t_scheme_masters (
     id SERIAL PRIMARY KEY,
@@ -516,6 +500,7 @@ CREATE TABLE t_scheme_details (
     scheme_name VARCHAR(500) NOT NULL,
     scheme_type_id INTEGER REFERENCES t_scheme_masters(id),
     scheme_category_id INTEGER REFERENCES t_scheme_masters(id),
+    asset_type_id INTEGER REFERENCES m_asset_types(id),
     scheme_nav_name VARCHAR(500),
     scheme_minimum_amount NUMERIC(15,2),
     launch_date DATE,
@@ -558,9 +543,10 @@ CREATE TABLE t_scheme_bookmarks (
 );
 
 COMMENT ON TABLE t_scheme_bookmarks IS 'User bookmarks for tracking specific schemes';
-COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference). Falls back to scheme_name if NULL';
+COMMENT ON COLUMN t_scheme_bookmarks.alias_name IS 'Custom scheme name (tenant preference)';
 
 -- TABLE: t_scheme_aliases
+-- NOTE: Constraint allows same alias for different schemes (v1.3 fix)
 CREATE TABLE t_scheme_aliases (
     id SERIAL PRIMARY KEY,
     scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id) ON DELETE CASCADE,
@@ -572,10 +558,12 @@ CREATE TABLE t_scheme_aliases (
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+    -- v1.3: Changed from unique_alias_global to allow same alias for different schemes
+    -- Transaction import prioritizes tenant's bookmarked schemes
+    CONSTRAINT unique_scheme_alias UNIQUE (scheme_id, alias_name_normalized)
 );
 
-COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports';
+COMMENT ON TABLE t_scheme_aliases IS 'Scheme alias mapping - same alias can map to different schemes, import uses tenant bookmarks';
 
 -- TABLE: t_nav_data
 CREATE TABLE t_nav_data (
@@ -590,8 +578,6 @@ CREATE TABLE t_nav_data (
     data_source VARCHAR(20) NOT NULL CHECK (data_source IN ('daily', 'historical', 'weekly')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Performance metrics
     daily_return NUMERIC(10,4),
     return_1w NUMERIC(10,4),
     return_1m NUMERIC(10,4),
@@ -613,7 +599,6 @@ CREATE TABLE t_nav_data (
     total_risk NUMERIC(10,4),
     cagr NUMERIC(10,4),
     metrics_calculated_at TIMESTAMP,
-    
     CONSTRAINT unique_nav_record UNIQUE (scheme_id, nav_date, is_live)
 );
 
@@ -684,7 +669,7 @@ BEGIN
     RAISE NOTICE 'Creating Portfolio and Transaction Tables...';
 END $$;
 
--- TABLE: t_customer_master_portfolio (UPDATED: Added allocation from Migration 007)
+-- TABLE: t_customer_master_portfolio
 CREATE TABLE t_customer_master_portfolio (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES t_customers(id),
@@ -698,17 +683,14 @@ CREATE TABLE t_customer_master_portfolio (
     tenant_id INTEGER,
     is_live BOOLEAN,
     is_active BOOLEAN DEFAULT true,
-    
-    -- Goal allocation tracking (Migration 007)
     allocation DECIMAL(5,2) DEFAULT 0.00 CHECK (allocation >= 0 AND allocation <= 100),
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_portfolio_record UNIQUE(customer_id, scheme_code, tenant_id, is_live)
 );
 
-COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with categorization and goal allocation';
-COMMENT ON COLUMN t_customer_master_portfolio.allocation IS 'Percentage of this scheme allocated to goals (0-100%). Auto-updated via trigger from t_jtbd_configurations.';
+COMMENT ON TABLE t_customer_master_portfolio IS 'Customer portfolio master records with goal allocation';
+COMMENT ON COLUMN t_customer_master_portfolio.allocation IS 'Percentage allocated to goals (0-100%)';
 
 -- TABLE: m_transaction_types
 CREATE TABLE m_transaction_types (
@@ -723,19 +705,6 @@ CREATE TABLE m_transaction_types (
 );
 
 COMMENT ON TABLE m_transaction_types IS 'Master data for transaction types (SIP, Purchase, Redemption, etc.)';
-
--- Seed transaction types
-INSERT INTO m_transaction_types (txn_code, txn_name, txn_type, is_active, description) VALUES
-    ('SIP', 'Systematic Investment Plan', 'Addition', TRUE, 'Regular systematic investment contributions'),
-    ('STP IN', 'Systematic Transfer Plan - In', 'Addition', TRUE, 'Systematic transfer of funds from another scheme'),
-    ('PURCHASE', 'One-Time Purchase', 'Addition', TRUE, 'Lump sum purchase or investment transaction'),
-    ('SWITCH IN', 'Switch In', 'Addition', TRUE, 'Funds received from switching from another scheme'),
-    ('STP OUT', 'Systematic Transfer Plan - Out', 'Deduction', TRUE, 'Systematic transfer of funds to another scheme'),
-    ('REDEMPTION', 'Redemption', 'Deduction', TRUE, 'Withdrawal or redemption of invested funds'),
-    ('SWITCH OUT', 'Switch Out', 'Deduction', TRUE, 'Funds moved out by switching to another scheme'),
-    ('SELL', 'Sell', 'Deduction', TRUE, 'Funds moved out / encashed from the scheme'),
-    ('OPENING BALANCE', 'Opening Balance', 'Addition', TRUE, 'Funds added to system portfolio to balance transaction records')
-ON CONFLICT (txn_code) DO NOTHING;
 
 -- TABLE: t_transaction_table
 CREATE TABLE t_transaction_table (
@@ -764,51 +733,37 @@ CREATE TABLE t_transaction_table (
     txn_description TEXT,
     txn_source VARCHAR(100),
     stt NUMERIC(15,2) DEFAULT 0,
-    tds NUMERIC(15,2) DEFAULT 0
+    tds NUMERIC(15,2) DEFAULT 0,
+    asset_type_code VARCHAR(100)
 );
 
 COMMENT ON TABLE t_transaction_table IS 'Investment transaction records with import tracking';
+COMMENT ON COLUMN t_transaction_table.asset_type_code IS 'Asset type derived from scheme category during import';
 
 -- TABLE: t_monthly_portfolio_snapshots
--- Extended for multi-asset support (NetworthViewer feature)
 CREATE TABLE t_monthly_portfolio_snapshots (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     is_live BOOLEAN NOT NULL,
     customer_id INTEGER NOT NULL,
     snapshot_month_end DATE NOT NULL,
-
-    -- Value columns
     total_invested NUMERIC(18,2),
     current_value NUMERIC(18,2),
     total_returns NUMERIC(18,2),
     return_percentage NUMERIC(10,2),
-
-    -- MF-specific columns (nullable for non-MF assets)
-    total_units NUMERIC(18,4),           -- Only for MF: sum of units
-    total_schemes INTEGER,                -- Only for MF: count of schemes
-
-    -- Multi-asset support columns
-    asset_type_code VARCHAR(50) DEFAULT 'MF',  -- MF, RE, GOLD, FD, etc.
-    investment_plan_id INTEGER,                 -- FK to t_customer_asset_assignments (NULL for MF aggregated)
-    calculation_method VARCHAR(20) DEFAULT 'NAV',  -- NAV or ASSUMPTION
-    growth_rate_applied NUMERIC(5,2),           -- Rate used for assumption-based calculation
-    actual_amount NUMERIC(18,2),                -- User-entered override value
-
-    -- Timestamps
+    total_units NUMERIC(18,4),
+    total_schemes INTEGER,
+    asset_type_code VARCHAR(100) NOT NULL,
+    investment_plan_id INTEGER,
+    calculation_method VARCHAR(20) DEFAULT 'NAV',
+    growth_rate_applied NUMERIC(5,2),
+    actual_amount NUMERIC(18,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    -- Constraints
     CONSTRAINT chk_calculation_method CHECK (calculation_method IN ('NAV', 'ASSUMPTION'))
 );
 
-COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio/networth snapshots for tracking performance across all asset types';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.asset_type_code IS 'Asset type code (MF, RE, GOLD, FD, etc.). Default MF for backward compatibility.';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.investment_plan_id IS 'Reference to t_customer_asset_assignments. NULL for MF aggregated snapshots.';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.calculation_method IS 'How current_value was calculated: NAV (units × nav_value) or ASSUMPTION (principal × growth_rate).';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.growth_rate_applied IS 'Annual growth rate used for assumption-based calculations (e.g., 8.00 for 8%).';
-COMMENT ON COLUMN t_monthly_portfolio_snapshots.actual_amount IS 'User-entered actual market value. When set, overrides calculated current_value for display.';
+COMMENT ON TABLE t_monthly_portfolio_snapshots IS 'Monthly portfolio/networth snapshots for tracking performance';
 
 -- TABLE: t_portfolio_snapshot_configs
 CREATE TABLE t_portfolio_snapshot_configs (
@@ -867,19 +822,16 @@ CREATE TABLE m_job_types (
     default_cron_expression VARCHAR(100),
     default_max_retries INTEGER DEFAULT 3,
     is_active BOOLEAN DEFAULT true,
-    default_schedule_type VARCHAR(20) DEFAULT 'daily',  -- daily, weekly, monthly
+    default_schedule_type VARCHAR(20) DEFAULT 'daily',
     failover_enabled BOOLEAN DEFAULT false,
     failover_cron_expression VARCHAR(50),
-    is_global BOOLEAN DEFAULT false,  -- True for NAV/Market jobs that run once for all tenants
+    is_global BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE m_job_types IS 'Registry of all available job types in the system';
-COMMENT ON COLUMN m_job_types.default_schedule_type IS 'Default schedule type: daily, weekly, monthly';
-COMMENT ON COLUMN m_job_types.failover_enabled IS 'Default failover enabled setting';
-COMMENT ON COLUMN m_job_types.failover_cron_expression IS 'Default failover cron expression';
-COMMENT ON COLUMN m_job_types.is_global IS 'If true, job runs once globally (not per-tenant) - e.g., NAV/Market downloads';
+COMMENT ON COLUMN m_job_types.is_global IS 'If true, job runs once globally (not per-tenant)';
 
 -- TABLE: t_job_scheduler_configs
 CREATE TABLE t_job_scheduler_configs (
@@ -893,10 +845,8 @@ CREATE TABLE t_job_scheduler_configs (
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     max_retries INTEGER NOT NULL DEFAULT 3,
     job_config JSONB,
-    -- Failover support
     failover_enabled BOOLEAN DEFAULT false,
     failover_cron_expression VARCHAR(50),
-    -- Tracking
     last_executed_at TIMESTAMP,
     next_execution_at TIMESTAMP,
     last_success_at TIMESTAMP,
@@ -909,9 +859,6 @@ CREATE TABLE t_job_scheduler_configs (
 );
 
 COMMENT ON TABLE t_job_scheduler_configs IS 'Scheduler configurations for all job types';
-COMMENT ON COLUMN t_job_scheduler_configs.failover_enabled IS 'Enable failover execution if primary fails';
-COMMENT ON COLUMN t_job_scheduler_configs.failover_cron_expression IS 'Cron for failover time (e.g., 0 22 * * * for 10 PM)';
-COMMENT ON COLUMN t_job_scheduler_configs.last_success_at IS 'Timestamp of last successful execution';
 
 -- TABLE: t_job_executions
 CREATE TABLE t_job_executions (
@@ -945,7 +892,38 @@ BEGIN
     RAISE NOTICE 'Creating JTBD Tables...';
 END $$;
 
--- TABLE: t_jtbd_configurations (UPDATED: Added jtbd_category from JTBD Consolidation)
+-- TABLE: m_alert_settings
+CREATE TABLE m_alert_settings (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES t_tenants(id),
+    is_live BOOLEAN DEFAULT true,
+    setting_key VARCHAR(100) NOT NULL,
+    setting_label VARCHAR(255) NOT NULL,
+    days_before INTEGER NOT NULL DEFAULT 3,
+    days_after INTEGER NOT NULL DEFAULT 10,
+    auto_expire_hours INTEGER,
+    applies_to_types TEXT[],
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_alert_setting UNIQUE (tenant_id, is_live, setting_key)
+);
+
+COMMENT ON TABLE m_alert_settings IS 'Configurable alert visibility settings';
+COMMENT ON COLUMN m_alert_settings.days_before IS 'Days before next_alert_date to start showing';
+COMMENT ON COLUMN m_alert_settings.days_after IS 'Days after next_alert_date to keep showing';
+COMMENT ON COLUMN m_alert_settings.auto_expire_hours IS 'For notifications: auto-deactivate after X hours';
+
+-- Seed default alert settings
+INSERT INTO m_alert_settings (tenant_id, is_live, setting_key, setting_label, days_before, days_after, auto_expire_hours, applies_to_types)
+VALUES
+    (NULL, true, 'sip_recurring_default', 'SIP/Recurring Payment Alerts', 3, 10, NULL, ARRAY['goal_sip_plan', 'portfolio_alert']),
+    (NULL, true, 'time_based_default', 'Time-Based Reminders', 7, 3, NULL, ARRAY['time_based', 'profile_trigger']),
+    (NULL, true, 'import_notification_default', 'Import Notifications', 0, 0, 24, ARRAY['import_notification']),
+    (NULL, true, 'general_default', 'General Alerts', 3, 10, NULL, NULL)
+ON CONFLICT (tenant_id, is_live, setting_key) DO NOTHING;
+
+-- TABLE: t_jtbd_configurations
 CREATE TABLE t_jtbd_configurations (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
@@ -964,51 +942,41 @@ CREATE TABLE t_jtbd_configurations (
     next_alert_date DATE,
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    completed_by INTEGER REFERENCES t_users(id),
+    completion_source VARCHAR(50),
+    auto_expire_at TIMESTAMP,
+    CONSTRAINT chk_completion_source CHECK (
+        completion_source IS NULL OR
+        completion_source IN ('manual', 'transaction_import', 'auto_expire', 'system')
+    )
 );
 
-COMMENT ON TABLE t_jtbd_configurations IS 'Unified JTBD configurations - Goals, Alerts, and Meeting templates. Use jtbd_category to filter.';
-COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger, goal_tracking, etc.';
-COMMENT ON COLUMN t_jtbd_configurations.jtbd_category IS 'Category: transactional (goals), alert (reminders, SIPs), meeting (client meetings)';
+COMMENT ON TABLE t_jtbd_configurations IS 'Unified JTBD configurations - Goals, Alerts, and Meeting templates';
+COMMENT ON COLUMN t_jtbd_configurations.jtbd_type IS 'Type: portfolio_alert, time_based, profile_trigger, goal_tracking';
+COMMENT ON COLUMN t_jtbd_configurations.jtbd_category IS 'Category: transactional (goals), alert (reminders), meeting';
+COMMENT ON COLUMN t_jtbd_configurations.completed_at IS 'Timestamp when alert was marked complete';
+COMMENT ON COLUMN t_jtbd_configurations.completion_source IS 'How completed: manual, transaction_import, auto_expire, system';
 
--- TABLE: t_jtbd_executions (NEW: From JTBD Consolidation migration)
+-- TABLE: t_jtbd_executions
 CREATE TABLE t_jtbd_executions (
     id SERIAL PRIMARY KEY,
-
-    -- Multi-tenancy
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL DEFAULT true,
-
-    -- Link to configuration (optional)
     config_id INTEGER REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-
-    -- Customer link
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
-
-    -- Execution type
     execution_type VARCHAR(50) NOT NULL,
-
-    -- Title and description
     title VARCHAR(255) NOT NULL,
     description TEXT,
-
-    -- Priority
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
-
-    -- Scheduling
     scheduled_date DATE NOT NULL,
     scheduled_time TIME,
-
-    -- Execution tracking
     execution_status VARCHAR(50) NOT NULL DEFAULT 'planned',
     execution_date DATE,
     execution_time TIME,
     deviation_days INTEGER,
-
-    -- Execution data (flexible JSON)
     execution_data JSONB DEFAULT '{}'::jsonb,
-
-    -- Audit fields
     created_by INTEGER NOT NULL REFERENCES t_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1016,12 +984,11 @@ CREATE TABLE t_jtbd_executions (
     completed_at TIMESTAMP
 );
 
-COMMENT ON TABLE t_jtbd_executions IS 'JTBD execution instances - Tracks meetings, SIP plans, and other execution records. Linked to configs via config_id.';
-COMMENT ON COLUMN t_jtbd_executions.config_id IS 'Optional link to parent configuration. NULL for standalone executions like one-time meetings.';
-COMMENT ON COLUMN t_jtbd_executions.execution_type IS 'Type: goal_sip_plan, client_meeting, portfolio_review, goal_review, etc.';
+COMMENT ON TABLE t_jtbd_executions IS 'JTBD execution instances - meetings, SIP plans, reviews';
+COMMENT ON COLUMN t_jtbd_executions.config_id IS 'Optional link to parent configuration';
+COMMENT ON COLUMN t_jtbd_executions.execution_type IS 'Type: goal_sip_plan, client_meeting, portfolio_review';
 COMMENT ON COLUMN t_jtbd_executions.execution_status IS 'Status: planned, due, completed, not_executed, delayed, failed, cancelled';
-COMMENT ON COLUMN t_jtbd_executions.deviation_days IS 'Days difference between scheduled and actual execution. Negative=early, Positive=late';
-COMMENT ON COLUMN t_jtbd_executions.execution_data IS 'Flexible JSONB for type-specific data: meeting notes, SIP details, transaction IDs, etc.';
+COMMENT ON COLUMN t_jtbd_executions.deviation_days IS 'Days between scheduled and actual. Negative=early, Positive=late';
 
 -- TABLE: t_goal_alerts
 CREATE TABLE t_goal_alerts (
@@ -1062,99 +1029,40 @@ CREATE TABLE t_goal_progress_snapshots (
     CONSTRAINT unique_goal_snapshot UNIQUE (goal_id, snapshot_date)
 );
 
-COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement over time';
+COMMENT ON TABLE t_goal_progress_snapshots IS 'Progress snapshots for tracking goal achievement';
 
 -- ============================================================================
--- DEPRECATED: t_goal_scheme_allocations (Replaced by t_goal_investment_allocations in Phase 2)
--- ============================================================================
--- TABLE: t_goal_scheme_allocations (OLD - Phase 1)
--- DEPRECATED: This table is replaced by t_goal_investment_allocations in Release 1.1 Phase 2
--- Kept commented for reference. Will be dropped after Phase 2 deployment.
-/*
-CREATE TABLE t_goal_scheme_allocations (
-    id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
-    is_live BOOLEAN NOT NULL,
-    goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-    scheme_id INTEGER NOT NULL REFERENCES t_scheme_details(id),
-    allocation_percentage NUMERIC(5,2) NOT NULL CHECK (allocation_percentage >= 0 AND allocation_percentage <= 100),
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_goal_scheme_allocation UNIQUE (goal_id, scheme_id)
-);
-
-COMMENT ON TABLE t_goal_scheme_allocations IS 'Goal scheme allocation tracking for portfolio recommendations';
-*/
-
--- ============================================================================
--- SECTION: MULTI-ASSET PORTFOLIO TABLES (Release 1.1 - Phase 1)
--- Note: Must be created BEFORE t_goal_investment_allocations which references t_customer_asset_assignments
+-- SECTION 8: MULTI-ASSET PORTFOLIO TABLES
 -- ============================================================================
 DO $$
 BEGIN
     RAISE NOTICE 'Creating Multi-Asset Portfolio Tables...';
 END $$;
 
--- TABLE: m_asset_types
--- Description: Global master data for all supported asset types
--- Note: This is NOT tenant-isolated (master data shared across all tenants)
-CREATE TABLE IF NOT EXISTS m_asset_types (
-    id SERIAL PRIMARY KEY,
-    asset_type_code VARCHAR(50) NOT NULL UNIQUE,
-    asset_type_name VARCHAR(100) NOT NULL,
-    category VARCHAR(50), -- equity, debt, commodity, real_estate, fixed_income
-    default_assumption_rate DECIMAL(5,2), -- Default expected growth rate (e.g., 8.00 for 8% per year)
-    is_active BOOLEAN DEFAULT true,
-    display_order INTEGER DEFAULT 0,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE m_asset_types IS 'Master data table for all supported asset types - global across all tenants';
-COMMENT ON COLUMN m_asset_types.asset_type_code IS 'Unique code identifier (e.g., MF, GOLD, EQUITY, FD)';
-COMMENT ON COLUMN m_asset_types.asset_type_name IS 'Display name for the asset type';
-COMMENT ON COLUMN m_asset_types.category IS 'Asset category: equity, debt, commodity, real_estate, fixed_income';
-COMMENT ON COLUMN m_asset_types.default_assumption_rate IS 'Default expected annual growth rate percentage (e.g., 8.00 for 8%)';
-COMMENT ON COLUMN m_asset_types.display_order IS 'Display order in UI (lower numbers first)';
-
 -- TABLE: t_customer_asset_assignments
--- Description: Tracks detailed investment plans for each customer's asset assignments
--- Note: Tenant-isolated table
-CREATE TABLE IF NOT EXISTS t_customer_asset_assignments (
+CREATE TABLE t_customer_asset_assignments (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL DEFAULT true,
     customer_id INTEGER NOT NULL REFERENCES t_customers(id) ON DELETE CASCADE,
     asset_type_id INTEGER NOT NULL REFERENCES m_asset_types(id),
-
-    -- Investment Plan Details
     principal_amount DECIMAL(15,2),
     start_date DATE,
     has_started BOOLEAN DEFAULT false,
     duration_months INTEGER,
     duration_years INTEGER,
-
-    -- Investment Type & Frequency
     investment_type VARCHAR(20) CHECK (investment_type IN ('one_time', 'sip', 'recurring')),
     recurring_amount DECIMAL(15,2),
     investment_frequency VARCHAR(20) CHECK (investment_frequency IS NULL OR investment_frequency IN ('monthly', 'quarterly', 'yearly')),
-
-    -- Growth & Returns
     custom_assumption_rate DECIMAL(5,2),
-
-    -- MF Specific
     scheme_code VARCHAR(50),
-
-    -- Metadata
     is_active BOOLEAN DEFAULT true,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     assigned_by INTEGER REFERENCES t_users(id),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
+    alerts_enabled BOOLEAN DEFAULT true,
     CONSTRAINT chk_duration CHECK (
         (duration_months IS NOT NULL AND duration_years IS NULL) OR
         (duration_months IS NULL AND duration_years IS NOT NULL) OR
@@ -1162,65 +1070,88 @@ CREATE TABLE IF NOT EXISTS t_customer_asset_assignments (
     )
 );
 
-COMMENT ON TABLE t_customer_asset_assignments IS 'Tracks customer investment plans with detailed information including principal, duration, investment type, and growth assumptions';
-COMMENT ON COLUMN t_customer_asset_assignments.customer_id IS 'Reference to customer in t_customers';
-COMMENT ON COLUMN t_customer_asset_assignments.asset_type_id IS 'Reference to asset type in m_asset_types (master data)';
-COMMENT ON COLUMN t_customer_asset_assignments.principal_amount IS 'Initial investment amount or current principal value';
-COMMENT ON COLUMN t_customer_asset_assignments.start_date IS 'Date when the investment starts or started';
-COMMENT ON COLUMN t_customer_asset_assignments.has_started IS 'Whether the investment has actually started (vs planned)';
-COMMENT ON COLUMN t_customer_asset_assignments.duration_months IS 'Investment duration in months (use either months or years, not both)';
-COMMENT ON COLUMN t_customer_asset_assignments.duration_years IS 'Investment duration in years (use either months or years, not both)';
-COMMENT ON COLUMN t_customer_asset_assignments.investment_type IS 'Type of investment: one_time, sip, or recurring';
-COMMENT ON COLUMN t_customer_asset_assignments.recurring_amount IS 'For SIP/recurring: amount invested per period';
-COMMENT ON COLUMN t_customer_asset_assignments.investment_frequency IS 'For SIP/recurring: monthly, quarterly, or yearly';
-COMMENT ON COLUMN t_customer_asset_assignments.custom_assumption_rate IS 'Custom growth rate percentage (overrides asset type default)';
+COMMENT ON TABLE t_customer_asset_assignments IS 'Customer investment plans with detailed tracking';
+COMMENT ON COLUMN t_customer_asset_assignments.principal_amount IS 'Initial investment amount';
+COMMENT ON COLUMN t_customer_asset_assignments.investment_type IS 'Type: one_time, sip, or recurring';
+COMMENT ON COLUMN t_customer_asset_assignments.custom_assumption_rate IS 'Custom growth rate (overrides asset type default)';
 COMMENT ON COLUMN t_customer_asset_assignments.scheme_code IS 'For MF: scheme code from bookmarked funds';
-COMMENT ON COLUMN t_customer_asset_assignments.is_active IS 'Whether this assignment is currently active';
-COMMENT ON COLUMN t_customer_asset_assignments.assigned_by IS 'User who made the assignment';
-COMMENT ON COLUMN t_customer_asset_assignments.notes IS 'Optional notes about the investment plan';
+COMMENT ON COLUMN t_customer_asset_assignments.alerts_enabled IS 'Toggle for automatic alert generation';
 
--- ============================================================================
--- TABLE: t_goal_investment_allocations (NEW - Phase 2)
--- ============================================================================
--- Links goals to investment plans (multi-asset support)
--- Replaces t_goal_scheme_allocations to enable tracking goals across all asset types
+-- TABLE: t_goal_investment_allocations
 CREATE TABLE t_goal_investment_allocations (
     id SERIAL PRIMARY KEY,
-
-    -- Multi-tenancy
     tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
     is_live BOOLEAN NOT NULL DEFAULT true,
-
-    -- Goal reference (stored in t_jtbd_configurations)
     goal_id INTEGER NOT NULL REFERENCES t_jtbd_configurations(id) ON DELETE CASCADE,
-
-    -- Investment Plan reference (from Phase 1 - t_customer_asset_assignments)
     investment_plan_id INTEGER NOT NULL REFERENCES t_customer_asset_assignments(id) ON DELETE CASCADE,
-
-    -- Allocation details
     allocated_percentage DECIMAL(5,2) CHECK (allocated_percentage >= 0 AND allocated_percentage <= 100),
     allocated_amount DECIMAL(15,2),
-
-    -- Notes
     notes TEXT,
-
-    -- Audit fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES t_users(id),
-
-    -- Constraints
     CONSTRAINT unique_goal_investment_allocation UNIQUE (goal_id, investment_plan_id)
 );
 
-COMMENT ON TABLE t_goal_investment_allocations IS 'Phase 2: Links goals to investment plans (multi-asset support). Replaces t_goal_scheme_allocations.';
-COMMENT ON COLUMN t_goal_investment_allocations.goal_id IS 'Reference to goal in t_jtbd_configurations (where jtbd_category = ''transactional'')';
-COMMENT ON COLUMN t_goal_investment_allocations.investment_plan_id IS 'Reference to investment plan in t_customer_asset_assignments (Phase 1)';
-COMMENT ON COLUMN t_goal_investment_allocations.allocated_percentage IS 'Percentage of this investment allocated to goal (0-100%). Allows partial allocations.';
-COMMENT ON COLUMN t_goal_investment_allocations.allocated_amount IS 'Fixed amount allocated (alternative to percentage). Usually NULL if percentage is used.';
+COMMENT ON TABLE t_goal_investment_allocations IS 'Links goals to investment plans (multi-asset support)';
 
 -- ============================================================================
--- SECTION 8: BOOKMARK TABLES & REASON MASTERS
+-- SECTION 9: COURSE CORRECTIONS TABLE
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Creating Course Corrections Table...';
+END $$;
+
+-- TABLE: t_course_corrections
+CREATE TABLE t_course_corrections (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES t_tenants(id),
+    is_live BOOLEAN NOT NULL DEFAULT true,
+    customer_id INTEGER NOT NULL REFERENCES t_customers(id),
+    customer_name VARCHAR(255),
+    source_scheme_code VARCHAR(100) NOT NULL,
+    source_scheme_name VARCHAR(500),
+    target_scheme_code VARCHAR(100) NOT NULL,
+    target_scheme_name VARCHAR(500),
+    reason TEXT,
+    transaction_count INTEGER DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
+        status IN ('pending', 'processing', 'completed', 'failed', 'rolled_back')
+    ),
+    error_message TEXT,
+    step_1_check_existing VARCHAR(10) DEFAULT 'pending' CHECK (step_1_check_existing IN ('pending', 'pass', 'fail')),
+    step_2_get_customer VARCHAR(10) DEFAULT 'pending' CHECK (step_2_get_customer IN ('pending', 'pass', 'fail')),
+    step_3_get_source_scheme VARCHAR(10) DEFAULT 'pending' CHECK (step_3_get_source_scheme IN ('pending', 'pass', 'fail')),
+    step_4_get_target_scheme VARCHAR(10) DEFAULT 'pending' CHECK (step_4_get_target_scheme IN ('pending', 'pass', 'fail')),
+    step_5_count_txns VARCHAR(10) DEFAULT 'pending' CHECK (step_5_count_txns IN ('pending', 'pass', 'fail')),
+    step_6_backup VARCHAR(10) DEFAULT 'pending' CHECK (step_6_backup IN ('pending', 'pass', 'fail')),
+    step_7_update_txns VARCHAR(10) DEFAULT 'pending' CHECK (step_7_update_txns IN ('pending', 'pass', 'fail')),
+    step_8_snapshots VARCHAR(10) DEFAULT 'pending' CHECK (step_8_snapshots IN ('pending', 'pass', 'fail')),
+    rollback_data JSONB,
+    backup_data JSONB,
+    snapshot_regenerated BOOLEAN DEFAULT false,
+    created_by INTEGER REFERENCES t_users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP,
+    rolled_back_at TIMESTAMP,
+    rolled_back_by INTEGER REFERENCES t_users(id)
+);
+
+COMMENT ON TABLE t_course_corrections IS 'Track scheme migration corrections for wrong NAV/returns';
+COMMENT ON COLUMN t_course_corrections.step_1_check_existing IS 'Step 1: Check for existing completed migrations';
+COMMENT ON COLUMN t_course_corrections.step_2_get_customer IS 'Step 2: Fetch customer name';
+COMMENT ON COLUMN t_course_corrections.step_3_get_source_scheme IS 'Step 3: Fetch source scheme name';
+COMMENT ON COLUMN t_course_corrections.step_4_get_target_scheme IS 'Step 4: Fetch target scheme name';
+COMMENT ON COLUMN t_course_corrections.step_5_count_txns IS 'Step 5: Count transactions to migrate';
+COMMENT ON COLUMN t_course_corrections.step_6_backup IS 'Step 6: Backup transaction data';
+COMMENT ON COLUMN t_course_corrections.step_7_update_txns IS 'Step 7: Update scheme codes, units, NAV';
+COMMENT ON COLUMN t_course_corrections.step_8_snapshots IS 'Step 8: Regenerate portfolio snapshots';
+COMMENT ON COLUMN t_course_corrections.backup_data IS 'Complete transaction backup for rollback';
+
+-- ============================================================================
+-- SECTION 10: BOOKMARK TABLES & REASON MASTERS
 -- ============================================================================
 DO $$
 BEGIN
@@ -1260,10 +1191,10 @@ CREATE TABLE t_customer_bookmarks (
     CONSTRAINT check_bookmark_reason CHECK (reason_id IS NOT NULL OR custom_reason IS NOT NULL)
 );
 
-COMMENT ON TABLE t_customer_bookmarks IS 'User bookmarks for tracking important customers with reasons/tags';
+COMMENT ON TABLE t_customer_bookmarks IS 'User bookmarks for tracking important customers';
 
 -- ============================================================================
--- SECTION 9: MARKET DATA TABLES
+-- SECTION 11: MARKET DATA TABLES
 -- ============================================================================
 DO $$
 BEGIN
@@ -1280,8 +1211,6 @@ CREATE TABLE t_market_indices (
     description TEXT,
     is_active BOOLEAN DEFAULT true,
     priority INTEGER DEFAULT 0,
-    
-    -- Download tracking
     total_records INTEGER DEFAULT 0,
     earliest_date DATE,
     latest_date DATE,
@@ -1289,22 +1218,15 @@ CREATE TABLE t_market_indices (
     last_download_at TIMESTAMP,
     last_download_error TEXT,
     historical_data_available BOOLEAN DEFAULT false,
-    
-    -- EOD retry fields
     next_eod_retry_at TIMESTAMP,
     eod_retry_count INTEGER DEFAULT 0,
     last_successful_eod_download_at TIMESTAMP,
-    
-    -- Data provider fields
     data_provider VARCHAR(50) DEFAULT 'not_configured',
     provider_symbol VARCHAR(100),
     provider_enabled BOOLEAN DEFAULT false,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT chk_data_provider 
-        CHECK (data_provider IN ('yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'))
+    CONSTRAINT chk_data_provider CHECK (data_provider IN ('yahoo_finance', 'nse_official', 'google_sheets', 'not_configured'))
 );
 
 COMMENT ON TABLE t_market_indices IS 'Master table for NSE market indices with multi-provider support';
@@ -1330,8 +1252,6 @@ CREATE TABLE t_market_data_records (
     data_source VARCHAR(50) DEFAULT 'yahoo_finance',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Performance metrics
     daily_return NUMERIC(10,4),
     return_1w NUMERIC(10,4),
     return_1m NUMERIC(10,4),
@@ -1353,7 +1273,6 @@ CREATE TABLE t_market_data_records (
     total_risk NUMERIC(10,4),
     cagr NUMERIC(10,4),
     metrics_calculated_at TIMESTAMP,
-    
     CONSTRAINT unique_market_data UNIQUE (index_id, date)
 );
 
@@ -1417,7 +1336,7 @@ CREATE TABLE t_market_eod_scheduler (
 COMMENT ON TABLE t_market_eod_scheduler IS 'Global EOD scheduler configuration';
 
 -- ============================================================================
--- SECTION 10: USER PREFERENCE TABLES
+-- SECTION 12: USER PREFERENCE TABLES
 -- ============================================================================
 DO $$
 BEGIN
@@ -1438,7 +1357,7 @@ CREATE TABLE t_user_chart_preferences (
 COMMENT ON TABLE t_user_chart_preferences IS 'User-specific chart visualization preferences per index';
 
 -- ============================================================================
--- SECTION 11: SYSTEM LOGS TABLE
+-- SECTION 13: SYSTEM LOGS TABLE
 -- ============================================================================
 DO $$
 BEGIN
@@ -1477,18 +1396,15 @@ BEGIN
     RAISE NOTICE 'Table creation completed!';
     RAISE NOTICE 'Total tables created: %', v_table_count;
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'MIGRATION INTEGRATION SUMMARY:';
+    RAISE NOTICE 'INTEGRATED MIGRATIONS:';
     RAISE NOTICE '  ✓ Migration 006: Name normalization & restart';
-    RAISE NOTICE '    - t_contacts.normalized_name (GENERATED)';
-    RAISE NOTICE '    - t_import_sessions restart columns';
-    RAISE NOTICE '    - t_import_staging_data match tracking';
-    RAISE NOTICE '  ✓ JTBD Consolidation Migration:';
-    RAISE NOTICE '    - t_jtbd_configurations.jtbd_category';
-    RAISE NOTICE '    - t_jtbd_executions (NEW TABLE)';
+    RAISE NOTICE '  ✓ JTBD Consolidation Migration';
     RAISE NOTICE '  ✓ Migration 007: Scheme allocation';
-    RAISE NOTICE '    - t_customer_master_portfolio.allocation';
-    RAISE NOTICE '  ✓ Default comparison index';
-    RAISE NOTICE '    - t_tenants.default_comparison_index_id';
+    RAISE NOTICE '  ✓ Migration 023: Alert System Enhancements';
+    RAISE NOTICE '  ✓ Migration 025: Drop unique PAN constraint';
+    RAISE NOTICE '  ✓ Migration 026: STP transaction aliases';
+    RAISE NOTICE '  ✓ Course Correction v2.0 (8-step tracking)';
+    RAISE NOTICE '  ✓ Alias Constraint Fix v1.3 (multi-scheme)';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Next: Run 03_indexes_triggers.sql';
     RAISE NOTICE '========================================';
