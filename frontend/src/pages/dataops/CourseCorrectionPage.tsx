@@ -1366,18 +1366,38 @@ const CourseCorrectionPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* NAV Data Warning */}
+                {!selectedTargetScheme.latest_nav_value && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    padding: '10px',
+                    backgroundColor: '#fef3c7',
+                    borderRadius: '6px',
+                    marginBottom: '10px',
+                    border: '1px solid #f59e0b'
+                  }}>
+                    <AlertTriangle size={16} color="#92400e" style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.4' }}>
+                      <strong>No NAV data available</strong> for this scheme. Please download NAV data first before migrating.
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={() => setShowConfirmModal(true)}
+                  disabled={!selectedTargetScheme.latest_nav_value}
                   style={{
                     width: '100%',
                     padding: '10px',
-                    backgroundColor: colors.brand.primary,
-                    color: '#fff',
+                    backgroundColor: !selectedTargetScheme.latest_nav_value ? colors.utility.primaryText + '30' : colors.brand.primary,
+                    color: !selectedTargetScheme.latest_nav_value ? colors.utility.secondaryText : '#fff',
                     border: 'none',
                     borderRadius: '6px',
                     fontSize: '13px',
                     fontWeight: 600,
-                    cursor: 'pointer',
+                    cursor: !selectedTargetScheme.latest_nav_value ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1385,7 +1405,7 @@ const CourseCorrectionPage: React.FC = () => {
                   }}
                 >
                   <Plus size={14} />
-                  Create Migration
+                  {!selectedTargetScheme.latest_nav_value ? 'NAV Required' : 'Create Migration'}
                 </button>
               </div>
             )}
