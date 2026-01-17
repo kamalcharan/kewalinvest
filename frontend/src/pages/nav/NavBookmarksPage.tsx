@@ -494,17 +494,20 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
 
-      // IMPORTANT: Clear selection after download when using "without_data" filter
-      // because downloaded schemes will disappear from the filtered results
-      // This prevents stale selection IDs from blocking future selections
+      // IMPORTANT: Always clear selection after bulk download completes
+      // This ensures fresh state for selecting next batch of schemes
+      // Previously only cleared for 'without_data' filter, now cleared unconditionally
+      setSelectedBookmarkIds(new Set());
+      setShowBulkActions(false);
+
+      // Reset to page 1 IMMEDIATELY (outside setTimeout) when filter is active
+      // This prevents race conditions where user selects new items before page resets
+      const targetPage = historicalDataFilter === 'without_data' ? 1 : currentPage;
       if (historicalDataFilter === 'without_data') {
-        setSelectedBookmarkIds(new Set());
-        setShowBulkActions(false);
+        setCurrentPage(1);
       }
 
-      // Refresh data - go back to page 1 when filter is active to show remaining schemes
-      const targetPage = historicalDataFilter === 'without_data' ? 1 : currentPage;
-
+      // Refresh data after a delay to let server process
       setTimeout(() => {
         fetchBookmarks({
           page: targetPage,
@@ -517,10 +520,6 @@ const NavBookmarksPage: React.FC = () => {
         });
         // Refresh statistics so cards update automatically
         refetchStatistics();
-        // Reset to page 1 in state as well
-        if (historicalDataFilter === 'without_data') {
-          setCurrentPage(1);
-        }
       }, 1000);
 
       // Notify user
