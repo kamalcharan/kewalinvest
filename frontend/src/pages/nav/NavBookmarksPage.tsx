@@ -480,14 +480,10 @@ const NavBookmarksPage: React.FC = () => {
       { totalSchemes: selectedBookmarks.length }
     );
 
-    // KEEP selection - user needs it for next step (calculate metrics)
-    // Selection will be cleared only after they complete their workflow
-
     try {
       // Start sequential download (BulkDownloadProgress modal will show automatically)
       const result = await bulkDownload.processSchemes(selectedBookmarks);
 
-      // Refresh card data while maintaining selection for metrics workflow
       FrontendErrorLogger.info(
         'Sequential bulk download completed',
         'NavBookmarksPage',
@@ -498,10 +494,20 @@ const NavBookmarksPage: React.FC = () => {
         }
       );
 
-      // Update card data (NAV counts, dates, status) while keeping selection
+      // IMPORTANT: Clear selection after download when using "without_data" filter
+      // because downloaded schemes will disappear from the filtered results
+      // This prevents stale selection IDs from blocking future selections
+      if (historicalDataFilter === 'without_data') {
+        setSelectedBookmarkIds(new Set());
+        setShowBulkActions(false);
+      }
+
+      // Refresh data - go back to page 1 when filter is active to show remaining schemes
+      const targetPage = historicalDataFilter === 'without_data' ? 1 : currentPage;
+
       setTimeout(() => {
         fetchBookmarks({
-          page: currentPage,
+          page: targetPage,
           page_size: pageSize,
           search: searchQuery || undefined,
           amc_name: amcFilter || undefined,
@@ -509,13 +515,17 @@ const NavBookmarksPage: React.FC = () => {
           has_historical_data: historicalDataFilter === 'all' ? undefined : historicalDataFilter === 'with_data' ? 'true' : 'false',
           has_calculations: calculationsFilter === 'all' ? undefined : calculationsFilter === 'with_calculations' ? 'true' : 'false'
         });
+        // Reset to page 1 in state as well
+        if (historicalDataFilter === 'without_data') {
+          setCurrentPage(1);
+        }
       }, 1000);
 
-      // Notify user they can proceed with their workflow
-      toastService.success(
-        `Download complete: ${result.successful} successful, ${result.failed} failed. ` +
-        `Cards updated! You can now calculate metrics.`
-      );
+      // Notify user
+      const message = historicalDataFilter === 'without_data'
+        ? `Download complete: ${result.successful} successful, ${result.failed} failed. Select next batch to continue.`
+        : `Download complete: ${result.successful} successful, ${result.failed} failed. You can now calculate metrics.`;
+      toastService.success(message);
 
     } catch (error: any) {
       FrontendErrorLogger.error(
