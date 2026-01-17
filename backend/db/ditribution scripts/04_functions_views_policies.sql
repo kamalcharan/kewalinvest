@@ -1337,15 +1337,15 @@ BEGIN
                     END IF;
                 END IF;
 
-                -- LOOKUP ASSET TYPE if we found a bookmarked scheme
+                -- LOOKUP ASSET TYPE using scheme_category_id (v1.3 fix)
                 IF v_bookmark_id IS NOT NULL THEN
                     SELECT mat.asset_type_code, mat.id
                     INTO v_asset_type_code, v_asset_type_id
                     FROM t_scheme_details sd
-                    JOIN m_asset_types mat ON sd.asset_type_id = mat.id AND mat.is_active = true
+                    JOIN m_asset_types mat ON sd.scheme_category_id = mat.id AND mat.is_active = true
                     WHERE sd.id = v_scheme_id;
 
-                    -- Default to 'Growth' if asset_type_id not set on scheme
+                    -- Default to 'Growth' if scheme_category_id not set on scheme
                     IF v_asset_type_code IS NULL THEN
                         SELECT asset_type_code, id
                         INTO v_asset_type_code, v_asset_type_id
