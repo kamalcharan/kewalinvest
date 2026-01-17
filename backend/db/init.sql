@@ -2490,24 +2490,48 @@ BEGIN
     v_error_messages := ARRAY[]::TEXT[];
     
     BEGIN
+        -- Get scheme_type_id if scheme_type is provided (global data - no tenant filter)
+        v_scheme_type_id := NULL;
+        IF v_mapped_data->>'scheme_type' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_type') != '' THEN
+            SELECT id INTO v_scheme_type_id
+            FROM t_scheme_masters
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_type'))
+              AND master_type = 'scheme_type'
+              AND is_active = true
+            LIMIT 1;
+        END IF;
+
+        -- Get scheme_category_id if scheme_category is provided (global AMFI data - no tenant filter)
+        v_scheme_category_id := NULL;
+        IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
+            SELECT id INTO v_scheme_category_id
+            FROM t_scheme_masters
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
+              AND master_type = 'scheme_category'
+              AND is_active = true
+            LIMIT 1;
+        END IF;
+
         -- Check for duplicate by scheme_code
         SELECT COUNT(*) > 0 INTO v_is_duplicate
         FROM t_scheme_details
         WHERE scheme_code = v_mapped_data->>'scheme_code'
           AND tenant_id = v_staging.tenant_id
           AND is_live = v_staging.is_live;
-        
+
         IF v_is_duplicate THEN
-            -- Update existing scheme
+            -- Update existing scheme (including scheme_type_id and scheme_category_id)
             UPDATE t_scheme_details
-            SET 
+            SET
                 amc_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'amc_name'), ''), amc_name),
                 scheme_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_name'), ''), scheme_name),
                 scheme_nav_name = COALESCE(NULLIF(TRIM(v_mapped_data->>'scheme_nav_name'), ''), scheme_nav_name),
-                scheme_minimum_amount = CASE 
-                    WHEN v_mapped_data->>'scheme_minimum_amount' IS NOT NULL 
+                scheme_type_id = COALESCE(v_scheme_type_id, scheme_type_id),
+                scheme_category_id = COALESCE(v_scheme_category_id, scheme_category_id),
+                scheme_minimum_amount = CASE
+                    WHEN v_mapped_data->>'scheme_minimum_amount' IS NOT NULL
                     THEN (v_mapped_data->>'scheme_minimum_amount')::DECIMAL(15,2)
-                    ELSE scheme_minimum_amount 
+                    ELSE scheme_minimum_amount
                 END,
                 isin_div_payout = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_div_payout'), ''), isin_div_payout),
                 isin_growth = COALESCE(NULLIF(TRIM(v_mapped_data->>'isin_growth'), ''), isin_growth),
@@ -2517,7 +2541,7 @@ BEGIN
               AND tenant_id = v_staging.tenant_id
               AND is_live = v_staging.is_live
             RETURNING id INTO v_scheme_id;
-            
+
             -- Mark as duplicate
             UPDATE t_import_staging_data
             SET processing_status = 'duplicate',
@@ -2526,34 +2550,8 @@ BEGIN
                 created_record_type = 'scheme',
                 processed_at = CURRENT_TIMESTAMP
             WHERE id = p_staging_id;
-            
+
             RETURN;
-        END IF;
-        
-        -- Get scheme_type_id if scheme_type is provided
-        v_scheme_type_id := NULL;
-        IF v_mapped_data->>'scheme_type' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_type') != '' THEN
-            SELECT id INTO v_scheme_type_id
-            FROM t_scheme_masters
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_type'))
-              AND master_type = 'scheme_type'
-              AND tenant_id = v_staging.tenant_id
-              AND is_live = v_staging.is_live
-              AND is_active = true
-            LIMIT 1;
-        END IF;
-        
-        -- Get scheme_category_id if scheme_category is provided
-        v_scheme_category_id := NULL;
-        IF v_mapped_data->>'scheme_category' IS NOT NULL AND TRIM(v_mapped_data->>'scheme_category') != '' THEN
-            SELECT id INTO v_scheme_category_id
-            FROM t_scheme_masters
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM(v_mapped_data->>'scheme_category'))
-              AND master_type = 'scheme_category'
-              AND tenant_id = v_staging.tenant_id
-              AND is_live = v_staging.is_live
-              AND is_active = true
-            LIMIT 1;
         END IF;
         
         -- Parse launch_date
