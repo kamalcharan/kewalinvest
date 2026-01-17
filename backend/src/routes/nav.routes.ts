@@ -55,7 +55,7 @@ const downloadRateLimit = rateLimit({
 // Rate limiting for historical downloads (heavy operations)
 const historicalDownloadRateLimit = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 100, // 3 historical downloads per day
+  max: 300, // 3 historical downloads per day
   message: {
     success: false,
     error: 'Historical download limit exceeded. You can only perform 300 historical downloads per day.'
