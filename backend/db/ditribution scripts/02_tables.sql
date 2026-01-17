@@ -575,10 +575,10 @@ CREATE TABLE t_scheme_aliases (
     created_by INTEGER REFERENCES t_users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_alias_global UNIQUE (alias_name_normalized)
+    CONSTRAINT unique_scheme_alias UNIQUE (scheme_id, alias_name_normalized)
 );
 
-COMMENT ON TABLE t_scheme_aliases IS 'Global scheme alias mapping - stores multiple name variations for flexible transaction imports';
+COMMENT ON TABLE t_scheme_aliases IS 'Scheme alias mapping - stores multiple name variations for flexible transaction imports. Same alias name can map to different schemes.';
 
 -- TABLE: t_nav_data
 CREATE TABLE t_nav_data (

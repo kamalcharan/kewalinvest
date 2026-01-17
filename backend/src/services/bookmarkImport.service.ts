@@ -148,12 +148,13 @@ export class BookmarkImportService {
           // Create aliases (global, shared across all tenants)
           for (const alias of aliasesToCreate) {
             try {
-              // NOTE: Aliases are universal/global across all tenants
-              // ON CONFLICT DO NOTHING handles duplicates from other tenants
+              // NOTE: Aliases can have same name for different schemes
+              // Constraint is UNIQUE(scheme_id, alias_name_normalized)
+              // This allows same alias name to map to different schemes
               const aliasQuery = `
                 INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
                 VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (alias_name_normalized) DO NOTHING
+                ON CONFLICT (scheme_id, alias_name_normalized) DO NOTHING
                 RETURNING id
               `;
 

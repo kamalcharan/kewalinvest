@@ -532,29 +532,45 @@ BEGIN
             IF v_staging_record.mapped_data->>'scheme_name' IS NOT NULL AND
                TRIM(v_staging_record.mapped_data->>'scheme_name') != '' THEN
 
-                SELECT sa.scheme_id INTO v_scheme_id
+                -- IMPROVED: Find alias that is ALSO bookmarked by this tenant
+                -- This handles cases where same alias name maps to different schemes
+                SELECT
+                    sa.scheme_id,
+                    sb.id,
+                    sb.scheme_code,
+                    sb.scheme_name
+                INTO
+                    v_scheme_id,
+                    v_bookmark_id,
+                    v_scheme_code,
+                    v_scheme_name
                 FROM t_scheme_aliases sa
+                JOIN t_scheme_bookmarks sb
+                    ON sb.scheme_id = sa.scheme_id
+                    AND sb.tenant_id = v_staging_record.tenant_id
+                    AND sb.is_live = v_staging_record.is_live
+                    AND sb.is_active = true
                 WHERE sa.is_active = true
                   AND LOWER(TRIM(sa.alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
                 LIMIT 1;
 
-                IF v_scheme_id IS NOT NULL THEN
-                    SELECT sb.id, sb.scheme_code, sb.scheme_name
-                    INTO v_bookmark_id, v_scheme_code, v_scheme_name
-                    FROM t_scheme_bookmarks sb
-                    WHERE sb.tenant_id = v_staging_record.tenant_id
-                      AND sb.is_live = v_staging_record.is_live
-                      AND sb.scheme_id = v_scheme_id
-                      AND sb.is_active = true
+                -- If no bookmarked alias found, try to find any alias for error reporting
+                IF v_scheme_id IS NULL THEN
+                    SELECT sa.scheme_id INTO v_scheme_id
+                    FROM t_scheme_aliases sa
+                    WHERE sa.is_active = true
+                      AND LOWER(TRIM(sa.alias_name)) = LOWER(TRIM(v_staging_record.mapped_data->>'scheme_name'))
                     LIMIT 1;
 
-                    IF v_bookmark_id IS NULL THEN
+                    IF v_scheme_id IS NOT NULL THEN
                         SELECT scheme_name INTO v_scheme_name
                         FROM t_scheme_details
                         WHERE id = v_scheme_id;
                     END IF;
+                END IF;
 
-                    -- LOOKUP ASSET TYPE directly from t_scheme_details.asset_type_id (references m_asset_types)
+                -- LOOKUP ASSET TYPE if we found a bookmarked scheme
+                IF v_bookmark_id IS NOT NULL THEN
                     SELECT mat.asset_type_code, mat.id
                     INTO v_asset_type_code, v_asset_type_id
                     FROM t_scheme_details sd
