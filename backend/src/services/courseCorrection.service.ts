@@ -535,6 +535,27 @@ export class CourseCorrectionService {
         result.steps.step_4_get_target_scheme = { status: 'pass', message: targetSchemeName };
         console.log(`[CourseCorrection] Step 4 complete: ${targetSchemeName}`);
 
+        // ========== STEP 4b: Validate NAV data exists for target scheme ==========
+        console.log(`[CourseCorrection] Step 4b: Checking NAV data for target scheme...`);
+        const navCheckQuery = `
+          SELECT COUNT(*) as nav_count
+          FROM t_nav_data
+          WHERE scheme_code = $1
+        `;
+        const navCheckResult = await pool.query(navCheckQuery, [request.target_scheme_code]);
+        const navCount = parseInt(navCheckResult.rows[0].nav_count);
+
+        if (navCount === 0) {
+          const navError = `No NAV data available for target scheme ${request.target_scheme_code}. Please download NAV data for this scheme first before proceeding with migration.`;
+          await this.updateStepStatus(correctionId, 'step_4_get_target_scheme', 'fail', navError);
+          await pool.query('UPDATE t_course_corrections SET status = $1, error_message = $2 WHERE id = $3', ['failed', navError, correctionId]);
+          result.steps.step_4_get_target_scheme = { status: 'fail', message: navError };
+          result.error = navError;
+          result.failed_step = 4;
+          return result;
+        }
+        console.log(`[CourseCorrection] Step 4b complete: ${navCount} NAV records found`);
+
       } catch (error: any) {
         await this.updateStepStatus(correctionId, 'step_4_get_target_scheme', 'fail', error.message);
         await pool.query('UPDATE t_course_corrections SET status = $1 WHERE id = $2', ['failed', correctionId]);
