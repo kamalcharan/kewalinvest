@@ -294,25 +294,8 @@ END $$;
 -- ============================================================================
 -- STEP 6: Fix Transaction Import - Use scheme_category_id (v1.3 fix)
 -- Key change: sd.asset_type_id → sd.scheme_category_id
+-- The RPC function now uses scheme_category_id to lookup asset_type_code
 -- ============================================================================
-
--- 6a. Fix existing transactions
-UPDATE t_transaction_table tt
-SET asset_type_code = mat.asset_type_code
-FROM t_scheme_details sd
-JOIN m_asset_types mat ON mat.id = sd.scheme_category_id
-WHERE tt.scheme_id = sd.id
-  AND tt.portfolio_flag = true
-  AND sd.scheme_category_id IS NOT NULL;
-
--- 6b. Fix existing customer assignments
-UPDATE t_customer_asset_assignments caa
-SET asset_type_id = sd.scheme_category_id
-FROM t_scheme_details sd
-WHERE caa.scheme_code = sd.scheme_code
-  AND sd.scheme_category_id IS NOT NULL;
-
--- 6c. Update process_transaction_import_session function
 CREATE OR REPLACE FUNCTION process_transaction_import_session(
     p_session_id INTEGER,
     p_customer_lookup_method VARCHAR DEFAULT 'iwell_code'
