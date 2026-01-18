@@ -65,6 +65,11 @@ export class BookmarkImportService {
         const row = rows[i];
         const rowNumber = i + 1;
 
+        // Use SAVEPOINT to allow continuing after row-level errors
+        // This prevents PostgreSQL error 25P02 (transaction aborted) from cascading
+        const savepointName = `row_${rowNumber}`;
+        await client.query(`SAVEPOINT ${savepointName}`);
+
         try {
           // Validate row data
           if (!row.scheme_code || !row.scheme_name) {
@@ -73,6 +78,7 @@ export class BookmarkImportService {
               scheme_code: row.scheme_code || 'MISSING',
               error: 'Missing required fields: scheme_code or scheme_name'
             });
+            await client.query(`RELEASE SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -96,6 +102,7 @@ export class BookmarkImportService {
               scheme_code: cleanSchemeCode,
               error: `Scheme code not found in master data (t_scheme_details)`
             });
+            await client.query(`RELEASE SAVEPOINT ${savepointName}`);
             continue;
           }
 
@@ -179,7 +186,14 @@ export class BookmarkImportService {
             }
           }
 
+          // Row processed successfully - release the savepoint
+          await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+
         } catch (error: any) {
+          // CRITICAL: Rollback to savepoint to recover from row-level error
+          // This prevents error 25P02 from cascading to subsequent rows
+          await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+
           errors.push({
             row: rowNumber,
             scheme_code: row.scheme_code || 'UNKNOWN',
