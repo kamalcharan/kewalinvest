@@ -59,7 +59,7 @@ END $$;
 -- This is a targeted update to just the scheme lookup portion.
 -- For production, run the full function update from update-import-functions-only.sql
 
-RAISE NOTICE 'IMPORTANT: Run update-import-functions-only.sql to update the transaction import function';
+-- RAISE NOTICE 'IMPORTANT: Run update-import-functions-only.sql to update the transaction import function';
 
 -- ============================================================================
 -- STEP 3: Verification

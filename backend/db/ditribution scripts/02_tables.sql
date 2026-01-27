@@ -160,7 +160,7 @@ COMMENT ON COLUMN t_contact_channels.channel_type IS 'Type: email, mobile, whats
 COMMENT ON COLUMN t_contact_channels.is_primary IS 'Primary channel for this type';
 
 -- TABLE: t_customers
--- NOTE: Migration 025 removed unique PAN constraint to allow minors to share guardian's PAN
+-- NOTE: Migration 025 removed unique PAN constraint to allow minors to share guardian's PANtt.asset_type_code does not exist
 -- Duplicate detection now uses iwell_code only (see check_customer_duplicate function)
 CREATE TABLE t_customers (
     id SERIAL PRIMARY KEY,
