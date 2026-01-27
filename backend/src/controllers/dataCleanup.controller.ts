@@ -17,8 +17,8 @@ export class DataCleanupController {
    */
   getCleanupPreview = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).tenantId;
-      const isLive = (req as any).isLive;
+      const tenantId = (req as any).user?.tenant_id;
+      const isLive = req.query.is_live === 'true' || req.headers['x-environment'] === 'live';
 
       if (!tenantId) {
         res.status(400).json({
@@ -54,9 +54,9 @@ export class DataCleanupController {
    */
   executeCleanup = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).tenantId;
-      const isLive = (req as any).isLive;
-      const userId = (req as any).userId;
+      const tenantId = (req as any).user?.tenant_id;
+      const isLive = req.query.is_live === 'true' || req.headers['x-environment'] === 'live';
+      const userId = (req as any).user?.user_id;
       const { confirmationText } = req.body;
 
       if (!tenantId) {
