@@ -311,6 +311,12 @@ export const API_ENDPOINTS = {
         REGENERATE_ALL: `${API_BASE}/cruise-control/snapshots/operations/regenerate-all`,
       },
     },
+
+    // Data Cleanup (Tenant Self-Service)
+    DATA_CLEANUP: {
+      PREVIEW: `${API_BASE}/cruise-control/data-cleanup/preview`,
+      EXECUTE: `${API_BASE}/cruise-control/data-cleanup/execute`,
+    },
   },
 
   // Portfolio Snapshots (alternative structure for backward compatibility)
