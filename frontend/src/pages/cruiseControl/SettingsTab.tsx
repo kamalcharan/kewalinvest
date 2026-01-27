@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DefaultIndexSettings } from '../../components/performance/DefaultIndexSettings';
 import { SchedulerSettings } from '../../components/cruiseControl/SchedulerSettings';
+import { DataCleanupSection } from '../../components/cruiseControl/DataCleanupSection';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
@@ -171,6 +172,9 @@ export const SettingsTab: React.FC = () => {
       <div style={{ marginTop: '24px' }}>
         <DefaultIndexSettings />
       </div>
+
+      {/* Data Cleanup Section */}
+      <DataCleanupSection />
 
       {/* CSS Animation */}
       <style>{`
