@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Trash2, AlertTriangle, CheckCircle, XCircle, Loader } from 'lucide-react';
 import apiService from '../../services/api.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
@@ -34,6 +35,8 @@ interface DeletionStep {
 export const DataCleanupSection: React.FC = () => {
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
+  const { environment } = useAuth() as any;
+  const isLive = environment === 'live';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [preview, setPreview] = useState<CleanupPreview | null>(null);
@@ -55,7 +58,7 @@ export const DataCleanupSection: React.FC = () => {
   const fetchPreview = async () => {
     setIsLoadingPreview(true);
     try {
-      const response = await apiService.get(API_ENDPOINTS.CRUISE_CONTROL.DATA_CLEANUP.PREVIEW) as any;
+      const response = await apiService.get(`${API_ENDPOINTS.CRUISE_CONTROL.DATA_CLEANUP.PREVIEW}?is_live=${isLive}`) as any;
       if (response.success) {
         setPreview(response.data);
         // Initialize deletion steps
@@ -145,7 +148,7 @@ export const DataCleanupSection: React.FC = () => {
       const simulationPromise = simulateStepProgress();
 
       // Execute the actual cleanup
-      const response = await apiService.post(API_ENDPOINTS.CRUISE_CONTROL.DATA_CLEANUP.EXECUTE, {
+      const response = await apiService.post(`${API_ENDPOINTS.CRUISE_CONTROL.DATA_CLEANUP.EXECUTE}?is_live=${isLive}`, {
         confirmationText: 'DELETE'
       }) as any;
 
