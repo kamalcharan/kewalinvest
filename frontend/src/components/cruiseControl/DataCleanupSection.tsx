@@ -73,18 +73,18 @@ export const DataCleanupSection: React.FC = () => {
 
   const initializeDeletionSteps = (data: CleanupPreview) => {
     const steps: DeletionStep[] = [
-      { id: 'goalAllocations', label: 'Goal Investment Allocations', count: data.goalInvestmentAllocations, status: 'pending' },
-      { id: 'goalProgress', label: 'Goal Progress Snapshots', count: data.goalProgressSnapshots, status: 'pending' },
-      { id: 'goalAlerts', label: 'Goal Alerts', count: data.goalAlerts, status: 'pending' },
-      { id: 'jtbdExecutions', label: 'JTBD Executions', count: data.jtbdExecutions, status: 'pending' },
-      { id: 'goals', label: 'Goals & Configurations', count: data.goals, status: 'pending' },
-      { id: 'assetAssignments', label: 'Asset Assignments', count: data.customerAssetAssignments, status: 'pending' },
-      { id: 'snapshots', label: 'Monthly Snapshots', count: data.monthlySnapshots, status: 'pending' },
-      { id: 'portfolio', label: 'Portfolio Entries', count: data.portfolioEntries, status: 'pending' },
-      { id: 'transactions', label: 'Transactions', count: data.transactions, status: 'pending' },
-      { id: 'staging', label: 'Import Staging Data', count: data.importStagingRecords, status: 'pending' },
-      { id: 'sessions', label: 'Import Sessions', count: data.importSessions, status: 'pending' },
-      { id: 'files', label: 'File Uploads', count: data.fileUploads, status: 'pending' },
+      { id: 'goalAllocations', label: 'Goal Investment Allocations', count: data.goalInvestmentAllocations, status: 'pending' as const },
+      { id: 'goalProgress', label: 'Goal Progress Snapshots', count: data.goalProgressSnapshots, status: 'pending' as const },
+      { id: 'goalAlerts', label: 'Goal Alerts', count: data.goalAlerts, status: 'pending' as const },
+      { id: 'jtbdExecutions', label: 'JTBD Executions', count: data.jtbdExecutions, status: 'pending' as const },
+      { id: 'goals', label: 'Goals & Configurations', count: data.goals, status: 'pending' as const },
+      { id: 'assetAssignments', label: 'Asset Assignments', count: data.customerAssetAssignments, status: 'pending' as const },
+      { id: 'snapshots', label: 'Monthly Snapshots', count: data.monthlySnapshots, status: 'pending' as const },
+      { id: 'portfolio', label: 'Portfolio Entries', count: data.portfolioEntries, status: 'pending' as const },
+      { id: 'transactions', label: 'Transactions', count: data.transactions, status: 'pending' as const },
+      { id: 'staging', label: 'Import Staging Data', count: data.importStagingRecords, status: 'pending' as const },
+      { id: 'sessions', label: 'Import Sessions', count: data.importSessions, status: 'pending' as const },
+      { id: 'files', label: 'File Uploads', count: data.fileUploads, status: 'pending' as const },
     ].filter(step => step.count > 0); // Only show steps with data
 
     setDeletionSteps(steps);
