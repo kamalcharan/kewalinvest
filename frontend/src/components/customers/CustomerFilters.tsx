@@ -74,6 +74,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
       setAppliedFilters(newFilters);
       onFiltersChangeRef.current(newFilters);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]); // Remove appliedFilters from dependencies to prevent focus loss
 
   // Handle local filter changes (doesn't trigger API)

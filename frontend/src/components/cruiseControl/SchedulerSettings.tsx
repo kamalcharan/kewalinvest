@@ -60,7 +60,7 @@ const cronToHuman = (cron: string): string => {
   const parts = cron.split(' ');
   if (parts.length !== 5) return cron;
 
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+  const [minute, hour, dayOfMonth, _month, dayOfWeek] = parts;
 
   // Format time in 12-hour format
   const hourNum = parseInt(hour);

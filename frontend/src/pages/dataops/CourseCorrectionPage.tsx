@@ -37,8 +37,6 @@ import {
   User,
   Users,
   XCircle,
-  TrendingUp,
-  TrendingDown,
   Package
 } from 'lucide-react';
 import type {
@@ -121,7 +119,7 @@ const CourseCorrectionPage: React.FC = () => {
     hasSearched,
     lastSearchTerm,
     searchSchemes,
-    clearSearch
+    clearSearch: _clearSearch
   } = useSchemeSearch();
 
   // Handle search button click
@@ -180,6 +178,7 @@ const CourseCorrectionPage: React.FC = () => {
     };
 
     fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, selectedScheme?.scheme_code, transactionPage]);
 
   // Reset selection

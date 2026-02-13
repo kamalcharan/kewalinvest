@@ -127,7 +127,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
     setShowForm(false);
   };
 
-  const closeAllForms = () => {
+  const _closeAllForms = () => {
     setShowForm(false);
     setEditingPlan(null);
   };

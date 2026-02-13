@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api.service';
 import { toastService } from '../../services/toast.service';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
-import { ImportSession, FileImportType } from '../../types/import.types';
+import { ImportSession } from '../../types/import.types';
 import RecordModal from './RecordModal';
 import RecordEditModal from '../ETL/RecordEditModal';
 
@@ -82,12 +82,14 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
       setPage(1);
       fetchRecords();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, filter]);
 
   useEffect(() => {
     if (session) {
       fetchRecords();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const fetchRecords = async () => {
@@ -131,7 +133,7 @@ const SessionRecordsTable: React.FC<SessionRecordsTableProps> = ({ session, onRe
       'success': { bg: colors.semantic.success + '20', text: colors.semantic.success },
       'failed': { bg: colors.semantic.error + '20', text: colors.semantic.error },
       'duplicate': { bg: colors.semantic.warning + '20', text: colors.semantic.warning },
-      'orphan': { bg: '#8B7355' + '20', text: '#8B7355' },
+      'orphan': { bg: '#8B735520', text: '#8B7355' },
       'pending': { bg: colors.utility.secondaryText + '20', text: colors.utility.secondaryText },
       'processing': { bg: colors.semantic.info + '20', text: colors.semantic.info }
     };

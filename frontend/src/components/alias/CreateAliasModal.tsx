@@ -1,7 +1,7 @@
 // frontend/src/components/alias/CreateAliasModal.tsx
 
 import React, { useState, useEffect } from 'react';
-import { X, Link2, Star, Users, Info } from 'lucide-react';
+import { X, Link2, Star, Info } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCreateAlias } from '../../hooks/useAlias';
 import { toastService } from '../../services/toast.service';

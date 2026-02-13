@@ -56,7 +56,7 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [processingStage, setProcessingStage] = useState<'preparing' | 'staging' | 'processing' | 'completing' | 'completed' | 'error'>('preparing');
   const [processingMessage, setProcessingMessage] = useState('');
-  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingProgress, _setProcessingProgress] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
   const [processedRecords, setProcessedRecords] = useState(0);
 
@@ -87,6 +87,7 @@ const ImportDataPage: React.FC<ImportDataPageProps> = ({ step: propStep }) => {
       ...prev,
       currentStep: stepNumber
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStepParam]);
 
   // Block navigation when processing modal is shown

@@ -156,7 +156,7 @@ const NavBookmarksPage: React.FC = () => {
     });
   };
 
-  const handleFilterByDailyDownload = (filter: 'enabled' | 'disabled') => {
+  const _handleFilterByDailyDownload = (filter: 'enabled' | 'disabled') => {
     const newFilter = dailyDownloadFilter === filter ? 'all' : filter;
     setDailyDownloadFilter(newFilter);
     setCurrentPage(1);
@@ -433,7 +433,7 @@ const NavBookmarksPage: React.FC = () => {
 
   // ==================== BULK OPERATIONS ====================
 
-  const handleBulkEnableDaily = async () => {
+  const _handleBulkEnableDaily = async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
     try {
       await Promise.all(
@@ -449,7 +449,7 @@ const NavBookmarksPage: React.FC = () => {
     }
   };
 
-  const handleBulkDisableDaily = async () => {
+  const _handleBulkDisableDaily = async () => {
     const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
     try {
       await Promise.all(

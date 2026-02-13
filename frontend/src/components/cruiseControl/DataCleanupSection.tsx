@@ -44,7 +44,7 @@ export const DataCleanupSection: React.FC = () => {
   const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletionSteps, setDeletionSteps] = useState<DeletionStep[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(-1);
+  const [_currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [deletionComplete, setDeletionComplete] = useState(false);
   const [deletionError, setDeletionError] = useState<string | null>(null);
 
@@ -53,6 +53,7 @@ export const DataCleanupSection: React.FC = () => {
     if (isModalOpen && !preview) {
       fetchPreview();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isModalOpen]);
 
   const fetchPreview = async () => {

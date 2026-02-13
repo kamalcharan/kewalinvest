@@ -59,12 +59,12 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
     );
   }
 
-  const getSuccessRate = (): number => {
+  const _getSuccessRate = (): number => {
     if (session.total_records === 0) return 0;
     return Math.round((session.successful_records / session.total_records) * 100);
   };
 
-  const getProcessingDuration = (): string => {
+  const _getProcessingDuration = (): string => {
     if (!session.processing_started_at || !session.processing_completed_at) {
       return 'N/A';
     }

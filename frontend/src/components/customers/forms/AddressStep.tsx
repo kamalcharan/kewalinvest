@@ -1,6 +1,6 @@
 // frontend/src/components/customers/forms/AddressStep.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { CustomerAddress, AddressType } from '../../../types/customer.types';
 import { useTheme } from '../../../contexts/ThemeContext';
 import AddressForm from './AddressForm';

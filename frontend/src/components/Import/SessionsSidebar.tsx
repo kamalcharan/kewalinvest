@@ -38,6 +38,7 @@ const SessionsSidebar: React.FC<SessionsSidebarProps> = ({
 
   useEffect(() => {
     fetchSessions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedType, refreshTrigger]);
 
   const fetchSessions = async () => {

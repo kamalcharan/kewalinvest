@@ -32,6 +32,7 @@ const ChannelForm: React.FC<ChannelFormProps> = ({
     if (channels.length === 0 && !hasExistingChannels) {
       addChannel();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fixed: Expand existing channels when they load in edit mode
@@ -45,6 +46,7 @@ const ChannelForm: React.FC<ChannelFormProps> = ({
         setExpandedChannels(new Set(channelIds));
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels.length]);
 
   const generateTempId = () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

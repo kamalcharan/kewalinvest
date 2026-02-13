@@ -49,12 +49,13 @@
     const [showSaveModal, setShowSaveModal] = useState(false);
     const [showLoadModal, setShowLoadModal] = useState(false);
     const [saveTemplateName, setSaveTemplateName] = useState('');
-    const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+    const [_selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [setAsDefault, setSetAsDefault] = useState(false);
 
     // Load templates on component mount
     useEffect(() => {
       loadTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [importType]);
 
     // Load available templates

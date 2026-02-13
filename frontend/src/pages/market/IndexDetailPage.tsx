@@ -13,7 +13,6 @@ import {
   useIndexDetail,
 } from '../../hooks/useMarketMetrics';
 import {
-  useChartPreference,
   useSaveChartPreference,
   useEffectiveChartColor,
 } from '../../hooks/useChartPreferences';
@@ -29,7 +28,7 @@ const IndexDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id: idParam } = useParams<{ id: string }>();
   const { theme, isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
@@ -94,7 +93,9 @@ const IndexDetailPage: React.FC = () => {
   // Extract data
   const indexDetail = indexDetailQuery.data;
   const metrics = metricsQuery.data as IndexMetrics | null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const returnsTimeSeries = returnsTimeSeriesQuery.data || [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const volatilityTimeSeries = volatilityTimeSeriesQuery.data || [];
 
   // Loading and error states

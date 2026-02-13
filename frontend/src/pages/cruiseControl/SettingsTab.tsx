@@ -39,6 +39,7 @@ export const SettingsTab: React.FC = () => {
   // Fetch job types to check for unconfigured jobs
   useEffect(() => {
     fetchJobTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchJobTypes = async () => {

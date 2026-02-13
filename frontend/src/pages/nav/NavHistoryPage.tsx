@@ -180,8 +180,8 @@ const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colo
     );
 
     try {
-      const result = await bulkDownload.processSchemes(schemesToDownload);
-      
+      const _result = await bulkDownload.processSchemes(schemesToDownload);
+
       setTimeout(() => {
         if (isMountedRef.current) {
           refetch();
@@ -218,8 +218,8 @@ const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colo
     );
 
     try {
-      const result = await bulkDownload.processSchemes(failedSchemes);
-      
+      const _result = await bulkDownload.processSchemes(failedSchemes);
+
       setTimeout(() => {
         if (isMountedRef.current) {
           refetch();
@@ -530,6 +530,7 @@ const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colo
     } finally {
       setIsDeleting(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookmarkToDelete, startDeletePolling]);
 
   // ==================== OTHER HANDLERS ====================
