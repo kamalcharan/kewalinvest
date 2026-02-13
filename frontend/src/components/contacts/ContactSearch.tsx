@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useContactSearch, useContactStats } from '../../hooks/useContacts';
 import { ContactSearchParams } from '../../types/contact.types';
-import { CONTACT_PREFIXES, CHANNEL_TYPES, CONTACT_SORT_OPTIONS } from '../../constants/contact.constants';
+import { CONTACT_PREFIXES, CHANNEL_TYPES } from '../../constants/contact.constants';
 import { debounce } from 'lodash';
 
 interface ContactSearchProps {
@@ -39,6 +39,7 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
   const { data: stats } = useContactStats();
 
   // FIXED: Debounced search function that doesn't depend on currentParams
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((query: string) => {
       onSearchParamsChange({
@@ -59,6 +60,7 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
     return () => {
       debouncedSearch.cancel();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]); // Remove debouncedSearch from deps since it's stable now
 
   // Handle filter changes
@@ -126,7 +128,7 @@ const ContactSearch: React.FC<ContactSearchProps> = ({
     </svg>
   );
 
-  const ChevronDownIcon = () => (
+  const _ChevronDownIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="6,9 12,15 18,9" />
     </svg>

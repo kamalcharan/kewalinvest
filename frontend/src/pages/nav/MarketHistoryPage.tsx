@@ -2,7 +2,7 @@
 // Market Data History - Download and manage NSE market indices
 // WITH BULK OPERATIONS SUPPORT
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,7 +16,6 @@ import { BulkDownloadModal } from '../../components/market/BulkDownloadModal';
 import { BulkMetricsModal } from '../../components/market/BulkMetricsModal';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import { toastService } from '../../services/toast.service';
-import MarketService from '../../services/market.service';
 import { marketAnalysisService } from '../../services/marketAnalysis.service';
 import type { MarketIndex } from '../../types/market.types';
 import { CheckSquare, Square, Download, Calculator } from 'lucide-react';

@@ -5,9 +5,6 @@ import apiService from './api.service';
 import { API_ENDPOINTS, buildQueryParams } from './serviceURLs';
 import {
   JobType,
-  JobSchedulerConfig,
-  JobStatistics,
-  JobExecution,
   UpdateJobConfigRequest,
   CreateJobConfigRequest,
   GetJobConfigResponse,

@@ -3,15 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Eye, EyeOff, Maximize2, Minimize2, BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
+import { BarChart3, TrendingUp, Target, CheckSquare, DollarSign, Package } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   toggleFullscreen,
   isFullscreen,
   onFullscreenChange,
-  isFullscreenSupported
 } from '../../utils/fullscreenUtils';
-import ChartExport from '../../components/visualizations/chartViewer/export/ChartExport';
 import { useCustomer } from '../../hooks/useCustomers';
 import { usePortfolioData, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useCustomerJTBDs } from '../../hooks/useJTBD';
@@ -20,10 +18,8 @@ import { TransactionService } from '../../services/transaction.service';
 import { UserPreferencesService } from '../../services/userPreferences.service';
 import { MarketService } from '../../services/market.service';
 import { TransactionWithDetails } from '../../types/transaction.types';
-import { calculatePortfolioMoM, getMoMArrow } from '../../utils/dataTransformers';
+import { calculatePortfolioMoM } from '../../utils/dataTransformers';
 import PortfolioDonutChart from '../../components/visualizations/PortfolioDonutChart';
-import PerformanceSparkline from '../../components/visualizations/PerformanceSparkline';
-import PerformanceComparisonChart from '../../components/visualizations/PerformanceComparisonChart';
 import AssetTypePerformanceChart from '../../components/visualizations/AssetTypePerformanceChart';
 import JTBDList from '../../components/jtbd/JTBDList';
 import JTBDSetupModal from '../../components/jtbd/JTBDSetupModal';
@@ -31,14 +27,11 @@ import TransactionTable from '../../components/transactions/TransactionTable';
 import TransactionDetails from '../../components/transactions/TransactionDetails';
 import CustomerPortfolioGapAlert from '../../components/customers/CustomerPortfolioGapAlert';
 import { CustomerViewHeader } from '../../components/customers/CustomerViewHeader';
-import { IndexSelector } from '../../components/performance/IndexSelector';
 import { CustomerMetricsBar } from '../../components/customers/CustomerMetricsBar';
 import { PortfolioSnapshotsTable } from '../../components/portfolio/PortfolioSnapshotsTable';
 import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import { PortfolioAllocationSummary } from '../../components/portfolio/PortfolioAllocationSummary';
-import { SchemeCard } from '../../components/common/SchemeCard';
 import GoalCard from '../../components/goals/GoalCard';
-import { AssetAllocationUtilization } from '../../components/goals/AssetAllocationUtilization';
 import GoalRecalculationModal from '../../components/goals/GoalRecalculationModal';
 import { GoalQuickActions } from '../../components/goals/GoalQuickActions';
 import { CreateMeetingModal } from '../../components/meetings/CreateMeetingModal';
@@ -60,7 +53,7 @@ const CustomerViewPage: React.FC = () => {
   const initialTab = (searchParams.get('tab') as 'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions') || 'overview';
   const initialView = (searchParams.get('view') as 'individual' | 'family') || 'individual';
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'goals' | 'assets' | 'jobs' | 'transactions'>(initialTab);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
+  const [_selectedTimeframe, _setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('1Y');
   const [showJTBDSetupModal, setShowJTBDSetupModal] = useState(false);
   const [showAllAlerts, setShowAllAlerts] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'family'>(initialView);
@@ -82,11 +75,11 @@ const CustomerViewPage: React.FC = () => {
   const removeFromWatchlistMutation = useRemoveFromWatchlist();
 
   // Index comparison state - FIXED: Changed to date-aware format
-  const [defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
-  const [comparisonIndexData, setComparisonIndexData] = useState<Array<{date: string, value: number}>>([]);
-  const [isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
-  const [showComparison, setShowComparison] = useState(true);
-  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  const [_defaultComparisonIndex, setDefaultComparisonIndex] = useState<MarketIndex | null>(null);
+  const [_comparisonIndexData, setComparisonIndexData] = useState<Array<{date: string, value: number}>>([]);
+  const [_isLoadingIndexComparison, setIsLoadingIndexComparison] = useState(false);
+  const [_showComparison, setShowComparison] = useState(true);
+  const [_isFullscreenMode, setIsFullscreenMode] = useState(false);
 
   // Chart element ID for export and fullscreen
   const performanceChartId = `performance-chart-${customerId}`;
@@ -113,7 +106,7 @@ const CustomerViewPage: React.FC = () => {
 
   // Load goals data
   const { data: goals = [], isLoading: goalsLoading, refetch: refetchGoals } = useCustomerGoals(customerId || 0);
-  const { data: goalSummary, isLoading: goalSummaryLoading } = useGoalSummary(customerId || 0);
+  const { data: goalSummary, isLoading: _goalSummaryLoading } = useGoalSummary(customerId || 0);
 
   // Load networth history for asset type performance charts
   const { data: networthHistoryData } = useNetworthHistory(
@@ -156,6 +149,7 @@ const CustomerViewPage: React.FC = () => {
     if (activeTab === 'transactions' && customerId) {
       fetchTransactions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, customerId]);
 
 
@@ -217,7 +211,7 @@ const CustomerViewPage: React.FC = () => {
   }, [portfolio?.performance]);
 
   // Handler for when user selects a different comparison index
-  const handleIndexSelect = async (index: MarketIndex | null) => {
+  const _handleIndexSelect = async (index: MarketIndex | null) => {
     if (!index) {
       setDefaultComparisonIndex(null);
       setComparisonIndexData([]);
@@ -281,6 +275,7 @@ const CustomerViewPage: React.FC = () => {
     console.log('⏳ Loading States:', { customerLoading, portfolioLoading, jtbdLoading, isLoading });
     console.log('❌ Errors:', { customerError, portfolioError });
     console.groupEnd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, customerId, customer, portfolio, jtbds, customerLoading, portfolioLoading, jtbdLoading, customerError, portfolioError]);
 
   // Calculate MoM changes for portfolio performance
@@ -306,7 +301,7 @@ const CustomerViewPage: React.FC = () => {
   }, [portfolioWithMoM]);
 
   // For backward compatibility - use returns MoM for the badge
-  const latestMoM = latestMoMData?.returnsMoM ?? null;
+  const _latestMoM = latestMoMData?.returnsMoM ?? null;
 
   const formatCurrency = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
@@ -325,7 +320,7 @@ const CustomerViewPage: React.FC = () => {
     return `${sign}${value.toFixed(1)}%`;
   };
 
-  const getValueColor = (value: number | null | undefined): string => {
+  const _getValueColor = (value: number | null | undefined): string => {
     if (value === null || value === undefined || isNaN(value)) {
       return colors.utility.secondaryText;
     }
@@ -361,7 +356,7 @@ const CustomerViewPage: React.FC = () => {
     </svg>
   );
 
-  const PieChartIcon = () => (
+  const _PieChartIcon = () => (
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
       <path d="M22 12A10 10 0 0 0 12 2v10z" />
@@ -562,7 +557,7 @@ const CustomerViewPage: React.FC = () => {
   );
 
   // Fullscreen handler
-  const handleFullscreenToggle = async () => {
+  const _handleFullscreenToggle = async () => {
     try {
       await toggleFullscreen(performanceChartId);
     } catch (error: any) {

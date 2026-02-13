@@ -3,12 +3,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AliasService } from '../services/alias.service';
 import type {
-  AliasWithMembers,
-  AliasMember,
-  AliasPortfolioSummary,
-  AliasAssetAllocation,
-  AliasGoalSummary,
-  AliasMeetingSummary,
   CreateAliasRequest,
   UpdateAliasRequest
 } from '../types/alias.types';

@@ -127,6 +127,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log(`   Time since last activity: ${Math.round(timeSinceLastActivity / 1000 / 60)} minutes`);
       logout();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   /**
@@ -178,6 +179,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    */
   useEffect(() => {
     initializeAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeAuth = async () => {
@@ -375,6 +377,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         days_until_expiry: daysUntilExpiry,
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isSuperAdmin, isSubscriptionExpired, daysUntilExpiry]);
 
   // ==========================================================================

@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { CustomerFormData, CustomerFormErrors, CustomerPrefix, SurvivalStatus, OnboardingStatus } from '../../types/customer.types';
-import { ChannelType } from '../../types/contact.types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { validatePhoneNumber } from '../../utils/phoneValidation';
 import ContactInfoStep from './forms/ContactInfoStep';

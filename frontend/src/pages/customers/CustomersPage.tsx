@@ -26,7 +26,7 @@ const CustomersPage: React.FC = () => {
     is_active: true  // Default to Active only
   });
   const [selectedCustomers, setSelectedCustomers] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<'list' | 'cards'>('cards');
+  const [_viewMode, _setViewMode] = useState<'list' | 'cards'>('cards');
   const [showCreateAliasModal, setShowCreateAliasModal] = useState(false);
 
   // Hooks

@@ -42,11 +42,12 @@ const ContactsPage: React.FC = () => {
     ...searchParams,
     page: searchParams.page || 1,
     page_size: searchParams.page_size || 50
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
-    searchParams.page, 
-    searchParams.page_size, 
-    searchParams.sort_by, 
-    searchParams.sort_order, 
+    searchParams.page,
+    searchParams.page_size,
+    searchParams.sort_by,
+    searchParams.sort_order,
     searchParams.search,
     searchParams.has_customer,
     searchParams.is_active,
@@ -62,7 +63,7 @@ const ContactsPage: React.FC = () => {
   const { data: stats, refetch: refetchStats } = useContactStats();
   const bulkActionMutation = useBulkContactAction();
   const deleteContactMutation = useDeleteContact();
-  const updateContactMutation = useUpdateContact();
+  const _updateContactMutation = useUpdateContact();
   const activateContactMutation = useActivateContact();
   const convertToCustomerMutation = useConvertToCustomer();
 

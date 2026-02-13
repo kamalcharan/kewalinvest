@@ -36,7 +36,7 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
   onViewModeChange
 }) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const _queryClient = useQueryClient();
   const { theme, isDarkMode } = useTheme();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
 

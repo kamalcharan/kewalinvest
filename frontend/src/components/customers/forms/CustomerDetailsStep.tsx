@@ -1,6 +1,6 @@
 // frontend/src/components/customers/forms/CustomerDetailsStep.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { SurvivalStatus } from '../../../types/customer.types';
 import { useTheme } from '../../../contexts/ThemeContext';
 

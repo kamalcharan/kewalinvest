@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { FileImportType } from '../../types/import.types';
-import { CUSTOMER_DATA_FIELDS, SCHEME_DATA_FIELDS, TRANSFORMATION_RULES } from '../../constants/fileImportTypes';
+import { TRANSFORMATION_RULES } from '../../constants/fileImportTypes';
 import MappingRow from './MappingRow';
 import TemplateManager from './TemplateManager';
 import CustomerLookupSelector, { CustomerLookupMethod } from './CustomerLookupSelector';
@@ -43,7 +43,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
   disabled = false
 }) => {
   const { theme, isDarkMode } = useTheme();
-  const { tenantId, environment } = useAuth();
+  const { tenantId: _tenantId, environment: _environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   
   const [mappings, setMappings] = useState<FieldMappingData[]>([]);
@@ -89,6 +89,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
     } else {
       console.log('⏭️  [FieldMapping] Skipping initialization - mappings already exist:', mappings.length);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importType, sourceHeaders]);
 
   // Clear success message after 5 seconds
@@ -319,7 +320,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({
   const suggestTransformation = (sourceHeader: string, targetField?: TargetField): string => {
     if (!targetField) return '';
     
-    const headerLower = sourceHeader.toLowerCase();
+    const _headerLower = sourceHeader.toLowerCase();
     
     // Text fields that should be uppercase
     if (['pan', 'iwell_code', 'scheme_code', 'isin_div_payout', 'isin_growth', 'isin_div_reinvestment', 'txn_code', 'euin', 'arn_no'].includes(targetField.field)) {

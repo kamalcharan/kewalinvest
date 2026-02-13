@@ -108,6 +108,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
   // Fetch results on component mount and when filters change
   useEffect(() => {
     fetchResults();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, currentPage, statusFilter]);
 
   // Handle loading cursor
@@ -481,7 +482,7 @@ const ImportResults: React.FC<ImportResultsProps> = ({
         <div style={{
           marginBottom: '24px',
           padding: '16px',
-          backgroundColor: '#8B7355' + '10',
+          backgroundColor: '#8B735510',
           border: `1px solid #8B735530`,
           borderRadius: '8px'
         }}>

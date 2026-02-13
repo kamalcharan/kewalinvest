@@ -17,7 +17,7 @@ interface GoalWithCustomer extends GoalConfiguration {
 
 const GoalsListPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, _setSearchParams] = useSearchParams();
   const { theme, isDarkMode } = useTheme();
   const { environment } = useAuth();
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
@@ -42,6 +42,7 @@ const GoalsListPage: React.FC = () => {
 
   useEffect(() => {
     filterGoals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goals, searchTerm, filterStatus, filterType, withdrawalPeriod]);
 
   const fetchGoals = async () => {

@@ -14,7 +14,7 @@ import {
   InvestmentType,
   InvestmentFrequency
 } from '../../types/investmentPlan.types';
-import { isSchemeAssetType, getAssetTypeIcon } from '../../constants/assetTypes';
+import { isSchemeAssetType } from '../../constants/assetTypes';
 
 interface InvestmentPlanFormProps {
   customerId: number;

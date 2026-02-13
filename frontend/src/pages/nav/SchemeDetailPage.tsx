@@ -32,7 +32,7 @@ const SchemeDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { scheme_id: idParam } = useParams<{ scheme_id: string }>();
   const { theme, isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   
   const colors = isDarkMode && theme.darkMode ? theme.darkMode.colors : theme.colors;
   

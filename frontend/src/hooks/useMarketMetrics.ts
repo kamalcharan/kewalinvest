@@ -4,12 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { toastService } from '../services/toast.service';
 import { marketAnalysisService, ReturnTimeSeriesResponse, VolatilityTimeSeriesResponse, DashboardStatisticsApiResponse } from '../services/marketAnalysis.service';
-import { MARKET_ANALYSIS_URLS } from '../services/serviceURLs';
 import {
   IndexMetrics,
-  ChartDataPoint,
-  GetChartDataRequest,
-  DashboardStatistics,
   IndexDetail,
   MarketAnalysisError
 } from '../types/marketAnalysis.types';

@@ -37,6 +37,7 @@ const HeaderPreview: React.FC<HeaderPreviewProps> = ({
   // Fetch headers on component mount
   useEffect(() => {
     fetchHeaders();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId]);
 
   const fetchHeaders = async () => {

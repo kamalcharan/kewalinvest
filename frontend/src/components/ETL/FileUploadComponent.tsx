@@ -263,6 +263,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     console.log('⏭️  Not transaction data, proceeding with direct upload');
     setSelectedFile(file);
     uploadFile(file);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importType]);
 
   const handleTransactionWarningConfirm = () => {
@@ -338,6 +339,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     if (file) {
       handleFileSelect(file);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled, isUploading, handleFileSelect]);
 
   const browseFiles = () => {

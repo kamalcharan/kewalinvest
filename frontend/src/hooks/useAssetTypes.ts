@@ -15,6 +15,7 @@ export const useAssetTypes = (activeOnly: boolean = true) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadAssetTypes();
   }, [activeOnly]);

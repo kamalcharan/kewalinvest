@@ -79,6 +79,9 @@ export interface MonthlyMarketValueData {
   invested_value: number;
   profit_loss: number;
   profit_loss_percentage: number;
+  month_change: number;
+  month_change_percentage: number;
+  net_cash_flow: number;
 }
 
 export interface MonthlyMarketValueResponse {

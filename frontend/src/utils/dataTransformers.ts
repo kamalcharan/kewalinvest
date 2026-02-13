@@ -445,8 +445,8 @@ export function calculatePortfolioMoM<T extends {
     const previousValue = sorted[index - 1].current_value ?? 0;
     const currentInvested = (point as any).invested ?? 0;
     const previousInvested = (sorted[index - 1] as any).invested ?? 0;
-    const currentReturns = (point as any).returns ?? 0;
-    const previousReturns = (sorted[index - 1] as any).returns ?? 0;
+    const _currentReturns = (point as any).returns ?? 0;
+    const _previousReturns = (sorted[index - 1] as any).returns ?? 0;
 
     // Calculate investment change
     const investmentChange = currentInvested - previousInvested;

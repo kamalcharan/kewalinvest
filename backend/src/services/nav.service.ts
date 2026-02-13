@@ -644,20 +644,37 @@ export class NavService {
 
       // Auto-generate aliases for this bookmarked scheme
       // Alias creation failures should NOT block bookmark creation
+      // IMPORTANT: Use SAVEPOINTs so that a failed alias INSERT does not
+      // abort the PostgreSQL transaction (which would silently ROLLBACK the bookmark)
       let aliasesCreated = 0;
+
+      // Helper to safely attempt alias creation within a savepoint
+      const tryCreateAlias = async (
+        aliasName: string,
+        source: string,
+        label: string
+      ): Promise<boolean> => {
+        try {
+          await client.query('SAVEPOINT alias_insert');
+          const aliasResult = await client.query(`
+            INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+          `, [scheme.id, scheme.scheme_code, aliasName, source, userId]);
+          await client.query('RELEASE SAVEPOINT alias_insert');
+          return aliasResult.rows.length > 0;
+        } catch (aliasError: any) {
+          await client.query('ROLLBACK TO SAVEPOINT alias_insert');
+          console.warn(`[NavService] Alias creation failed for ${label} "${aliasName}":`, aliasError.message);
+          return false;
+        }
+      };
 
       // Alias 1: scheme_name from master data (always create)
       if (scheme.scheme_name?.trim()) {
-        try {
-          const aliasResult = await client.query(`
-            INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
-            VALUES ($1, $2, $3, 'bookmark_master', $4)
-            ON CONFLICT (alias_name_normalized) DO NOTHING
-            RETURNING id
-          `, [scheme.id, scheme.scheme_code, scheme.scheme_name.trim(), userId]);
-          if (aliasResult.rows.length > 0) aliasesCreated++;
-        } catch (aliasError: any) {
-          console.warn(`[NavService] Alias creation failed for scheme_name "${scheme.scheme_name}":`, aliasError.message);
+        if (await tryCreateAlias(scheme.scheme_name.trim(), 'bookmark_master', 'scheme_name')) {
+          aliasesCreated++;
         }
       }
 
@@ -667,32 +684,16 @@ export class NavService {
         const normalizedNavName = scheme.scheme_nav_name.trim().toUpperCase().replace(/\s+/g, ' ');
 
         if (normalizedName !== normalizedNavName) {
-          try {
-            const aliasResult = await client.query(`
-              INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
-              VALUES ($1, $2, $3, 'bookmark_master', $4)
-              ON CONFLICT (alias_name_normalized) DO NOTHING
-              RETURNING id
-            `, [scheme.id, scheme.scheme_code, scheme.scheme_nav_name.trim(), userId]);
-            if (aliasResult.rows.length > 0) aliasesCreated++;
-          } catch (aliasError: any) {
-            console.warn(`[NavService] Alias creation failed for scheme_nav_name "${scheme.scheme_nav_name}":`, aliasError.message);
+          if (await tryCreateAlias(scheme.scheme_nav_name.trim(), 'bookmark_master', 'scheme_nav_name')) {
+            aliasesCreated++;
           }
         }
       }
 
       // Alias 3: User's custom alias (if provided) - for transaction import matching
       if (request.custom_alias?.trim()) {
-        try {
-          const aliasResult = await client.query(`
-            INSERT INTO t_scheme_aliases (scheme_id, scheme_code, alias_name, source, created_by)
-            VALUES ($1, $2, $3, 'user_custom', $4)
-            ON CONFLICT (alias_name_normalized) DO NOTHING
-            RETURNING id
-          `, [scheme.id, scheme.scheme_code, request.custom_alias.trim(), userId]);
-          if (aliasResult.rows.length > 0) aliasesCreated++;
-        } catch (aliasError: any) {
-          console.warn(`[NavService] Alias creation failed for custom alias "${request.custom_alias}":`, aliasError.message);
+        if (await tryCreateAlias(request.custom_alias.trim(), 'user_custom', 'custom_alias')) {
+          aliasesCreated++;
         }
       }
 

@@ -6,7 +6,6 @@ import { ArrowLeft, RefreshCw, Edit, Shuffle, Target } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGoal, useGoalHistory, useRecalculateGoal } from '../../hooks/useGoals';
 import { useJTBDExecutions } from '../../hooks/useJTBD';
-import { formatDate, formatCurrency, formatPercentage } from '../../utils/goalUtils';
 import GoalCard from '../../components/goals/GoalCard';
 import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import GoalActionCard from '../../components/goals/GoalActionCard';
@@ -36,7 +35,7 @@ const GoalDetailsPage: React.FC = () => {
   const customerIdNum = customerId ? parseInt(customerId) : 0;
 
   const { data: goal, isLoading: goalLoading, error: goalError, refetch: refetchGoal } = useGoal(goalIdNum);
-  const { data: history, isLoading: historyLoading } = useGoalHistory(goalIdNum);
+  const { data: _history, isLoading: _historyLoading } = useGoalHistory(goalIdNum);
 
   // Fetch SIP executions for this goal
   const { data: sipExecutionsData, isLoading: sipExecutionsLoading, refetch: refetchSIPExecutions } = useJTBDExecutions({

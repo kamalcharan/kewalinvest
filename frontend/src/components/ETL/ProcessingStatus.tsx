@@ -241,6 +241,7 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
         clearInterval(intervalRef.current);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, isPolling, onProcessingComplete, onError, tenantId, environment]);
 
   // Auto-scroll logs
