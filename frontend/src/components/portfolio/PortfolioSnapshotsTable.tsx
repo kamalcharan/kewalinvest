@@ -182,30 +182,36 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const totalPortfolioMoM = useMemo((): TotalMoMData[] => {
     if (schemes.length === 0 || !monthHeaders.length) return [];
 
-    // For each month index, sum all schemes' market_value
+    // For each month index, sum all schemes' market_value and net_cash_flow
     const totals = monthHeaders.map((_: any, monthIdx: number) => {
       let totalMarketValue = 0;
+      let totalNetCashFlow = 0;
 
       schemes.forEach((scheme: any) => {
         const monthData = scheme.monthly_data?.[monthIdx];
         if (monthData?.market_value) {
           totalMarketValue += monthData.market_value;
         }
+        if (monthData?.net_cash_flow) {
+          totalNetCashFlow += monthData.net_cash_flow;
+        }
       });
 
-      return { totalMarketValue };
+      return { totalMarketValue, totalNetCashFlow };
     });
 
-    // Calculate MoM % for each month
+    // Calculate MoM % for each month — cash-flow adjusted
+    // Subtracts net cash flow so MoM reflects actual investment performance
     // Note: Data is in reverse chronological order (newest first)
     // So index 0 is current month, index 1 is previous month, etc.
-    return totals.map((current: { totalMarketValue: number }, idx: number) => {
+    return totals.map((current: { totalMarketValue: number; totalNetCashFlow: number }, idx: number) => {
       const previousIdx = idx + 1; // Previous month is next index (older)
       const previous = totals[previousIdx];
 
       let momPercentage = 0;
       if (previous && previous.totalMarketValue > 0) {
-        momPercentage = ((current.totalMarketValue - previous.totalMarketValue) / previous.totalMarketValue) * 100;
+        const adjustedChange = current.totalMarketValue - previous.totalMarketValue - current.totalNetCashFlow;
+        momPercentage = (adjustedChange / previous.totalMarketValue) * 100;
       }
 
       return {

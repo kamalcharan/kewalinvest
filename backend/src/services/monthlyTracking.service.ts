@@ -449,7 +449,8 @@ export class MonthlyTrackingService {
       const investedQuery = `
         SELECT
           TO_CHAR(txn_date, 'YYYY-MM') as month,
-          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN total_amount ELSE 0 END) as invested
+          SUM(CASE WHEN mtt.txn_type = 'Addition' THEN total_amount ELSE 0 END) as invested,
+          SUM(CASE WHEN mtt.txn_type = 'Deduction' THEN total_amount ELSE 0 END) as redeemed
         FROM t_transaction_table tt
         LEFT JOIN m_transaction_types mtt ON tt.txn_type_id = mtt.id
         WHERE tt.tenant_id = $1
@@ -474,10 +475,14 @@ export class MonthlyTrackingService {
       ]);
 
       const investedMap = new Map<string, number>();
+      const cashFlowMap = new Map<string, number>();  // Per-month net cash flow (additions - redemptions)
       let cumulativeInvested = priorInvested;  // Start with prior invested amount
       investedResult.rows.forEach(row => {
-        cumulativeInvested += parseFloat(row.invested) || 0;
+        const monthInvested = parseFloat(row.invested) || 0;
+        const monthRedeemed = Math.abs(parseFloat(row.redeemed) || 0);
+        cumulativeInvested += monthInvested;
         investedMap.set(row.month, cumulativeInvested);
+        cashFlowMap.set(row.month, monthInvested - monthRedeemed);
       });
 
       // Build monthly market value data
@@ -512,10 +517,14 @@ export class MonthlyTrackingService {
           ? (profitLoss / investedValue) * 100
           : 0;
 
-        // Calculate MoM (Month-over-Month) change
+        // Calculate MoM (Month-over-Month) change — cash-flow adjusted
+        // Subtracts net cash flow so MoM reflects actual investment performance,
+        // not capital additions/redemptions
+        const netCashFlow = cashFlowMap.get(month) || 0;
         const monthChange = marketValue - previousMonthMarketValue;
+        const adjustedMonthChange = monthChange - netCashFlow;
         const monthChangePercentage = previousMonthMarketValue > 0
-          ? (monthChange / previousMonthMarketValue) * 100
+          ? (adjustedMonthChange / previousMonthMarketValue) * 100
           : 0;
 
         monthlyData.push({
@@ -530,7 +539,8 @@ export class MonthlyTrackingService {
           profit_loss: Math.round(profitLoss * 100) / 100,
           profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
           month_change: Math.round(monthChange * 100) / 100,
-          month_change_percentage: Math.round(monthChangePercentage * 100) / 100
+          month_change_percentage: Math.round(monthChangePercentage * 100) / 100,
+          net_cash_flow: Math.round(netCashFlow * 100) / 100
         });
 
         // Update previous month values for next iteration
@@ -657,7 +667,8 @@ export class MonthlyTrackingService {
               // Market Value data
               market_value: marketValueMonth.market_value,
               month_change: marketValueMonth.month_change,
-              month_change_percentage: marketValueMonth.month_change_percentage
+              month_change_percentage: marketValueMonth.month_change_percentage,
+              net_cash_flow: marketValueMonth.net_cash_flow || 0
             };
           });
 
