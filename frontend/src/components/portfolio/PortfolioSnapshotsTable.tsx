@@ -2,13 +2,14 @@
 // Portfolio Snapshots Table with tree structure showing all metrics
 // Each scheme has 4 expandable rows: Units, NAV, Market Value, Performance
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart, Download } from 'lucide-react';
 import { usePortfolioSnapshots, useNetworthSummary, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
 import { getAssetTypeColor, getAssetTypeIcon, isSchemeAssetType } from '../../constants/assetTypes';
+import * as XLSX from 'xlsx';
 
 interface PortfolioSnapshotsTableProps {
   customerId: number;
@@ -378,6 +379,180 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const allExpanded = expandedSchemes.size === schemes.length;
   const allCollapsed = expandedSchemes.size === 0;
 
+  // Download spreadsheet with both MF and Asset sheets
+  const downloadSpreadsheet = useCallback(() => {
+    if (schemes.length === 0 || monthHeaders.length === 0) return;
+
+    const wb = XLSX.utils.book_new();
+    const monthLabels = monthHeaders.map((m: any) => formatMonthHeader(m));
+
+    // ========== Sheet 1: MF Allocation ==========
+    const mfRows: any[][] = [];
+
+    // Header row
+    mfRows.push(['Scheme Name', 'Metric', ...monthLabels]);
+
+    // Scheme rows
+    schemes.forEach((scheme: any) => {
+      // MoM % row
+      mfRows.push([
+        scheme.scheme_name,
+        'MoM %',
+        ...scheme.monthly_data.map((m: any) => {
+          const val = m.month_change_percentage;
+          return val !== undefined && val !== null ? Math.round(val * 100) / 100 : '';
+        })
+      ]);
+
+      // Units row
+      mfRows.push([
+        '',
+        'Units',
+        ...scheme.monthly_data.map((m: any) =>
+          m.closing_units !== undefined && m.closing_units !== null
+            ? Math.round(m.closing_units * 1000) / 1000
+            : ''
+        )
+      ]);
+
+      // NAV row
+      mfRows.push([
+        '',
+        'NAV',
+        ...scheme.monthly_data.map((m: any) => {
+          if (!m.has_nav_data && !m.is_estimated) return 'No data';
+          const val = m.closing_nav;
+          return val !== undefined && val !== null ? Math.round(val * 100) / 100 : '';
+        })
+      ]);
+
+      // Market Value row
+      mfRows.push([
+        '',
+        'Market Value',
+        ...scheme.monthly_data.map((m: any) =>
+          m.market_value !== undefined && m.market_value !== null
+            ? Math.round(m.market_value * 100) / 100
+            : ''
+        )
+      ]);
+    });
+
+    // Empty separator row
+    mfRows.push([]);
+
+    // Total Portfolio row
+    if (totalPortfolioMoM.length > 0) {
+      mfRows.push([
+        'Total Portfolio',
+        'MoM %',
+        ...totalPortfolioMoM.map((m: TotalMoMData) => m.momPercentage || '')
+      ]);
+      mfRows.push([
+        '',
+        'Market Value',
+        ...totalPortfolioMoM.map((m: TotalMoMData) =>
+          m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
+        )
+      ]);
+    }
+
+    // Benchmark row
+    if (marketMoM.length > 0) {
+      mfRows.push([
+        benchmarkName,
+        'MoM %',
+        ...marketMoM.map((m: MarketMoMData) => m.momPercentage || '')
+      ]);
+      mfRows.push([
+        '',
+        'Close Price',
+        ...marketMoM.map((m: MarketMoMData) =>
+          m.closePrice ? Math.round(m.closePrice * 100) / 100 : ''
+        )
+      ]);
+    }
+
+    const mfSheet = XLSX.utils.aoa_to_sheet(mfRows);
+
+    // Set column widths
+    mfSheet['!cols'] = [
+      { wch: 45 }, // Scheme Name
+      { wch: 14 }, // Metric
+      ...monthLabels.map(() => ({ wch: 12 }))
+    ];
+
+    XLSX.utils.book_append_sheet(wb, mfSheet, 'MF Allocation');
+
+    // ========== Sheet 2: Asset Allocation ==========
+    if (assetAllocationMoM.length > 0) {
+      const assetRows: any[][] = [];
+
+      // Header row
+      assetRows.push(['Asset Type', 'Metric', ...monthLabels]);
+
+      assetAllocationMoM.forEach((assetData: any) => {
+        const displayName = assetData.assetTypeName || assetData.assetType;
+
+        // Market Value row
+        assetRows.push([
+          displayName,
+          'Market Value',
+          ...assetData.monthlyData.map((m: any) =>
+            m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
+          )
+        ]);
+
+        // MoM % row
+        assetRows.push([
+          '',
+          'MoM %',
+          ...assetData.monthlyData.map((m: any) => m.momPercentage || '')
+        ]);
+      });
+
+      // Empty separator
+      assetRows.push([]);
+
+      // Total Portfolio row
+      if (totalPortfolioMoM.length > 0) {
+        assetRows.push([
+          'Total Portfolio',
+          'MoM %',
+          ...totalPortfolioMoM.map((m: TotalMoMData) => m.momPercentage || '')
+        ]);
+        assetRows.push([
+          '',
+          'Market Value',
+          ...totalPortfolioMoM.map((m: TotalMoMData) =>
+            m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
+          )
+        ]);
+      }
+
+      // Benchmark
+      if (marketMoM.length > 0) {
+        assetRows.push([
+          benchmarkName,
+          'MoM %',
+          ...marketMoM.map((m: MarketMoMData) => m.momPercentage || '')
+        ]);
+      }
+
+      const assetSheet = XLSX.utils.aoa_to_sheet(assetRows);
+      assetSheet['!cols'] = [
+        { wch: 30 },
+        { wch: 14 },
+        ...monthLabels.map(() => ({ wch: 12 }))
+      ];
+      XLSX.utils.book_append_sheet(wb, assetSheet, 'Asset Allocation');
+    }
+
+    // Generate filename with date
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Portfolio_Snapshots_${customerId}_${today}.xlsx`);
+  }, [schemes, monthHeaders, totalPortfolioMoM, marketMoM, assetAllocationMoM, benchmarkName, customerId]);
+
   // Early returns AFTER all hooks
   if (isLoading) {
     return (
@@ -461,47 +636,72 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             </p>
           </div>
 
-          {/* Expand/Collapse All Button - Only for MF tab */}
-          {activeTab === 'mf' && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={expandAll}
-                disabled={allExpanded}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: allExpanded ? colors.utility.secondaryText : colors.brand.primary,
-                  backgroundColor: allExpanded ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
-                  border: `1px solid ${allExpanded ? colors.utility.primaryText + '20' : colors.brand.primary}`,
-                  borderRadius: '6px',
-                  cursor: allExpanded ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  opacity: allExpanded ? 0.5 : 1
-                }}
-              >
-                Expand All
-              </button>
-              <button
-                onClick={collapseAll}
-                disabled={allCollapsed}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: allCollapsed ? colors.utility.secondaryText : colors.brand.primary,
-                  backgroundColor: allCollapsed ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
-                  border: `1px solid ${allCollapsed ? colors.utility.primaryText + '20' : colors.brand.primary}`,
-                  borderRadius: '6px',
-                  cursor: allCollapsed ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  opacity: allCollapsed ? 0.5 : 1
-                }}
-              >
-                Collapse All
-              </button>
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {/* Expand/Collapse All Buttons - Only for MF tab */}
+            {activeTab === 'mf' && (
+              <>
+                <button
+                  onClick={expandAll}
+                  disabled={allExpanded}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    color: allExpanded ? colors.utility.secondaryText : colors.brand.primary,
+                    backgroundColor: allExpanded ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
+                    border: `1px solid ${allExpanded ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+                    borderRadius: '6px',
+                    cursor: allExpanded ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: allExpanded ? 0.5 : 1
+                  }}
+                >
+                  Expand All
+                </button>
+                <button
+                  onClick={collapseAll}
+                  disabled={allCollapsed}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    color: allCollapsed ? colors.utility.secondaryText : colors.brand.primary,
+                    backgroundColor: allCollapsed ? colors.utility.primaryBackground : `${colors.brand.primary}10`,
+                    border: `1px solid ${allCollapsed ? colors.utility.primaryText + '20' : colors.brand.primary}`,
+                    borderRadius: '6px',
+                    cursor: allCollapsed ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: allCollapsed ? 0.5 : 1
+                  }}
+                >
+                  Collapse All
+                </button>
+              </>
+            )}
+
+            {/* Download Spreadsheet Button - Always visible */}
+            <button
+              onClick={downloadSpreadsheet}
+              style={{
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: colors.semantic.success,
+                backgroundColor: `${colors.semantic.success}10`,
+                border: `1px solid ${colors.semantic.success}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title="Download as Excel spreadsheet"
+            >
+              <Download size={14} />
+              Download
+            </button>
+          </div>
         </div>
 
         {/* Horizontal Tabs */}
