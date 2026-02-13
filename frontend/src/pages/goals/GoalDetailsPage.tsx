@@ -6,7 +6,6 @@ import { ArrowLeft, RefreshCw, Edit, Shuffle, Target } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGoal, useGoalHistory, useRecalculateGoal } from '../../hooks/useGoals';
 import { useJTBDExecutions } from '../../hooks/useJTBD';
-import {} from '../../utils/goalUtils';
 import GoalCard from '../../components/goals/GoalCard';
 import { NetworthProjectionChart } from '../../components/portfolio/NetworthProjectionChart';
 import GoalActionCard from '../../components/goals/GoalActionCard';
