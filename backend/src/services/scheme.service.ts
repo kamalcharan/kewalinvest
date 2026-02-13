@@ -32,6 +32,8 @@ export interface SchemeDetail {
   isin_div_payout?: string;
   isin_growth?: string;
   isin_div_reinvestment?: string;
+  latest_nav_value?: number;
+  latest_nav_date?: Date;
   created_at: Date;
   updated_at: Date;
   created_by?: number;
