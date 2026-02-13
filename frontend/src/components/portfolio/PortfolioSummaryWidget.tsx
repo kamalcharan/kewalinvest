@@ -23,10 +23,10 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
 
   // Format currency - NULL SAFE
   const formatCurrency = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) {
-      return '₹0';
+    if (value === null || value === undefined || isNaN(value) || value === 0) {
+      return '-';
     }
-    
+
     if (value >= 10000000) {
       return `₹${(value / 10000000).toFixed(2)}Cr`;
     } else if (value >= 100000) {
@@ -37,8 +37,8 @@ const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
 
   // Format percentage - NULL SAFE
   const formatPercentage = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) {
-      return '0.0%';
+    if (value === null || value === undefined || isNaN(value) || value === 0) {
+      return '-';
     }
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(1)}%`;
