@@ -143,7 +143,9 @@ export class SchemeService {
   }
 
   /**
-   * Get scheme by ID - ADDED METHOD TO FIX BOOKMARK ISSUE
+   * Get scheme by ID
+   * NOTE: t_scheme_details is GLOBAL master data (not tenant-scoped),
+   * so we only filter by id and is_active.
    */
   async getSchemeById(
     tenantId: number,
@@ -153,14 +155,12 @@ export class SchemeService {
     try {
       const query = `
         SELECT * FROM t_scheme_details
-        WHERE tenant_id = $1 
-          AND is_live = $2 
-          AND id = $3
+        WHERE id = $1
           AND is_active = true
         LIMIT 1
       `;
-      
-      const result = await this.db.query(query, [tenantId, isLive, schemeId]);
+
+      const result = await this.db.query(query, [schemeId]);
       return result.rows[0] || null;
     } catch (error) {
       console.error('Error fetching scheme by ID:', error);

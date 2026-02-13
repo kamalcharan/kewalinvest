@@ -107,8 +107,8 @@ export class NavController {
       const schemesWithBookmarkStatus: SchemeWithNavInfo[] = searchResults.schemes.map(scheme => ({
         ...scheme,
         is_bookmarked: bookmarkedSchemeIds.has(scheme.id),
-        latest_nav_value: null as number | null,
-        latest_nav_date: null as Date | null
+        latest_nav_value: scheme.latest_nav_value ?? null,
+        latest_nav_date: scheme.latest_nav_date ?? null
       }));
 
       res.json({

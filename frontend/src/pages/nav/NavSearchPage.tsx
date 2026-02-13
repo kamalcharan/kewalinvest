@@ -441,97 +441,181 @@ const NavSearchPage: React.FC = () => {
 
             {schemes.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {schemes.map((scheme) => (
+                {schemes.map((scheme) => {
+                  // Calculate NAV ageing
+                  const getNavAgeing = () => {
+                    if (!scheme.latest_nav_date) return null;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const navDate = new Date(scheme.latest_nav_date);
+                    navDate.setHours(0, 0, 0, 0);
+                    const daysDiff = Math.floor((today.getTime() - navDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysDiff === 0) return 'Today';
+                    if (daysDiff === 1) return 'Yesterday';
+                    return `${daysDiff} days ago`;
+                  };
+
+                  const formatNavValue = (value: any): string => {
+                    if (value === null || value === undefined) return 'N/A';
+                    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+                    if (isNaN(numValue)) return 'N/A';
+                    return numValue.toFixed(4);
+                  };
+
+                  return (
                   <div
                     key={scheme.id}
+                    className="search-result-card"
                     style={{
-                      padding: '20px',
+                      padding: '16px',
                       backgroundColor: colors.utility.primaryBackground,
                       border: `1px solid ${colors.utility.primaryText}10`,
                       borderRadius: '8px',
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'flex-start'
+                      alignItems: 'center',
+                      minHeight: '100px',
+                      transition: 'all 0.2s ease',
+                      gap: '16px',
                     }}
                   >
-                    <div style={{ flex: 1 }}>
+                    {/* Left Section: Scheme Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Scheme Name */}
                       <div style={{
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        color: colors.utility.primaryText,
-                        marginBottom: '8px',
-                        lineHeight: '1.4'
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '6px',
+                        flexWrap: 'wrap',
                       }}>
-                        {scheme.scheme_name}
-                      </div>
-                      
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: '12px',
-                        fontSize: '14px',
-                        color: colors.utility.secondaryText,
-                        marginBottom: '12px'
-                      }}>
-                        <div><strong>Code:</strong> {scheme.scheme_code}</div>
-                        <div><strong>AMC:</strong> {scheme.amc_name}</div>
-                        {scheme.scheme_type_name && (
-                          <div><strong>Type:</strong> {scheme.scheme_type_name}</div>
-                        )}
-                        {scheme.scheme_category_name && (
-                          <div><strong>Category:</strong> {scheme.scheme_category_name}</div>
-                        )}
-                      </div>
-
-                      {scheme.latest_nav_value && (
                         <div style={{
                           fontSize: '14px',
-                          color: colors.brand.primary,
-                          fontWeight: '500'
+                          fontWeight: '600',
+                          color: colors.utility.primaryText,
+                          lineHeight: '1.3',
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                         }}>
-                          Latest NAV: ₹{typeof scheme.latest_nav_value === 'string' 
-                            ? parseFloat(scheme.latest_nav_value).toFixed(4) 
-                            : scheme.latest_nav_value.toFixed(4)}
-                          {scheme.latest_nav_date && (
-                            <span style={{ color: colors.utility.secondaryText, fontWeight: 'normal' }}>
-                              {' '}({new Date(scheme.latest_nav_date).toLocaleDateString()})
-                            </span>
-                          )}
+                          {scheme.scheme_name}
                         </div>
-                      )}
+                        {scheme.is_bookmarked && (
+                          <span style={{
+                            fontSize: '11px',
+                            padding: '2px 8px',
+                            backgroundColor: colors.semantic.success + '20',
+                            color: colors.semantic.success,
+                            borderRadius: '12px',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            Bookmarked
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Scheme Details Row */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        fontSize: '12px',
+                        color: colors.utility.secondaryText,
+                        marginBottom: '6px',
+                        flexWrap: 'wrap',
+                      }}>
+                        <span><strong>Code:</strong> {scheme.scheme_code}</span>
+                        <span><strong>AMC:</strong> {scheme.amc_name}</span>
+                        {scheme.scheme_type_name && (
+                          <span><strong>Type:</strong> {scheme.scheme_type_name}</span>
+                        )}
+                        {scheme.scheme_category_name && (
+                          <span><strong>Category:</strong> {scheme.scheme_category_name}</span>
+                        )}
+                      </div>
+
+                      {/* NAV Info Row */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                        fontSize: '11px',
+                        color: colors.utility.secondaryText,
+                        flexWrap: 'wrap',
+                      }}>
+                        {scheme.launch_date && (
+                          <span>
+                            <strong>Launch:</strong>{' '}
+                            {new Date(scheme.launch_date).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric'
+                            })}
+                          </span>
+                        )}
+                        {scheme.latest_nav_value && (
+                          <span style={{
+                            color: colors.brand.primary,
+                            fontWeight: '600',
+                            fontFamily: 'monospace'
+                          }}>
+                            <strong>Latest NAV:</strong> ₹{formatNavValue(scheme.latest_nav_value)}
+                          </span>
+                        )}
+                        {scheme.latest_nav_date && (
+                          <span>
+                            <strong>NAV Date:</strong>{' '}
+                            {new Date(scheme.latest_nav_date).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric'
+                            })}
+                            {getNavAgeing() && (
+                              <span style={{ marginLeft: '4px', opacity: 0.8 }}>
+                                ({getNavAgeing()})
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ marginLeft: '16px' }}>
+                    {/* Right Section: Bookmark Button */}
+                    <div style={{ flexShrink: 0 }}>
                       <button
                         onClick={() => handleBookmarkClick(scheme)}
                         disabled={scheme.is_bookmarked || bookmarkingIds.has(scheme.id)}
                         style={{
-                          padding: '10px 20px',
-                          backgroundColor: scheme.is_bookmarked 
-                            ? colors.semantic.success
+                          padding: '8px 16px',
+                          backgroundColor: scheme.is_bookmarked
+                            ? 'transparent'
                             : bookmarkingIds.has(scheme.id)
                             ? colors.utility.secondaryText
                             : colors.brand.primary,
-                          color: 'white',
-                          border: 'none',
+                          color: scheme.is_bookmarked
+                            ? colors.semantic.success
+                            : 'white',
+                          border: scheme.is_bookmarked
+                            ? `1px solid ${colors.semantic.success}40`
+                            : 'none',
                           borderRadius: '6px',
-                          cursor: (scheme.is_bookmarked || bookmarkingIds.has(scheme.id)) 
-                            ? 'not-allowed' 
+                          cursor: (scheme.is_bookmarked || bookmarkingIds.has(scheme.id))
+                            ? 'not-allowed'
                             : 'pointer',
-                          fontSize: '14px',
+                          fontSize: '12px',
                           fontWeight: '500',
-                          minWidth: '120px',
+                          minWidth: '100px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '8px'
+                          gap: '6px',
+                          transition: 'all 0.2s ease',
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {bookmarkingIds.has(scheme.id) ? (
                           <>
                             <span style={{
-                              width: '14px',
-                              height: '14px',
+                              width: '12px',
+                              height: '12px',
                               border: '2px solid transparent',
                               borderTop: '2px solid white',
                               borderRadius: '50%',
@@ -547,7 +631,8 @@ const NavSearchPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : isSearched && !isLoading ? (
               <div style={{
@@ -842,6 +927,16 @@ const NavSearchPage: React.FC = () => {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        .search-result-card:hover {
+          border-color: ${colors.brand.primary}30 !important;
+          box-shadow: 0 2px 8px ${colors.brand.primary}10;
+          transform: translateY(-1px);
+        }
+        .search-result-card button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+          filter: brightness(1.05);
         }
       `}</style>
     </div>
