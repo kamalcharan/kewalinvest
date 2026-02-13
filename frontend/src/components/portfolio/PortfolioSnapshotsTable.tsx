@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart, Download } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart, Download, EyeOff, Eye } from 'lucide-react';
 import { usePortfolioSnapshots, useNetworthSummary, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
@@ -66,6 +66,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const [selectedScheme, setSelectedScheme] = useState<any>(null);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('mf');
+  const [hideExited, setHideExited] = useState(false);
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
@@ -109,13 +110,37 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const schemes = data?.data?.schemes || [];
   const assetTypes = networthData?.data?.by_asset_type || [];
 
-  // Initialize with all schemes expanded by default
+  // Display-only filter: hides fully exited schemes from rendering
+  // but keeps them in `schemes` so totalPortfolioMoM calculations stay correct
+  const displaySchemes = useMemo(() => {
+    if (!hideExited) return schemes;
+    return schemes.filter((scheme: any) => {
+      const latestMonth = scheme.monthly_data?.[0];
+      if (!latestMonth) return true;
+      // A scheme is fully exited when current units AND market value are both 0 or absent
+      const hasUnits = latestMonth.closing_units && latestMonth.closing_units > 0;
+      const hasValue = latestMonth.market_value && latestMonth.market_value > 0;
+      return hasUnits || hasValue;
+    });
+  }, [schemes, hideExited]);
+
+  const exitedCount = useMemo(() => {
+    return schemes.filter((scheme: any) => {
+      const latestMonth = scheme.monthly_data?.[0];
+      if (!latestMonth) return false;
+      const hasUnits = latestMonth.closing_units && latestMonth.closing_units > 0;
+      const hasValue = latestMonth.market_value && latestMonth.market_value > 0;
+      return !hasUnits && !hasValue;
+    }).length;
+  }, [schemes]);
+
+  // Initialize with all displayed schemes expanded by default
   useEffect(() => {
-    if (schemes.length > 0) {
-      const allSchemeCodes = schemes.map((scheme: any) => scheme.scheme_code);
+    if (displaySchemes.length > 0) {
+      const allSchemeCodes = displaySchemes.map((scheme: any) => scheme.scheme_code);
       setExpandedSchemes(new Set(allSchemeCodes));
     }
-  }, [schemes.length]);
+  }, [displaySchemes.length]);
 
   const toggleSchemeExpansion = (schemeCode: string) => {
     const newExpanded = new Set(expandedSchemes);
@@ -128,7 +153,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   };
 
   const expandAll = () => {
-    const allSchemeCodes = schemes.map((scheme: any) => scheme.scheme_code);
+    const allSchemeCodes = displaySchemes.map((scheme: any) => scheme.scheme_code);
     setExpandedSchemes(new Set(allSchemeCodes));
   };
 
@@ -382,7 +407,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     return result;
   }, [benchmarkData, monthHeaders]);
 
-  const allExpanded = expandedSchemes.size === schemes.length;
+  const allExpanded = expandedSchemes.size === displaySchemes.length;
   const allCollapsed = expandedSchemes.size === 0;
 
   // Download spreadsheet with both MF and Asset sheets
@@ -398,8 +423,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     // Header row
     mfRows.push(['Scheme Name', 'Metric', ...monthLabels]);
 
-    // Scheme rows
-    schemes.forEach((scheme: any) => {
+    // Scheme rows (respects hide/show exited toggle)
+    displaySchemes.forEach((scheme: any) => {
       // MoM % row
       mfRows.push([
         scheme.scheme_name,
@@ -557,7 +582,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     // Generate filename with date
     const today = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `Portfolio_Snapshots_${customerId}_${today}.xlsx`);
-  }, [schemes, monthHeaders, totalPortfolioMoM, marketMoM, assetAllocationMoM, benchmarkName, customerId]);
+  }, [schemes, displaySchemes, monthHeaders, totalPortfolioMoM, marketMoM, assetAllocationMoM, benchmarkName, customerId]);
 
   // Early returns AFTER all hooks
   if (isLoading) {
@@ -683,6 +708,31 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   Collapse All
                 </button>
               </>
+            )}
+
+            {/* Hide/Show Exited Schemes Toggle - Only for MF tab */}
+            {activeTab === 'mf' && exitedCount > 0 && (
+              <button
+                onClick={() => setHideExited(!hideExited)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: hideExited ? colors.semantic.warning : colors.utility.secondaryText,
+                  backgroundColor: hideExited ? `${colors.semantic.warning}10` : colors.utility.primaryBackground,
+                  border: `1px solid ${hideExited ? colors.semantic.warning : colors.utility.primaryText + '20'}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title={hideExited ? `Show ${exitedCount} exited scheme(s)` : `Hide ${exitedCount} fully exited scheme(s)`}
+              >
+                {hideExited ? <Eye size={14} /> : <EyeOff size={14} />}
+                {hideExited ? `Show Exited (${exitedCount})` : `Hide Exited (${exitedCount})`}
+              </button>
             )}
 
             {/* Download Spreadsheet Button - Always visible */}
@@ -827,7 +877,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
           </thead>
           <tbody>
             {/* MF Allocation Tab - Scheme-based view */}
-            {activeTab === 'mf' && schemes.map((scheme: any, schemeIdx: number) => {
+            {activeTab === 'mf' && displaySchemes.map((scheme: any, schemeIdx: number) => {
               const isExpanded = expandedSchemes.has(scheme.scheme_code);
 
               return (
