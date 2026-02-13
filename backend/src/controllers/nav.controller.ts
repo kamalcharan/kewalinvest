@@ -104,12 +104,15 @@ export class NavController {
 
       const bookmarkedSchemeIds = new Set(bookmarks.bookmarks.map(b => b.scheme_id));
 
-      const schemesWithBookmarkStatus: SchemeWithNavInfo[] = searchResults.schemes.map(scheme => ({
-        ...scheme,
-        is_bookmarked: bookmarkedSchemeIds.has(scheme.id),
-        latest_nav_value: scheme.latest_nav_value ?? null,
-        latest_nav_date: scheme.latest_nav_date ?? null
-      }));
+      const schemesWithBookmarkStatus: SchemeWithNavInfo[] = searchResults.schemes.map(scheme => {
+        const row = scheme as any;
+        return {
+          ...scheme,
+          is_bookmarked: bookmarkedSchemeIds.has(scheme.id),
+          latest_nav_value: row.latest_nav_value ?? null,
+          latest_nav_date: row.latest_nav_date ?? null
+        };
+      });
 
       res.json({
         success: true,
