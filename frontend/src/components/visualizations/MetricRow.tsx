@@ -38,20 +38,24 @@ const MetricRow: React.FC<MetricRowProps> = ({
       return '--';
     }
 
+    if (numVal === 0) {
+      return '-';
+    }
+
     switch (format) {
       case 'percentage':
         const sign = numVal >= 0 ? '+' : '';
         return `${sign}${numVal.toFixed(decimals)}%`;
-      
+
       case 'ratio':
         return numVal.toFixed(decimals);
-      
+
       case 'number':
         return numVal.toLocaleString('en-IN', {
           minimumFractionDigits: decimals,
           maximumFractionDigits: decimals
         });
-      
+
       default:
         return numVal.toFixed(decimals);
     }

@@ -62,12 +62,12 @@ export const SchemeCard: React.FC<SchemeCardProps> = ({
 
   // Format helpers
   const formatCurrency = (value?: number) => {
-    if (value === undefined || value === null) return '-';
+    if (value === undefined || value === null || value === 0) return '-';
     return `₹${(value / 100000).toFixed(2)}L`;
   };
 
   const formatPercentage = (value?: number) => {
-    if (value === undefined || value === null) return '-';
+    if (value === undefined || value === null || value === 0) return '-';
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(2)}%`;
   };

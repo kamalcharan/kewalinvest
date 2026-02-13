@@ -183,6 +183,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   // Format value based on type
   const formatValue = (value: number | undefined | null, type: 'units' | 'nav' | 'market_value' | 'percentage') => {
     if (value === undefined || value === null) return '-';
+    if (value === 0) return '-';
 
     switch (type) {
       case 'units':
