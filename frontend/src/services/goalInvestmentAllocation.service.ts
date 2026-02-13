@@ -6,7 +6,6 @@ import { API_ENDPOINTS } from './serviceURLs';
 import {
   GoalInvestmentAllocation,
   GoalCalculationResult,
-  InvestmentPlan
 } from '../types/goal.types';
 
 export interface ApiResponse<T> {

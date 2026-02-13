@@ -11,8 +11,6 @@ import type {
   GetIndicesParams,
   DownloadHistoricalRequest,
   DownloadEODRequest,
-  ApiResponse,
-  GetIndicesResponse
 } from '../types/market.types';
 
 // ==================== INTERFACES ====================
@@ -124,6 +122,7 @@ export const useMarketIndices = (initialParams?: GetIndicesParams): UseMarketInd
   }, [fetchIndices]);
 
   // Initial load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -132,6 +131,7 @@ export const useMarketIndices = (initialParams?: GetIndicesParams): UseMarketInd
   }, []);
 
   // Re-fetch when params change (for filter changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (hasInitializedRef.current && initialParams) {
       // Compare current params with last params to detect changes
@@ -736,10 +736,12 @@ export const useMarketDashboard = (filters?: FilterState): UseMarketDashboardRet
 
 // ==================== EXPORTS ====================
 
-export default {
+const marketDataHooks = {
   useMarketIndices,
   useMarketStatistics,
   useMarketDownload,
   useBulkDownload,
   useMarketDashboard
 };
+
+export default marketDataHooks;

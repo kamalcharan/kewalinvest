@@ -22,7 +22,6 @@ import type {
   BookmarkNavDataParams,
   BookmarkStats,
   UpdateBookmarkDownloadStatus,
-  PaginatedResponse,
   ApiResponse
 } from '../services/nav.service';
 
@@ -344,6 +343,7 @@ export const useBookmarkDownloadStatus = (initialBookmarkIds: number[] = []): Us
   }, [fetchStatus]);
 
   const lastIdsStringRef = useRef<string>('');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const currentIdsString = initialBookmarkIds.sort().join(',');
     if (initialBookmarkIds.length > 0 && currentIdsString !== lastIdsStringRef.current) {
@@ -513,6 +513,7 @@ export const useBookmarks = (initialParams?: BookmarkSearchParams): UseBookmarks
 
   const statusMap = {};
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -681,6 +682,7 @@ export const useScheduler = (): UseSchedulerReturn => {
     fetchStatus();
   }, [fetchConfig, fetchStatus]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -983,6 +985,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     fetchActiveDownloads();
   }, [fetchDownloadJobs, fetchActiveDownloads]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -1236,6 +1239,7 @@ export const useNavStatistics = (): UseNavStatisticsReturn => {
     checkTodayData();
   }, [fetchStatistics, checkTodayData]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;

@@ -15,7 +15,7 @@ export const NON_SCHEME_ASSET_TYPES = [
 /**
  * Scheme category prefixes for grouping colors
  */
-const CATEGORY_PREFIXES = {
+const _CATEGORY_PREFIXES = {
   EQUITY: 'Equity Scheme',
   DEBT: 'Debt Scheme',
   HYBRID: 'Hybrid Scheme',

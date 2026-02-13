@@ -6,7 +6,6 @@ import toastService from '../services/toast.service';
 import apiService from '../services/api.service';
 import { API_ENDPOINTS, CUSTOMER_URLS, buildQueryParams, getAPIErrorMessage } from '../services/serviceURLs';
 import {
-  Customer,
   CustomerWithContact,
   CustomerAddress,
   CreateCustomerRequest,

@@ -2,7 +2,7 @@
 // FIXED: useMutation syntax errors (missing < bracket)
 
 import React from 'react';
-import { useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { schemeAnalysisService } from '../services/schemeAnalysis.service';
 import { toastService } from '../services/toast.service';
 import { FrontendErrorLogger } from '../services/errorLogger.service';

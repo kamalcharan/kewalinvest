@@ -13,7 +13,6 @@ import {
   FileSpreadsheet,
   Bug,
   Target,
-  Bell,
   Link2,
   Activity,
   GitBranch

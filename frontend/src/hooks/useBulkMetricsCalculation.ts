@@ -11,7 +11,6 @@ import type {
   SchemeBookmark,
   BulkMetricsRequest,
   BulkMetricsResult,
-  BulkMetricsError,
   BulkMetricsProgress,
   SchemeReadiness,
   SchemeReadinessCategory,

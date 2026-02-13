@@ -2,13 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { FamilyService } from '../services/family.service';
-import type {
-  FamilyMember,
-  FamilyPortfolioSummary,
-  FamilyAssetAllocation,
-  FamilyGoalSummary,
-  FamilyMeetingSummary
-} from '../types/family.types';
 
 // ==================== QUERY KEYS ====================
 

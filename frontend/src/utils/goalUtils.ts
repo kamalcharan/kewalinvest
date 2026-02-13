@@ -2,10 +2,6 @@
 
 import {
   GoalConfiguration,
-  GoalConfig,
-  TimeBasedGoalConfig,
-  PriceBasedGoalConfig,
-  TimeAndPriceGoalConfig,
   GoalTrackingType,
   GoalFormData,
   GoalFormErrors,
@@ -235,7 +231,7 @@ export function getGoalStatus(goal: GoalConfiguration): GoalStatusInfo {
     // Read Monte Carlo results from config_data
     const onTrack = config.on_track === true;
     const probability = config.probability_of_success || 0;
-    const confidence = config.success_confidence || 'medium';
+    const _confidence = config.success_confidence || 'medium';
 
     // Simple logic based on Monte Carlo on_track flag
     if (onTrack) {
