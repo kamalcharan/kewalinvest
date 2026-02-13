@@ -179,10 +179,6 @@ const NavSearchPage: React.FC = () => {
           : '';
         toastService.success(`${scheme.scheme_name} bookmarked successfully${aliasMsg}`);
 
-        setTimeout(() => {
-          navigate('/nav/dashboard');
-        }, 1500);
-
       } else {
         throw new Error(response.error || 'Failed to bookmark scheme');
       }
