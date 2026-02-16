@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart, Download, EyeOff, Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, BarChart3, Wallet, LineChart, PieChart, Download, EyeOff, Eye, ArrowRightLeft } from 'lucide-react';
 import { usePortfolioSnapshots, useNetworthSummary, useNetworthHistory } from '../../hooks/usePortfolioData';
 import { useIndexReturnsTimeSeries } from '../../hooks/useMarketMetrics';
 import { SchemeChartsModal } from './SchemeChartsModal';
@@ -67,6 +67,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('mf');
   const [hideExited, setHideExited] = useState(false);
+  const [sortNewestFirst, setSortNewestFirst] = useState(false); // Default: chronological (oldest → newest)
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
@@ -411,12 +412,44 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const allExpanded = expandedSchemes.size === displaySchemes.length;
   const allCollapsed = expandedSchemes.size === 0;
 
+  // Display order helpers: data arrives newest-first from backend
+  // Default (sortNewestFirst=false): reverse to chronological (oldest on left, newest on right)
+  const displayMonthHeaders = useMemo(() =>
+    sortNewestFirst ? monthHeaders : [...monthHeaders].reverse()
+  , [monthHeaders, sortNewestFirst]);
+
+  const displaySchemeMonthlyData = useCallback((monthlyData: any[]) =>
+    sortNewestFirst ? monthlyData : [...monthlyData].reverse()
+  , [sortNewestFirst]);
+
+  const displayTotalPortfolioMoM = useMemo(() =>
+    sortNewestFirst ? totalPortfolioMoM : [...totalPortfolioMoM].reverse()
+  , [totalPortfolioMoM, sortNewestFirst]);
+
+  const displayMarketMoM = useMemo(() =>
+    sortNewestFirst ? marketMoM : [...marketMoM].reverse()
+  , [marketMoM, sortNewestFirst]);
+
+  const displayAssetAllocationMoM = useMemo(() =>
+    sortNewestFirst ? assetAllocationMoM : assetAllocationMoM.map((a: any) => ({
+      ...a,
+      monthlyData: [...a.monthlyData].reverse()
+    }))
+  , [assetAllocationMoM, sortNewestFirst]);
+
+  // Index of the current (latest) month column in display order
+  const currentMonthColIdx = sortNewestFirst ? 0 : (displayMonthHeaders.length - 1);
+
   // Download spreadsheet with both MF and Asset sheets
+  // Respects current display order (chronological or reverse)
   const downloadSpreadsheet = useCallback(() => {
     if (schemes.length === 0 || monthHeaders.length === 0) return;
 
+    // Helper to apply display order (matches table column ordering)
+    const ordered = <T,>(arr: T[]): T[] => sortNewestFirst ? arr : [...arr].reverse();
+
     const wb = XLSX.utils.book_new();
-    const monthLabels = monthHeaders.map((m: any) => formatMonthHeader(m));
+    const monthLabels = ordered(monthHeaders).map((m: any) => formatMonthHeader(m));
 
     // ========== Sheet 1: MF Allocation ==========
     const mfRows: any[][] = [];
@@ -426,11 +459,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
     // Scheme rows (respects hide/show exited toggle)
     displaySchemes.forEach((scheme: any) => {
+      const orderedMonthly = ordered(scheme.monthly_data);
+
       // MoM % row
       mfRows.push([
         scheme.scheme_name,
         'MoM %',
-        ...scheme.monthly_data.map((m: any) => {
+        ...orderedMonthly.map((m: any) => {
           const val = m.month_change_percentage;
           return val !== undefined && val !== null ? Math.round(val * 100) / 100 : '';
         })
@@ -440,7 +475,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       mfRows.push([
         '',
         'Units',
-        ...scheme.monthly_data.map((m: any) =>
+        ...orderedMonthly.map((m: any) =>
           m.closing_units !== undefined && m.closing_units !== null
             ? Math.round(m.closing_units * 1000) / 1000
             : ''
@@ -451,7 +486,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       mfRows.push([
         '',
         'NAV',
-        ...scheme.monthly_data.map((m: any) => {
+        ...orderedMonthly.map((m: any) => {
           if (!m.has_nav_data && !m.is_estimated) return 'No data';
           const val = m.closing_nav;
           return val !== undefined && val !== null ? Math.round(val * 100) / 100 : '';
@@ -462,7 +497,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       mfRows.push([
         '',
         'Market Value',
-        ...scheme.monthly_data.map((m: any) =>
+        ...orderedMonthly.map((m: any) =>
           m.market_value !== undefined && m.market_value !== null
             ? Math.round(m.market_value * 100) / 100
             : ''
@@ -475,15 +510,16 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
     // Total Portfolio row
     if (totalPortfolioMoM.length > 0) {
+      const orderedTotal = ordered(totalPortfolioMoM);
       mfRows.push([
         'Total Portfolio',
         'MoM %',
-        ...totalPortfolioMoM.map((m: TotalMoMData) => m.momPercentage || '')
+        ...orderedTotal.map((m: TotalMoMData) => m.momPercentage || '')
       ]);
       mfRows.push([
         '',
         'Market Value',
-        ...totalPortfolioMoM.map((m: TotalMoMData) =>
+        ...orderedTotal.map((m: TotalMoMData) =>
           m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
         )
       ]);
@@ -491,15 +527,16 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
     // Benchmark row
     if (marketMoM.length > 0) {
+      const orderedMarket = ordered(marketMoM);
       mfRows.push([
         benchmarkName,
         'MoM %',
-        ...marketMoM.map((m: MarketMoMData) => m.momPercentage || '')
+        ...orderedMarket.map((m: MarketMoMData) => m.momPercentage || '')
       ]);
       mfRows.push([
         '',
         'Close Price',
-        ...marketMoM.map((m: MarketMoMData) =>
+        ...orderedMarket.map((m: MarketMoMData) =>
           m.closePrice ? Math.round(m.closePrice * 100) / 100 : ''
         )
       ]);
@@ -525,12 +562,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
       assetAllocationMoM.forEach((assetData: any) => {
         const displayName = assetData.assetTypeName || assetData.assetType;
+        const orderedAssetMonthly = ordered(assetData.monthlyData);
 
         // Market Value row
         assetRows.push([
           displayName,
           'Market Value',
-          ...assetData.monthlyData.map((m: any) =>
+          ...orderedAssetMonthly.map((m: any) =>
             m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
           )
         ]);
@@ -539,7 +577,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         assetRows.push([
           '',
           'MoM %',
-          ...assetData.monthlyData.map((m: any) => m.momPercentage || '')
+          ...orderedAssetMonthly.map((m: any) => m.momPercentage || '')
         ]);
       });
 
@@ -548,15 +586,16 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
       // Total Portfolio row
       if (totalPortfolioMoM.length > 0) {
+        const orderedTotal = ordered(totalPortfolioMoM);
         assetRows.push([
           'Total Portfolio',
           'MoM %',
-          ...totalPortfolioMoM.map((m: TotalMoMData) => m.momPercentage || '')
+          ...orderedTotal.map((m: TotalMoMData) => m.momPercentage || '')
         ]);
         assetRows.push([
           '',
           'Market Value',
-          ...totalPortfolioMoM.map((m: TotalMoMData) =>
+          ...orderedTotal.map((m: TotalMoMData) =>
             m.totalMarketValue ? Math.round(m.totalMarketValue * 100) / 100 : ''
           )
         ]);
@@ -567,7 +606,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         assetRows.push([
           benchmarkName,
           'MoM %',
-          ...marketMoM.map((m: MarketMoMData) => m.momPercentage || '')
+          ...ordered(marketMoM).map((m: MarketMoMData) => m.momPercentage || '')
         ]);
       }
 
@@ -583,7 +622,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     // Generate filename with date
     const today = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `Portfolio_Snapshots_${customerId}_${today}.xlsx`);
-  }, [schemes, displaySchemes, monthHeaders, totalPortfolioMoM, marketMoM, assetAllocationMoM, benchmarkName, customerId]);
+  }, [schemes, displaySchemes, monthHeaders, totalPortfolioMoM, marketMoM, assetAllocationMoM, benchmarkName, customerId, sortNewestFirst]);
 
   // Early returns AFTER all hooks
   if (isLoading) {
@@ -758,6 +797,29 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               <Download size={14} />
               Download
             </button>
+
+            {/* Sort Order Toggle */}
+            <button
+              onClick={() => setSortNewestFirst(!sortNewestFirst)}
+              style={{
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: colors.brand.primary,
+                backgroundColor: `${colors.brand.primary}10`,
+                border: `1px solid ${colors.brand.primary}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title={sortNewestFirst ? 'Currently: Newest first. Click for oldest first.' : 'Currently: Oldest first. Click for newest first.'}
+            >
+              <ArrowRightLeft size={14} />
+              {sortNewestFirst ? 'New → Old' : 'Old → New'}
+            </button>
           </div>
         </div>
 
@@ -852,7 +914,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
               }}>
                 Scheme Name
               </th>
-              {monthHeaders.map((month: any, idx: number) => (
+              {displayMonthHeaders.map((month: any, idx: number) => (
                 <th
                   key={idx}
                   style={{
@@ -863,13 +925,13 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     color: colors.utility.secondaryText,
                     textTransform: 'uppercase',
                     minWidth: '90px',
-                    backgroundColor: idx === 0
+                    backgroundColor: idx === currentMonthColIdx
                       ? `${colors.brand.primary}15`
                       : colors.utility.primaryBackground
                   }}
                 >
                   {formatMonthHeader(month)}
-                  {idx === 0 && (
+                  {idx === currentMonthColIdx && (
                     <span style={{ marginLeft: '4px', color: colors.brand.primary }}>*</span>
                   )}
                 </th>
@@ -961,7 +1023,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                       </div>
                     </td>
                     {/* Show Performance (MoM) values directly in scheme row */}
-                    {scheme.monthly_data.map((month: any, idx: number) => {
+                    {displaySchemeMonthlyData(scheme.monthly_data).map((month: any, idx: number) => {
                       const changePercentage = month.month_change_percentage || 0;
                       return (
                         <td
@@ -974,7 +1036,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             color: changePercentage >= 0
                               ? colors.semantic.success
                               : colors.semantic.error,
-                            backgroundColor: idx === 0
+                            backgroundColor: idx === currentMonthColIdx
                               ? `${colors.brand.primary}10`
                               : (schemeIdx % 2 === 0
                                 ? colors.utility.secondaryBackground
@@ -1009,7 +1071,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           <span>Units</span>
                         </div>
                       </td>
-                      {scheme.monthly_data.map((month: any, idx: number) => (
+                      {displaySchemeMonthlyData(scheme.monthly_data).map((month: any, idx: number) => (
                         <td
                           key={idx}
                           style={{
@@ -1018,7 +1080,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             fontWeight: '500',
                             fontSize: '12px',
                             color: colors.utility.primaryText,
-                            backgroundColor: idx === 0
+                            backgroundColor: idx === currentMonthColIdx
                               ? `${colors.brand.primary}10`
                               : undefined
                           }}
@@ -1051,7 +1113,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           <span>NAV</span>
                         </div>
                       </td>
-                      {scheme.monthly_data.map((month: any, idx: number) => {
+                      {displaySchemeMonthlyData(scheme.monthly_data).map((month: any, idx: number) => {
                         const hasData = month.has_nav_data || month.is_estimated;
                         const isEstimated = month.is_estimated;
                         return (
@@ -1065,7 +1127,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                               color: hasData
                                 ? (isEstimated ? colors.semantic.warning : colors.utility.primaryText)
                                 : colors.semantic.error,
-                              backgroundColor: idx === 0
+                              backgroundColor: idx === currentMonthColIdx
                                 ? `${colors.brand.primary}10`
                                 : undefined
                             }}
@@ -1101,7 +1163,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           <span>Market Value</span>
                         </div>
                       </td>
-                      {scheme.monthly_data.map((month: any, idx: number) => (
+                      {displaySchemeMonthlyData(scheme.monthly_data).map((month: any, idx: number) => (
                         <td
                           key={idx}
                           style={{
@@ -1110,7 +1172,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             fontWeight: '500',
                             fontSize: '12px',
                             color: colors.utility.primaryText,
-                            backgroundColor: idx === 0
+                            backgroundColor: idx === currentMonthColIdx
                               ? `${colors.brand.primary}10`
                               : undefined
                           }}
@@ -1126,7 +1188,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             })}
 
             {/* Total Portfolio MoM Row - Summary at bottom (MF tab only) */}
-            {activeTab === 'mf' && totalPortfolioMoM.length > 0 && (
+            {activeTab === 'mf' && displayTotalPortfolioMoM.length > 0 && (
               <tr style={{
                 borderTop: `3px solid ${colors.brand.primary}`,
                 backgroundColor: `${colors.brand.primary}15`
@@ -1172,7 +1234,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </div>
                   </div>
                 </td>
-                {totalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
+                {displayTotalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
                   const momPercentage = monthData.momPercentage || 0;
                   return (
                     <td
@@ -1185,7 +1247,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         color: momPercentage >= 0
                           ? colors.semantic.success
                           : colors.semantic.error,
-                        backgroundColor: idx === 0
+                        backgroundColor: idx === currentMonthColIdx
                           ? `${colors.brand.primary}25`
                           : `${colors.brand.primary}15`
                       }}
@@ -1198,7 +1260,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             )}
 
             {/* Market Performance MoM Row - Benchmark comparison (MF tab only) */}
-            {activeTab === 'mf' && marketMoM.length > 0 && (
+            {activeTab === 'mf' && displayMarketMoM.length > 0 && (
               <tr style={{
                 borderTop: `1px solid ${colors.semantic.warning}40`,
                 backgroundColor: `${colors.semantic.warning}12`
@@ -1244,7 +1306,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </div>
                   </div>
                 </td>
-                {marketMoM.map((monthData: MarketMoMData, idx: number) => {
+                {displayMarketMoM.map((monthData: MarketMoMData, idx: number) => {
                   const momPercentage = monthData.momPercentage || 0;
                   return (
                     <td
@@ -1257,7 +1319,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         color: momPercentage >= 0
                           ? colors.semantic.success
                           : colors.semantic.error,
-                        backgroundColor: idx === 0
+                        backgroundColor: idx === currentMonthColIdx
                           ? `${colors.semantic.warning}20`
                           : `${colors.semantic.warning}12`
                       }}
@@ -1270,7 +1332,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             )}
 
             {/* Asset Allocation Tab - Asset type based view (2 rows per asset: Value + MoM %) */}
-            {activeTab === 'asset' && assetAllocationMoM.map((assetData: any, assetIdx: number) => {
+            {activeTab === 'asset' && displayAssetAllocationMoM.map((assetData: any, assetIdx: number) => {
               // Use color from data or get from constants
               const assetColor = assetData.color || getAssetTypeColor(assetData.assetType);
               const assetIcon = getAssetTypeIcon(assetData.assetType);
@@ -1340,7 +1402,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                           fontWeight: '600',
                           fontSize: '12px',
                           color: colors.utility.primaryText,
-                          backgroundColor: idx === 0 ? `${assetColor}10` : bgColor
+                          backgroundColor: idx === currentMonthColIdx ? `${assetColor}10` : bgColor
                         }}
                       >
                         {formatValue(monthData.totalMarketValue, 'market_value')}
@@ -1389,7 +1451,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             color: momPercentage >= 0
                               ? colors.semantic.success
                               : colors.semantic.error,
-                            backgroundColor: idx === 0 ? `${assetColor}10` : bgColor
+                            backgroundColor: idx === currentMonthColIdx ? `${assetColor}10` : bgColor
                           }}
                         >
                           {formatValue(momPercentage, 'percentage')}
@@ -1402,7 +1464,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             })}
 
             {/* Total Portfolio MoM Row - Summary at bottom (Asset tab) */}
-            {activeTab === 'asset' && totalPortfolioMoM.length > 0 && (
+            {activeTab === 'asset' && displayTotalPortfolioMoM.length > 0 && (
               <tr style={{
                 borderTop: `3px solid ${colors.brand.primary}`,
                 backgroundColor: `${colors.brand.primary}15`
@@ -1448,7 +1510,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </div>
                   </div>
                 </td>
-                {totalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
+                {displayTotalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
                   const momPercentage = monthData.momPercentage || 0;
                   return (
                     <td
@@ -1461,7 +1523,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         color: momPercentage >= 0
                           ? colors.semantic.success
                           : colors.semantic.error,
-                        backgroundColor: idx === 0
+                        backgroundColor: idx === currentMonthColIdx
                           ? `${colors.brand.primary}25`
                           : `${colors.brand.primary}15`
                       }}
@@ -1474,7 +1536,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
             )}
 
             {/* Market Performance MoM Row - Benchmark comparison (Asset tab) */}
-            {activeTab === 'asset' && marketMoM.length > 0 && (
+            {activeTab === 'asset' && displayMarketMoM.length > 0 && (
               <tr style={{
                 borderTop: `1px solid ${colors.semantic.warning}40`,
                 backgroundColor: `${colors.semantic.warning}12`
@@ -1520,7 +1582,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </div>
                   </div>
                 </td>
-                {marketMoM.map((monthData: MarketMoMData, idx: number) => {
+                {displayMarketMoM.map((monthData: MarketMoMData, idx: number) => {
                   const momPercentage = monthData.momPercentage || 0;
                   return (
                     <td
@@ -1533,7 +1595,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         color: momPercentage >= 0
                           ? colors.semantic.success
                           : colors.semantic.error,
-                        backgroundColor: idx === 0
+                        backgroundColor: idx === currentMonthColIdx
                           ? `${colors.semantic.warning}20`
                           : `${colors.semantic.warning}12`
                       }}

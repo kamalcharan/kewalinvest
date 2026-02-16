@@ -487,7 +487,6 @@ export class MonthlyTrackingService {
 
       // Build monthly market value data
       const monthlyData: MonthlyMarketValueData[] = [];
-      let previousMonthNAV = 0;
       let previousMonthMarketValue = 0;
 
       for (let i = 0; i < monthList.length; i++) {
@@ -495,8 +494,10 @@ export class MonthlyTrackingService {
         const unitsData = unitsResponse.months[i];
         const navData = navResponse.months[i];
 
-        // Use previous month's closing NAV
-        const navToUse = i === 0 ? navData.closing_nav : previousMonthNAV;
+        // Use current month's closing NAV directly
+        // For current/incomplete month, latest available NAV is used (see getMonthlyNAVPerformance)
+        // At month-end, the scheduler updates with actual EOM NAV
+        const navToUse = navData.closing_nav;
         const currentMonthUnits = unitsData.closing_units;
 
         // FIX: When units <= 0 (investor exited), show market value as 0
@@ -543,8 +544,7 @@ export class MonthlyTrackingService {
           net_cash_flow: Math.round(netCashFlow * 100) / 100
         });
 
-        // Update previous month values for next iteration
-        previousMonthNAV = navData.closing_nav;
+        // Update previous month market value for next iteration's MoM calculation
         previousMonthMarketValue = marketValue;
       }
 
