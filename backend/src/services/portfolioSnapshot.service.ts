@@ -777,8 +777,10 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Regenerate all snapshots (DROP + CREATE)
-   * VERY DANGEROUS: Deletes all snapshots then rebuilds from scratch
+   * Regenerate all snapshots
+   * SAFE: Only drops non-scheme (assumption-based) snapshots like GOLD, FD, etc.
+   * Preserves scheme-based (NAV) snapshots from MF transactions.
+   * Then runs smartBackfill to create+update all snapshots.
    */
   async regenerateAllSnapshots(params: {
     tenant_id: number;
@@ -789,32 +791,44 @@ export class PortfolioSnapshotService {
     const errors: any[] = [];
 
     try {
-      // Step 1: Drop all snapshots
-      console.log(`[SnapshotService] Regenerate: Dropping all snapshots for tenant ${params.tenant_id}`);
-      
-      const dropResult = await this.dropAllSnapshots(params);
-      
-      if (!dropResult.success) {
-        throw new Error(`Failed to drop snapshots: ${dropResult.message}`);
+      // Step 1: Only drop non-scheme (assumption-based) snapshots
+      // This preserves MF/scheme-based NAV snapshots which are calculated from actual transactions
+      const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
+
+      console.log(`[SnapshotService] Regenerate: Dropping ONLY non-scheme snapshots for tenant ${params.tenant_id}`);
+
+      let dropQuery = `
+        DELETE FROM t_monthly_portfolio_snapshots
+        WHERE tenant_id = $1 AND is_live = $2
+          AND asset_type_code IN (SELECT UNNEST($3::text[]))
+      `;
+      const dropParams: any[] = [params.tenant_id, params.is_live, nonSchemeAssetTypes];
+
+      if (params.customer_ids && params.customer_ids.length > 0) {
+        dropQuery += ` AND customer_id = ANY($4)`;
+        dropParams.push(params.customer_ids);
       }
 
-      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} snapshots`);
+      const dropResult = await this.db.query(dropQuery, dropParams);
+      const deletedCount = dropResult.rowCount || 0;
 
-      // Step 2: Generate all snapshots fresh (CREATE only, no UPDATE since we just dropped all)
-      console.log(`[SnapshotService] Regenerate: Creating fresh snapshots`);
-      
-      const generateResult = await this.generateMissingSnapshots(params);
+      console.log(`[SnapshotService] Regenerate: Dropped ${deletedCount} non-scheme snapshots (MF snapshots preserved)`);
+
+      // Step 2: Run smartBackfill to create+update all snapshots (scheme + non-scheme)
+      console.log(`[SnapshotService] Regenerate: Running smartBackfill to rebuild`);
+
+      const generateResult = await this.smartBackfill(params);
 
       const duration = Date.now() - startTime;
 
-      console.log(`[SnapshotService] Regenerate completed: ${generateResult.snapshots_created} created in ${duration}ms`);
+      console.log(`[SnapshotService] Regenerate completed: ${generateResult.snapshots_created} created, ${generateResult.snapshots_updated} updated in ${duration}ms`);
 
       return {
         snapshot_month_end: generateResult.snapshot_month_end,
         customers_processed: generateResult.customers_processed,
         customers_failed: generateResult.customers_failed,
         snapshots_created: generateResult.snapshots_created,
-        snapshots_deleted: dropResult.deleted_count,
+        snapshots_deleted: deletedCount,
         months_processed: generateResult.months_processed,
         errors: [...errors, ...generateResult.errors],
         execution_duration_ms: duration
@@ -823,7 +837,7 @@ export class PortfolioSnapshotService {
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error('[SnapshotService] Error in regenerateAllSnapshots:', error);
-      
+
       return {
         snapshot_month_end: this.getLastMonthEnd(),
         customers_processed: 0,
