@@ -393,7 +393,7 @@ export class MarketAnalysisService {
   /**
    * Get all indices with optional filtering
    */
-  static async getAllIndices(params?: any): Promise<{
+  static async getAllIndices(_params?: any): Promise<{
     indices: any[];
     total: number;
     page: number;
@@ -420,7 +420,7 @@ export class MarketAnalysisService {
   /**
    * Get a specific index by ID
    */
-  static async getIndexById(indexId: number): Promise<any | null> {
+  static async getIndexById(_indexId: number): Promise<any | null> {
     try {
       // This would typically call market.service
       console.warn('getIndexById not implemented - use market.service instead');
