@@ -81,19 +81,22 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
     setShowRegenerateDialog(false);
     setIsRegenerating(true);
     try {
-      const response = await PortfolioSnapshotService.regenerateAllSnapshots([customerId]);
+      // Use smartBackfill with non_scheme_only=true to only update non-scheme asset snapshots
+      // (GOLD, FD, PPF, etc.) without recalculating MF NAV-based snapshots which can produce
+      // incorrect values due to NAV data availability issues
+      const response = await PortfolioSnapshotService.smartBackfill([customerId], true);
       if (response.success) {
-        toastService.success('Snapshots regenerated successfully! Refreshing page...');
+        toastService.success('Snapshots updated successfully! Refreshing page...');
         // Refresh the entire page to show updated charts with latest data
         setTimeout(() => {
           window.location.reload();
         }, 1000);
       } else {
-        toastService.error(response.error || 'Failed to regenerate snapshots');
+        toastService.error(response.error || 'Failed to update snapshots');
         setIsRegenerating(false);
       }
     } catch (error: any) {
-      toastService.error('Failed to regenerate snapshots: ' + error.message);
+      toastService.error('Failed to update snapshots: ' + error.message);
       setIsRegenerating(false);
     }
     // Note: Don't setIsRegenerating(false) on success since we're reloading the page
