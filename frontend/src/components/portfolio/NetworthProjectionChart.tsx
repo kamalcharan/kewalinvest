@@ -37,7 +37,7 @@ interface WithdrawalMarker {
   date: string; // YYYY-MM-DD
 }
 
-type TimeframePeriod = '1M' | '1Y' | '2Y' | '3Y' | '4Y' | '5Y' | 'CUSTOM';
+type TimeframePeriod = '1M' | '1Y' | '2Y' | '3Y' | '4Y' | '5Y' | 'ALL' | 'CUSTOM';
 type DataGranularity = 'monthly' | 'quarterly' | '6months' | 'yearly';
 type ChartType = 'line' | 'smooth' | 'area';
 
@@ -210,16 +210,13 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
   const effectiveWithdrawals = isGoalMode ? (goalConfig?.withdrawals || []) : withdrawals;
 
   // Calculate date range based on timeframe
-  // Always fetch 24 months of history to ensure data availability, then filter on frontend
+  // Fetch ALL history from customer's first transaction (no start date limit)
   const dateRange = useMemo(() => {
     const now = new Date();
     const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // End of current month
 
-    // Always fetch 24 months of history to ensure we have data
-    const fetchStartDate = new Date(now);
-    fetchStartDate.setMonth(fetchStartDate.getMonth() - 24);
-
     // Determine how many months to DISPLAY based on timeframe
+    // Infinity means show ALL available historical data
     let displayHistoricalMonths: number;
     let projectionMonths: number;
 
@@ -237,19 +234,23 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         projectionMonths = 24;
         break;
       case '3Y':
-        displayHistoricalMonths = 24; // Show max 24 months history
+        displayHistoricalMonths = 36;
         projectionMonths = 36;
         break;
       case '4Y':
-        displayHistoricalMonths = 24;
+        displayHistoricalMonths = 48;
         projectionMonths = 48;
         break;
       case '5Y':
-        displayHistoricalMonths = 24;
+        displayHistoricalMonths = 60;
         projectionMonths = 60;
         break;
+      case 'ALL':
+        displayHistoricalMonths = Infinity; // Show all available history
+        projectionMonths = 0; // No projection in ALL mode
+        break;
       case 'CUSTOM':
-        displayHistoricalMonths = 24;
+        displayHistoricalMonths = Infinity; // Show all available history
         projectionMonths = customYears * 12; // Convert years to months
         break;
       default:
@@ -258,7 +259,8 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
     }
 
     return {
-      startDate: fetchStartDate.toISOString().split('T')[0],
+      // No startDate - fetch ALL history from customer's first transaction
+      startDate: undefined as string | undefined,
       endDate: endDate.toISOString().split('T')[0],
       displayHistoricalMonths,
       projectionMonths
@@ -579,7 +581,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
           Limited data for {timeframePeriod} view
         </div>
         <div style={{ fontSize: '12px', color: colors.utility.secondaryText, opacity: 0.7 }}>
-          Try selecting a longer timeframe (1Y or 24M)
+          Try selecting a longer timeframe (1Y or ALL)
         </div>
       </div>
     );
@@ -824,7 +826,7 @@ export const NetworthProjectionChart: React.FC<NetworthProjectionChartProps> = (
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           {/* Timeframe selector */}
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            {(['1M', '1Y', '2Y', '3Y', '4Y', '5Y'] as TimeframePeriod[]).map(period => (
+            {(['1M', '1Y', '2Y', '3Y', '4Y', '5Y', 'ALL'] as TimeframePeriod[]).map(period => (
               <button
                 key={period}
                 onClick={() => setTimeframePeriod(period)}
