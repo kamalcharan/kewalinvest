@@ -788,9 +788,10 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Regenerate all snapshots (SAFE: drops non-scheme only, preserves MF)
-   * Non-scheme (ASSUMPTION) snapshots are dropped and recreated.
-   * MF (NAV) snapshots are preserved to prevent corruption from incomplete NAV data.
+   * Regenerate all snapshots
+   * Step 1: Drop ONLY non-scheme (ASSUMPTION) snapshots (clean slate for formula-based assets)
+   * Step 2: Full smartBackfill for ALL asset types (MF gets updated in-place, non-scheme gets created fresh)
+   * This avoids the dangerous DROP of MF data while still refreshing everything.
    */
   async regenerateAllSnapshots(params: {
     tenant_id: number;
@@ -801,39 +802,29 @@ export class PortfolioSnapshotService {
     const errors: any[] = [];
 
     try {
-      // ================================================================
-      // SAFE REGENERATION STRATEGY:
-      // MF snapshots (calculation_method='NAV') are PRESERVED - they contain
-      // correct values calculated from NAV×Units. Recalculating them from scratch
-      // can produce inconsistent values if NAV data is incomplete for historical months.
-      //
-      // Non-scheme snapshots (calculation_method='ASSUMPTION') are DROPPED and
-      // REGENERATED - they're formula-based (principal × growth_rate ^ time) and
-      // always produce the same correct values.
-      // ================================================================
-
-      // Step 1: Drop ONLY non-scheme (ASSUMPTION-based) snapshots
-      // MF/NAV-based snapshots are PROTECTED from deletion
-      console.log(`[SnapshotService] Regenerate: Dropping non-scheme snapshots for tenant ${params.tenant_id} (MF snapshots preserved)`);
+      // Step 1: Drop only non-scheme (ASSUMPTION-based) snapshots
+      // These are formula-based (Gold, FD, etc.) and always recalculate correctly
+      console.log(`[SnapshotService] Regenerate: Dropping non-scheme snapshots for tenant ${params.tenant_id}`);
 
       const dropResult = await this.dropAllSnapshots({
         ...params,
-        non_scheme_only: true  // Only delete ASSUMPTION-based snapshots
+        non_scheme_only: true
       });
 
       if (!dropResult.success) {
         throw new Error(`Failed to drop snapshots: ${dropResult.message}`);
       }
 
-      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} non-scheme snapshots (MF preserved)`);
+      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} non-scheme snapshots`);
 
-      // Step 2: Regenerate non-scheme snapshots using smartBackfill
-      // non_scheme_only=true → creates new ASSUMPTION snapshots, skips MF entirely
-      console.log(`[SnapshotService] Regenerate: Recreating non-scheme snapshots via smartBackfill`);
+      // Step 2: Full smartBackfill - regenerates ALL asset types
+      // MF (NAV-based): UPDATES existing snapshots in-place (no data loss window)
+      // Non-scheme (ASSUMPTION): CREATES fresh snapshots (since we just dropped them)
+      console.log(`[SnapshotService] Regenerate: Running full smartBackfill for all asset types`);
 
       const backfillResult = await this.smartBackfill({
-        ...params,
-        non_scheme_only: true
+        ...params
+        // non_scheme_only NOT set → processes both MF and non-scheme
       });
 
       const duration = Date.now() - startTime;

@@ -81,10 +81,8 @@ export const CustomerViewHeader: React.FC<CustomerViewHeaderProps> = ({
     setShowRegenerateDialog(false);
     setIsRegenerating(true);
     try {
-      // Use smartBackfill with non_scheme_only=true to only update non-scheme asset snapshots
-      // (GOLD, FD, PPF, etc.) without recalculating MF NAV-based snapshots which can produce
-      // incorrect values due to NAV data availability issues
-      const response = await PortfolioSnapshotService.smartBackfill([customerId], true);
+      // Full smartBackfill: regenerates both MF (NAV-based) and non-scheme (ASSUMPTION) snapshots
+      const response = await PortfolioSnapshotService.smartBackfill([customerId], false);
       if (response.success) {
         toastService.success('Snapshots updated successfully! Refreshing page...');
         // Refresh the entire page to show updated charts with latest data
