@@ -24,12 +24,12 @@ type TabType = 'mf' | 'asset';
 // Interfaces for MoM calculations
 interface TotalMoMData {
   totalMarketValue: number;
-  momPercentage: number;
+  momPercentage: number | null;
 }
 
 interface MarketMoMData {
   closePrice: number;
-  momPercentage: number;
+  momPercentage: number | null;
   month: string;
 }
 
@@ -194,9 +194,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   };
 
   // Format value based on type
+  // For percentage: null/undefined = uncomputable (show "-"), 0 = genuine 0% change (show "+0.00%")
+  // For other types: null/undefined/0 = no data (show "-")
   const formatValue = (value: number | undefined | null, type: 'units' | 'nav' | 'market_value' | 'percentage') => {
     if (value === undefined || value === null) return '-';
-    if (value === 0) return '-';
+    if (value === 0 && type !== 'percentage') return '-';
 
     switch (type) {
       case 'units':
@@ -243,11 +245,12 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     // Subtracts net cash flow so MoM reflects actual investment performance
     // Note: Data is in reverse chronological order (newest first)
     // So index 0 is current month, index 1 is previous month, etc.
+    // Returns null for months where MoM can't be computed (no previous data)
     return totals.map((current: { totalMarketValue: number; totalNetCashFlow: number }, idx: number) => {
       const previousIdx = idx + 1; // Previous month is next index (older)
       const previous = totals[previousIdx];
 
-      let momPercentage = 0;
+      let momPercentage: number | null = null;
       if (previous && previous.totalMarketValue > 0) {
         const adjustedChange = current.totalMarketValue - previous.totalMarketValue - current.totalNetCashFlow;
         momPercentage = (adjustedChange / previous.totalMarketValue) * 100;
@@ -255,7 +258,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
       return {
         totalMarketValue: current.totalMarketValue,
-        momPercentage: Math.round(momPercentage * 100) / 100
+        momPercentage: momPercentage !== null ? Math.round(momPercentage * 100) / 100 : null
       };
     });
   }, [schemes, monthHeaders]);
@@ -323,14 +326,14 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
           const previousIdx = idx + 1;
           const previousValue = finalValues[previousIdx];
 
-          let momPercentage = 0;
+          let momPercentage: number | null = null;
           if (previousValue && previousValue > 0) {
             momPercentage = ((value - previousValue) / previousValue) * 100;
           }
 
           return {
             totalMarketValue: value,
-            momPercentage: Math.round(momPercentage * 100) / 100
+            momPercentage: momPercentage !== null ? Math.round(momPercentage * 100) / 100 : null
           };
         });
 
@@ -350,7 +353,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     return assetAllocationData.map((asset: any) => {
       const monthlyData = Array(targetMonths).fill(null).map((_, idx) => ({
         totalMarketValue: idx === 0 ? asset.current_value : 0,
-        momPercentage: 0
+        momPercentage: null as number | null
       }));
 
       return {
@@ -404,7 +407,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
       const prevMonthKey = prevMonthData?.month;
       const prevBenchmark = prevMonthKey ? benchmarkByMonth.get(prevMonthKey) : null;
 
-      let momPercentage = 0;
+      let momPercentage: number | null = null;
       const closePrice = currentBenchmark?.close || 0;
 
       if (currentBenchmark && prevBenchmark && prevBenchmark.close > 0) {
@@ -413,7 +416,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
 
       result.push({
         closePrice,
-        momPercentage: Math.round(momPercentage * 100) / 100,
+        momPercentage: momPercentage !== null ? Math.round(momPercentage * 100) / 100 : null,
         month: monthKey
       });
     }
@@ -1070,7 +1073,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                     </td>
                     {/* Show Performance (MoM) values directly in scheme row */}
                     {displaySchemeMonthlyData(scheme.monthly_data).map((month: any, idx: number) => {
-                      const changePercentage = month.month_change_percentage || 0;
+                      const changePercentage = month.month_change_percentage;
+                      const isComputable = changePercentage !== null && changePercentage !== undefined;
                       return (
                         <td
                           key={idx}
@@ -1079,9 +1083,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             textAlign: 'right',
                             fontWeight: '600',
                             fontSize: '12px',
-                            color: changePercentage >= 0
-                              ? colors.semantic.success
-                              : colors.semantic.error,
+                            color: !isComputable
+                              ? colors.utility.secondaryText
+                              : changePercentage >= 0
+                                ? colors.semantic.success
+                                : colors.semantic.error,
                             backgroundColor: idx === currentMonthColIdx
                               ? `${colors.brand.primary}10`
                               : (schemeIdx % 2 === 0
@@ -1281,7 +1287,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   </div>
                 </td>
                 {displayTotalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
-                  const momPercentage = monthData.momPercentage || 0;
+                  const momPercentage = monthData.momPercentage;
+                  const isComputable = momPercentage !== null && momPercentage !== undefined;
                   return (
                     <td
                       key={idx}
@@ -1290,9 +1297,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         textAlign: 'right',
                         fontWeight: '700',
                         fontSize: '13px',
-                        color: momPercentage >= 0
-                          ? colors.semantic.success
-                          : colors.semantic.error,
+                        color: !isComputable
+                          ? colors.utility.secondaryText
+                          : momPercentage >= 0
+                            ? colors.semantic.success
+                            : colors.semantic.error,
                         backgroundColor: idx === currentMonthColIdx
                           ? `${colors.brand.primary}25`
                           : `${colors.brand.primary}15`
@@ -1353,7 +1362,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   </div>
                 </td>
                 {displayMarketMoM.map((monthData: MarketMoMData, idx: number) => {
-                  const momPercentage = monthData.momPercentage || 0;
+                  const momPercentage = monthData.momPercentage;
+                  const isComputable = momPercentage !== null && momPercentage !== undefined;
                   return (
                     <td
                       key={idx}
@@ -1362,9 +1372,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         textAlign: 'right',
                         fontWeight: '600',
                         fontSize: '13px',
-                        color: momPercentage >= 0
-                          ? colors.semantic.success
-                          : colors.semantic.error,
+                        color: !isComputable
+                          ? colors.utility.secondaryText
+                          : momPercentage >= 0
+                            ? colors.semantic.success
+                            : colors.semantic.error,
                         backgroundColor: idx === currentMonthColIdx
                           ? `${colors.semantic.warning}20`
                           : `${colors.semantic.warning}12`
@@ -1485,7 +1497,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                       </div>
                     </td>
                     {assetData.monthlyData.map((monthData: any, idx: number) => {
-                      const momPercentage = monthData.momPercentage || 0;
+                      const momPercentage = monthData.momPercentage;
+                      const isComputable = momPercentage !== null && momPercentage !== undefined;
                       return (
                         <td
                           key={idx}
@@ -1494,9 +1507,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                             textAlign: 'right',
                             fontWeight: '600',
                             fontSize: '12px',
-                            color: momPercentage >= 0
-                              ? colors.semantic.success
-                              : colors.semantic.error,
+                            color: !isComputable
+                              ? colors.utility.secondaryText
+                              : momPercentage >= 0
+                                ? colors.semantic.success
+                                : colors.semantic.error,
                             backgroundColor: idx === currentMonthColIdx ? `${assetColor}10` : bgColor
                           }}
                         >
@@ -1557,7 +1572,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   </div>
                 </td>
                 {displayTotalPortfolioMoM.map((monthData: TotalMoMData, idx: number) => {
-                  const momPercentage = monthData.momPercentage || 0;
+                  const momPercentage = monthData.momPercentage;
+                  const isComputable = momPercentage !== null && momPercentage !== undefined;
                   return (
                     <td
                       key={idx}
@@ -1566,9 +1582,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         textAlign: 'right',
                         fontWeight: '700',
                         fontSize: '13px',
-                        color: momPercentage >= 0
-                          ? colors.semantic.success
-                          : colors.semantic.error,
+                        color: !isComputable
+                          ? colors.utility.secondaryText
+                          : momPercentage >= 0
+                            ? colors.semantic.success
+                            : colors.semantic.error,
                         backgroundColor: idx === currentMonthColIdx
                           ? `${colors.brand.primary}25`
                           : `${colors.brand.primary}15`
@@ -1629,7 +1647,8 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                   </div>
                 </td>
                 {displayMarketMoM.map((monthData: MarketMoMData, idx: number) => {
-                  const momPercentage = monthData.momPercentage || 0;
+                  const momPercentage = monthData.momPercentage;
+                  const isComputable = momPercentage !== null && momPercentage !== undefined;
                   return (
                     <td
                       key={idx}
@@ -1638,9 +1657,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                         textAlign: 'right',
                         fontWeight: '600',
                         fontSize: '13px',
-                        color: momPercentage >= 0
-                          ? colors.semantic.success
-                          : colors.semantic.error,
+                        color: !isComputable
+                          ? colors.utility.secondaryText
+                          : momPercentage >= 0
+                            ? colors.semantic.success
+                            : colors.semantic.error,
                         backgroundColor: idx === currentMonthColIdx
                           ? `${colors.semantic.warning}20`
                           : `${colors.semantic.warning}12`

@@ -524,9 +524,10 @@ export class MonthlyTrackingService {
         const netCashFlow = cashFlowMap.get(month) || 0;
         const monthChange = marketValue - previousMonthMarketValue;
         const adjustedMonthChange = monthChange - netCashFlow;
+        // Return null when MoM can't be computed (no previous base to calculate % from)
         const monthChangePercentage = previousMonthMarketValue > 0
           ? (adjustedMonthChange / previousMonthMarketValue) * 100
-          : 0;
+          : null;
 
         monthlyData.push({
           month,
@@ -540,7 +541,9 @@ export class MonthlyTrackingService {
           profit_loss: Math.round(profitLoss * 100) / 100,
           profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
           month_change: Math.round(monthChange * 100) / 100,
-          month_change_percentage: Math.round(monthChangePercentage * 100) / 100,
+          month_change_percentage: monthChangePercentage !== null
+            ? Math.round(monthChangePercentage * 100) / 100
+            : null,
           net_cash_flow: Math.round(netCashFlow * 100) / 100
         });
 

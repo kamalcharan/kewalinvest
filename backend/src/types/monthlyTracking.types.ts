@@ -81,7 +81,7 @@ export interface MonthlyMarketValueData {
   profit_loss: number; // market_value - invested_value
   profit_loss_percentage: number; // (profit_loss / invested_value) * 100
   month_change: number; // Change from previous month's market value
-  month_change_percentage: number; // MoM percentage change (cash-flow adjusted)
+  month_change_percentage: number | null; // MoM percentage change (cash-flow adjusted). null = uncomputable (no previous data)
   net_cash_flow: number; // Net cash flow for this month (additions - redemptions)
 }
 
