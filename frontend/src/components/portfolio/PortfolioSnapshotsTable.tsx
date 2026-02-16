@@ -37,7 +37,7 @@ interface AssetMoMData {
   assetType: string;
   monthlyData: {
     totalMarketValue: number;
-    momPercentage: number;
+    momPercentage: number | null;
   }[];
 }
 
