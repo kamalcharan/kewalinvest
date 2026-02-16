@@ -73,15 +73,14 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
     setShowSnapshotPrompt(true);
   };
 
-  // Handle snapshot regeneration
-  // Uses smartBackfill instead of regenerateAll to preserve existing MF NAV-based snapshots
-  // regenerateAll drops ALL snapshots first, causing MF values to be recalculated from
-  // potentially stale NAV data, leading to incorrect networth values
+  // Handle snapshot update after adding a new investment plan
+  // Uses smartBackfill with non_scheme_only=true to ONLY generate snapshots for the new asset
+  // (GOLD, FD, etc.) without touching existing MF NAV-based snapshots
   const handleConfirmRegenerate = async () => {
     setShowSnapshotPrompt(false);
     setIsRegenerating(true);
     try {
-      const response = await PortfolioSnapshotService.smartBackfill([customerId]);
+      const response = await PortfolioSnapshotService.smartBackfill([customerId], true);
       if (response.success) {
         toastService.success('Snapshots updated successfully! Refreshing page...');
         // Refresh the entire page to show updated charts with latest data

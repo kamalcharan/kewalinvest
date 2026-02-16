@@ -77,16 +77,8 @@ export class PortfolioSnapshotService {
             request.is_live
           );
 
-          // Check for legacy 'MF' snapshots that need cleanup
-          const hasLegacyMF = !customerSchemeCategories.includes('MF') && await this.hasLegacyMFSnapshot(
-            customer.customer_id,
-            request.tenant_id,
-            request.is_live
-          );
-
           // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS (NAV-based) ====================
           // Generate separate snapshots for each scheme category this customer has
-          let createdCategorySnapshots = false;
           for (const assetTypeCode of customerSchemeCategories) {
             const snapshotData = await this.calculateSnapshotData(
               customer.customer_id,
@@ -120,17 +112,6 @@ export class PortfolioSnapshotService {
               await this.createSnapshot(snapshotData);
               snapshotsCreated++;
             }
-            createdCategorySnapshots = true;
-          }
-
-          // Clean up legacy 'MF' snapshot if we created per-category snapshots
-          if (hasLegacyMF && createdCategorySnapshots) {
-            await this.removeLegacyMFSnapshot(
-              customer.customer_id,
-              snapshotMonthEnd,
-              request.tenant_id,
-              request.is_live
-            );
           }
 
           // ==================== NON-SCHEME SNAPSHOTS (Assumption-based) ====================
@@ -211,6 +192,7 @@ export class PortfolioSnapshotService {
     tenant_id: number;
     is_live: boolean;
     customer_ids?: number[];
+    non_scheme_only?: boolean;
   }): Promise<BackfillResult> {
     const startTime = Date.now();
     const errors: BackfillMonthError[] = [];
@@ -263,16 +245,7 @@ export class PortfolioSnapshotService {
           const hasNonSchemeAssets = nonSchemePlans.length > 0;
 
           // OPTIMIZATION: Fetch customer's distinct scheme categories ONCE
-          const customerSchemeCategories = await this.getCustomerSchemeCategories(
-            customer.customer_id,
-            params.tenant_id,
-            params.is_live
-          );
-
-          // Check for legacy 'MF' snapshots that need to be cleaned up
-          // Migration 020 tagged all old snapshots as 'MF', but now we use actual scheme categories
-          // (e.g., 'Open Ended', 'Debt'). Legacy 'MF' snapshots should be removed to prevent double-counting.
-          const hasLegacyMFSnapshots = !customerSchemeCategories.includes('MF') && await this.hasLegacyMFSnapshot(
+          const customerSchemeCategories = params.non_scheme_only ? [] : await this.getCustomerSchemeCategories(
             customer.customer_id,
             params.tenant_id,
             params.is_live
@@ -282,8 +255,8 @@ export class PortfolioSnapshotService {
           for (const monthEnd of months) {
             try {
               // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
-              // Calculate snapshots for each scheme category this customer has
-              let createdCategorySnapshots = false;
+              // Skip scheme snapshots when non_scheme_only is set (e.g., after adding a new investment plan)
+              // This preserves existing MF snapshot values which are calculated from NAV data
               for (const assetTypeCode of customerSchemeCategories) {
                 const snapshotData = await this.calculateSnapshotData(
                   customer.customer_id,
@@ -317,18 +290,6 @@ export class PortfolioSnapshotService {
                   await this.createSnapshot(snapshotData);
                   snapshotsCreated++;
                 }
-                createdCategorySnapshots = true;
-              }
-
-              // Clean up legacy 'MF' snapshot for this month if we created per-category snapshots
-              // This prevents double-counting when old 'MF' snapshots coexist with new category snapshots
-              if (hasLegacyMFSnapshots && createdCategorySnapshots) {
-                await this.removeLegacyMFSnapshot(
-                  customer.customer_id,
-                  monthEnd,
-                  params.tenant_id,
-                  params.is_live
-                );
               }
 
               // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
@@ -454,18 +415,10 @@ export class PortfolioSnapshotService {
             request.is_live
           );
 
-          // Check for legacy 'MF' snapshots
-          const hasLegacyMF = !customerSchemeCategories.includes('MF') && await this.hasLegacyMFSnapshot(
-            customer.customer_id,
-            request.tenant_id,
-            request.is_live
-          );
-
           for (const monthEnd of months) {
             try {
               // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
               // Calculate snapshots for each scheme category this customer has
-              let createdCategorySnapshots = false;
               for (const assetTypeCode of customerSchemeCategories) {
                 const snapshotData = await this.calculateSnapshotData(
                   customer.customer_id,
@@ -497,17 +450,6 @@ export class PortfolioSnapshotService {
                   await this.createSnapshot(snapshotData);
                   snapshotsCreated++;
                 }
-                createdCategorySnapshots = true;
-              }
-
-              // Clean up legacy 'MF' snapshot
-              if (hasLegacyMF && createdCategorySnapshots) {
-                await this.removeLegacyMFSnapshot(
-                  customer.customer_id,
-                  monthEnd,
-                  request.tenant_id,
-                  request.is_live
-                );
               }
 
               // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
@@ -716,17 +658,9 @@ export class PortfolioSnapshotService {
             params.is_live
           );
 
-          // Check for legacy 'MF' snapshots that need cleanup
-          const hasLegacyMF = !customerSchemeCategories.includes('MF') && await this.hasLegacyMFSnapshot(
-            customer.customer_id,
-            params.tenant_id,
-            params.is_live
-          );
-
           for (const monthEnd of months) {
             // ==================== SCHEME-CATEGORY-BASED SNAPSHOTS ====================
             // Generate snapshots for each scheme category this customer has
-            let createdCategorySnapshots = false;
             for (const assetTypeCode of customerSchemeCategories) {
               const existing = await this.getExistingSnapshot(
                 customer.customer_id, monthEnd, params.tenant_id, params.is_live,
@@ -755,19 +689,8 @@ export class PortfolioSnapshotService {
 
                 await this.createSnapshot(snapshotData);
                 snapshotsCreated++;
-                createdCategorySnapshots = true;
                 console.log(`[SnapshotService]     ✓ ${assetTypeCode} Created`);
               }
-            }
-
-            // Clean up legacy 'MF' snapshot if we created per-category snapshots
-            if (hasLegacyMF && createdCategorySnapshots) {
-              await this.removeLegacyMFSnapshot(
-                customer.customer_id,
-                monthEnd,
-                params.tenant_id,
-                params.is_live
-              );
             }
 
             // ==================== NON-SCHEME ASSET SNAPSHOTS ====================
@@ -856,10 +779,8 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Regenerate all snapshots
-   * SAFE: Only drops non-scheme (assumption-based) snapshots like GOLD, FD, etc.
-   * Preserves scheme-based (NAV) snapshots from MF transactions.
-   * Then runs smartBackfill to create+update all snapshots.
+   * Regenerate all snapshots (DROP + CREATE)
+   * VERY DANGEROUS: Deletes all snapshots then rebuilds from scratch
    */
   async regenerateAllSnapshots(params: {
     tenant_id: number;
@@ -870,44 +791,32 @@ export class PortfolioSnapshotService {
     const errors: any[] = [];
 
     try {
-      // Step 1: Only drop non-scheme (assumption-based) snapshots
-      // This preserves MF/scheme-based NAV snapshots which are calculated from actual transactions
-      const nonSchemeAssetTypes = ['GOLD', 'SILVER', 'EQUITY', 'FD', 'PPF', 'EPF', 'NPS', 'REAL_ESTATE', 'INSURANCE', 'NSC', 'BONDS', 'OTHER'];
-
-      console.log(`[SnapshotService] Regenerate: Dropping ONLY non-scheme snapshots for tenant ${params.tenant_id}`);
-
-      let dropQuery = `
-        DELETE FROM t_monthly_portfolio_snapshots
-        WHERE tenant_id = $1 AND is_live = $2
-          AND asset_type_code IN (SELECT UNNEST($3::text[]))
-      `;
-      const dropParams: any[] = [params.tenant_id, params.is_live, nonSchemeAssetTypes];
-
-      if (params.customer_ids && params.customer_ids.length > 0) {
-        dropQuery += ` AND customer_id = ANY($4)`;
-        dropParams.push(params.customer_ids);
+      // Step 1: Drop all snapshots
+      console.log(`[SnapshotService] Regenerate: Dropping all snapshots for tenant ${params.tenant_id}`);
+      
+      const dropResult = await this.dropAllSnapshots(params);
+      
+      if (!dropResult.success) {
+        throw new Error(`Failed to drop snapshots: ${dropResult.message}`);
       }
 
-      const dropResult = await this.db.query(dropQuery, dropParams);
-      const deletedCount = dropResult.rowCount || 0;
+      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} snapshots`);
 
-      console.log(`[SnapshotService] Regenerate: Dropped ${deletedCount} non-scheme snapshots (MF snapshots preserved)`);
-
-      // Step 2: Run smartBackfill to create+update all snapshots (scheme + non-scheme)
-      console.log(`[SnapshotService] Regenerate: Running smartBackfill to rebuild`);
-
-      const generateResult = await this.smartBackfill(params);
+      // Step 2: Generate all snapshots fresh (CREATE only, no UPDATE since we just dropped all)
+      console.log(`[SnapshotService] Regenerate: Creating fresh snapshots`);
+      
+      const generateResult = await this.generateMissingSnapshots(params);
 
       const duration = Date.now() - startTime;
 
-      console.log(`[SnapshotService] Regenerate completed: ${generateResult.snapshots_created} created, ${generateResult.snapshots_updated} updated in ${duration}ms`);
+      console.log(`[SnapshotService] Regenerate completed: ${generateResult.snapshots_created} created in ${duration}ms`);
 
       return {
         snapshot_month_end: generateResult.snapshot_month_end,
         customers_processed: generateResult.customers_processed,
         customers_failed: generateResult.customers_failed,
         snapshots_created: generateResult.snapshots_created,
-        snapshots_deleted: deletedCount,
+        snapshots_deleted: dropResult.deleted_count,
         months_processed: generateResult.months_processed,
         errors: [...errors, ...generateResult.errors],
         execution_duration_ms: duration
@@ -916,7 +825,7 @@ export class PortfolioSnapshotService {
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error('[SnapshotService] Error in regenerateAllSnapshots:', error);
-
+      
       return {
         snapshot_month_end: this.getLastMonthEnd(),
         customers_processed: 0,
@@ -945,7 +854,6 @@ export class PortfolioSnapshotService {
     assetTypeCode: string = 'Open Ended'  // Filter by specific asset type
   ): Promise<PortfolioSnapshotData> {
     // Query to calculate portfolio totals as of the snapshot date, filtered by asset_type_code
-    // Uses COALESCE to include transactions with NULL asset_type_code under 'MF' (legacy default)
     const query = `
       WITH customer_transactions AS (
         SELECT
@@ -976,7 +884,7 @@ export class PortfolioSnapshotService {
           AND t.is_live = $3
           AND t.txn_date <= $4
           AND t.portfolio_flag = true
-          AND COALESCE(t.asset_type_code, 'MF') = $5
+          AND t.asset_type_code = $5
         GROUP BY t.scheme_code
         HAVING (SUM(CASE WHEN tt.txn_type = 'Addition' THEN t.units ELSE 0 END) -
                 SUM(CASE WHEN tt.txn_type = 'Deduction' THEN t.units ELSE 0 END)) > 0.001
@@ -1154,53 +1062,6 @@ export class PortfolioSnapshotService {
       customerId, monthEnd, tenantId, isLive, assetTypeCode, investmentPlanId
     ]);
     return result.rows.length > 0 ? result.rows[0] : null;
-  }
-
-  /**
-   * Check if a customer has legacy 'MF' snapshots (from migration 020)
-   * These are snapshots tagged as 'MF' instead of actual scheme categories
-   */
-  private async hasLegacyMFSnapshot(
-    customerId: number,
-    tenantId: number,
-    isLive: boolean
-  ): Promise<boolean> {
-    const query = `
-      SELECT 1 FROM t_monthly_portfolio_snapshots
-      WHERE customer_id = $1
-        AND tenant_id = $2
-        AND is_live = $3
-        AND asset_type_code = 'MF'
-        AND investment_plan_id IS NULL
-      LIMIT 1
-    `;
-    const result = await this.db.query(query, [customerId, tenantId, isLive]);
-    return result.rows.length > 0;
-  }
-
-  /**
-   * Remove legacy 'MF' snapshot for a specific month
-   * Called when per-category snapshots (e.g., 'Open Ended', 'Debt') are created to replace it
-   */
-  private async removeLegacyMFSnapshot(
-    customerId: number,
-    monthEnd: Date,
-    tenantId: number,
-    isLive: boolean
-  ): Promise<void> {
-    const query = `
-      DELETE FROM t_monthly_portfolio_snapshots
-      WHERE customer_id = $1
-        AND snapshot_month_end = $2
-        AND tenant_id = $3
-        AND is_live = $4
-        AND asset_type_code = 'MF'
-        AND investment_plan_id IS NULL
-    `;
-    const result = await this.db.query(query, [customerId, monthEnd, tenantId, isLive]);
-    if (result.rowCount && result.rowCount > 0) {
-      console.log(`[SnapshotService] Removed legacy 'MF' snapshot for customer ${customerId} month ${monthEnd.toISOString().split('T')[0]}`);
-    }
   }
 
   // ==================== HELPER METHODS ====================
@@ -1426,7 +1287,6 @@ export class PortfolioSnapshotService {
   /**
    * Get customer's distinct scheme categories from transactions
    * Returns unique asset_type_code values from t_transaction_table for this customer
-   * Transactions with NULL asset_type_code are grouped under 'MF' (legacy default)
    */
   private async getCustomerSchemeCategories(
     customerId: number,
@@ -1434,13 +1294,14 @@ export class PortfolioSnapshotService {
     isLive: boolean
   ): Promise<string[]> {
     const query = `
-      SELECT DISTINCT COALESCE(tt.asset_type_code, 'MF') as asset_type_code
+      SELECT DISTINCT tt.asset_type_code
       FROM t_transaction_table tt
       WHERE tt.customer_id = $1
         AND tt.tenant_id = $2
         AND tt.is_live = $3
+        AND tt.asset_type_code IS NOT NULL
         AND tt.portfolio_flag = true
-      ORDER BY asset_type_code
+      ORDER BY tt.asset_type_code
     `;
 
     const result = await this.db.query(query, [customerId, tenantId, isLive]);

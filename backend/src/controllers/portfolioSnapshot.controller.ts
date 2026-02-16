@@ -315,13 +315,13 @@ export class PortfolioSnapshotController {
         return;
       }
 
-      const { customer_ids } = req.body;
+      const { customer_ids, non_scheme_only } = req.body;
 
-      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}`);
+      console.log(`[SnapshotController] Smart backfill requested for tenant ${tenantId}${customer_ids ? ` (${customer_ids.length} customers)` : ' (all customers)'}${non_scheme_only ? ' (non-scheme only)' : ''}`);
 
       // Get or create config
       let config = await this.jobSchedulerService.getConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT);
-      
+
       if (!config) {
         config = await this.jobSchedulerService.createConfig(tenantId, isLive, JobType.PORTFOLIO_SNAPSHOT, {
           user_id: userId,
@@ -346,7 +346,8 @@ export class PortfolioSnapshotController {
       this.snapshotService.smartBackfill({
         tenant_id: tenantId,
         is_live: isLive,
-        customer_ids: customer_ids
+        customer_ids: customer_ids,
+        non_scheme_only: non_scheme_only || false
       }).then(async (result) => {
         try {
           await this.jobSchedulerService.completeExecution(executionId, {
