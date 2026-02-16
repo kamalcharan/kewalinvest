@@ -501,8 +501,54 @@ const AssetTypePerformanceChart: React.FC<AssetTypePerformanceChartProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: isFullscreenMode ? '400px' : 'auto'
+        minHeight: isFullscreenMode ? '400px' : 'auto',
+        position: 'relative'
       }}>
+        {/* Loading overlay while index comparison data is being fetched */}
+        {isLoadingIndexComparison && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.utility.secondaryBackground,
+            zIndex: 10,
+            borderRadius: '8px',
+            gap: '16px'
+          }}>
+            {/* Animated pulse bars to mimic a chart loading */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '60px' }}>
+              {[40, 60, 35, 55, 45, 65, 50].map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: '8px',
+                    height: `${h}%`,
+                    backgroundColor: colors.brand.primary,
+                    borderRadius: '4px',
+                    opacity: 0.3,
+                    animation: `chartPulse 1.2s ease-in-out ${i * 0.1}s infinite alternate`
+                  }}
+                />
+              ))}
+            </div>
+            <span style={{
+              fontSize: '13px',
+              color: colors.utility.secondaryText,
+              fontWeight: '500'
+            }}>
+              Loading chart data...
+            </span>
+            <style>{`
+              @keyframes chartPulse {
+                0% { opacity: 0.2; transform: scaleY(0.7); }
+                100% { opacity: 0.5; transform: scaleY(1); }
+              }
+            `}</style>
+          </div>
+        )}
         {dataWithMoM && dataWithMoM.length > 1 ? (
           <div style={{ width: '100%', height: '100%' }}>
             <PerformanceComparisonChart
