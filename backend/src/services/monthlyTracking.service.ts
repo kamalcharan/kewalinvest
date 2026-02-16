@@ -591,6 +591,35 @@ export class MonthlyTrackingService {
     months: number = 12
   ): Promise<any> {
     try {
+      // If months=0, auto-detect from customer's first transaction date
+      let actualMonths = months;
+      let firstTransactionDate: string | null = null;
+
+      if (months === 0) {
+        const firstTxnQuery = `
+          SELECT MIN(txn_date) as first_date
+          FROM t_transaction_table
+          WHERE tenant_id = $1
+            AND is_live = $2
+            AND customer_id = $3
+            AND is_active = true
+            AND portfolio_flag = true
+        `;
+        const result = await this.db.query(firstTxnQuery, [tenantId, isLive, customerId]);
+        const firstDate = result.rows[0]?.first_date;
+
+        if (firstDate) {
+          firstTransactionDate = new Date(firstDate).toISOString().split('T')[0];
+          const now = new Date();
+          const first = new Date(firstDate);
+          actualMonths = (now.getFullYear() - first.getFullYear()) * 12
+            + (now.getMonth() - first.getMonth()) + 1;
+          actualMonths = Math.max(actualMonths, 1);
+        } else {
+          actualMonths = 12; // Fallback if no transactions
+        }
+      }
+
       // Get all active schemes from customer's portfolio
       // Join with t_scheme_details and t_scheme_masters to get actual scheme category
       const schemesQuery = `
@@ -619,7 +648,8 @@ export class MonthlyTrackingService {
         return {
           customer_id: customerId,
           schemes: [],
-          months_count: months
+          months_count: actualMonths,
+          first_transaction_date: firstTransactionDate
         };
       }
 
@@ -628,7 +658,7 @@ export class MonthlyTrackingService {
         const filters = {
           customer_id: customerId,
           scheme_code: scheme.scheme_code,
-          months
+          months: actualMonths
         };
 
         try {
@@ -710,7 +740,8 @@ export class MonthlyTrackingService {
       return {
         customer_id: customerId,
         schemes,
-        months_count: months
+        months_count: actualMonths,
+        first_transaction_date: firstTransactionDate
       };
 
     } catch (error: any) {

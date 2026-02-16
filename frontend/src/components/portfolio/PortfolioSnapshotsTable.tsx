@@ -68,10 +68,11 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   const [activeTab, setActiveTab] = useState<TabType>('mf');
   const [hideExited, setHideExited] = useState(false);
   const [sortNewestFirst, setSortNewestFirst] = useState(false); // Default: chronological (oldest → newest)
+  const [selectedMonths, setSelectedMonths] = useState(months); // 12, 24, 36, or 0 (All)
 
   const { data, isLoading, error, isError } = usePortfolioSnapshots(
     customerId,
-    months
+    selectedMonths
   );
 
   // Fetch benchmark index data (monthly granularity)
@@ -87,16 +88,27 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
     { enabled: customerId > 0 }
   );
 
-  // Calculate date range for networth history (last N months)
+  // Calculate date range for networth history
+  // When selectedMonths=0 (All), use the first_transaction_date from response or fallback to 20 years
   const dateRange = useMemo(() => {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - months);
+    if (selectedMonths === 0) {
+      const firstTxnDate = data?.data?.first_transaction_date;
+      if (firstTxnDate) {
+        const d = new Date(firstTxnDate);
+        startDate.setFullYear(d.getFullYear(), d.getMonth(), 1);
+      } else {
+        startDate.setFullYear(startDate.getFullYear() - 20); // generous fallback
+      }
+    } else {
+      startDate.setMonth(startDate.getMonth() - selectedMonths);
+    }
     return {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0]
     };
-  }, [months]);
+  }, [selectedMonths, data?.data?.first_transaction_date]);
 
   // Fetch networth history for asset type MoM calculations
   const { data: networthHistoryData } = useNetworthHistory(
@@ -272,7 +284,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
   // Uses actual asset type breakdown with historical values
   // Aligns data to match MF tab's month count (uses monthHeaders length)
   const assetAllocationMoM = useMemo((): AssetMoMData[] => {
-    const targetMonths = monthHeaders.length || months;
+    const targetMonths = monthHeaders.length || selectedMonths;
 
     // Use networth history if available
     if (networthHistoryData?.data?.chart_ready?.by_asset_type) {
@@ -347,7 +359,7 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
         monthlyData
       };
     });
-  }, [networthHistoryData, assetAllocationData, monthHeaders.length, months]);
+  }, [networthHistoryData, assetAllocationData, monthHeaders.length, selectedMonths]);
 
   // Calculate Market (Benchmark) MoM for each month
   // Uses benchmark index data to show market performance alongside portfolio
@@ -693,8 +705,42 @@ export const PortfolioSnapshotsTable: React.FC<PortfolioSnapshotsTableProps> = (
                 color: colors.utility.primaryText,
                 margin: '0'
               }}>
-                Portfolio Snapshots - {months} Month View
+                Portfolio Snapshots - {selectedMonths === 0 ? 'Full History' : `${selectedMonths} Month View`}
               </h3>
+              {/* Month Range Selector */}
+              <div style={{
+                display: 'flex',
+                gap: '2px',
+                backgroundColor: colors.utility.primaryBackground,
+                padding: '2px',
+                borderRadius: '6px',
+                marginLeft: '12px'
+              }}>
+                {([12, 24, 36, 0] as const).map((m) => {
+                  const label = m === 0 ? 'All' : `${m}M`;
+                  const isActive = selectedMonths === m;
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => setSelectedMonths(m)}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: isActive ? '700' : '500',
+                        color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+                        backgroundColor: isActive ? colors.utility.secondaryBackground : 'transparent',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: isActive ? `0 1px 3px ${colors.utility.primaryText}10` : 'none'
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <p style={{
               fontSize: '12px',
