@@ -882,7 +882,7 @@ export class PortfolioSnapshotController {
         data: {
           execution_id: executionId,
           status: 'running',
-          message: 'Regenerating all snapshots (dropping and recreating). This may take several minutes.'
+          message: 'Regenerating snapshots. Non-scheme assets (Gold, FD, etc.) are refreshed. MF snapshots are preserved (NAV-based values are protected).'
         }
       });
     } catch (error: any) {

@@ -530,6 +530,7 @@ export class PortfolioSnapshotService {
     tenant_id: number;
     is_live: boolean;
     customer_ids?: number[];
+    non_scheme_only?: boolean;
   }): Promise<DropAllSnapshotsResult> {
     const startTime = Date.now();
 
@@ -538,13 +539,21 @@ export class PortfolioSnapshotService {
         DELETE FROM t_monthly_portfolio_snapshots
         WHERE tenant_id = $1 AND is_live = $2
       `;
-      
+
       const queryParams: any[] = [params.tenant_id, params.is_live];
+      let paramIdx = 3;
+
+      // Protect MF (NAV-based) snapshots: only delete ASSUMPTION-based (non-scheme) snapshots
+      if (params.non_scheme_only) {
+        query += ` AND calculation_method = 'ASSUMPTION'`;
+        console.log(`[SnapshotService] DROP: non_scheme_only=true → only deleting ASSUMPTION-based snapshots (protecting NAV/MF data)`);
+      }
 
       // Optional: Filter by specific customers
       if (params.customer_ids && params.customer_ids.length > 0) {
-        query += ` AND customer_id = ANY($3)`;
+        query += ` AND customer_id = ANY($${paramIdx})`;
         queryParams.push(params.customer_ids);
+        paramIdx++;
       }
 
       const result = await this.db.query(query, queryParams);
@@ -552,21 +561,21 @@ export class PortfolioSnapshotService {
 
       const duration = Date.now() - startTime;
 
-      console.log(`[SnapshotService] Dropped ${deletedCount} snapshots for tenant ${params.tenant_id} in ${duration}ms`);
+      console.log(`[SnapshotService] Dropped ${deletedCount} snapshots for tenant ${params.tenant_id} in ${duration}ms${params.non_scheme_only ? ' (non-scheme only)' : ''}`);
 
       return {
         success: true,
         deleted_count: deletedCount,
         execution_duration_ms: duration,
-        message: deletedCount > 0 
-          ? `Successfully deleted ${deletedCount} snapshot(s)` 
+        message: deletedCount > 0
+          ? `Successfully deleted ${deletedCount} snapshot(s)${params.non_scheme_only ? ' (non-scheme only, MF preserved)' : ''}`
           : 'No snapshots found to delete'
       };
 
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error('[SnapshotService] Error dropping snapshots:', error);
-      
+
       return {
         success: false,
         deleted_count: 0,
@@ -779,8 +788,9 @@ export class PortfolioSnapshotService {
   }
 
   /**
-   * Regenerate all snapshots (DROP + CREATE)
-   * VERY DANGEROUS: Deletes all snapshots then rebuilds from scratch
+   * Regenerate all snapshots (SAFE: drops non-scheme only, preserves MF)
+   * Non-scheme (ASSUMPTION) snapshots are dropped and recreated.
+   * MF (NAV) snapshots are preserved to prevent corruption from incomplete NAV data.
    */
   async regenerateAllSnapshots(params: {
     tenant_id: number;
@@ -791,41 +801,60 @@ export class PortfolioSnapshotService {
     const errors: any[] = [];
 
     try {
-      // Step 1: Drop all snapshots
-      console.log(`[SnapshotService] Regenerate: Dropping all snapshots for tenant ${params.tenant_id}`);
-      
-      const dropResult = await this.dropAllSnapshots(params);
-      
+      // ================================================================
+      // SAFE REGENERATION STRATEGY:
+      // MF snapshots (calculation_method='NAV') are PRESERVED - they contain
+      // correct values calculated from NAV×Units. Recalculating them from scratch
+      // can produce inconsistent values if NAV data is incomplete for historical months.
+      //
+      // Non-scheme snapshots (calculation_method='ASSUMPTION') are DROPPED and
+      // REGENERATED - they're formula-based (principal × growth_rate ^ time) and
+      // always produce the same correct values.
+      // ================================================================
+
+      // Step 1: Drop ONLY non-scheme (ASSUMPTION-based) snapshots
+      // MF/NAV-based snapshots are PROTECTED from deletion
+      console.log(`[SnapshotService] Regenerate: Dropping non-scheme snapshots for tenant ${params.tenant_id} (MF snapshots preserved)`);
+
+      const dropResult = await this.dropAllSnapshots({
+        ...params,
+        non_scheme_only: true  // Only delete ASSUMPTION-based snapshots
+      });
+
       if (!dropResult.success) {
         throw new Error(`Failed to drop snapshots: ${dropResult.message}`);
       }
 
-      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} snapshots`);
+      console.log(`[SnapshotService] Regenerate: Dropped ${dropResult.deleted_count} non-scheme snapshots (MF preserved)`);
 
-      // Step 2: Generate all snapshots fresh (CREATE only, no UPDATE since we just dropped all)
-      console.log(`[SnapshotService] Regenerate: Creating fresh snapshots`);
-      
-      const generateResult = await this.generateMissingSnapshots(params);
+      // Step 2: Regenerate non-scheme snapshots using smartBackfill
+      // non_scheme_only=true → creates new ASSUMPTION snapshots, skips MF entirely
+      console.log(`[SnapshotService] Regenerate: Recreating non-scheme snapshots via smartBackfill`);
+
+      const backfillResult = await this.smartBackfill({
+        ...params,
+        non_scheme_only: true
+      });
 
       const duration = Date.now() - startTime;
 
-      console.log(`[SnapshotService] Regenerate completed: ${generateResult.snapshots_created} created in ${duration}ms`);
+      console.log(`[SnapshotService] Regenerate completed: ${dropResult.deleted_count} dropped, ${backfillResult.snapshots_created} created, ${backfillResult.snapshots_updated} updated in ${duration}ms`);
 
       return {
-        snapshot_month_end: generateResult.snapshot_month_end,
-        customers_processed: generateResult.customers_processed,
-        customers_failed: generateResult.customers_failed,
-        snapshots_created: generateResult.snapshots_created,
+        snapshot_month_end: backfillResult.snapshot_month_end,
+        customers_processed: backfillResult.customers_processed,
+        customers_failed: backfillResult.customers_failed,
+        snapshots_created: backfillResult.snapshots_created,
         snapshots_deleted: dropResult.deleted_count,
-        months_processed: generateResult.months_processed,
-        errors: [...errors, ...generateResult.errors],
+        months_processed: backfillResult.months_processed,
+        errors: [...errors, ...backfillResult.errors.map(e => ({ error: e.error_message }))],
         execution_duration_ms: duration
       };
 
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error('[SnapshotService] Error in regenerateAllSnapshots:', error);
-      
+
       return {
         snapshot_month_end: this.getLastMonthEnd(),
         customers_processed: 0,
@@ -854,6 +883,10 @@ export class PortfolioSnapshotService {
     assetTypeCode: string = 'Open Ended'  // Filter by specific asset type
   ): Promise<PortfolioSnapshotData> {
     // Query to calculate portfolio totals as of the snapshot date, filtered by asset_type_code
+    // FIXES applied:
+    //  1. scheme_navs uses id DESC tiebreaker for deterministic DISTINCT ON results
+    //  2. scheme_navs only fetches NAVs for schemes the customer actually holds (efficient + safe)
+    //  3. Schemes with missing NAV data are logged (LEFT JOIN preserved for invested tracking)
     const query = `
       WITH customer_transactions AS (
         SELECT
@@ -894,21 +927,29 @@ export class PortfolioSnapshotService {
           n.scheme_code,
           n.nav_value
         FROM t_nav_data n
+        INNER JOIN customer_transactions ct_inner ON ct_inner.scheme_code = n.scheme_code
         WHERE n.nav_date <= $4
           AND n.is_live = $3
-        ORDER BY n.scheme_code, n.nav_date DESC
+        ORDER BY n.scheme_code, n.nav_date DESC, n.id DESC
       )
-      SELECT 
+      SELECT
         COALESCE(SUM(ct.total_invested), 0) as total_invested,
         COALESCE(SUM(ct.total_redemption_proceeds), 0) as total_redemption_proceeds,
         COALESCE(SUM((ct.total_units_purchased - ct.total_units_redeemed) * sn.nav_value), 0) as current_value,
         COUNT(DISTINCT ct.scheme_code) as total_schemes,
-        COALESCE(SUM(ct.total_units_purchased - ct.total_units_redeemed), 0) as total_units
+        COALESCE(SUM(ct.total_units_purchased - ct.total_units_redeemed), 0) as total_units,
+        COUNT(DISTINCT ct.scheme_code) FILTER (WHERE sn.nav_value IS NULL) as schemes_missing_nav
       FROM customer_transactions ct
       LEFT JOIN scheme_navs sn ON sn.scheme_code = ct.scheme_code
     `;
 
     const result = await this.db.query(query, [customerId, tenantId, isLive, asOfDate, assetTypeCode]);
+
+    // Log warning if any schemes are missing NAV data (their current_value contribution is 0)
+    const schemesMissingNav = parseInt(result.rows[0]?.schemes_missing_nav) || 0;
+    if (schemesMissingNav > 0) {
+      console.warn(`[SnapshotService] ⚠️  Customer ${customerId}, ${assetTypeCode}, asOf ${asOfDate.toISOString().split('T')[0]}: ${schemesMissingNav} scheme(s) have NO NAV data → their current_value is 0 in this snapshot`);
+    }
 
     const row = result.rows[0];
 
