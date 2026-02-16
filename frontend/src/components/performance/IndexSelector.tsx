@@ -73,8 +73,9 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
     try {
       const response = await MarketService.getAllIndices();
       if (response.success && response.data) {
-        // Sort by priority and name
-        const sorted = [...response.data.indices].sort((a, b) => {
+        // Only show configured indices (hide those not set up with a data provider)
+        const configured = response.data.indices.filter(i => i.provider_enabled !== false);
+        const sorted = configured.sort((a, b) => {
           if (a.priority !== b.priority) return b.priority - a.priority;
           return a.index_name.localeCompare(b.index_name);
         });
@@ -125,25 +126,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
         }}
       >
         <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {isLoading ? 'Loading...' : selectedIndex ? (
-            <>
-              {selectedIndex.index_name}
-              {selectedIndex.provider_enabled === false && (
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: '600',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: '#F59E0B20',
-                  color: '#D97706',
-                  textTransform: 'uppercase',
-                  flexShrink: 0
-                }}>
-                  Not Configured
-                </span>
-              )}
-            </>
-          ) : placeholder}
+          {isLoading ? 'Loading...' : selectedIndex ? selectedIndex.index_name : placeholder}
         </span>
         {selectedIndex && !disabled && (
           <span
@@ -289,9 +272,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
                   {searchQuery ? 'No matching indices found' : 'No indices available'}
                 </div>
               ) : (
-                filteredIndices.map((index, idx) => {
-                  const isNotConfigured = index.provider_enabled === false;
-                  return (
+                filteredIndices.map((index, idx) => (
                     <button
                       key={index.id}
                       onClick={() => handleSelect(index)}
@@ -333,19 +314,6 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
                         }}>
                           {index.index_name}
                         </span>
-                        {isNotConfigured && (
-                          <span style={{
-                            fontSize: '9px',
-                            fontWeight: '600',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: '#F59E0B20',
-                            color: '#D97706',
-                            textTransform: 'uppercase'
-                          }}>
-                            Not Configured
-                          </span>
-                        )}
                       </div>
                       <div style={{
                         fontSize: '11px',
@@ -359,8 +327,7 @@ export const IndexSelector: React.FC<IndexSelectorProps> = ({
                         <span style={{ textTransform: 'capitalize' }}>{index.category}</span>
                       </div>
                     </button>
-                  );
-                })
+                  ))
               )}
             </div>
           </div>

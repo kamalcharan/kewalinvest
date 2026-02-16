@@ -73,24 +73,26 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
     setShowSnapshotPrompt(true);
   };
 
-  // Handle snapshot regeneration
+  // Handle snapshot update after adding a new investment plan
+  // Uses smartBackfill with non_scheme_only=true to ONLY generate snapshots for the new asset
+  // (GOLD, FD, etc.) without touching existing MF NAV-based snapshots
   const handleConfirmRegenerate = async () => {
     setShowSnapshotPrompt(false);
     setIsRegenerating(true);
     try {
-      const response = await PortfolioSnapshotService.regenerateAllSnapshots([customerId]);
+      const response = await PortfolioSnapshotService.smartBackfill([customerId], true);
       if (response.success) {
-        toastService.success('Snapshots regenerated successfully! Refreshing page...');
+        toastService.success('Snapshots updated successfully! Refreshing page...');
         // Refresh the entire page to show updated charts with latest data
         setTimeout(() => {
           window.location.reload();
         }, 1000);
       } else {
-        toastService.error(response.error || 'Failed to regenerate snapshots');
+        toastService.error(response.error || 'Failed to update snapshots');
         setIsRegenerating(false);
       }
     } catch (error: any) {
-      toastService.error('Failed to regenerate snapshots: ' + error.message);
+      toastService.error('Failed to update snapshots: ' + error.message);
       setIsRegenerating(false);
     }
   };
@@ -342,14 +344,14 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
         type="warning"
       />
 
-      {/* Snapshot Regeneration Prompt Modal */}
+      {/* Snapshot Update Prompt Modal */}
       <ConfirmationDialog
         isOpen={showSnapshotPrompt}
         onClose={handleSkipRegenerate}
         onConfirm={handleConfirmRegenerate}
-        title="Regenerate Portfolio Snapshots"
-        description="A new investment plan has been added. To calculate and reflect the data correctly in charts and reports, portfolio snapshots need to be regenerated. Would you like to regenerate them now?"
-        confirmText="Regenerate Now"
+        title="Update Portfolio Snapshots"
+        description="A new investment plan has been added. To calculate and reflect the data correctly in charts and reports, portfolio snapshots need to be updated. Would you like to update them now?"
+        confirmText="Update Now"
         cancelText="Skip for Now"
         type="info"
       />
@@ -402,7 +404,7 @@ export const CustomerAssetManager: React.FC<CustomerAssetManagerProps> = ({ cust
               margin: '0 0 8px 0',
               lineHeight: '1.5'
             }}>
-              Regenerating portfolio snapshots with new investment plan data
+              Updating portfolio snapshots with new investment plan data
             </p>
 
             <p style={{

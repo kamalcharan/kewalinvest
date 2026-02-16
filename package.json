@@ -1,4 +1,19 @@
 {
+  "name": "kewalinvest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KewalInvest Financial Advisory Platform",
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "lint:frontend": "cd frontend && npx react-scripts build 2>&1 | grep -E '(warning|error)' || echo 'No lint issues'"
+  },
   "dependencies": {
     "html2canvas": "^1.4.1",
     "node-cron": "^4.2.1",

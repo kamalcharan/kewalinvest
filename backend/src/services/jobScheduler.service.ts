@@ -580,6 +580,21 @@ async getStatistics(tenantId: number, isLive: boolean, jobType: JobType): Promis
     return null;
   }
 
+  // Auto-cleanup: mark stale jobs as failed if they've been running > 10 minutes
+  const cleanupQuery = `
+    UPDATE t_job_executions
+    SET status = 'failed',
+        error_message = 'Auto-cleaned: job was stuck in running state for over 10 minutes',
+        completed_at = CURRENT_TIMESTAMP
+    WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3
+    AND status IN ('running', 'retrying')
+    AND execution_time < NOW() - INTERVAL '10 minutes'
+  `;
+  const cleanupResult = await this.db.query(cleanupQuery, [tenantId, isLive, jobType]);
+  if ((cleanupResult.rowCount || 0) > 0) {
+    console.log(`[JobScheduler] Auto-cleaned ${cleanupResult.rowCount} stale running job(s) for ${jobType}`);
+  }
+
   const recentQuery = `
     SELECT * FROM t_job_executions
     WHERE tenant_id = $1 AND is_live = $2 AND job_type = $3

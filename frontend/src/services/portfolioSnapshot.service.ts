@@ -199,12 +199,16 @@ export class PortfolioSnapshotService {
   /**
    * Smart backfill - auto-detects date range
    * POST /api/cruise-control/snapshots/backfill-smart
+   * @param nonSchemeOnly - When true, only generates non-scheme (GOLD, FD, etc.) snapshots, preserving MF data
    */
-  static async smartBackfill(customerIds?: number[]): Promise<ApiResponse> {
+  static async smartBackfill(customerIds?: number[], nonSchemeOnly?: boolean): Promise<ApiResponse> {
     try {
+      const body: Record<string, any> = {};
+      if (customerIds) body.customer_ids = customerIds;
+      if (nonSchemeOnly) body.non_scheme_only = true;
       const response = await apiService.post<ApiResponse>(
         API_ENDPOINTS.CRUISE_CONTROL.SNAPSHOTS.BACKFILL_SMART,
-        customerIds ? { customer_ids: customerIds } : {}
+        body
       );
       return response;
     } catch (error: any) {

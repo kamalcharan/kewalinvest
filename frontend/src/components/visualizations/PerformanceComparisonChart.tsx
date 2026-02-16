@@ -356,7 +356,8 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
 
   // Use theme colors if not provided
   const portfolioColor = primaryColor || colors.brand.primary;
-  const indexColor = comparisonColor || '#FCD34D'; // Yellow/gold for index
+  const indexUpColor = isDarkMode ? '#e5e5e5' : '#1a1a1a'; // Black (light) / White-ish (dark) for uptrend
+  const indexDownColor = '#EF4444'; // Red for downtrend
 
   const isPercentage = viewMode === 'percentage' || viewMode === 'mom';
   const isMoMView = viewMode === 'mom';
@@ -438,6 +439,30 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
       Math.ceil(max + padding)
     ];
   }, [chartData]);
+
+  // Build SVG gradient stops for comparison line: black=uptrend, red=downtrend
+  const comparisonGradientStops = useMemo(() => {
+    if (!chartData || chartData.length < 2) return [];
+
+    const stops: { offset: string; color: string }[] = [];
+    const n = chartData.length;
+
+    for (let i = 0; i < n - 1; i++) {
+      const curr = chartData[i]?.comparison;
+      const next = chartData[i + 1]?.comparison;
+      if (curr === undefined || next === undefined) continue;
+
+      const segColor = next >= curr ? indexUpColor : indexDownColor;
+      const startPct = (i / (n - 1)) * 100;
+      const endPct = ((i + 1) / (n - 1)) * 100;
+
+      // Sharp color transition: end previous segment and start new one at same position
+      stops.push({ offset: `${startPct}%`, color: segColor });
+      stops.push({ offset: `${endPct}%`, color: segColor });
+    }
+
+    return stops;
+  }, [chartData, indexUpColor, indexDownColor]);
 
   // Empty state
   if (!data || data.length === 0) {
@@ -566,19 +591,29 @@ const PerformanceComparisonChart: React.FC<PerformanceComparisonChartProps> = ({
             }}
           />
 
-          {/* Comparison/Index Line */}
+          {/* SVG gradient definition for comparison line: black=uptrend, red=downtrend */}
+          {showComparison && comparisonGradientStops.length > 0 && (
+            <defs>
+              <linearGradient id="comparisonTrendGradient" x1="0" y1="0" x2="1" y2="0">
+                {comparisonGradientStops.map((stop, i) => (
+                  <stop key={i} offset={stop.offset} stopColor={stop.color} />
+                ))}
+              </linearGradient>
+            </defs>
+          )}
+
+          {/* Comparison/Index Line - colored by trend direction */}
           {showComparison && comparisonData && comparisonData.length > 0 && (
             <Line
               type="monotone"
               dataKey="comparison"
               name={comparisonName}
-              stroke={indexColor}
+              stroke={comparisonGradientStops.length > 0 ? 'url(#comparisonTrendGradient)' : indexUpColor}
               strokeWidth={2}
-              strokeDasharray="5 5"
               dot={false}
               activeDot={{
                 r: 5,
-                fill: indexColor,
+                fill: indexUpColor,
                 stroke: colors.utility.secondaryBackground,
                 strokeWidth: 2
               }}

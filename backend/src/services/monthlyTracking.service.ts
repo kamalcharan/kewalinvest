@@ -487,7 +487,6 @@ export class MonthlyTrackingService {
 
       // Build monthly market value data
       const monthlyData: MonthlyMarketValueData[] = [];
-      let previousMonthNAV = 0;
       let previousMonthMarketValue = 0;
 
       for (let i = 0; i < monthList.length; i++) {
@@ -495,8 +494,10 @@ export class MonthlyTrackingService {
         const unitsData = unitsResponse.months[i];
         const navData = navResponse.months[i];
 
-        // Use previous month's closing NAV
-        const navToUse = i === 0 ? navData.closing_nav : previousMonthNAV;
+        // Use current month's closing NAV directly
+        // For current/incomplete month, latest available NAV is used (see getMonthlyNAVPerformance)
+        // At month-end, the scheduler updates with actual EOM NAV
+        const navToUse = navData.closing_nav;
         const currentMonthUnits = unitsData.closing_units;
 
         // FIX: When units <= 0 (investor exited), show market value as 0
@@ -523,9 +524,10 @@ export class MonthlyTrackingService {
         const netCashFlow = cashFlowMap.get(month) || 0;
         const monthChange = marketValue - previousMonthMarketValue;
         const adjustedMonthChange = monthChange - netCashFlow;
+        // Return null when MoM can't be computed (no previous base to calculate % from)
         const monthChangePercentage = previousMonthMarketValue > 0
           ? (adjustedMonthChange / previousMonthMarketValue) * 100
-          : 0;
+          : null;
 
         monthlyData.push({
           month,
@@ -539,12 +541,13 @@ export class MonthlyTrackingService {
           profit_loss: Math.round(profitLoss * 100) / 100,
           profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
           month_change: Math.round(monthChange * 100) / 100,
-          month_change_percentage: Math.round(monthChangePercentage * 100) / 100,
+          month_change_percentage: monthChangePercentage !== null
+            ? Math.round(monthChangePercentage * 100) / 100
+            : null,
           net_cash_flow: Math.round(netCashFlow * 100) / 100
         });
 
-        // Update previous month values for next iteration
-        previousMonthNAV = navData.closing_nav;
+        // Update previous month market value for next iteration's MoM calculation
         previousMonthMarketValue = marketValue;
       }
 
@@ -591,6 +594,35 @@ export class MonthlyTrackingService {
     months: number = 12
   ): Promise<any> {
     try {
+      // If months=0, auto-detect from customer's first transaction date
+      let actualMonths = months;
+      let firstTransactionDate: string | null = null;
+
+      if (months === 0) {
+        const firstTxnQuery = `
+          SELECT MIN(txn_date) as first_date
+          FROM t_transaction_table
+          WHERE tenant_id = $1
+            AND is_live = $2
+            AND customer_id = $3
+            AND is_active = true
+            AND portfolio_flag = true
+        `;
+        const result = await this.db.query(firstTxnQuery, [tenantId, isLive, customerId]);
+        const firstDate = result.rows[0]?.first_date;
+
+        if (firstDate) {
+          firstTransactionDate = new Date(firstDate).toISOString().split('T')[0];
+          const now = new Date();
+          const first = new Date(firstDate);
+          actualMonths = (now.getFullYear() - first.getFullYear()) * 12
+            + (now.getMonth() - first.getMonth()) + 1;
+          actualMonths = Math.max(actualMonths, 1);
+        } else {
+          actualMonths = 12; // Fallback if no transactions
+        }
+      }
+
       // Get all active schemes from customer's portfolio
       // Join with t_scheme_details and t_scheme_masters to get actual scheme category
       const schemesQuery = `
@@ -619,7 +651,8 @@ export class MonthlyTrackingService {
         return {
           customer_id: customerId,
           schemes: [],
-          months_count: months
+          months_count: actualMonths,
+          first_transaction_date: firstTransactionDate
         };
       }
 
@@ -628,7 +661,7 @@ export class MonthlyTrackingService {
         const filters = {
           customer_id: customerId,
           scheme_code: scheme.scheme_code,
-          months
+          months: actualMonths
         };
 
         try {
@@ -710,7 +743,8 @@ export class MonthlyTrackingService {
       return {
         customer_id: customerId,
         schemes,
-        months_count: months
+        months_count: actualMonths,
+        first_transaction_date: firstTransactionDate
       };
 
     } catch (error: any) {

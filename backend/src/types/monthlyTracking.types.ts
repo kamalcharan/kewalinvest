@@ -75,13 +75,13 @@ export interface MonthlyMarketValueData {
   scheme_code: string;
   scheme_name: string;
   current_month_units: number; // Units at end of current month
-  previous_month_nav: number; // NAV at end of previous month
-  market_value: number; // previous_month_nav × current_month_units
+  previous_month_nav: number; // NAV used for valuation (current month's closing NAV; for incomplete months, latest available)
+  market_value: number; // closing_nav × current_month_units
   invested_value: number; // Total investment till date
   profit_loss: number; // market_value - invested_value
   profit_loss_percentage: number; // (profit_loss / invested_value) * 100
   month_change: number; // Change from previous month's market value
-  month_change_percentage: number; // MoM percentage change (cash-flow adjusted)
+  month_change_percentage: number | null; // MoM percentage change (cash-flow adjusted). null = uncomputable (no previous data)
   net_cash_flow: number; // Net cash flow for this month (additions - redemptions)
 }
 
