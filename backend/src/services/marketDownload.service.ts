@@ -106,33 +106,91 @@ export class MarketDownloadService {
         skipExisting
       });
 
-      // Check if data already exists
+      // Check if data already exists and adjust date range to fill gaps
       if (skipExisting && index.historical_data_available) {
-        // Check for date range overlap
         if (index.earliest_date && index.latest_date) {
           const existingStart = new Date(index.earliest_date);
           const existingEnd = new Date(index.latest_date);
-          
-          // Check if requested range overlaps with existing data
-          const hasOverlap = !(endDate < existingStart || startDate > existingEnd);
-          
-          if (hasOverlap) {
-            SimpleLogger.warn('MarketDownload', 'Date range overlaps with existing data', 'downloadHistoricalData', {
+          existingStart.setHours(0, 0, 0, 0);
+          existingEnd.setHours(0, 0, 0, 0);
+
+          // Check if requested range is fully within existing data
+          const requestedStartNorm = new Date(startDate);
+          const requestedEndNorm = new Date(endDate);
+          requestedStartNorm.setHours(0, 0, 0, 0);
+          requestedEndNorm.setHours(0, 0, 0, 0);
+
+          if (requestedStartNorm >= existingStart && requestedEndNorm <= existingEnd) {
+            // Entire range already covered
+            SimpleLogger.info('MarketDownload', 'Requested range fully covered by existing data, skipping', 'downloadHistoricalData', {
               indexId,
               requestedRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
               existingRange: `${index.earliest_date} to ${index.latest_date}`
             });
 
             return {
-              success: false,
+              success: true,
               indexId,
               indexName: index.index_name,
               recordsInserted: 0,
               recordsUpdated: 0,
               recordsSkipped: 0,
-              error: `Data already exists for this date range. Existing: ${index.earliest_date} to ${index.latest_date}`,
               executionTimeMs: Date.now() - startTime
             };
+          }
+
+          // If there's overlap, adjust the date range to only download the missing gap
+          const hasOverlap = !(requestedEndNorm < existingStart || requestedStartNorm > existingEnd);
+
+          if (hasOverlap) {
+            // Adjust start date: if requested start is within existing range, move it to day after existing end
+            if (requestedStartNorm <= existingEnd && requestedEndNorm > existingEnd) {
+              const adjustedStart = new Date(existingEnd);
+              adjustedStart.setDate(adjustedStart.getDate() + 1);
+              startDate = adjustedStart;
+
+              SimpleLogger.info('MarketDownload', 'Adjusted start date to fill gap after existing data', 'downloadHistoricalData', {
+                indexId,
+                originalStart: requestedStartNorm.toISOString().split('T')[0],
+                adjustedStart: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+                existingRange: `${index.earliest_date} to ${index.latest_date}`
+              });
+            }
+
+            // Adjust end date: if requested end is within existing range, move it to day before existing start
+            if (requestedEndNorm >= existingStart && requestedStartNorm < existingStart) {
+              const adjustedEnd = new Date(existingStart);
+              adjustedEnd.setDate(adjustedEnd.getDate() - 1);
+              endDate = adjustedEnd;
+
+              SimpleLogger.info('MarketDownload', 'Adjusted end date to fill gap before existing data', 'downloadHistoricalData', {
+                indexId,
+                originalEnd: requestedEndNorm.toISOString().split('T')[0],
+                adjustedEnd: endDate.toISOString().split('T')[0],
+                startDate: startDate.toISOString().split('T')[0],
+                existingRange: `${index.earliest_date} to ${index.latest_date}`
+              });
+            }
+
+            // After adjustment, verify start is still before end
+            if (startDate >= endDate) {
+              SimpleLogger.info('MarketDownload', 'No gap to fill after date adjustment', 'downloadHistoricalData', {
+                indexId,
+                adjustedStart: startDate.toISOString().split('T')[0],
+                adjustedEnd: endDate.toISOString().split('T')[0]
+              });
+
+              return {
+                success: true,
+                indexId,
+                indexName: index.index_name,
+                recordsInserted: 0,
+                recordsUpdated: 0,
+                recordsSkipped: 0,
+                executionTimeMs: Date.now() - startTime
+              };
+            }
           }
         }
       }
