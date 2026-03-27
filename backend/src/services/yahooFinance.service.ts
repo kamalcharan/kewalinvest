@@ -210,8 +210,15 @@ export class YahooFinanceService {
       const quotes = result.indicators?.quote?.[0];
       const adjClose = result.indicators?.adjclose?.[0];
 
-      if (!timestamps || !quotes) {
-        throw new Error('Missing required data fields in Yahoo Finance response');
+      if (!timestamps || !quotes || timestamps.length === 0) {
+        // No trading data for the requested period (weekends, holidays, or future dates)
+        SimpleLogger.info('YahooFinance', 'No trading data available for requested period', 'parseYahooFinanceResponse', {
+          symbol,
+          hasTimestamps: !!timestamps,
+          hasQuotes: !!quotes,
+          timestampCount: timestamps?.length || 0
+        });
+        return [];
       }
 
       // Build records array

@@ -226,11 +226,37 @@ export class MarketDownloadService {
         }
       );
 
-      if (!yahooResponse.success || yahooResponse.data.length === 0) {
+      if (!yahooResponse.success) {
         throw new Error(
-          yahooResponse.error || 
-          'No data returned from Yahoo Finance for the requested date range'
+          yahooResponse.error ||
+          'Failed to fetch data from Yahoo Finance'
         );
+      }
+
+      // No trading data for the requested range (weekends, holidays, etc.)
+      if (yahooResponse.data.length === 0) {
+        SimpleLogger.info('MarketDownload', 'No trading data available for requested date range', 'downloadHistoricalData', {
+          indexId,
+          dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+        });
+
+        await this.marketService.updateDownloadJob(job.id, {
+          status: 'completed',
+          records_inserted: 0,
+          records_updated: 0,
+          records_skipped: 0,
+          execution_time_ms: Date.now() - startTime
+        });
+
+        return {
+          success: true,
+          indexId,
+          indexName: index.index_name,
+          recordsInserted: 0,
+          recordsUpdated: 0,
+          recordsSkipped: 0,
+          executionTimeMs: Date.now() - startTime
+        };
       }
 
       SimpleLogger.info('MarketDownload', 'Received data from Yahoo Finance', 'downloadHistoricalData', {
