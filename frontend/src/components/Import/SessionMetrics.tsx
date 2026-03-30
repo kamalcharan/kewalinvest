@@ -46,27 +46,32 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
   const [correctionResult, setCorrectionResult] = useState<DateCorrectResult | null>(null);
 
   const isTransactionSession = session
-    ? (session.import_type === 'TransactionData' || (session.import_type as string) === 'transaction_import')
+    ? (session.import_type === 'TransactionData' ||
+       (session.import_type as string) === 'transaction_import' ||
+       (session.import_type as string).toLowerCase().includes('transaction'))
     : false;
 
   // Auto-check dates when a transaction session is selected
   useEffect(() => {
+    console.log('[DateCheck] Session changed:', session?.id, 'import_type:', session?.import_type, 'isTransaction:', isTransactionSession);
     if (session && isTransactionSession) {
       checkDates();
     } else {
       setDateCheckResult(null);
       setCorrectionResult(null);
     }
-  }, [session?.id]);
+  }, [session?.id, isTransactionSession]);
 
   const checkDates = async () => {
     if (!session) return;
+    console.log('[DateCheck] Calling API for session:', session.id);
     setIsCheckingDates(true);
     setCorrectionResult(null);
     try {
       const response = await apiService.get<{ success: boolean; data: DateCheckResult }>(
         `/import/date-check/${session.id}`
       );
+      console.log('[DateCheck] API response:', response);
       if (response && response.success && response.data?.isTransactionImport) {
         setDateCheckResult({
           sessionId: response.data.sessionId,
