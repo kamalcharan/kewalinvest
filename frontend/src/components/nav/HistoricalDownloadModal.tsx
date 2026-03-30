@@ -135,31 +135,32 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   const resetForm = () => {
     if (!bookmark) return;
 
-    // Set end date to latest NAV date or today
-    let defaultEndDate: Date;
-    if (bookmark.latest_nav_date) {
-      defaultEndDate = new Date(bookmark.latest_nav_date);
-    } else {
-      defaultEndDate = new Date();
-    }
-    
+    // End date should always be today (we want to download up to the latest available)
     const today = new Date();
-    if (defaultEndDate > today) {
-      defaultEndDate = today;
-    }
-    
-    const endDateStr = defaultEndDate.toISOString().split('T')[0];
+    const endDateStr = today.toISOString().split('T')[0];
     setEndDate(endDateStr);
 
-    // Default to Last 90 Days
-    const defaultStartDate = new Date(defaultEndDate);
-    defaultStartDate.setDate(defaultStartDate.getDate() - 89);
-    
+    // For "Update" (data exists): start from day after latest downloaded date
+    // For "Download" (no data): default to Last 90 Days
+    let defaultStartDate: Date;
+    if (bookmark.latest_nav_date) {
+      defaultStartDate = new Date(bookmark.latest_nav_date);
+      defaultStartDate.setDate(defaultStartDate.getDate() + 1);
+      // If already up to date (latest_nav_date is today or yesterday), fall back to last 90 days
+      if (defaultStartDate > today) {
+        defaultStartDate = new Date(today);
+        defaultStartDate.setDate(defaultStartDate.getDate() - 89);
+      }
+    } else {
+      defaultStartDate = new Date(today);
+      defaultStartDate.setDate(defaultStartDate.getDate() - 89);
+    }
+
     const startDateStr = defaultStartDate.toISOString().split('T')[0];
     setStartDate(startDateStr);
     setValidationError(null);
     setExistingDataInfo(null);
-    setSelectedPreset('Last 90 Days');
+    setSelectedPreset(bookmark.latest_nav_date ? null : 'Last 90 Days');
   };
 
   const clearForm = () => {
@@ -178,15 +179,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     setExistingDataInfo(null);
 
     const today = new Date();
-    let calculatedEndDate = today;
-    
-    // Use latest NAV date if available and earlier than today
-    if (bookmark.latest_nav_date) {
-      const latestNavDate = new Date(bookmark.latest_nav_date);
-      if (latestNavDate < today) {
-        calculatedEndDate = latestNavDate;
-      }
-    }
+    const calculatedEndDate = today;
 
     const endDateStr = calculatedEndDate.toISOString().split('T')[0];
     setEndDate(endDateStr);
