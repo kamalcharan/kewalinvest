@@ -1135,15 +1135,7 @@ export class NavController {
         error: error.message
       }, req.user?.user_id, req.user?.tenant_id, error.stack);
 
-      // UPDATED: Handle DATE_RANGE_OVERLAP error with detailed information
-      if (error.message === 'DATE_RANGE_OVERLAP') {
-        const existingData = (error as any).existingData;
-        res.status(409).json({
-          success: false,
-          error: `Date range overlaps with existing data for ${existingData.scheme_name}. Existing data: ${existingData.earliest_date} to ${existingData.latest_date} (${existingData.record_count} records). Please adjust your date range to avoid overlap.`,
-          existing_data: existingData
-        });
-      } else if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
+      if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
         res.status(409).json({
           success: false,
           error: 'Historical download already completed for one or more schemes'
@@ -1193,6 +1185,245 @@ export class NavController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to get download progress'
+      });
+    }
+  };
+
+  /**
+   * Fill gaps for all bookmarked schemes using MFAPI (last 90 days)
+   * POST /api/nav/download/fill-gaps
+   */
+  fillGaps = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const tenantId = user!.tenant_id;
+      const userId = user!.user_id;
+
+      // Get all bookmarked schemes
+      const bookmarks = await this.navService.getUserBookmarks(
+        tenantId, isLive, userId,
+        { page: 1, page_size: 1000 }
+      );
+
+      if (bookmarks.bookmarks.length === 0) {
+        res.json({ success: true, message: 'No bookmarked schemes', filled: 0, skipped: 0, failed: 0 });
+        return;
+      }
+
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const endDate = new Date();
+
+      let filled = 0;
+      let skipped = 0;
+      let failed = 0;
+      const errors: Array<{ scheme_code: string; error: string }> = [];
+
+      // Respond immediately, process in background
+      res.status(202).json({
+        success: true,
+        message: `Gap filling started for ${bookmarks.bookmarks.length} schemes (last 90 days)`,
+        total_schemes: bookmarks.bookmarks.length
+      });
+
+      // Process each scheme in background
+      setImmediate(async () => {
+        for (const bookmark of bookmarks.bookmarks) {
+          try {
+            const schemeCode = bookmark.scheme_code;
+
+            // Get last known NAV date for this scheme
+            const lastNavQuery = `
+              SELECT MAX(nav_date) as last_date
+              FROM t_nav_data
+              WHERE scheme_id = $1
+            `;
+            const lastNavResult = await pool.query(lastNavQuery, [bookmark.scheme_id]);
+            const lastKnownDate = lastNavResult.rows[0]?.last_date;
+
+            // Calculate start date: day after last known date or 90 days ago
+            let startDate: Date;
+            if (lastKnownDate) {
+              startDate = new Date(lastKnownDate);
+              startDate.setDate(startDate.getDate() + 1);
+              // If last known date is within the last day, skip
+              if (startDate > endDate) {
+                skipped++;
+                continue;
+              }
+              // Cap at 90 days ago
+              if (startDate < ninetyDaysAgo) {
+                startDate = ninetyDaysAgo;
+              }
+            } else {
+              startDate = ninetyDaysAgo;
+            }
+
+            // Download from MFAPI
+            const mfapiResponse = await this.amfiService.downloadFromMFAPI(
+              schemeCode,
+              startDate,
+              endDate,
+              { requestId: `gapfill_${schemeCode}_${Date.now()}`, retryAttempts: 2, timeout: 30000 }
+            );
+
+            if (!mfapiResponse.success || !mfapiResponse.data || mfapiResponse.data.length === 0) {
+              skipped++;
+              continue;
+            }
+
+            // Upsert
+            const upsertResult = await this.navService.upsertNavData(
+              tenantId, isLive, mfapiResponse.data
+            );
+
+            if (upsertResult.inserted > 0 || upsertResult.updated > 0) {
+              filled++;
+            } else {
+              skipped++;
+            }
+
+          } catch (err: any) {
+            failed++;
+            errors.push({ scheme_code: bookmark.scheme_code, error: err.message });
+            SimpleLogger.error('NavController', 'Gap fill failed for scheme', 'fillGaps', {
+              schemeCode: bookmark.scheme_code, error: err.message
+            }, userId, tenantId);
+          }
+        }
+
+        SimpleLogger.info('NavController', 'Gap filling completed', 'fillGaps', {
+          tenantId, userId, filled, skipped, failed, totalErrors: errors.length
+        }, userId, tenantId);
+      });
+
+    } catch (error: any) {
+      SimpleLogger.error('NavController', 'Failed to start gap filling', 'fillGaps', {
+        error: error.message
+      }, req.user?.user_id, req.user?.tenant_id, error.stack);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to start gap filling'
+      });
+    }
+  };
+
+  /**
+   * Diagnostic endpoint: test MFAPI fetch + upsert for a single scheme
+   * GET /api/nav/download/diagnose/:schemeCode
+   */
+  diagnoseDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const schemeCode = req.params.schemeCode;
+      const steps: any[] = [];
+
+      // Step 1: Check scheme exists
+      const schemeResult = await pool.query(
+        `SELECT id, scheme_name, scheme_code FROM t_scheme_details WHERE scheme_code = $1`,
+        [schemeCode]
+      );
+      steps.push({
+        step: 1,
+        action: 'scheme_lookup',
+        found: schemeResult.rows.length > 0,
+        data: schemeResult.rows[0] || null
+      });
+
+      if (schemeResult.rows.length === 0) {
+        res.json({ success: false, steps, error: 'Scheme not found in t_scheme_details' });
+        return;
+      }
+
+      const schemeId = schemeResult.rows[0].id;
+
+      // Step 2: Check existing NAV data
+      const existingNav = await pool.query(
+        `SELECT COUNT(*) as count, MIN(nav_date) as earliest, MAX(nav_date) as latest
+         FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2`,
+        [schemeId, isLive]
+      );
+      steps.push({
+        step: 2,
+        action: 'existing_nav_check',
+        data: existingNav.rows[0]
+      });
+
+      // Step 3: Fetch from MFAPI (last 60 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 60);
+
+      const mfapiResponse = await this.amfiService.downloadFromMFAPI(
+        schemeCode,
+        startDate,
+        endDate,
+        { requestId: `diag_${schemeCode}_${Date.now()}`, retryAttempts: 2, timeout: 30000 }
+      );
+      steps.push({
+        step: 3,
+        action: 'mfapi_fetch',
+        success: mfapiResponse.success,
+        error: mfapiResponse.error || null,
+        totalRecords: mfapiResponse.totalRecords,
+        sampleDates: mfapiResponse.data?.slice(0, 5).map(r => ({
+          nav_date: r.nav_date,
+          nav_date_iso: r.nav_date instanceof Date ? r.nav_date.toISOString() : String(r.nav_date),
+          nav_value: r.nav_value,
+          scheme_code: r.scheme_code
+        })) || []
+      });
+
+      if (!mfapiResponse.success || !mfapiResponse.data || mfapiResponse.data.length === 0) {
+        res.json({ success: false, steps, error: 'MFAPI fetch failed or returned no data' });
+        return;
+      }
+
+      // Step 4: Try upsert
+      const upsertResult = await this.navService.upsertNavData(
+        user!.tenant_id,
+        isLive,
+        mfapiResponse.data
+      );
+      steps.push({
+        step: 4,
+        action: 'upsert',
+        inserted: upsertResult.inserted,
+        updated: upsertResult.updated,
+        errors: upsertResult.errors.slice(0, 5)
+      });
+
+      // Step 5: Verify data after upsert
+      const verifyNav = await pool.query(
+        `SELECT COUNT(*) as count, MIN(nav_date) as earliest, MAX(nav_date) as latest
+         FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2`,
+        [schemeId, isLive]
+      );
+      steps.push({
+        step: 5,
+        action: 'verify_after_upsert',
+        data: verifyNav.rows[0]
+      });
+
+      res.json({
+        success: true,
+        steps,
+        summary: {
+          mfapi_records: mfapiResponse.totalRecords,
+          inserted: upsertResult.inserted,
+          updated: upsertResult.updated,
+          errors: upsertResult.errors.length,
+          date_range: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack
       });
     }
   };

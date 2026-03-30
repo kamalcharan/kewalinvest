@@ -1604,8 +1604,7 @@ export class MarketService {
 
   /**
    * Detect gaps in market data for an index
-   * Only checks for missing trading days (excludes weekends)
-   * LIMITED TO LAST 2 WEEKS to avoid flagging old historical gaps
+   * Checks for missing trading days in the last 90 days (excludes weekends)
    */
   private async detectDataGaps(
     indexId: number,
@@ -1617,10 +1616,10 @@ export class MarketService {
     }
 
     try {
-      // Only check gaps in the last 2 weeks
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-      twoWeeksAgo.setHours(0, 0, 0, 0);
+      // Check gaps in the last 90 days
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90);
+      cutoffDate.setHours(0, 0, 0, 0);
 
       // Calculate yesterday (last business day) as the end date for gap detection
       const yesterday = new Date();
@@ -1631,14 +1630,14 @@ export class MarketService {
         yesterday.setDate(yesterday.getDate() - 1);
       }
 
-      // Get all dates we have data for (last 2 weeks only)
+      // Get all dates we have data for (last 90 days)
       const datesQuery = `
         SELECT DISTINCT date
         FROM t_market_data_records
         WHERE index_id = $1 AND date >= $2
         ORDER BY date
       `;
-      const datesResult = await this.db.query(datesQuery, [indexId, twoWeeksAgo]);
+      const datesResult = await this.db.query(datesQuery, [indexId, cutoffDate]);
 
       const existingDates = new Set(
         datesResult.rows.map(r => new Date(r.date).toISOString().split('T')[0])
@@ -1649,10 +1648,10 @@ export class MarketService {
       let missingDays = 0;
 
       // Iterate through date range and find gaps (only trading days)
-      // Start from 2 weeks ago or earliest date, whichever is later
+      // Start from 90 days ago or earliest date, whichever is later
       // End at yesterday (last trading day), not at latestDate
       const earliestDateObj = new Date(earliestDate);
-      const start = earliestDateObj > twoWeeksAgo ? earliestDateObj : twoWeeksAgo;
+      const start = earliestDateObj > cutoffDate ? earliestDateObj : cutoffDate;
       const end = yesterday; // FIX: Use yesterday instead of latestDate
       const current = new Date(start);
 

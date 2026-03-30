@@ -1,8 +1,8 @@
 // frontend/src/components/nav/HistoricalDownloadModal.tsx
-// FIXED: 
+// FIXED:
 // 1. "Since Inception" now goes back 20 years (or uses actual launch_date/earliest_nav_date)
 // 2. Added fund start date display in scheme info section
-// 3. Display detailed date range overlap errors with existing data info
+// 3. End date defaults to today, start date defaults to day after latest downloaded date
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -26,14 +26,6 @@ interface DatePreset {
   description: string;
 }
 
-interface ExistingDataInfo {
-  scheme_id: number;
-  scheme_name: string;
-  earliest_date: string;
-  latest_date: string;
-  record_count: number;
-}
-
 export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = ({
   isOpen,
   bookmark,
@@ -49,7 +41,6 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   const [endDate, setEndDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [existingDataInfo, setExistingDataInfo] = useState<ExistingDataInfo | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
   const datePresets: DatePreset[] = [
@@ -135,38 +126,37 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
   const resetForm = () => {
     if (!bookmark) return;
 
-    // Set end date to latest NAV date or today
-    let defaultEndDate: Date;
-    if (bookmark.latest_nav_date) {
-      defaultEndDate = new Date(bookmark.latest_nav_date);
-    } else {
-      defaultEndDate = new Date();
-    }
-    
+    // End date should always be today (we want to download up to the latest available)
     const today = new Date();
-    if (defaultEndDate > today) {
-      defaultEndDate = today;
-    }
-    
-    const endDateStr = defaultEndDate.toISOString().split('T')[0];
+    const endDateStr = today.toISOString().split('T')[0];
     setEndDate(endDateStr);
 
-    // Default to Last 90 Days
-    const defaultStartDate = new Date(defaultEndDate);
-    defaultStartDate.setDate(defaultStartDate.getDate() - 89);
-    
+    // For "Update" (data exists): start from day after latest downloaded date
+    // For "Download" (no data): default to Last 90 Days
+    let defaultStartDate: Date;
+    if (bookmark.latest_nav_date) {
+      defaultStartDate = new Date(bookmark.latest_nav_date);
+      defaultStartDate.setDate(defaultStartDate.getDate() + 1);
+      // If already up to date (latest_nav_date is today or yesterday), fall back to last 90 days
+      if (defaultStartDate > today) {
+        defaultStartDate = new Date(today);
+        defaultStartDate.setDate(defaultStartDate.getDate() - 89);
+      }
+    } else {
+      defaultStartDate = new Date(today);
+      defaultStartDate.setDate(defaultStartDate.getDate() - 89);
+    }
+
     const startDateStr = defaultStartDate.toISOString().split('T')[0];
     setStartDate(startDateStr);
     setValidationError(null);
-    setExistingDataInfo(null);
-    setSelectedPreset('Last 90 Days');
+    setSelectedPreset(bookmark.latest_nav_date ? null : 'Last 90 Days');
   };
 
   const clearForm = () => {
     setStartDate('');
     setEndDate('');
     setValidationError(null);
-    setExistingDataInfo(null);
     setSelectedPreset(null);
   };
 
@@ -175,18 +165,9 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
 
     setSelectedPreset(preset.label);
     setValidationError(null);
-    setExistingDataInfo(null);
 
     const today = new Date();
-    let calculatedEndDate = today;
-    
-    // Use latest NAV date if available and earlier than today
-    if (bookmark.latest_nav_date) {
-      const latestNavDate = new Date(bookmark.latest_nav_date);
-      if (latestNavDate < today) {
-        calculatedEndDate = latestNavDate;
-      }
-    }
+    const calculatedEndDate = today;
 
     const endDateStr = calculatedEndDate.toISOString().split('T')[0];
     setEndDate(endDateStr);
@@ -262,13 +243,11 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
     const error = validateDateRange();
     if (error) {
       setValidationError(error);
-      setExistingDataInfo(null);
-      return;
+        return;
     }
 
     setIsSubmitting(true);
     setValidationError(null);
-    setExistingDataInfo(null);
 
     try {
       const dayCount = calculateDayCount();
@@ -311,20 +290,12 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           bookmarkId: bookmark.id,
           startDate,
           endDate,
-          error: error.message,
-          existingData: error.existing_data
+          error: error.message
         },
         error.stack
       );
-      
-      // Handle date range overlap with detailed info
-      if (error.existing_data) {
-        setExistingDataInfo(error.existing_data);
-        setValidationError(null);
-      } else {
-        setValidationError(error.message || 'Failed to start historical download. Please try again.');
-        setExistingDataInfo(null);
-      }
+
+      setValidationError(error.message || 'Failed to start historical download. Please try again.');
       
     } finally {
       setIsSubmitting(false);
@@ -570,8 +541,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                   setStartDate(e.target.value);
                   setSelectedPreset(null);
                   setValidationError(null);
-                  setExistingDataInfo(null);
-                }}
+                              }}
                 disabled={isSubmitting}
                 style={{
                   width: '100%',
@@ -604,8 +574,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                   setEndDate(e.target.value);
                   setSelectedPreset(null);
                   setValidationError(null);
-                  setExistingDataInfo(null);
-                }}
+                              }}
                 max={new Date().toISOString().split('T')[0]}
                 disabled={isSubmitting}
                 style={{
@@ -624,7 +593,7 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           </div>
 
           {/* Download Preview */}
-          {dayCount > 0 && isValidRange && !existingDataInfo && (
+          {dayCount > 0 && isValidRange && (
             <div style={{
               padding: '16px',
               backgroundColor: colors.semantic.success + '10',
@@ -649,68 +618,6 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
                 • <strong>Scheme:</strong> {bookmark.scheme_name}<br/>
                 • <strong>Estimated time:</strong> {getEstimatedTime()}<br/>
                 • Full history will be downloaded in a single operation
-              </div>
-            </div>
-          )}
-
-          {/* Date Range Overlap Warning */}
-          {existingDataInfo && (
-            <div style={{
-              padding: '16px',
-              backgroundColor: colors.semantic.warning + '10',
-              borderRadius: '8px',
-              border: `1px solid ${colors.semantic.warning}30`,
-              marginBottom: '16px'
-            }}>
-              <div style={{
-                fontSize: '14px',
-                color: colors.semantic.warning,
-                marginBottom: '10px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                ⚠️ Date Range Overlap Detected
-              </div>
-              <div style={{
-                fontSize: '13px',
-                color: colors.utility.primaryText,
-                lineHeight: '1.6',
-                marginBottom: '12px'
-              }}>
-                Your selected date range overlaps with existing NAV data. To avoid data conflicts, please adjust your dates.
-              </div>
-              <div style={{
-                padding: '12px',
-                backgroundColor: colors.utility.primaryBackground,
-                borderRadius: '6px',
-                border: `1px solid ${colors.utility.primaryText}10`,
-                marginBottom: '12px'
-              }}>
-                <div style={{
-                  fontSize: '12px',
-                  color: colors.utility.secondaryText,
-                  marginBottom: '8px',
-                  fontWeight: '600'
-                }}>
-                  Existing Data:
-                </div>
-                <div style={{
-                  fontSize: '13px',
-                  color: colors.utility.primaryText,
-                  lineHeight: '1.5'
-                }}>
-                  • <strong>Date Range:</strong> {new Date(existingDataInfo.earliest_date).toLocaleDateString('en-IN')} to {new Date(existingDataInfo.latest_date).toLocaleDateString('en-IN')}<br/>
-                  • <strong>Records:</strong> {existingDataInfo.record_count.toLocaleString()} NAV entries
-                </div>
-              </div>
-              <div style={{
-                fontSize: '12px',
-                color: colors.utility.secondaryText,
-                fontStyle: 'italic'
-              }}>
-                💡 Tip: Select dates before {new Date(existingDataInfo.earliest_date).toLocaleDateString('en-IN')} or after {new Date(existingDataInfo.latest_date).toLocaleDateString('en-IN')} to download non-overlapping data.
               </div>
             </div>
           )}
@@ -759,16 +666,16 @@ export const HistoricalDownloadModal: React.FC<HistoricalDownloadModalProps> = (
           
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !isValidRange || dayCount === 0 || !!existingDataInfo}
+            disabled={isSubmitting || !isValidRange || dayCount === 0 }
             style={{
               padding: '10px 20px',
-              backgroundColor: (isSubmitting || !isValidRange || dayCount === 0 || !!existingDataInfo)
+              backgroundColor: (isSubmitting || !isValidRange || dayCount === 0 )
                 ? colors.utility.secondaryText 
                 : colors.brand.primary,
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: (isSubmitting || !isValidRange || dayCount === 0 || !!existingDataInfo) 
+              cursor: (isSubmitting || !isValidRange || dayCount === 0 ) 
                 ? 'not-allowed' 
                 : 'pointer',
               fontSize: '14px',

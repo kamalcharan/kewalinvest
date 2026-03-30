@@ -395,11 +395,13 @@ export class NavService {
         
         const updateQuery = `
           UPDATE t_scheme_details
-          SET 
+          SET
             earliest_nav_date = $2,
             latest_nav_date = $3,
             total_nav_records = $4,
             historical_data_available = true,
+            last_nav_download_date = CURRENT_TIMESTAMP,
+            last_nav_download_status = 'success',
             updated_at = CURRENT_TIMESTAMP
           WHERE id = $1
         `;
@@ -1458,45 +1460,7 @@ export class NavService {
         if (!request.start_date || !request.end_date) {
           throw new Error('Historical downloads require start_date and end_date');
         }
-
-        for (const schemeId of request.scheme_ids) {
-          const overlapQuery = `
-            SELECT 
-              MIN(nav_date) as earliest_date,
-              MAX(nav_date) as latest_date,
-              COUNT(*) as record_count
-            FROM t_nav_data 
-            WHERE is_live = $1 
-              AND scheme_id = $2
-          `;
-          const overlapResult = await client.query(overlapQuery, [isLive, schemeId]);
-          
-          if (overlapResult.rows.length > 0 && overlapResult.rows[0].record_count > 0) {
-            const existingData = overlapResult.rows[0];
-            const existingStart = new Date(existingData.earliest_date);
-            const existingEnd = new Date(existingData.latest_date);
-            const requestedStart = new Date(request.start_date);
-            const requestedEnd = new Date(request.end_date);
-            
-            const hasOverlap = !(requestedEnd < existingStart || requestedStart > existingEnd);
-            
-            if (hasOverlap) {
-              const schemeQuery = `SELECT scheme_name FROM t_scheme_details WHERE id = $1`;
-              const schemeResult = await client.query(schemeQuery, [schemeId]);
-              const schemeName = schemeResult.rows[0]?.scheme_name || 'Unknown Scheme';
-              
-              const error = new Error('DATE_RANGE_OVERLAP');
-              (error as any).existingData = {
-                scheme_id: schemeId,
-                scheme_name: schemeName,
-                earliest_date: existingStart.toISOString().split('T')[0],
-                latest_date: existingEnd.toISOString().split('T')[0],
-                record_count: parseInt(existingData.record_count)
-              };
-              throw error;
-            }
-          }
-        }
+        // No overlap check - upsert handles existing records gracefully
       }
 
       const insertQuery = `
@@ -2052,7 +2016,7 @@ export class NavService {
 
   /**
    * Detect gaps in NAV data for a scheme
-   * Only checks for missing trading days in the last 2 weeks (excludes weekends)
+   * Checks for missing trading days in the last 90 days (excludes weekends)
    */
   private async detectNavDataGaps(
     schemeId: number,
@@ -2064,12 +2028,12 @@ export class NavService {
     }
 
     try {
-      // Only check last 2 weeks for gaps (historical gaps are not actionable)
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-      const twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
+      // Check last 90 days for gaps
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
-      // Get dates from last 2 weeks only
+      // Get dates from last 90 days
       const datesQuery = `
         SELECT DISTINCT nav_date as date
         FROM t_nav_data
@@ -2077,14 +2041,13 @@ export class NavService {
           AND nav_date >= $2::date
         ORDER BY nav_date
       `;
-      const datesResult = await this.db.query(datesQuery, [schemeId, twoWeeksAgoStr]);
+      const datesResult = await this.db.query(datesQuery, [schemeId, cutoffDateStr]);
 
-      // If no data in last 2 weeks, check if scheme has any recent data at all
+      // If no data in last 90 days, check if scheme has any recent data at all
       if (datesResult.rows.length === 0) {
-        // No data in last 2 weeks - this is a gap if the scheme should have data
         const latestDataDate = new Date(latestDate);
-        if (latestDataDate < twoWeeksAgo) {
-          // Latest data is older than 2 weeks - flag as gap
+        if (latestDataDate < cutoffDate) {
+          // Latest data is older than 90 days - flag as gap
           return [{
             start_date: latestDate,
             end_date: new Date().toISOString().split('T')[0],
@@ -2102,8 +2065,8 @@ export class NavService {
       let currentGapStart: Date | null = null;
       let missingDays = 0;
 
-      // Only check from 2 weeks ago to today
-      const start = new Date(twoWeeksAgo);
+      // Check from cutoff date to today
+      const start = new Date(cutoffDate);
       const end = new Date(); // Today
       const current = new Date(start);
 

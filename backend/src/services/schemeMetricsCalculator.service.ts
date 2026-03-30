@@ -458,7 +458,7 @@ export class SchemeMetricsCalculator {
       // Process each scheme in current batch
       for (const schemeId of batch) {
         try {
-          const calculationResult = await this.calculateForScheme(schemeId, asOfDate, isLive);
+          const calculationResult = await this.calculateAllPendingForScheme(schemeId, isLive);
 
           if (calculationResult.success) {
             result.successful++;
@@ -467,7 +467,7 @@ export class SchemeMetricsCalculator {
             result.errors.push({
               schemeId,
               schemeCode: `SCHEME_${schemeId}`,
-              error: calculationResult.error || 'Unknown error'
+              error: calculationResult.errors.join('; ') || 'Unknown error'
             });
           }
 
