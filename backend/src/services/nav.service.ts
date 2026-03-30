@@ -395,11 +395,13 @@ export class NavService {
         
         const updateQuery = `
           UPDATE t_scheme_details
-          SET 
+          SET
             earliest_nav_date = $2,
             latest_nav_date = $3,
             total_nav_records = $4,
             historical_data_available = true,
+            last_nav_download_date = CURRENT_TIMESTAMP,
+            last_nav_download_status = 'success',
             updated_at = CURRENT_TIMESTAMP
           WHERE id = $1
         `;
