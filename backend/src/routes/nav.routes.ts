@@ -22,7 +22,7 @@ router.use(environmentMiddleware);
 // General API rate limiting
 const generalRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // 1000 requests per 15 minutes
+  max: 10000, // 10000 requests per 15 minutes
   message: {
     success: false,
     error: 'Too many requests, please try again later'
@@ -30,73 +30,7 @@ const generalRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for health checks or system operations
     return req.ip === '127.0.0.1' && req.headers['user-agent']?.includes('HealthCheck');
-  }
-});
-
-// Strict rate limiting for download operations (to protect AMFI APIs)
-const downloadRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // 10 download requests per hour
-  message: {
-    success: false,
-    error: 'Download rate limit exceeded. Please wait before triggering another download.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    // Rate limit per user per tenant
-    const user = (req as any).user;
-    return `${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
-  }
-});
-
-// Rate limiting for historical downloads (heavy operations)
-const historicalDownloadRateLimit = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 300, // 3 historical downloads per day
-  message: {
-    success: false,
-    error: 'Historical download limit exceeded. You can only perform 300 historical downloads per day.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const user = (req as any).user;
-    return `historical_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
-  }
-});
-
-// Scheduler configuration rate limiting (prevent spam configuration changes)
-const schedulerConfigRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // 20 scheduler config changes per hour
-  message: {
-    success: false,
-    error: 'Scheduler configuration rate limit exceeded. Please wait before making more changes.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const user = (req as any).user;
-    return `scheduler_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
-  }
-});
-
-// Manual trigger rate limiting (prevent abuse of manual triggers)
-const manualTriggerRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour  
-  max: 5, // 5 manual triggers per hour
-  message: {
-    success: false,
-    error: 'Manual trigger rate limit exceeded. Please wait before triggering another download.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const user = (req as any).user;
-    return `manual_trigger_${user?.tenant_id || 'unknown'}_${user?.user_id || 'unknown'}`;
   }
 });
 
@@ -342,7 +276,7 @@ router.get('/timeseries/:schemeId', navController.getNavTimeSeries);
  * Returns immediately if download already in progress
  * Returns data availability status if already downloaded
  */
-router.post('/download/daily', downloadRateLimit, navController.triggerDailyDownload);
+router.post('/download/daily', navController.triggerDailyDownload);
 
 /**
  * Download NAV for a single scheme (from AMFI daily data)
@@ -351,7 +285,7 @@ router.post('/download/daily', downloadRateLimit, navController.triggerDailyDown
  * Used by "Update NAV" button in Cruise Control
  * Downloads latest NAV from AMFI for the specified scheme
  */
-router.post('/download/scheme/:schemeCode', downloadRateLimit, navController.downloadSchemeNav);
+router.post('/download/scheme/:schemeCode', navController.downloadSchemeNav);
 
 /**
  * Diagnostic endpoint - test full MFAPI fetch + upsert pipeline
@@ -372,7 +306,7 @@ router.get('/download/diagnose/:schemeCode', navController.diagnoseDownload);
  * Returns job_id for progress tracking
  * ENHANCED: Now updates bookmark download status automatically
  */
-router.post('/download/historical', historicalDownloadRateLimit, navController.triggerHistoricalDownload);
+router.post('/download/historical', navController.triggerHistoricalDownload);
 
 /**
  * Get download progress for UI engagement
@@ -479,7 +413,7 @@ router.get('/scheduler/config', navController.getSchedulerConfig);
  * Auto-generates cron expression from schedule_type + download_time
  * Starts/stops cron job based on is_enabled flag
  */
-router.post('/scheduler/config', schedulerConfigRateLimit, navController.saveSchedulerConfig);
+router.post('/scheduler/config', navController.saveSchedulerConfig);
 
 /**
  * Update existing scheduler configuration
@@ -494,7 +428,7 @@ router.post('/scheduler/config', schedulerConfigRateLimit, navController.saveSch
  * Updates specific fields of existing scheduler configuration
  * Automatically restarts cron job with new settings
  */
-router.put('/scheduler/config/:id', schedulerConfigRateLimit, navController.updateSchedulerConfig);
+router.put('/scheduler/config/:id', navController.updateSchedulerConfig);
 
 /**
  * Delete scheduler configuration
@@ -503,7 +437,7 @@ router.put('/scheduler/config/:id', schedulerConfigRateLimit, navController.upda
  * Removes user's scheduler configuration and stops any running cron job
  * This will disable all automated downloads for the user
  */
-router.delete('/scheduler/config', schedulerConfigRateLimit, navController.deleteSchedulerConfig);
+router.delete('/scheduler/config', navController.deleteSchedulerConfig);
 
 /**
  * Get scheduler status and recent executions
@@ -540,7 +474,7 @@ router.get('/scheduler/status', navController.getSchedulerStatus);
  *   message: "Download triggered successfully via N8N"
  * }
  */
-router.post('/scheduler/trigger', manualTriggerRateLimit, navController.triggerScheduledDownload);
+router.post('/scheduler/trigger', navController.triggerScheduledDownload);
 
 /**
  * Get all active schedulers across system (admin endpoint)

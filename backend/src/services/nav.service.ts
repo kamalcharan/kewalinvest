@@ -2014,7 +2014,7 @@ export class NavService {
 
   /**
    * Detect gaps in NAV data for a scheme
-   * Only checks for missing trading days in the last 2 weeks (excludes weekends)
+   * Checks for missing trading days in the last 90 days (excludes weekends)
    */
   private async detectNavDataGaps(
     schemeId: number,
@@ -2026,12 +2026,12 @@ export class NavService {
     }
 
     try {
-      // Only check last 2 weeks for gaps (historical gaps are not actionable)
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-      const twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
+      // Check last 90 days for gaps
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
-      // Get dates from last 2 weeks only
+      // Get dates from last 90 days
       const datesQuery = `
         SELECT DISTINCT nav_date as date
         FROM t_nav_data
@@ -2039,14 +2039,13 @@ export class NavService {
           AND nav_date >= $2::date
         ORDER BY nav_date
       `;
-      const datesResult = await this.db.query(datesQuery, [schemeId, twoWeeksAgoStr]);
+      const datesResult = await this.db.query(datesQuery, [schemeId, cutoffDateStr]);
 
-      // If no data in last 2 weeks, check if scheme has any recent data at all
+      // If no data in last 90 days, check if scheme has any recent data at all
       if (datesResult.rows.length === 0) {
-        // No data in last 2 weeks - this is a gap if the scheme should have data
         const latestDataDate = new Date(latestDate);
-        if (latestDataDate < twoWeeksAgo) {
-          // Latest data is older than 2 weeks - flag as gap
+        if (latestDataDate < cutoffDate) {
+          // Latest data is older than 90 days - flag as gap
           return [{
             start_date: latestDate,
             end_date: new Date().toISOString().split('T')[0],
@@ -2064,8 +2063,8 @@ export class NavService {
       let currentGapStart: Date | null = null;
       let missingDays = 0;
 
-      // Only check from 2 weeks ago to today
-      const start = new Date(twoWeeksAgo);
+      // Check from cutoff date to today
+      const start = new Date(cutoffDate);
       const end = new Date(); // Today
       const current = new Date(start);
 
