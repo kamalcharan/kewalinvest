@@ -15,6 +15,8 @@ import { BulkMetricsPreCheckModal } from '../../components/nav/BulkMetricsPreChe
 import { BulkMetricsProgress } from '../../components/nav/BulkMetricsProgress';
 import { BulkDownloadProgress } from '../../components/nav/BulkDownloadProgress';
 import { AliasManagementModal } from '../../components/nav/AliasManagementModal';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
+import { apiService } from '../../services/api.service';
 import { toastService } from '../../services/toast.service';
 import { FrontendErrorLogger } from '../../services/errorLogger.service';
 import type { SchemeBookmark, DownloadProgress } from '../../services/nav.service';
@@ -53,6 +55,12 @@ const NavBookmarksPage: React.FC = () => {
   // Bulk selection state
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<number>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
+
+  // Remove bookmark dialog state
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [removeDialogMessage, setRemoveDialogMessage] = useState('');
+  const [isCheckingTransactions, setIsCheckingTransactions] = useState(false);
+  const [isRemovingBookmarks, setIsRemovingBookmarks] = useState(false);
 
   // Hooks - NAV operations
   const {
@@ -604,7 +612,7 @@ const NavBookmarksPage: React.FC = () => {
     const confirmed = window.confirm(
       `Are you sure you want to remove ${selectedBookmarks.length} bookmarks?`
     );
-    
+
     if (!confirmed) return;
 
     try {
@@ -616,6 +624,69 @@ const NavBookmarksPage: React.FC = () => {
       setShowBulkActions(false);
     } catch (error) {
       toastService.error('Failed to remove some bookmarks');
+    }
+  };
+
+  const handleRemoveBookmarks = async () => {
+    const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
+    if (selectedBookmarks.length === 0) return;
+
+    setIsCheckingTransactions(true);
+
+    try {
+      // Check transactions for all selected bookmarks
+      const checks = await Promise.all(
+        selectedBookmarks.map(async (b) => {
+          try {
+            const resp = await apiService.get<{ success: boolean; data: { schemeName: string; transactionCount: number } }>(
+              `/nav/bookmarks/${b.id}/transactions-check`
+            );
+            return { name: b.scheme_name, txnCount: resp?.data?.transactionCount || 0 };
+          } catch {
+            return { name: b.scheme_name, txnCount: 0 };
+          }
+        })
+      );
+
+      const withTxns = checks.filter(c => c.txnCount > 0);
+      const totalTxns = withTxns.reduce((sum, c) => sum + c.txnCount, 0);
+
+      let message = `You are about to remove ${selectedBookmarks.length} bookmark(s).\n\n`;
+      if (withTxns.length > 0) {
+        message += `WARNING: ${withTxns.length} scheme(s) have ${totalTxns} transaction(s):\n`;
+        withTxns.forEach(c => {
+          message += `- ${c.name}: ${c.txnCount} transactions\n`;
+        });
+        message += `\nRemoving bookmarks will NOT delete transactions, but the scheme will no longer appear in your bookmarks list.`;
+      } else {
+        message += `No transactions found for the selected scheme(s). Safe to remove.`;
+      }
+
+      setRemoveDialogMessage(message);
+      setShowRemoveDialog(true);
+    } catch (error) {
+      toastService.error('Failed to check transactions');
+    } finally {
+      setIsCheckingTransactions(false);
+    }
+  };
+
+  const handleConfirmRemove = async () => {
+    const selectedBookmarks = filteredBookmarks.filter(b => selectedBookmarkIds.has(b.id));
+    setIsRemovingBookmarks(true);
+
+    try {
+      await Promise.all(
+        selectedBookmarks.map(bookmark => deleteBookmark(bookmark.id))
+      );
+      toastService.success(`${selectedBookmarks.length} bookmark(s) removed successfully`);
+      setSelectedBookmarkIds(new Set());
+      setShowBulkActions(false);
+      setShowRemoveDialog(false);
+    } catch (error) {
+      toastService.error('Failed to remove some bookmarks');
+    } finally {
+      setIsRemovingBookmarks(false);
     }
   };
 
@@ -1192,19 +1263,21 @@ const NavBookmarksPage: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={handleBulkDelete}
+                  onClick={handleRemoveBookmarks}
+                  disabled={isCheckingTransactions}
                   style={{
                     padding: '6px 12px',
                     backgroundColor: colors.semantic.error,
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: isCheckingTransactions ? 'not-allowed' : 'pointer',
                     fontSize: '12px',
-                    fontWeight: '500'
+                    fontWeight: '500',
+                    opacity: isCheckingTransactions ? 0.7 : 1
                   }}
                 >
-                  Delete Selected
+                  {isCheckingTransactions ? 'Checking...' : 'Remove Bookmark'}
                 </button>
               </div>
             </div>
@@ -1541,6 +1614,19 @@ const NavBookmarksPage: React.FC = () => {
         isOpen={showAliasModal}
         bookmark={aliasBookmark}
         onClose={handleCloseAliasModal}
+      />
+
+      {/* Remove Bookmark Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showRemoveDialog}
+        title="Remove Bookmark"
+        description={removeDialogMessage}
+        confirmText={isRemovingBookmarks ? 'Removing...' : 'Remove'}
+        cancelText="Cancel"
+        onConfirm={handleConfirmRemove}
+        onClose={() => setShowRemoveDialog(false)}
+        type="warning"
+        isLoading={isRemovingBookmarks}
       />
 
       {/* CSS Animation */}

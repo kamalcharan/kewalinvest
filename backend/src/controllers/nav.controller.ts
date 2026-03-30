@@ -1795,4 +1795,57 @@ export class NavController {
         throw new Error('Invalid schedule type');
     }
   }
+
+  /**
+   * Check if a bookmark's scheme has transactions
+   */
+  checkBookmarkTransactions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const bookmarkId = parseInt(req.params.id);
+
+      if (isNaN(bookmarkId)) {
+        res.status(400).json({ success: false, error: 'Invalid bookmark ID' });
+        return;
+      }
+
+      // Get the bookmark's scheme_code
+      const bookmarkResult = await pool.query(
+        `SELECT scheme_code, scheme_name FROM t_scheme_bookmarks
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3 AND is_active = true`,
+        [bookmarkId, user!.tenant_id, isLive]
+      );
+
+      if (bookmarkResult.rows.length === 0) {
+        res.status(404).json({ success: false, error: 'Bookmark not found' });
+        return;
+      }
+
+      const { scheme_code, scheme_name } = bookmarkResult.rows[0];
+
+      // Count transactions for this scheme
+      const txnResult = await pool.query(
+        `SELECT COUNT(*) AS txn_count
+         FROM t_transaction_table
+         WHERE scheme_code = $1 AND tenant_id = $2 AND is_live = $3 AND is_active = true`,
+        [scheme_code, user!.tenant_id, isLive]
+      );
+
+      const txnCount = parseInt(txnResult.rows[0].txn_count);
+
+      res.json({
+        success: true,
+        data: {
+          bookmarkId,
+          schemeCode: scheme_code,
+          schemeName: scheme_name,
+          transactionCount: txnCount,
+          hasTransactions: txnCount > 0
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message || 'Failed to check transactions' });
+    }
+  };
 }

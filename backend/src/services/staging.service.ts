@@ -264,41 +264,45 @@
                       mapping.targetField === 'isin_growth' || 
                       mapping.targetField === 'isin_div_reinvestment') && value !== '') {
               value = value.toUpperCase().replace(/\s/g, '').trim();
-            } else if ((mapping.targetField === 'launch_date' || 
+            } else if ((mapping.targetField === 'launch_date' ||
                       mapping.targetField === 'closure_date' ||
                       mapping.targetField === 'txn_date' ||
                       mapping.targetField === 'sip_regd_date') && value !== '') {
               try {
-                const date = new Date(value);
-                if (!isNaN(date.getTime())) {
-                  value = date.toISOString().split('T')[0];
-                } else {
-                  const dateFormats = [
-                    /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/,
-                    /^(\d{2})[-\/](\d{2})[-\/](\d{2})$/,
-                    /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/
-                  ];
-                  
-                  let formattedDate = value;
-                  for (const format of dateFormats) {
-                    const match = value.match(format);
-                    if (match) {
-                      if (format === dateFormats[0]) {
-                        // DD-MM-YYYY
-                        formattedDate = `${match[3]}-${match[2]}-${match[1]}`;
-                      } else if (format === dateFormats[1]) {
-                        // DD-MM-YY
-                        const year = parseInt(match[3]);
-                        const fullYear = year <= 30 ? `20${match[3]}` : `19${match[3]}`;
-                        formattedDate = `${fullYear}-${match[2]}-${match[1]}`;
-                      } else {
-                        // YYYY-MM-DD
-                        formattedDate = `${match[1]}-${match[2]}-${match[3]}`;
-                      }
-                      break;
+                // Try explicit date formats FIRST (before new Date() which assumes MM/DD/YYYY for slash-separated dates)
+                const dateFormats = [
+                  /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/,  // DD-MM-YYYY or DD/MM/YYYY
+                  /^(\d{2})[-\/](\d{2})[-\/](\d{2})$/,   // DD-MM-YY or DD/MM/YY
+                  /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/    // YYYY-MM-DD
+                ];
+
+                let parsed = false;
+                for (const format of dateFormats) {
+                  const match = String(value).match(format);
+                  if (match) {
+                    if (format === dateFormats[0]) {
+                      // DD/MM/YYYY → YYYY-MM-DD
+                      value = `${match[3]}-${match[2]}-${match[1]}`;
+                    } else if (format === dateFormats[1]) {
+                      // DD/MM/YY → YYYY-MM-DD
+                      const year = parseInt(match[3]);
+                      const fullYear = year <= 30 ? `20${match[3]}` : `19${match[3]}`;
+                      value = `${fullYear}-${match[2]}-${match[1]}`;
+                    } else {
+                      // YYYY-MM-DD (already correct)
+                      value = `${match[1]}-${match[2]}-${match[3]}`;
                     }
+                    parsed = true;
+                    break;
                   }
-                  value = formattedDate;
+                }
+
+                // Fallback to Date constructor only for other formats (e.g. "Dec 01, 2025")
+                if (!parsed) {
+                  const date = new Date(value);
+                  if (!isNaN(date.getTime())) {
+                    value = date.toISOString().split('T')[0];
+                  }
                 }
               } catch (error) {
                 console.warn(`Date parsing failed for ${mapping.targetField}: ${value}`);
@@ -367,6 +371,19 @@
             return stringValue.replace(/\D/g, '');
           case 'format_date':
             try {
+              // Try DD/MM/YYYY or DD-MM-YYYY first (Indian date format)
+              const ddmmyyyy = stringValue.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/);
+              if (ddmmyyyy) {
+                return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+              }
+              // Try DD/MM/YY or DD-MM-YY
+              const ddmmyy = stringValue.match(/^(\d{2})[-\/](\d{2})[-\/](\d{2})$/);
+              if (ddmmyy) {
+                const yr = parseInt(ddmmyy[3]);
+                const fullYear = yr <= 30 ? `20${ddmmyy[3]}` : `19${ddmmyy[3]}`;
+                return `${fullYear}-${ddmmyy[2]}-${ddmmyy[1]}`;
+              }
+              // Fallback for other formats (e.g. "Dec 01, 2025")
               const date = new Date(stringValue);
               if (!isNaN(date.getTime())) {
                 return date.toISOString().split('T')[0];

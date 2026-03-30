@@ -139,6 +139,12 @@ router.put('/bookmarks/:id', navController.updateBookmark);
  */
 router.delete('/bookmarks/:id', navController.removeBookmark);
 
+/**
+ * Check if bookmark's scheme has transactions
+ * GET /api/nav/bookmarks/:id/transactions-check
+ */
+router.get('/bookmarks/:id/transactions-check', navController.checkBookmarkTransactions);
+
 // ==================== ENHANCED BOOKMARK ENDPOINTS ====================
 
 /**

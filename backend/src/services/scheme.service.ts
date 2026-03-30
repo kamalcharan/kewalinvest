@@ -356,7 +356,7 @@ export class SchemeService {
     
     // Add filters
     if (search) {
-      baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex})`;
+      baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.scheme_nav_name ILIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }

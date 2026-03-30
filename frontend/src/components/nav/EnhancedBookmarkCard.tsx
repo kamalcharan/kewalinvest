@@ -180,6 +180,9 @@ export const EnhancedBookmarkCard: React.FC<EnhancedBookmarkCardProps> = ({
         }}>
           <span><strong>Code:</strong> {bookmark.scheme_code}</span>
           <span><strong>AMC:</strong> {bookmark.amc_name}</span>
+          {bookmark.scheme_nav_name && (
+            <span><strong>NAV Name:</strong> {bookmark.scheme_nav_name}</span>
+          )}
           <span style={{ 
             color: statusIndicator.color,
             display: 'flex',

@@ -52,6 +52,7 @@ export interface SchemeBookmark {
   scheme_id: number;
   scheme_code: string;
   scheme_name: string;
+  scheme_nav_name?: string;
   amc_name: string;
   alias_name?: string;
   daily_download_enabled: boolean;
