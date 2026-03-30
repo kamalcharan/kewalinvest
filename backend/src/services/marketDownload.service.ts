@@ -106,36 +106,7 @@ export class MarketDownloadService {
         skipExisting
       });
 
-      // Check if data already exists
-      if (skipExisting && index.historical_data_available) {
-        // Check for date range overlap
-        if (index.earliest_date && index.latest_date) {
-          const existingStart = new Date(index.earliest_date);
-          const existingEnd = new Date(index.latest_date);
-          
-          // Check if requested range overlaps with existing data
-          const hasOverlap = !(endDate < existingStart || startDate > existingEnd);
-          
-          if (hasOverlap) {
-            SimpleLogger.warn('MarketDownload', 'Date range overlaps with existing data', 'downloadHistoricalData', {
-              indexId,
-              requestedRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
-              existingRange: `${index.earliest_date} to ${index.latest_date}`
-            });
-
-            return {
-              success: false,
-              indexId,
-              indexName: index.index_name,
-              recordsInserted: 0,
-              recordsUpdated: 0,
-              recordsSkipped: 0,
-              error: `Data already exists for this date range. Existing: ${index.earliest_date} to ${index.latest_date}`,
-              executionTimeMs: Date.now() - startTime
-            };
-          }
-        }
-      }
+      // No overlap check - upsert handles existing records gracefully
 
       // Create download job
       const job = await this.marketService.createDownloadJob(
