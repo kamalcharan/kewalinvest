@@ -298,11 +298,12 @@ export class AmfiDataSourceService {
         return null;
       }
 
-      const date = new Date(year, month - 1, day);
+      // Use UTC to avoid timezone mismatches with date filtering and PostgreSQL storage
+      const date = new Date(Date.UTC(year, month - 1, day));
 
-      if (date.getFullYear() !== year || 
-          date.getMonth() !== (month - 1) || 
-          date.getDate() !== day) {
+      if (date.getUTCFullYear() !== year ||
+          date.getUTCMonth() !== (month - 1) ||
+          date.getUTCDate() !== day) {
         return null;
       }
 
@@ -588,9 +589,10 @@ export class AmfiDataSourceService {
         return null;
       }
 
-      const date = new Date(year, month, day);
-      
-      if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+      // Use UTC to avoid timezone mismatches with date filtering and PostgreSQL storage
+      const date = new Date(Date.UTC(year, month, day));
+
+      if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) {
         return null;
       }
 
