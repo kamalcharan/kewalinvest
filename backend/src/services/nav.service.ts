@@ -1458,45 +1458,7 @@ export class NavService {
         if (!request.start_date || !request.end_date) {
           throw new Error('Historical downloads require start_date and end_date');
         }
-
-        for (const schemeId of request.scheme_ids) {
-          const overlapQuery = `
-            SELECT 
-              MIN(nav_date) as earliest_date,
-              MAX(nav_date) as latest_date,
-              COUNT(*) as record_count
-            FROM t_nav_data 
-            WHERE is_live = $1 
-              AND scheme_id = $2
-          `;
-          const overlapResult = await client.query(overlapQuery, [isLive, schemeId]);
-          
-          if (overlapResult.rows.length > 0 && overlapResult.rows[0].record_count > 0) {
-            const existingData = overlapResult.rows[0];
-            const existingStart = new Date(existingData.earliest_date);
-            const existingEnd = new Date(existingData.latest_date);
-            const requestedStart = new Date(request.start_date);
-            const requestedEnd = new Date(request.end_date);
-            
-            const hasOverlap = !(requestedEnd < existingStart || requestedStart > existingEnd);
-            
-            if (hasOverlap) {
-              const schemeQuery = `SELECT scheme_name FROM t_scheme_details WHERE id = $1`;
-              const schemeResult = await client.query(schemeQuery, [schemeId]);
-              const schemeName = schemeResult.rows[0]?.scheme_name || 'Unknown Scheme';
-              
-              const error = new Error('DATE_RANGE_OVERLAP');
-              (error as any).existingData = {
-                scheme_id: schemeId,
-                scheme_name: schemeName,
-                earliest_date: existingStart.toISOString().split('T')[0],
-                latest_date: existingEnd.toISOString().split('T')[0],
-                record_count: parseInt(existingData.record_count)
-              };
-              throw error;
-            }
-          }
-        }
+        // No overlap check - upsert handles existing records gracefully
       }
 
       const insertQuery = `

@@ -1,5 +1,4 @@
 // frontend/src/services/nav.service.ts
-// UPDATED: Enhanced 409 error handling with existing_data details and improved toast messages
 // UPDATED: Corrected bookmark gap detection method names and added bulk bookmark functionality
 
 import { NAV_URLS, buildHeaders, getAPIErrorMessage } from './serviceURLs';
@@ -12,13 +11,6 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
-  existing_data?: {
-    scheme_id: number;
-    scheme_name: string;
-    earliest_date: string;
-    latest_date: string;
-    record_count: number;
-  };
 }
 
 export interface PaginatedResponse<T> {
@@ -361,24 +353,10 @@ export class NavService {
           };
         }
         
-        // Enhanced 409 handling with existing_data extraction
         if (response.status === 409) {
-          const errorMsg = errorData.error || '';
-          const existingData = errorData.existing_data;
-          
-          // Check if this is a date range overlap error with details
-          if (existingData) {
-            return {
-              success: false,
-              error: errorMsg,
-              existing_data: existingData
-            };
-          }
-          
-          // Other 409 conflicts
           return {
             success: false,
-            error: errorMsg || 'A conflict occurred. The requested operation cannot be completed.'
+            error: errorData.error || 'A conflict occurred. The requested operation cannot be completed.'
           };
         }
         
@@ -684,18 +662,7 @@ export class NavService {
       const schemeCount = response.data?.total_schemes || request.scheme_ids.length;
       toastService.success(`Historical download started for ${schemeCount} scheme${schemeCount > 1 ? 's' : ''}`);
     } else {
-      // Show detailed toast for date range overlap errors
-      if ((response as any).existing_data) {
-        const existingData = (response as any).existing_data;
-        toastService.error(
-          `Date range overlap detected for ${existingData.scheme_name}. ` +
-          `Existing data: ${new Date(existingData.earliest_date).toLocaleDateString()} to ` +
-          `${new Date(existingData.latest_date).toLocaleDateString()} ` +
-          `(${existingData.record_count} records). Please adjust your date range.`
-        );
-      } else {
-        toastService.error(response.error || 'Failed to trigger historical download');
-      }
+      toastService.error(response.error || 'Failed to trigger historical download');
     }
     
     return response as ApiResponse<{ 

@@ -1,5 +1,4 @@
 // frontend/src/hooks/useNavData.ts
-// UPDATED: Preserve existing_data from 409 responses in triggerHistoricalDownload
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { navService, NavService } from '../services/nav.service';
@@ -910,20 +909,19 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
     }
   }, []);
 
-  // UPDATED: Preserve existing_data from 409 responses
   const triggerHistoricalDownload = useCallback(async (
     request: HistoricalDownloadRequest
-  ): Promise<{ 
-    job_id: number; 
+  ): Promise<{
+    job_id: number;
     message: string;
     total_schemes: number;
     estimated_time_ms: number;
   }> => {
     const startDate = new Date(request.start_date);
     const endDate = new Date(request.end_date);
-    
+
     const validation = NavService.validateDateRange(startDate, endDate);
-    
+
     if (!validation.valid) {
       const error = new Error(validation.error);
       setError(error.message);
@@ -932,19 +930,12 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
 
     try {
       const response = await navService.triggerHistoricalDownload(request);
-      
+
       if (response.success && response.data) {
         return response.data;
       } else {
-        // FIXED: Preserve existing_data when creating error
         const errorMsg = response.error || 'Failed to trigger historical download';
         const error = new Error(errorMsg);
-        
-        // Attach existing_data if present (for date range overlap errors)
-        if ((response as any).existing_data) {
-          (error as any).existing_data = (response as any).existing_data;
-        }
-        
         setError(errorMsg);
         throw error;
       }
@@ -952,7 +943,7 @@ export const useDownloads = (initialParams?: DownloadJobParams): UseDownloadsRet
       console.error('Trigger historical download error:', err);
       const errorMsg = err.message || 'Failed to trigger historical download';
       setError(errorMsg);
-      throw err; // Re-throw to preserve existing_data if it exists
+      throw err;
     }
   }, []);
 

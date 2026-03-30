@@ -322,13 +322,6 @@ export class NavDownloadService {
         tenantId, userId, request, error: error.message
       }, userId, tenantId, error.stack);
       
-      // Preserve existingData property when re-throwing DATE_RANGE_OVERLAP error
-      if (error.message === 'DATE_RANGE_OVERLAP' && error.existingData) {
-        const preservedError = new Error(error.message);
-        (preservedError as any).existingData = error.existingData;
-        throw preservedError;
-      }
-      
       throw error;
     }
   }

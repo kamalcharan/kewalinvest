@@ -1135,15 +1135,7 @@ export class NavController {
         error: error.message
       }, req.user?.user_id, req.user?.tenant_id, error.stack);
 
-      // UPDATED: Handle DATE_RANGE_OVERLAP error with detailed information
-      if (error.message === 'DATE_RANGE_OVERLAP') {
-        const existingData = (error as any).existingData;
-        res.status(409).json({
-          success: false,
-          error: `Date range overlaps with existing data for ${existingData.scheme_name}. Existing data: ${existingData.earliest_date} to ${existingData.latest_date} (${existingData.record_count} records). Please adjust your date range to avoid overlap.`,
-          existing_data: existingData
-        });
-      } else if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
+      if (error.message === 'HISTORICAL_DOWNLOAD_COMPLETED') {
         res.status(409).json({
           success: false,
           error: 'Historical download already completed for one or more schemes'
