@@ -67,11 +67,22 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
       const response = await apiService.get<{ success: boolean; data: DateCheckResult }>(
         `/import/date-check/${session.id}`
       );
-      if (response && response.success) {
-        setDateCheckResult(response.data);
+      if (response && response.success && response.data?.isTransactionImport) {
+        setDateCheckResult({
+          sessionId: response.data.sessionId,
+          isTransactionImport: true,
+          totalRecords: response.data.totalRecords || 0,
+          correctDates: response.data.correctDates || 0,
+          wrongDates: response.data.wrongDates || 0,
+          noDate: response.data.noDate || 0,
+          hasIssues: response.data.hasIssues || false
+        });
+      } else {
+        setDateCheckResult(null);
       }
     } catch (error: any) {
       console.error('Error checking dates:', error);
+      setDateCheckResult(null);
     } finally {
       setIsCheckingDates(false);
     }
@@ -82,11 +93,12 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
     setIsCorrectingDates(true);
     try {
       const response = await apiService.post<{ success: boolean; data: DateCorrectResult }>(
-        `/import/date-correct/${session.id}`
+        `/import/date-correct/${session.id}`,
+        {}
       );
-      if (response && response.success) {
+      if (response && response.success && response.data) {
         setCorrectionResult(response.data);
-        toastService.success(response.data.message);
+        toastService.success(response.data.message || 'Dates corrected successfully');
         // Re-check to update the card stats
         await checkDates();
       }
@@ -593,8 +605,8 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
                       fontWeight: '700',
                       color: dateCheckResult.hasIssues ? colors.semantic.error : colors.semantic.success
                     }}>
-                      {dateCheckResult.wrongDates > 0
-                        ? dateCheckResult.wrongDates.toLocaleString()
+                      {(dateCheckResult.wrongDates || 0) > 0
+                        ? (dateCheckResult.wrongDates || 0).toLocaleString()
                         : 'All OK'}
                     </div>
                     <div style={{
@@ -603,10 +615,10 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
                       marginTop: '4px',
                       lineHeight: '1.4'
                     }}>
-                      {dateCheckResult.correctDates.toLocaleString()} correct
-                      {dateCheckResult.wrongDates > 0 && (
+                      {(dateCheckResult.correctDates || 0).toLocaleString()} correct
+                      {(dateCheckResult.wrongDates || 0) > 0 && (
                         <span style={{ color: colors.semantic.error, fontWeight: '600' }}>
-                          {' '} | {dateCheckResult.wrongDates.toLocaleString()} wrong
+                          {' '} | {(dateCheckResult.wrongDates || 0).toLocaleString()} wrong
                         </span>
                       )}
                     </div>
@@ -649,7 +661,7 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
                     >
                       {isCorrectingDates
                         ? 'Correcting...'
-                        : `Correct ${dateCheckResult.wrongDates} Dates`}
+                        : `Correct ${(dateCheckResult.wrongDates || 0)} Dates`}
                     </button>
                   )}
                 </>

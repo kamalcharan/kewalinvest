@@ -1713,6 +1713,18 @@ export class ImportController {
         return;
       }
 
+      // Safe date parsing helper function (handles bad date formats)
+      await this.db.query(`
+        CREATE OR REPLACE FUNCTION pg_temp.safe_to_date(text, text)
+        RETURNS date AS $$
+        BEGIN
+          RETURN TO_DATE($1, $2);
+        EXCEPTION WHEN OTHERS THEN
+          RETURN NULL;
+        END;
+        $$ LANGUAGE plpgsql IMMUTABLE;
+      `);
+
       // Check all staging records: compare raw date vs mapped date
       const checkResult = await this.db.query(
         `SELECT
@@ -1720,16 +1732,19 @@ export class ImportController {
           COUNT(*) FILTER (
             WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
               AND mapped_data->>'txn_date' IS NOT NULL
-              AND (mapped_data->>'txn_date')::date = TO_DATE(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+              AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
+              AND (mapped_data->>'txn_date')::date = pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
           ) AS correct_dates,
           COUNT(*) FILTER (
             WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
               AND mapped_data->>'txn_date' IS NOT NULL
-              AND (mapped_data->>'txn_date')::date != TO_DATE(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+              AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
+              AND (mapped_data->>'txn_date')::date != pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
           ) AS wrong_dates,
           COUNT(*) FILTER (
             WHERE raw_data->>'TRANSACTION DATE' IS NULL
               OR mapped_data->>'txn_date' IS NULL
+              OR pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NULL
           ) AS no_date
         FROM t_import_staging_data
         WHERE session_id = $1
@@ -1793,45 +1808,59 @@ export class ImportController {
         return;
       }
 
-      // Find all staging records with wrong dates
-      const wrongRecords = await this.db.query(
-        `SELECT
-          s.id AS staging_id,
-          s.raw_data->>'TRANSACTION DATE' AS raw_date,
-          s.mapped_data->>'txn_date' AS mapped_date,
-          TO_CHAR(TO_DATE(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY'), 'YYYY-MM-DD') AS correct_date,
-          t.id AS transaction_id
-        FROM t_import_staging_data s
-        LEFT JOIN t_transaction_table t ON t.staging_record_id = s.id
-        WHERE s.session_id = $1
-          AND s.processing_status IN ('success', 'duplicate')
-          AND s.raw_data->>'TRANSACTION DATE' IS NOT NULL
-          AND s.mapped_data->>'txn_date' IS NOT NULL
-          AND (s.mapped_data->>'txn_date')::date != TO_DATE(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')`,
-        [sessionId]
-      );
-
-      if (wrongRecords.rows.length === 0) {
-        res.json({
-          success: true,
-          data: {
-            sessionId: parseInt(sessionId),
-            corrected: 0,
-            stagingUpdated: 0,
-            transactionsUpdated: 0,
-            message: 'No date issues found. All dates are correct.'
-          }
-        });
-        return;
-      }
-
-      let stagingUpdated = 0;
-      let transactionsUpdated = 0;
-
-      // Process corrections in a transaction
+      // Use a single client for temp function + queries + updates
       const client = await this.db.connect();
       try {
         await client.query('BEGIN');
+
+        // Safe date parsing helper
+        await client.query(`
+          CREATE OR REPLACE FUNCTION pg_temp.safe_to_date(text, text)
+          RETURNS date AS $$
+          BEGIN
+            RETURN TO_DATE($1, $2);
+          EXCEPTION WHEN OTHERS THEN
+            RETURN NULL;
+          END;
+          $$ LANGUAGE plpgsql IMMUTABLE;
+        `);
+
+        // Find all staging records with wrong dates
+        const wrongRecords = await client.query(
+          `SELECT
+            s.id AS staging_id,
+            s.raw_data->>'TRANSACTION DATE' AS raw_date,
+            s.mapped_data->>'txn_date' AS mapped_date,
+            TO_CHAR(pg_temp.safe_to_date(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY'), 'YYYY-MM-DD') AS correct_date,
+            t.id AS transaction_id
+          FROM t_import_staging_data s
+          LEFT JOIN t_transaction_table t ON t.staging_record_id = s.id
+          WHERE s.session_id = $1
+            AND s.processing_status IN ('success', 'duplicate')
+            AND s.raw_data->>'TRANSACTION DATE' IS NOT NULL
+            AND s.mapped_data->>'txn_date' IS NOT NULL
+            AND pg_temp.safe_to_date(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
+            AND (s.mapped_data->>'txn_date')::date != pg_temp.safe_to_date(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')`,
+          [sessionId]
+        );
+
+        if (wrongRecords.rows.length === 0) {
+          await client.query('COMMIT');
+          res.json({
+            success: true,
+            data: {
+              sessionId: parseInt(sessionId),
+              corrected: 0,
+              stagingUpdated: 0,
+              transactionsUpdated: 0,
+              message: 'No date issues found. All dates are correct.'
+            }
+          });
+          return;
+        }
+
+        let stagingUpdated = 0;
+        let transactionsUpdated = 0;
 
         for (const record of wrongRecords.rows) {
           // Update staging mapped_data.txn_date
@@ -1858,23 +1887,24 @@ export class ImportController {
         }
 
         await client.query('COMMIT');
+
+        res.json({
+          success: true,
+          data: {
+            sessionId: parseInt(sessionId),
+            corrected: wrongRecords.rows.length,
+            stagingUpdated,
+            transactionsUpdated,
+            message: `All ${wrongRecords.rows.length} records have been corrected. Transactions and monthly sheets will now show correct month data.`
+          }
+        });
+
       } catch (txError) {
         await client.query('ROLLBACK');
         throw txError;
       } finally {
         client.release();
       }
-
-      res.json({
-        success: true,
-        data: {
-          sessionId: parseInt(sessionId),
-          corrected: wrongRecords.rows.length,
-          stagingUpdated,
-          transactionsUpdated,
-          message: `All ${wrongRecords.rows.length} records have been corrected. Transactions and monthly sheets will now show correct month data.`
-        }
-      });
 
     } catch (error: any) {
       console.error('Error correcting date issues:', error);
