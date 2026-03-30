@@ -1189,6 +1189,124 @@ export class NavController {
     }
   };
 
+  /**
+   * Diagnostic endpoint: test MFAPI fetch + upsert for a single scheme
+   * GET /api/nav/download/diagnose/:schemeCode
+   */
+  diagnoseDownload = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { user, environment } = req;
+      const isLive = environment === 'live';
+      const schemeCode = req.params.schemeCode;
+      const steps: any[] = [];
+
+      // Step 1: Check scheme exists
+      const schemeResult = await pool.query(
+        `SELECT id, scheme_name, scheme_code FROM t_scheme_details WHERE scheme_code = $1`,
+        [schemeCode]
+      );
+      steps.push({
+        step: 1,
+        action: 'scheme_lookup',
+        found: schemeResult.rows.length > 0,
+        data: schemeResult.rows[0] || null
+      });
+
+      if (schemeResult.rows.length === 0) {
+        res.json({ success: false, steps, error: 'Scheme not found in t_scheme_details' });
+        return;
+      }
+
+      const schemeId = schemeResult.rows[0].id;
+
+      // Step 2: Check existing NAV data
+      const existingNav = await pool.query(
+        `SELECT COUNT(*) as count, MIN(nav_date) as earliest, MAX(nav_date) as latest
+         FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2`,
+        [schemeId, isLive]
+      );
+      steps.push({
+        step: 2,
+        action: 'existing_nav_check',
+        data: existingNav.rows[0]
+      });
+
+      // Step 3: Fetch from MFAPI (last 60 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 60);
+
+      const mfapiResponse = await this.amfiService.downloadFromMFAPI(
+        schemeCode,
+        startDate,
+        endDate,
+        { requestId: `diag_${schemeCode}_${Date.now()}`, retryAttempts: 2, timeout: 30000 }
+      );
+      steps.push({
+        step: 3,
+        action: 'mfapi_fetch',
+        success: mfapiResponse.success,
+        error: mfapiResponse.error || null,
+        totalRecords: mfapiResponse.totalRecords,
+        sampleDates: mfapiResponse.data?.slice(0, 5).map(r => ({
+          nav_date: r.nav_date,
+          nav_date_iso: r.nav_date instanceof Date ? r.nav_date.toISOString() : String(r.nav_date),
+          nav_value: r.nav_value,
+          scheme_code: r.scheme_code
+        })) || []
+      });
+
+      if (!mfapiResponse.success || !mfapiResponse.data || mfapiResponse.data.length === 0) {
+        res.json({ success: false, steps, error: 'MFAPI fetch failed or returned no data' });
+        return;
+      }
+
+      // Step 4: Try upsert
+      const upsertResult = await this.navService.upsertNavData(
+        user!.tenant_id,
+        isLive,
+        mfapiResponse.data
+      );
+      steps.push({
+        step: 4,
+        action: 'upsert',
+        inserted: upsertResult.inserted,
+        updated: upsertResult.updated,
+        errors: upsertResult.errors.slice(0, 5)
+      });
+
+      // Step 5: Verify data after upsert
+      const verifyNav = await pool.query(
+        `SELECT COUNT(*) as count, MIN(nav_date) as earliest, MAX(nav_date) as latest
+         FROM t_nav_data WHERE scheme_id = $1 AND is_live = $2`,
+        [schemeId, isLive]
+      );
+      steps.push({
+        step: 5,
+        action: 'verify_after_upsert',
+        data: verifyNav.rows[0]
+      });
+
+      res.json({
+        success: true,
+        steps,
+        summary: {
+          mfapi_records: mfapiResponse.totalRecords,
+          inserted: upsertResult.inserted,
+          updated: upsertResult.updated,
+          errors: upsertResult.errors.length,
+          date_range: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack
+      });
+    }
+  };
+
   getDownloadJobs = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { user, environment } = req;

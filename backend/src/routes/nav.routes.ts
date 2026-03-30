@@ -354,6 +354,12 @@ router.post('/download/daily', downloadRateLimit, navController.triggerDailyDown
 router.post('/download/scheme/:schemeCode', downloadRateLimit, navController.downloadSchemeNav);
 
 /**
+ * Diagnostic endpoint - test full MFAPI fetch + upsert pipeline
+ * GET /api/nav/download/diagnose/:schemeCode
+ */
+router.get('/download/diagnose/:schemeCode', navController.diagnoseDownload);
+
+/**
  * Trigger historical NAV download (heavy operation)
  * POST /api/nav/download/historical
  * Body: { 
