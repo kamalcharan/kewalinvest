@@ -151,13 +151,25 @@ export const NavTab: React.FC = () => {
     }));
   };
 
-  // Run Now: Download daily NAV for all bookmarked schemes, then calculate metrics
+  // Run Now: Fill gaps, download daily NAV, then calculate metrics
   const handleRunNow = async () => {
     try {
       setIsRunning(true);
+      document.body.style.cursor = 'wait';
 
-      // Step 1: Download daily NAV for all bookmarked schemes
-      toastService.info('Starting NAV downloads for all bookmarked schemes...');
+      // Step 1: Fill gaps for all schemes (last 90 days via MFAPI)
+      toastService.info('Step 1/3: Filling data gaps for all schemes (last 90 days)...');
+      try {
+        const gapResponse = await apiService.post(API_ENDPOINTS.NAV.FILL_GAPS) as any;
+        if (gapResponse?.success) {
+          toastService.success(`Gap filling started for ${gapResponse.data?.total_schemes ?? 'all'} schemes`);
+        }
+      } catch (gapErr: any) {
+        toastService.warning(`Gap filling failed: ${gapErr.message}. Continuing...`);
+      }
+
+      // Step 2: Download daily NAV for all bookmarked schemes
+      toastService.info('Step 2/3: Downloading today\'s NAV for all schemes...');
       const navResponse = await apiService.post(API_ENDPOINTS.NAV.DOWNLOAD_DAILY) as any;
 
       if (navResponse?.success && navResponse?.data) {
@@ -169,10 +181,9 @@ export const NavTab: React.FC = () => {
         toastService.success('NAV downloads triggered');
       }
 
-      // Step 2: Calculate metrics for all schemes with data
-      toastService.info('Starting metrics calculation for all schemes...');
+      // Step 3: Calculate metrics for all schemes with data
+      toastService.info('Step 3/3: Calculating metrics for all schemes...');
 
-      // Get all scheme IDs that need metrics calculation
       const schemesNeedingMetrics = data?.schemes
         .filter(scheme => scheme.total_records > 0)
         .map(scheme => scheme.scheme_id) || [];
@@ -199,6 +210,7 @@ export const NavTab: React.FC = () => {
       console.error('Error in Run Now:', err);
       toastService.error(`Run Now failed: ${err.message || 'Unknown error'}`);
     } finally {
+      document.body.style.cursor = 'default';
       setIsRunning(false);
     }
   };

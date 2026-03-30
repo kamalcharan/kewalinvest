@@ -343,6 +343,12 @@ router.delete('/download/jobs/:jobId', navController.cancelDownloadJob);
  */
 router.get('/download/active', navController.getActiveDownloads);
 
+/**
+ * Fill gaps for all bookmarked schemes using MFAPI (last 90 days)
+ * POST /api/nav/download/fill-gaps
+ */
+router.post('/download/fill-gaps', navController.fillGaps);
+
 // ==================== STATISTICS & DASHBOARD ROUTES ====================
 
 /**

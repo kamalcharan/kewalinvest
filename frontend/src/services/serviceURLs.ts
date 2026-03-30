@@ -392,6 +392,7 @@ export const API_ENDPOINTS = {
     DOWNLOAD_JOBS: `${API_BASE}/nav/download/jobs`,
     CANCEL_DOWNLOAD: (jobId: number) => `${API_BASE}/nav/download/jobs/${jobId}`,
     ACTIVE_DOWNLOADS: `${API_BASE}/nav/download/active`,
+    FILL_GAPS: `${API_BASE}/nav/download/fill-gaps`,
     STATISTICS: `${API_BASE}/nav/statistics`,
     CHECK_TODAY: `${API_BASE}/nav/check-today`,
     HEALTH: `${API_BASE}/nav/health`,
