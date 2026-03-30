@@ -1713,60 +1713,65 @@ export class ImportController {
         return;
       }
 
-      // Safe date parsing helper function (handles bad date formats)
-      await this.db.query(`
-        CREATE OR REPLACE FUNCTION pg_temp.safe_to_date(text, text)
-        RETURNS date AS $$
-        BEGIN
-          RETURN TO_DATE($1, $2);
-        EXCEPTION WHEN OTHERS THEN
-          RETURN NULL;
-        END;
-        $$ LANGUAGE plpgsql IMMUTABLE;
-      `);
+      // Use a single client so pg_temp function is available for the check query
+      const client = await this.db.connect();
+      try {
+        // Safe date parsing helper function (handles bad date formats)
+        await client.query(`
+          CREATE OR REPLACE FUNCTION pg_temp.safe_to_date(text, text)
+          RETURNS date AS $$
+          BEGIN
+            RETURN TO_DATE($1, $2);
+          EXCEPTION WHEN OTHERS THEN
+            RETURN NULL;
+          END;
+          $$ LANGUAGE plpgsql IMMUTABLE;
+        `);
 
-      // Check all staging records: compare raw date vs mapped date
-      const checkResult = await this.db.query(
-        `SELECT
-          COUNT(*) AS total_records,
-          COUNT(*) FILTER (
-            WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
-              AND mapped_data->>'txn_date' IS NOT NULL
-              AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
-              AND (mapped_data->>'txn_date')::date = pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
-          ) AS correct_dates,
-          COUNT(*) FILTER (
-            WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
-              AND mapped_data->>'txn_date' IS NOT NULL
-              AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
-              AND (mapped_data->>'txn_date')::date != pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
-          ) AS wrong_dates,
-          COUNT(*) FILTER (
-            WHERE raw_data->>'TRANSACTION DATE' IS NULL
-              OR mapped_data->>'txn_date' IS NULL
-              OR pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NULL
-          ) AS no_date
-        FROM t_import_staging_data
-        WHERE session_id = $1
-          AND processing_status IN ('success', 'duplicate')`,
-        [sessionId]
-      );
+        // Check all staging records: compare raw date vs mapped date
+        const checkResult = await client.query(
+          `SELECT
+            COUNT(*) AS total_records,
+            COUNT(*) FILTER (
+              WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
+                AND mapped_data->>'txn_date' IS NOT NULL
+                AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
+                AND (mapped_data->>'txn_date')::date = pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+            ) AS correct_dates,
+            COUNT(*) FILTER (
+              WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
+                AND mapped_data->>'txn_date' IS NOT NULL
+                AND pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NOT NULL
+                AND (mapped_data->>'txn_date')::date != pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+            ) AS wrong_dates,
+            COUNT(*) FILTER (
+              WHERE raw_data->>'TRANSACTION DATE' IS NULL
+                OR mapped_data->>'txn_date' IS NULL
+                OR pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NULL
+            ) AS no_date
+          FROM t_import_staging_data
+          WHERE session_id = $1
+            AND processing_status IN ('success', 'duplicate')`,
+          [sessionId]
+        );
 
-      const stats = checkResult.rows[0];
+        const stats = checkResult.rows[0];
 
-      res.json({
-        success: true,
-        data: {
-          sessionId: parseInt(sessionId),
-          isTransactionImport: true,
-          totalRecords: parseInt(stats.total_records),
-          correctDates: parseInt(stats.correct_dates),
-          wrongDates: parseInt(stats.wrong_dates),
-          noDate: parseInt(stats.no_date),
-          hasIssues: parseInt(stats.wrong_dates) > 0
-        }
-      });
-
+        res.json({
+          success: true,
+          data: {
+            sessionId: parseInt(sessionId),
+            isTransactionImport: true,
+            totalRecords: parseInt(stats.total_records),
+            correctDates: parseInt(stats.correct_dates),
+            wrongDates: parseInt(stats.wrong_dates),
+            noDate: parseInt(stats.no_date),
+            hasIssues: parseInt(stats.wrong_dates) > 0
+          }
+        });
+      } finally {
+        client.release();
+      }
     } catch (error: any) {
       console.error('Error checking date issues:', error);
       res.status(500).json({
