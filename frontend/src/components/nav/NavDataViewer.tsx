@@ -62,13 +62,13 @@ export const NavDataViewer: React.FC<NavDataViewerProps> = ({
     }
 
     if (period === 'all') {
-      if (bookmark?.earliest_nav_date && bookmark?.latest_nav_date) {
-        return {
-          startDate: new Date(bookmark.earliest_nav_date).toISOString().split('T')[0],
-          endDate: new Date(bookmark.latest_nav_date).toISOString().split('T')[0]
-        };
-      }
-      return null;
+      const startStr = bookmark?.earliest_nav_date
+        ? new Date(bookmark.earliest_nav_date).toISOString().split('T')[0]
+        : '2000-01-01';
+      return {
+        startDate: startStr,
+        endDate: new Date().toISOString().split('T')[0]
+      };
     }
 
     const endDate = new Date();
