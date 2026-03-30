@@ -91,7 +91,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
           const sessionType = session.import_type as string;
           const isTransactionType = sessionType === 'TransactionData' || 
                                    sessionType === 'transaction_import';
-          const isSuccessful = session.status === 'completed' || session.status === 'success';
+          const isSuccessful = session.status === 'completed' || session.status === 'success' || session.status === 'completed_with_errors';
           
           return isTransactionType && isSuccessful;
         });
