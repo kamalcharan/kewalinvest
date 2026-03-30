@@ -89,9 +89,9 @@ export class NavService {
 
     if (search) {
       if (showAll) {
-        baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.amc_name ILIKE $${paramIndex})`;
+        baseQuery += ` AND (sd.scheme_name ILIKE $${paramIndex} OR sd.scheme_code ILIKE $${paramIndex} OR sd.amc_name ILIKE $${paramIndex} OR sd.scheme_nav_name ILIKE $${paramIndex})`;
       } else {
-        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex})`;
+        baseQuery += ` AND (sb.scheme_name ILIKE $${paramIndex} OR sb.scheme_code ILIKE $${paramIndex} OR sb.amc_name ILIKE $${paramIndex} OR sb.alias_name ILIKE $${paramIndex} OR sd.scheme_nav_name ILIKE $${paramIndex})`;
       }
       queryParams.push(`%${search}%`);
       paramIndex++;
