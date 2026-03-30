@@ -14,6 +14,8 @@ interface DateCheckResult {
   wrongDates: number;
   noDate: number;
   hasIssues: boolean;
+  maxTxnDate: string | null;
+  minTxnDate: string | null;
 }
 
 interface DateCorrectResult {
@@ -80,7 +82,9 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
           correctDates: response.data.correctDates || 0,
           wrongDates: response.data.wrongDates || 0,
           noDate: response.data.noDate || 0,
-          hasIssues: response.data.hasIssues || false
+          hasIssues: response.data.hasIssues || false,
+          maxTxnDate: response.data.maxTxnDate || null,
+          minTxnDate: response.data.minTxnDate || null
         });
       } else {
         setDateCheckResult(null);
@@ -406,6 +410,38 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
               }}>
                 ✓ DELETED
               </span>
+            </div>
+          )}
+
+          {/* Max Transaction Date - only for transaction imports */}
+          {isTransactionSession && dateCheckResult?.maxTxnDate && (
+            <div>
+              <span style={{
+                fontSize: '12px',
+                color: colors.utility.secondaryText,
+                display: 'block',
+                marginBottom: '4px'
+              }}>
+                Txn Date Range
+              </span>
+              <div>
+                <span style={{
+                  fontSize: '16px',
+                  color: colors.brand.primary,
+                  fontWeight: '600'
+                }}>
+                  {new Date(dateCheckResult.maxTxnDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+                {dateCheckResult.minTxnDate && dateCheckResult.minTxnDate !== dateCheckResult.maxTxnDate && (
+                  <span style={{
+                    fontSize: '11px',
+                    color: colors.utility.secondaryText,
+                    marginLeft: '6px'
+                  }}>
+                    (from {new Date(dateCheckResult.minTxnDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>

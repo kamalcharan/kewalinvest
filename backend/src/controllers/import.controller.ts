@@ -1749,7 +1749,9 @@ export class ImportController {
               WHERE raw_data->>'TRANSACTION DATE' IS NULL
                 OR mapped_data->>'txn_date' IS NULL
                 OR pg_temp.safe_to_date(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY') IS NULL
-            ) AS no_date
+            ) AS no_date,
+            MAX((mapped_data->>'txn_date')::date) AS max_txn_date,
+            MIN((mapped_data->>'txn_date')::date) AS min_txn_date
           FROM t_import_staging_data
           WHERE session_id = $1
             AND processing_status IN ('success', 'duplicate')`,
@@ -1767,7 +1769,9 @@ export class ImportController {
             correctDates: parseInt(stats.correct_dates),
             wrongDates: parseInt(stats.wrong_dates),
             noDate: parseInt(stats.no_date),
-            hasIssues: parseInt(stats.wrong_dates) > 0
+            hasIssues: parseInt(stats.wrong_dates) > 0,
+            maxTxnDate: stats.max_txn_date || null,
+            minTxnDate: stats.min_txn_date || null
           }
         });
       } finally {
