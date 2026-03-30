@@ -1700,7 +1700,8 @@ export class ImportController {
       }
 
       const session = sessionResult.rows[0];
-      if (session.import_type !== 'transaction_import') {
+      const isTransaction = session.import_type === 'transaction_import' || session.import_type === 'TransactionData';
+      if (!isTransaction) {
         res.json({
           success: true,
           data: {
@@ -1808,7 +1809,8 @@ export class ImportController {
         return;
       }
 
-      if (sessionResult.rows[0].import_type !== 'transaction_import') {
+      const importType = sessionResult.rows[0].import_type;
+      if (importType !== 'transaction_import' && importType !== 'TransactionData') {
         res.status(400).json({ success: false, error: 'Date correction is only applicable for transaction imports' });
         return;
       }
