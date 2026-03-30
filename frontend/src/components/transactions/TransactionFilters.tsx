@@ -794,14 +794,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
                 )}
                 {importSessions.map(session => (
                   <option key={session.id} value={session.id}>
-                    {session.session_name || `Session #${session.id}`}
-                    {' • '}
-                    {new Date(session.created_at).toLocaleDateString('en-IN', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric' 
-                    })}
-                    {` • ${session.successful_records}/${session.total_records} records`}
+                    Session #{session.id}
                   </option>
                 ))}
               </select>
