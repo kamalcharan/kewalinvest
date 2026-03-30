@@ -267,4 +267,8 @@ router.put('/staging/:stagingId/edit', authenticate, importController.editStagin
 router.post('/staging/:stagingId/reprocess', authenticate, importController.reprocessSingleRecord);
 router.post('/session/:sessionId/bulk-reprocess', authenticate, importController.bulkReprocessRecords);
 
+// Date correction endpoints
+router.get('/date-check/:sessionId', authenticate, importController.checkDateIssues);
+router.post('/date-correct/:sessionId', authenticate, importController.correctDateIssues);
+
 export default router;

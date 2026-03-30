@@ -1,10 +1,28 @@
 // frontend/src/components/Import/SessionMetrics.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ImportSession } from '../../types/import.types';
 import { apiService } from '../../services/api.service';
 import { toastService } from '../../services/toast.service';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
+
+interface DateCheckResult {
+  sessionId: number;
+  isTransactionImport: boolean;
+  totalRecords: number;
+  correctDates: number;
+  wrongDates: number;
+  noDate: number;
+  hasIssues: boolean;
+}
+
+interface DateCorrectResult {
+  sessionId: number;
+  corrected: number;
+  stagingUpdated: number;
+  transactionsUpdated: number;
+  message: string;
+}
 
 interface SessionMetricsProps {
   session: ImportSession | null;
@@ -20,6 +38,65 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Date correction state
+  const [dateCheckResult, setDateCheckResult] = useState<DateCheckResult | null>(null);
+  const [isCheckingDates, setIsCheckingDates] = useState(false);
+  const [isCorrectingDates, setIsCorrectingDates] = useState(false);
+  const [correctionResult, setCorrectionResult] = useState<DateCorrectResult | null>(null);
+
+  const isTransactionSession = session
+    ? (session.import_type === 'TransactionData' || (session.import_type as string) === 'transaction_import')
+    : false;
+
+  // Auto-check dates when a transaction session is selected
+  useEffect(() => {
+    if (session && isTransactionSession) {
+      checkDates();
+    } else {
+      setDateCheckResult(null);
+      setCorrectionResult(null);
+    }
+  }, [session?.id]);
+
+  const checkDates = async () => {
+    if (!session) return;
+    setIsCheckingDates(true);
+    setCorrectionResult(null);
+    try {
+      const response = await apiService.get<{ success: boolean; data: DateCheckResult }>(
+        `/import/date-check/${session.id}`
+      );
+      if (response && response.success) {
+        setDateCheckResult(response.data);
+      }
+    } catch (error: any) {
+      console.error('Error checking dates:', error);
+    } finally {
+      setIsCheckingDates(false);
+    }
+  };
+
+  const correctDates = async () => {
+    if (!session) return;
+    setIsCorrectingDates(true);
+    try {
+      const response = await apiService.post<{ success: boolean; data: DateCorrectResult }>(
+        `/import/date-correct/${session.id}`
+      );
+      if (response && response.success) {
+        setCorrectionResult(response.data);
+        toastService.success(response.data.message);
+        // Re-check to update the card stats
+        await checkDates();
+      }
+    } catch (error: any) {
+      console.error('Error correcting dates:', error);
+      toastService.error(error.message || 'Failed to correct dates');
+    } finally {
+      setIsCorrectingDates(false);
+    }
+  };
 
   if (!session) {
     return (
@@ -420,7 +497,7 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
                   {metric.icon}
                 </span>
               </div>
-              
+
               <div style={{
                 display: 'flex',
                 alignItems: 'baseline',
@@ -447,6 +524,143 @@ const SessionMetrics: React.FC<SessionMetricsProps> = ({ session, onStagingDelet
             </div>
           </div>
         ))}
+
+        {/* Date Correction Card - Only for transaction imports */}
+        {isTransactionSession && (
+          <div
+            style={{
+              padding: '20px',
+              backgroundColor: dateCheckResult?.hasIssues
+                ? colors.semantic.error + '10'
+                : correctionResult
+                  ? colors.semantic.success + '10'
+                  : colors.brand.primary + '08',
+              borderRadius: '12px',
+              border: `1px solid ${
+                dateCheckResult?.hasIssues
+                  ? colors.semantic.error + '30'
+                  : correctionResult
+                    ? colors.semantic.success + '30'
+                    : colors.brand.primary + '20'
+              }`,
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Background Pattern */}
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              fontSize: '80px',
+              opacity: 0.1,
+              transform: 'rotate(-15deg)'
+            }}>
+              {dateCheckResult?.hasIssues ? '\u{1F4C5}' : '\u2705'}
+            </div>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px'
+              }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: colors.utility.secondaryText,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  DATE CHECK
+                </span>
+                <span style={{ fontSize: '20px' }}>
+                  {isCheckingDates ? '\u23F3' : dateCheckResult?.hasIssues ? '\u{1F4C5}' : '\u2705'}
+                </span>
+              </div>
+
+              {isCheckingDates ? (
+                <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                  Checking dates...
+                </div>
+              ) : dateCheckResult ? (
+                <>
+                  {/* Stats row */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{
+                      fontSize: '28px',
+                      fontWeight: '700',
+                      color: dateCheckResult.hasIssues ? colors.semantic.error : colors.semantic.success
+                    }}>
+                      {dateCheckResult.wrongDates > 0
+                        ? dateCheckResult.wrongDates.toLocaleString()
+                        : 'All OK'}
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.utility.secondaryText,
+                      marginTop: '4px',
+                      lineHeight: '1.4'
+                    }}>
+                      {dateCheckResult.correctDates.toLocaleString()} correct
+                      {dateCheckResult.wrongDates > 0 && (
+                        <span style={{ color: colors.semantic.error, fontWeight: '600' }}>
+                          {' '} | {dateCheckResult.wrongDates.toLocaleString()} wrong
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Correction result message */}
+                  {correctionResult && (
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.semantic.success,
+                      fontWeight: '600',
+                      marginBottom: '8px',
+                      padding: '6px 8px',
+                      backgroundColor: colors.semantic.success + '10',
+                      borderRadius: '4px',
+                      lineHeight: '1.4'
+                    }}>
+                      {correctionResult.corrected} records corrected. {correctionResult.transactionsUpdated} transactions updated. Monthly sheets will now show correct month data.
+                    </div>
+                  )}
+
+                  {/* Correct button */}
+                  {dateCheckResult.hasIssues && (
+                    <button
+                      onClick={correctDates}
+                      disabled={isCorrectingDates}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        backgroundColor: colors.semantic.error,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: isCorrectingDates ? 'not-allowed' : 'pointer',
+                        opacity: isCorrectingDates ? 0.7 : 1,
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {isCorrectingDates
+                        ? 'Correcting...'
+                        : `Correct ${dateCheckResult.wrongDates} Dates`}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: '14px', color: colors.utility.secondaryText }}>
+                  --
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Dialog */}

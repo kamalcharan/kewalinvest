@@ -1670,4 +1670,218 @@ export class ImportController {
       });
     }
   };
+
+  /**
+   * Check date issues in a transaction import session
+   * Compares raw_data TRANSACTION DATE (DD/MM/YYYY) with mapped_data txn_date
+   */
+  checkDateIssues = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { sessionId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      // Verify session exists and is a transaction import
+      const sessionResult = await this.db.query(
+        `SELECT id, import_type, status, total_records
+         FROM t_import_sessions
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [sessionId, user.tenant_id, isLive]
+      );
+
+      if (sessionResult.rows.length === 0) {
+        res.status(404).json({ success: false, error: 'Session not found' });
+        return;
+      }
+
+      const session = sessionResult.rows[0];
+      if (session.import_type !== 'transaction_import') {
+        res.json({
+          success: true,
+          data: {
+            sessionId: parseInt(sessionId),
+            importType: session.import_type,
+            isTransactionImport: false,
+            message: 'Date check is only applicable for transaction imports'
+          }
+        });
+        return;
+      }
+
+      // Check all staging records: compare raw date vs mapped date
+      const checkResult = await this.db.query(
+        `SELECT
+          COUNT(*) AS total_records,
+          COUNT(*) FILTER (
+            WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
+              AND mapped_data->>'txn_date' IS NOT NULL
+              AND (mapped_data->>'txn_date')::date = TO_DATE(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+          ) AS correct_dates,
+          COUNT(*) FILTER (
+            WHERE raw_data->>'TRANSACTION DATE' IS NOT NULL
+              AND mapped_data->>'txn_date' IS NOT NULL
+              AND (mapped_data->>'txn_date')::date != TO_DATE(raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')
+          ) AS wrong_dates,
+          COUNT(*) FILTER (
+            WHERE raw_data->>'TRANSACTION DATE' IS NULL
+              OR mapped_data->>'txn_date' IS NULL
+          ) AS no_date
+        FROM t_import_staging_data
+        WHERE session_id = $1
+          AND processing_status IN ('success', 'duplicate')`,
+        [sessionId]
+      );
+
+      const stats = checkResult.rows[0];
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: parseInt(sessionId),
+          isTransactionImport: true,
+          totalRecords: parseInt(stats.total_records),
+          correctDates: parseInt(stats.correct_dates),
+          wrongDates: parseInt(stats.wrong_dates),
+          noDate: parseInt(stats.no_date),
+          hasIssues: parseInt(stats.wrong_dates) > 0
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error checking date issues:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to check date issues'
+      });
+    }
+  };
+
+  /**
+   * Correct date issues in a transaction import session
+   * Re-parses raw TRANSACTION DATE (DD/MM/YYYY) and updates staging + transaction table
+   */
+  correctDateIssues = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { sessionId } = req.params;
+      const isLive = req.headers['x-environment'] === 'live';
+
+      // Verify session exists and is a transaction import
+      const sessionResult = await this.db.query(
+        `SELECT id, import_type FROM t_import_sessions
+         WHERE id = $1 AND tenant_id = $2 AND is_live = $3`,
+        [sessionId, user.tenant_id, isLive]
+      );
+
+      if (sessionResult.rows.length === 0) {
+        res.status(404).json({ success: false, error: 'Session not found' });
+        return;
+      }
+
+      if (sessionResult.rows[0].import_type !== 'transaction_import') {
+        res.status(400).json({ success: false, error: 'Date correction is only applicable for transaction imports' });
+        return;
+      }
+
+      // Find all staging records with wrong dates
+      const wrongRecords = await this.db.query(
+        `SELECT
+          s.id AS staging_id,
+          s.raw_data->>'TRANSACTION DATE' AS raw_date,
+          s.mapped_data->>'txn_date' AS mapped_date,
+          TO_CHAR(TO_DATE(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY'), 'YYYY-MM-DD') AS correct_date,
+          t.id AS transaction_id
+        FROM t_import_staging_data s
+        LEFT JOIN t_transaction_table t ON t.staging_record_id = s.id
+        WHERE s.session_id = $1
+          AND s.processing_status IN ('success', 'duplicate')
+          AND s.raw_data->>'TRANSACTION DATE' IS NOT NULL
+          AND s.mapped_data->>'txn_date' IS NOT NULL
+          AND (s.mapped_data->>'txn_date')::date != TO_DATE(s.raw_data->>'TRANSACTION DATE', 'DD/MM/YYYY')`,
+        [sessionId]
+      );
+
+      if (wrongRecords.rows.length === 0) {
+        res.json({
+          success: true,
+          data: {
+            sessionId: parseInt(sessionId),
+            corrected: 0,
+            stagingUpdated: 0,
+            transactionsUpdated: 0,
+            message: 'No date issues found. All dates are correct.'
+          }
+        });
+        return;
+      }
+
+      let stagingUpdated = 0;
+      let transactionsUpdated = 0;
+
+      // Process corrections in a transaction
+      const client = await this.db.connect();
+      try {
+        await client.query('BEGIN');
+
+        for (const record of wrongRecords.rows) {
+          // Update staging mapped_data.txn_date
+          await client.query(
+            `UPDATE t_import_staging_data
+             SET mapped_data = jsonb_set(mapped_data, '{txn_date}', to_jsonb($1::text)),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2`,
+            [record.correct_date, record.staging_id]
+          );
+          stagingUpdated++;
+
+          // Update transaction table txn_date
+          if (record.transaction_id) {
+            await client.query(
+              `UPDATE t_transaction_table
+               SET txn_date = $1::date,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $2`,
+              [record.correct_date, record.transaction_id]
+            );
+            transactionsUpdated++;
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
+      }
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: parseInt(sessionId),
+          corrected: wrongRecords.rows.length,
+          stagingUpdated,
+          transactionsUpdated,
+          message: `All ${wrongRecords.rows.length} records have been corrected. Transactions and monthly sheets will now show correct month data.`
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error correcting date issues:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to correct date issues'
+      });
+    }
+  };
 }
