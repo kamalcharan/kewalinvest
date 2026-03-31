@@ -960,49 +960,83 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
             flexWrap: 'wrap',
             gap: '16px'
           }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              color: colors.utility.primaryText
-            }}>
-              <input
-                type="checkbox"
-                checked={filters.is_potential_duplicate === true}
-                onChange={(e) => handleFilterChange('is_potential_duplicate', e.target.checked ? true : undefined)}
-                disabled={loading}
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  cursor: 'pointer'
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                fontSize: '13px',
+                fontWeight: '500',
+                color: filters.is_potential_duplicate === true ? colors.semantic.warning : colors.utility.secondaryText
+              }}>
+                {filters.is_potential_duplicate === true ? 'Duplicates' : 'Active'}
+              </span>
+              <div
+                onClick={() => {
+                  if (!loading) {
+                    handleFilterChange('is_potential_duplicate', filters.is_potential_duplicate === true ? undefined : true);
+                  }
                 }}
-              />
-              Show Duplicates Only
-            </label>
+                style={{
+                  width: '40px',
+                  height: '22px',
+                  borderRadius: '11px',
+                  backgroundColor: filters.is_potential_duplicate === true ? colors.semantic.warning : colors.utility.primaryText + '25',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  position: 'relative',
+                  transition: 'background-color 0.2s ease',
+                  opacity: loading ? 0.5 : 1
+                }}
+              >
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: filters.is_potential_duplicate === true ? '20px' : '2px',
+                  transition: 'left 0.2s ease',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                }} />
+              </div>
+            </div>
 
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              color: colors.utility.primaryText
-            }}>
-              <input
-                type="checkbox"
-                checked={filters.portfolio_flag === false}
-                onChange={(e) => handleFilterChange('portfolio_flag', e.target.checked ? false : undefined)}
-                disabled={loading}
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  cursor: 'pointer'
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                fontSize: '13px',
+                fontWeight: '500',
+                color: filters.portfolio_flag === false ? colors.semantic.error : colors.utility.secondaryText
+              }}>
+                {filters.portfolio_flag === false ? 'Excluded' : 'Included'}
+              </span>
+              <div
+                onClick={() => {
+                  if (!loading) {
+                    handleFilterChange('portfolio_flag', filters.portfolio_flag === false ? undefined : false);
+                  }
                 }}
-              />
-              Excluded from Portfolio
-            </label>
+                style={{
+                  width: '40px',
+                  height: '22px',
+                  borderRadius: '11px',
+                  backgroundColor: filters.portfolio_flag === false ? colors.semantic.error : colors.utility.primaryText + '25',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  position: 'relative',
+                  transition: 'background-color 0.2s ease',
+                  opacity: loading ? 0.5 : 1
+                }}
+              >
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: filters.portfolio_flag === false ? '20px' : '2px',
+                  transition: 'left 0.2s ease',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                }} />
+              </div>
+            </div>
           </div>
         </div>
       )}
