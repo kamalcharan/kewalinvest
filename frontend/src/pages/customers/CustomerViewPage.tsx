@@ -95,6 +95,8 @@ const CustomerViewPage: React.FC = () => {
   });
   const [transactionsSortBy, setTransactionsSortBy] = useState<string>('txn_date');
   const [transactionsSortOrder, setTransactionsSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showExcluded, setShowExcluded] = useState(false);
 
   const { data: customer, isLoading: customerLoading, error: customerError } = useCustomer(customerId || 0);
   const { portfolio, isLoading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = usePortfolioData({
@@ -128,7 +130,9 @@ const CustomerViewPage: React.FC = () => {
         page: page,
         page_size: 20,
         sort_by: sortBy || transactionsSortBy,
-        sort_order: sortOrder || transactionsSortOrder
+        sort_order: sortOrder || transactionsSortOrder,
+        is_potential_duplicate: showDuplicates ? true : undefined,
+        portfolio_flag: showExcluded ? false : undefined
       });
       
       if (response.success && response.data) {
@@ -150,7 +154,7 @@ const CustomerViewPage: React.FC = () => {
       fetchTransactions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, customerId]);
+  }, [activeTab, customerId, showDuplicates, showExcluded]);
 
 
   // FIXED: Load default comparison index and its data using new API method
@@ -1272,6 +1276,88 @@ const CustomerViewPage: React.FC = () => {
                     color: colors.utility.secondaryText
                   }}>
                     {transactionsPagination.total} transaction{transactionsPagination.total !== 1 ? 's' : ''}
+                  </div>
+                </div>
+
+                {/* Filter Toggles */}
+                <div style={{
+                  display: 'flex',
+                  gap: '24px',
+                  alignItems: 'center',
+                  marginBottom: '16px',
+                  padding: '10px 16px',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderRadius: '8px',
+                  border: `1px solid ${colors.utility.primaryText}10`
+                }}>
+                  {/* Show Duplicates Toggle */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: showDuplicates ? colors.semantic.warning : colors.utility.secondaryText
+                    }}>
+                      {showDuplicates ? 'Duplicates' : 'Active'}
+                    </span>
+                    <div
+                      onClick={() => { setShowDuplicates(!showDuplicates); }}
+                      style={{
+                        width: '40px',
+                        height: '22px',
+                        borderRadius: '11px',
+                        backgroundColor: showDuplicates ? colors.semantic.warning : colors.utility.primaryText + '25',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                    >
+                      <div style={{
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '50%',
+                        backgroundColor: '#fff',
+                        position: 'absolute',
+                        top: '2px',
+                        left: showDuplicates ? '20px' : '2px',
+                        transition: 'left 0.2s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Show Excluded Toggle */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: showExcluded ? colors.semantic.error : colors.utility.secondaryText
+                    }}>
+                      {showExcluded ? 'Excluded' : 'Included'}
+                    </span>
+                    <div
+                      onClick={() => { setShowExcluded(!showExcluded); }}
+                      style={{
+                        width: '40px',
+                        height: '22px',
+                        borderRadius: '11px',
+                        backgroundColor: showExcluded ? colors.semantic.error : colors.utility.primaryText + '25',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                    >
+                      <div style={{
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '50%',
+                        backgroundColor: '#fff',
+                        position: 'absolute',
+                        top: '2px',
+                        left: showExcluded ? '20px' : '2px',
+                        transition: 'left 0.2s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }} />
+                    </div>
                   </div>
                 </div>
 
