@@ -45,6 +45,7 @@ BEGIN
         FROM t_import_staging_data sd
         INNER JOIN t_import_sessions s ON s.id = sd.session_id
         WHERE sd.processing_status = 'duplicate'
+          AND s.import_type = 'TransactionData'
         ORDER BY sd.session_id, sd.id
     ) LOOP
         v_total_count := v_total_count + 1;
