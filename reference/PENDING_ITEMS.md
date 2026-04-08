@@ -1,87 +1,33 @@
 # Pending Items - Feature Branch: claude/review-26-pdf-gQBfa
 
-## Critical Issues
+## Resolved Issues
 
 ### 1. NAV Query Issue for Scheme 149182 (Kotak Multicap Fund)
-**Status**: BLOCKING
+**Status**: ✅ RESOLVED
 
-**Problem**:
-- NAV data exists in database (540 records per UI)
-- UI shows date range: 3/10/2023 to 11/12/2025
-- API returns 409 Conflict (overlap detected)
-- BUT SQL queries return NULL
+**Root Cause Found**:
+The bookmark had `scheme_code = '149182'` but `scheme_id = 14398` (wrong internal ID).
+The correct `scheme_id` for scheme_code 149182 is **12445**.
 
-**Impact**:
-- 11 customers have wrong/missing values for Kotak Multicap Fund
-- SWETHA KOTTI showing -49.07% return (should be positive)
+NAV queries use `scheme_id` (internal ID), NOT `scheme_code` - that's why queries returned NULL.
 
-**Affected Customers**:
-1. CHALLA SANJAY KUMAR (1287)
-2. DHWANI CHHABHAIYA (1291)
-3. GNANA PRASUNA MUKTEVI (1295)
-4. LAGISHETTY VENKATESH (1312)
-5. MAVANUR RANGARAJU BALAJI (1320)
-6. NANDISH T C (1332)
-7. PRIYANKA S CHILLERGE (1350)
-8. RACHURI RAGHAVENDRA SWAMY (1351)
-9. SAMPATH KUMAR TUDGANI (1362)
-10. SWETHA KOTTI (1383)
-11. V AJAY KUMAR (1387)
-
-**Diagnostic Queries Tried**:
+**Fix Applied**:
 ```sql
--- All returned NULL despite data existing in UI
-SELECT * FROM t_nav_data WHERE scheme_code = '149182';
-SELECT * FROM t_nav_data WHERE scheme_code = 149182;  -- without quotes
-SELECT * FROM t_nav_data WHERE scheme_code::text = '149182';
-SELECT * FROM t_nav_data WHERE CAST(scheme_code AS TEXT) = '149182';
+UPDATE t_scheme_bookmarks
+SET scheme_id = 12445
+WHERE id = 2058 AND tenant_id = 17;
 ```
 
-**Possible Causes**:
-1. Data type mismatch (VARCHAR vs INTEGER)
-2. Different database connection (dev vs prod)
-3. Caching layer between API and DB
-4. is_live flag issue
-5. Schema/tenant isolation
-
-**Next Steps**:
-1. Check database connection string in API vs direct DB tool
-2. Check if data is in a different schema
-3. Investigate caching layer (Redis?)
-4. Check API code for NAV data retrieval
-
----
-
-## Verification Pending
-
-### 2. Regenerate Snapshots for 11 Kotak Multicap Customers
-**Status**: BLOCKED by Issue #1
-
-After NAV issue is resolved:
-```sql
--- Verification query
-SELECT
-    c.id as customer_id,
-    co.name as customer_name,
-    s.snapshot_month_end,
-    s.total_invested,
-    s.current_value,
-    s.return_percentage
-FROM t_monthly_portfolio_snapshots s
-JOIN t_customers c ON c.id = s.customer_id
-JOIN t_contacts co ON co.id = c.contact_id
-WHERE c.id IN (1287, 1291, 1295, 1312, 1320, 1332, 1350, 1351, 1362, 1383, 1387)
-  AND s.tenant_id = 17
-  AND s.is_live = true
-  AND s.snapshot_month_end = (
-      SELECT MAX(snapshot_month_end)
-      FROM t_monthly_portfolio_snapshots
-      WHERE customer_id = s.customer_id
-        AND tenant_id = 17
-        AND is_live = true
-  )
-ORDER BY co.name;
-```
+**Results After Fix** (11 customers):
+| Customer | Before | After |
+|----------|--------|-------|
+| CHALLA SANJAY KUMAR | +24.86% | +36.35% |
+| LAGISHETTY VENKATESH | -20.40% | +8.83% |
+| NANDISH T C | -20.30% | +7.52% |
+| PRIYANKA S CHILLERGE | -10.32% | +22.83% |
+| SAMPATH KUMAR TUDGANI | -15.54% | +5.35% |
+| SWETHA KOTTI | -49.07% | +5.24% |
+| V AJAY KUMAR | +8.00% | +22.89% |
 
 ---
 

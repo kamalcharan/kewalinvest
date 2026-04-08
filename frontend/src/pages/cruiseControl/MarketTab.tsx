@@ -153,6 +153,55 @@ export const MarketTab: React.FC = () => {
     }));
   };
 
+  const handleRunNow = async () => {
+    try {
+      setIsRunningJob(true);
+      const response = await apiService.post(
+        API_ENDPOINTS.JOBS.EXECUTE('MARKET_OHLC_DOWNLOAD')
+      ) as any;
+
+      if (response.success) {
+        toastService.info('Market download job started. Processing...');
+
+        // Poll for job completion
+        const maxAttempts = 60; // Max 2 minutes
+        let attempts = 0;
+
+        const checkStatus = async (): Promise<void> => {
+          attempts++;
+          try {
+            const statsResponse = await apiService.get(
+              API_ENDPOINTS.JOBS.STATISTICS('MARKET_OHLC_DOWNLOAD')
+            ) as any;
+
+            if (statsResponse.success && statsResponse.data) {
+              if (statsResponse.data.is_running) {
+                if (attempts < maxAttempts) {
+                  setTimeout(checkStatus, 2000);
+                } else {
+                  setIsRunningJob(false);
+                  toastService.warning('Job is still running. Refresh to check status.');
+                }
+              } else {
+                setIsRunningJob(false);
+                toastService.success('Market download job completed!');
+                await fetchDetailedStatus();
+              }
+            }
+          } catch (err) {
+            setIsRunningJob(false);
+          }
+        };
+
+        setTimeout(checkStatus, 2000);
+      } else {
+        toastService.error(response.error || 'Failed to trigger job');
+        setIsRunningJob(false);
+      }
+    } catch (err: any) {
+      console.error('Error triggering market download job:', err);
+      toastService.error('Failed to trigger job');
+      setIsRunningJob(false);
   // Run Now: Download EOD for all indices with gaps, then calculate metrics
   const handleRunNow = async () => {
     try {
@@ -271,6 +320,10 @@ export const MarketTab: React.FC = () => {
         }}>
           Market Index Status
         </h3>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={handleRunNow}
+            disabled={isRunningJob}
         <div style={{ display: 'flex', gap: '10px' }}>
           {/* Run Now Button - Downloads EOD for all + Calculates metrics */}
           <button
@@ -281,11 +334,18 @@ export const MarketTab: React.FC = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '8px 16px',
+              backgroundColor: colors.semantic.success,
               backgroundColor: colors.brand.primary,
               color: '#FFF',
               border: 'none',
               borderRadius: '6px',
               fontSize: '13px',
+              fontWeight: '500',
+              cursor: isRunningJob ? 'not-allowed' : 'pointer',
+              opacity: isRunningJob ? 0.7 : 1
+            }}
+          >
+            {isRunningJob ? (
               fontWeight: '600',
               cursor: isRunning ? 'not-allowed' : 'pointer',
               opacity: isRunning ? 0.7 : 1
@@ -297,6 +357,10 @@ export const MarketTab: React.FC = () => {
             ) : (
               <Play size={14} />
             )}
+            {isRunningJob ? 'Running...' : 'Run Now'}
+          </button>
+          <button
+            onClick={fetchDetailedStatus}
             {isRunning ? 'Running...' : 'Run Now'}
           </button>
           {/* Refresh Button */}
@@ -314,6 +378,7 @@ export const MarketTab: React.FC = () => {
               borderRadius: '6px',
               fontSize: '13px',
               fontWeight: '500',
+              cursor: 'pointer'
               cursor: isRunning ? 'not-allowed' : 'pointer',
               opacity: isRunning ? 0.7 : 1
             }}

@@ -33,9 +33,12 @@
 -- FIX: Update scheme_code from 152065 to 149182
 -- ============================================================================
 
--- Step 1: Update bookmark
+-- Step 1: Update bookmark scheme_code AND scheme_id
+-- IMPORTANT: scheme_id must match the internal ID in t_scheme_details
+-- scheme_code 149182 has scheme_id = 12445 in t_scheme_details
 UPDATE t_scheme_bookmarks
-SET scheme_code = '149182'
+SET scheme_code = '149182',
+    scheme_id = (SELECT id FROM t_scheme_details WHERE scheme_code = '149182' LIMIT 1)
 WHERE scheme_code = '152065'
   AND tenant_id = 17;
 
