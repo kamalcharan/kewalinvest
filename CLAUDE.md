@@ -87,6 +87,18 @@ The `jobScheduler.service.ts` manages all background jobs. Jobs register themsel
 ### Asset Type System
 `t_scheme_details.asset_type_id` links to `m_asset_types`. `t_transaction_table.asset_type_code` is backfilled from the scheme's asset type at import time. Snapshots are generated per asset type. Old `'MF'` asset type (id=1) is deprecated — 'Growth' is the default fallback.
 
+## Astro / Panchangam Integration
+
+Panchangam data is stored in the `kaala_dristi_db` database, table `km_daily_panchang`. Key fields: `tithi_name`, `tithi_end_ist`, `tithi_next_name`, `nakshatra_name`, `nakshatra_end_ist`, `nakshatra_next_name`. All times are IST strings (`HH:MM` or `HH:MM:SS`).
+
+**Critical display logic** (in `frontend/src/components/domain/PanchangamCard.tsx`):
+- Compare current IST time against `*_end_ist`
+- Before end time → show `name · ends HH:MM` (current element still active)
+- After end time → show `next_name · since HH:MM` (element ended, next is active since that time)
+- Nakshatra can transition mid-day — always re-evaluate against real IST clock
+
+Astro pipeline runs on port **8101**. Backend API endpoint: `GET /api/panchang/daily?date=YYYY-MM-DD`.
+
 ## Development Branch
 
 Active development branch: `claude/fix-astro-panchangam-issue-p5K5z`
